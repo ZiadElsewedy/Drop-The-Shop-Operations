@@ -29,5 +29,7 @@ abstract class AuthRepository {
 
   Future<void> saveUser(UserEntity user);
 
+  Future<UserEntity?> getUser(String uid);
+
   UserEntity? get currentUser;
 }

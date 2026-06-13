@@ -7,6 +7,7 @@ import 'package:fbro/features/auth/domain/usecases/verify_phone_number.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_in_with_otp.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_out.dart';
 import 'package:fbro/features/auth/domain/usecases/save_user.dart';
+import 'package:fbro/features/auth/domain/usecases/get_user.dart';
 import 'package:fbro/features/auth/domain/repositories/auth_repository.dart';
 import 'auth_state.dart';
 
@@ -18,6 +19,7 @@ class AuthCubit extends Cubit<AuthState> {
   final SignInWithOtp _signInWithOtp;
   final SignOut _signOut;
   final SaveUser _saveUser;
+  final GetUser _getUser;
 
   StreamSubscription? _authSub;
 
@@ -29,8 +31,29 @@ class AuthCubit extends Cubit<AuthState> {
     required this._signInWithOtp,
     required this._signOut,
     required this._saveUser,
-  }) :
-        super(const AuthState.initial()) {
+    required this._getUser,
+  }) : super(const AuthState.initial());
+
+  /// Called once from SplashPage on cold start.
+  /// Resolves the initial auth state with Firestore enrichment, then starts
+  /// the auth stream listener so subsequent changes (sign-out, token
+  /// revocation) are handled without re-triggering this enrichment path.
+  Future<void> restoreSession() async {
+    final firebaseUser = _repository.currentUser;
+    if (firebaseUser == null) {
+      emit(const AuthState.unauthenticated());
+    } else {
+      try {
+        final firestoreUser = await _getUser(firebaseUser.uid);
+        emit(AuthState.authenticated(firestoreUser ?? firebaseUser));
+      } catch (_) {
+        // Firestore unavailable — keep the user signed in with Firebase data.
+        emit(AuthState.authenticated(firebaseUser));
+      }
+    }
+
+    // Start listening only after the initial state is settled so the stream
+    // does not emit a duplicate authenticated event on cold start.
     _listenToAuthChanges();
   }
 

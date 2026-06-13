@@ -10,6 +10,7 @@ import 'package:fbro/features/auth/domain/usecases/verify_phone_number.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_in_with_otp.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_out.dart';
 import 'package:fbro/features/auth/domain/usecases/save_user.dart';
+import 'package:fbro/features/auth/domain/usecases/get_user.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 
 class AppDependencies {
@@ -33,6 +34,7 @@ class AppDependencies {
       signInWithOtp: SignInWithOtp(authRepository),
       signOut: SignOut(authRepository),
       saveUser: SaveUser(authRepository),
+      getUser: GetUser(authRepository),
     );
   }
 }

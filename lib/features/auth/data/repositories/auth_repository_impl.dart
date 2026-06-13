@@ -80,6 +80,12 @@ class AuthRepositoryImpl implements AuthRepository {
   Future<void> signOut() => _remote.signOut();
 
   @override
+  Future<UserEntity?> getUser(String uid) async {
+    final model = await _userRemote.getUser(uid);
+    return model?.toEntity();
+  }
+
+  @override
   Future<void> saveUser(UserEntity user) async {
     final model = UserModel(
       uid: user.uid,

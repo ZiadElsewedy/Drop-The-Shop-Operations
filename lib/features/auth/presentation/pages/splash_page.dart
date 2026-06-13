@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:fbro/core/di/injection.dart';
 import 'package:fbro/core/routes/route_names.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_typography.dart';
@@ -46,9 +47,21 @@ class _SplashPageState extends State<SplashPage>
     );
 
     _controller.forward();
-    Future.delayed(const Duration(milliseconds: 2400), () {
-      if (mounted) context.go(RouteNames.welcome);
-    });
+    _initSession();
+  }
+
+  Future<void> _initSession() async {
+    await Future.wait([
+      AppDependencies.authCubit.restoreSession(),
+      Future.delayed(const Duration(milliseconds: 2400)),
+    ]);
+    if (!mounted) return;
+
+    final isAuthenticated = AppDependencies.authCubit.state.maybeWhen(
+      authenticated: (_) => true,
+      orElse: () => false,
+    );
+    context.go(isAuthenticated ? RouteNames.home : RouteNames.welcome);
   }
 
   @override
