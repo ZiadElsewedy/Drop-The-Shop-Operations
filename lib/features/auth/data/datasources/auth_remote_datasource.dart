@@ -21,15 +21,28 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   final FirebaseAuth _auth;
   AuthRemoteDataSourceImpl(this._auth);
 
+  String _resolveProvider(User user) {
+    if (user.providerData.isEmpty) return 'unknown';
+    final id = user.providerData.first.providerId;
+    if (id == 'password') return 'email';
+    if (id == 'phone') return 'phone';
+    return id;
+  }
+
   @override
   Stream<UserModel?> get authStateChanges => _auth
       .authStateChanges()
-      .map((u) => u == null ? null : UserModel.fromFirebaseUser(u));
+      .map((u) => u == null
+          ? null
+          : UserModel.fromFirebaseUser(u, authProvider: _resolveProvider(u)));
 
   @override
-  UserModel? get currentUser => _auth.currentUser == null
-      ? null
-      : UserModel.fromFirebaseUser(_auth.currentUser!);
+  UserModel? get currentUser {
+    final u = _auth.currentUser;
+    return u == null
+        ? null
+        : UserModel.fromFirebaseUser(u, authProvider: _resolveProvider(u));
+  }
 
   @override
   Future<UserModel> signInWithEmail({
@@ -41,7 +54,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         email: email,
         password: password,
       );
-      return UserModel.fromFirebaseUser(credential.user!);
+      final user = credential.user!;
+      return UserModel.fromFirebaseUser(user, authProvider: _resolveProvider(user));
     } on FirebaseAuthException catch (e) {
       throw AuthException(e.message ?? 'Sign in failed');
     }
@@ -57,7 +71,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         email: email,
         password: password,
       );
-      return UserModel.fromFirebaseUser(credential.user!);
+      final user = credential.user!;
+      return UserModel.fromFirebaseUser(user, authProvider: _resolveProvider(user));
     } on FirebaseAuthException catch (e) {
       throw AuthException(e.message ?? 'Registration failed');
     }
@@ -76,7 +91,9 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         try {
           final result = await _auth.signInWithCredential(credential);
           if (result.user != null) {
-            onAutoVerified?.call(UserModel.fromFirebaseUser(result.user!));
+            final u = result.user!;
+            onAutoVerified?.call(
+                UserModel.fromFirebaseUser(u, authProvider: _resolveProvider(u)));
           }
         } on FirebaseAuthException catch (e) {
           onFailed(e.message ?? 'Auto-verification failed');
@@ -99,7 +116,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         smsCode: smsCode,
       );
       final result = await _auth.signInWithCredential(credential);
-      return UserModel.fromFirebaseUser(result.user!);
+      final u = result.user!;
+      return UserModel.fromFirebaseUser(u, authProvider: _resolveProvider(u));
     } on FirebaseAuthException catch (e) {
       throw AuthException(e.message ?? 'OTP verification failed');
     }

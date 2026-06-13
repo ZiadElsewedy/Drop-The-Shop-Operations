@@ -1,12 +1,16 @@
 import 'package:fbro/core/errors/exceptions.dart';
 import 'package:fbro/core/errors/failures.dart';
 import 'package:fbro/features/auth/data/datasources/auth_remote_datasource.dart';
+import 'package:fbro/features/auth/data/datasources/user_remote_datasource.dart';
+import 'package:fbro/features/auth/data/models/user_model.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/domain/repositories/auth_repository.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource _remote;
-  AuthRepositoryImpl(this._remote);
+  final UserRemoteDataSource _userRemote;
+
+  AuthRepositoryImpl(this._remote, this._userRemote);
 
   @override
   Stream<UserEntity?> get authStateChanges =>
@@ -74,4 +78,17 @@ class AuthRepositoryImpl implements AuthRepository {
 
   @override
   Future<void> signOut() => _remote.signOut();
+
+  @override
+  Future<void> saveUser(UserEntity user) async {
+    final model = UserModel(
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName,
+      photoUrl: user.photoUrl,
+      phoneNumber: user.phoneNumber,
+      authProvider: user.authProvider,
+    );
+    await _userRemote.saveUser(model);
+  }
 }

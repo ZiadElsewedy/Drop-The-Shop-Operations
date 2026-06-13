@@ -7,21 +7,25 @@ class UserModel {
   final String? displayName;
   final String? photoUrl;
   final String? phoneNumber;
+  final String authProvider;
 
   const UserModel({
     required this.uid,
     required this.email,
+    required this.authProvider,
     this.displayName,
     this.photoUrl,
     this.phoneNumber,
   });
 
-  factory UserModel.fromFirebaseUser(User user) => UserModel(
+  factory UserModel.fromFirebaseUser(User user, {String authProvider = 'unknown'}) =>
+      UserModel(
         uid: user.uid,
         email: user.email ?? '',
         displayName: user.displayName,
         photoUrl: user.photoURL,
         phoneNumber: user.phoneNumber,
+        authProvider: authProvider,
       );
 
   factory UserModel.fromMap(Map<String, dynamic> map) => UserModel(
@@ -30,6 +34,7 @@ class UserModel {
         displayName: map['displayName'] as String?,
         photoUrl: map['photoUrl'] as String?,
         phoneNumber: map['phoneNumber'] as String?,
+        authProvider: map['authProvider'] as String? ?? 'unknown',
       );
 
   Map<String, dynamic> toMap() => {
@@ -38,6 +43,7 @@ class UserModel {
         'displayName': displayName,
         'photoUrl': photoUrl,
         'phoneNumber': phoneNumber,
+        'authProvider': authProvider,
       };
 
   UserEntity toEntity() => UserEntity(
@@ -46,5 +52,6 @@ class UserModel {
         displayName: displayName,
         photoUrl: photoUrl,
         phoneNumber: phoneNumber,
+        authProvider: authProvider,
       );
 }

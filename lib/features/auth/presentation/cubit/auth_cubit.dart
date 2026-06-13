@@ -6,6 +6,7 @@ import 'package:fbro/features/auth/domain/usecases/register_with_email.dart';
 import 'package:fbro/features/auth/domain/usecases/verify_phone_number.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_in_with_otp.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_out.dart';
+import 'package:fbro/features/auth/domain/usecases/save_user.dart';
 import 'package:fbro/features/auth/domain/repositories/auth_repository.dart';
 import 'auth_state.dart';
 
@@ -16,6 +17,7 @@ class AuthCubit extends Cubit<AuthState> {
   final VerifyPhoneNumber _verifyPhoneNumber;
   final SignInWithOtp _signInWithOtp;
   final SignOut _signOut;
+  final SaveUser _saveUser;
 
   StreamSubscription? _authSub;
 
@@ -26,6 +28,7 @@ class AuthCubit extends Cubit<AuthState> {
     required this._verifyPhoneNumber,
     required this._signInWithOtp,
     required this._signOut,
+    required this._saveUser,
   }) :
         super(const AuthState.initial()) {
     _listenToAuthChanges();
@@ -55,6 +58,7 @@ class AuthCubit extends Cubit<AuthState> {
     emit(const AuthState.loading());
     try {
       final user = await _registerWithEmail(email: email, password: password);
+      await _saveUser(user);
       emit(AuthState.authenticated(user));
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));
@@ -78,6 +82,7 @@ class AuthCubit extends Cubit<AuthState> {
         verificationId: verificationId,
         smsCode: smsCode,
       );
+      await _saveUser(user);
       emit(AuthState.authenticated(user));
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));

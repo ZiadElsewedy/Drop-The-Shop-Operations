@@ -19,6 +19,7 @@ final _privateConstructorUsedError = UnsupportedError(
 mixin _$UserEntity {
   String get uid => throw _privateConstructorUsedError;
   String get email => throw _privateConstructorUsedError;
+  String get authProvider => throw _privateConstructorUsedError;
   String? get displayName => throw _privateConstructorUsedError;
   String? get photoUrl => throw _privateConstructorUsedError;
   String? get phoneNumber => throw _privateConstructorUsedError;
@@ -40,6 +41,7 @@ abstract class $UserEntityCopyWith<$Res> {
   $Res call({
     String uid,
     String email,
+    String authProvider,
     String? displayName,
     String? photoUrl,
     String? phoneNumber,
@@ -63,6 +65,7 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
   $Res call({
     Object? uid = null,
     Object? email = null,
+    Object? authProvider = null,
     Object? displayName = freezed,
     Object? photoUrl = freezed,
     Object? phoneNumber = freezed,
@@ -76,6 +79,10 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
             email: null == email
                 ? _value.email
                 : email // ignore: cast_nullable_to_non_nullable
+                      as String,
+            authProvider: null == authProvider
+                ? _value.authProvider
+                : authProvider // ignore: cast_nullable_to_non_nullable
                       as String,
             displayName: freezed == displayName
                 ? _value.displayName
@@ -107,6 +114,7 @@ abstract class _$$UserEntityImplCopyWith<$Res>
   $Res call({
     String uid,
     String email,
+    String authProvider,
     String? displayName,
     String? photoUrl,
     String? phoneNumber,
@@ -129,6 +137,7 @@ class __$$UserEntityImplCopyWithImpl<$Res>
   $Res call({
     Object? uid = null,
     Object? email = null,
+    Object? authProvider = null,
     Object? displayName = freezed,
     Object? photoUrl = freezed,
     Object? phoneNumber = freezed,
@@ -142,6 +151,10 @@ class __$$UserEntityImplCopyWithImpl<$Res>
         email: null == email
             ? _value.email
             : email // ignore: cast_nullable_to_non_nullable
+                  as String,
+        authProvider: null == authProvider
+            ? _value.authProvider
+            : authProvider // ignore: cast_nullable_to_non_nullable
                   as String,
         displayName: freezed == displayName
             ? _value.displayName
@@ -166,6 +179,7 @@ class _$UserEntityImpl implements _UserEntity {
   const _$UserEntityImpl({
     required this.uid,
     required this.email,
+    required this.authProvider,
     this.displayName,
     this.photoUrl,
     this.phoneNumber,
@@ -176,6 +190,8 @@ class _$UserEntityImpl implements _UserEntity {
   @override
   final String email;
   @override
+  final String authProvider;
+  @override
   final String? displayName;
   @override
   final String? photoUrl;
@@ -184,7 +200,7 @@ class _$UserEntityImpl implements _UserEntity {
 
   @override
   String toString() {
-    return 'UserEntity(uid: $uid, email: $email, displayName: $displayName, photoUrl: $photoUrl, phoneNumber: $phoneNumber)';
+    return 'UserEntity(uid: $uid, email: $email, authProvider: $authProvider, displayName: $displayName, photoUrl: $photoUrl, phoneNumber: $phoneNumber)';
   }
 
   @override
@@ -194,6 +210,8 @@ class _$UserEntityImpl implements _UserEntity {
             other is _$UserEntityImpl &&
             (identical(other.uid, uid) || other.uid == uid) &&
             (identical(other.email, email) || other.email == email) &&
+            (identical(other.authProvider, authProvider) ||
+                other.authProvider == authProvider) &&
             (identical(other.displayName, displayName) ||
                 other.displayName == displayName) &&
             (identical(other.photoUrl, photoUrl) ||
@@ -203,8 +221,15 @@ class _$UserEntityImpl implements _UserEntity {
   }
 
   @override
-  int get hashCode =>
-      Object.hash(runtimeType, uid, email, displayName, photoUrl, phoneNumber);
+  int get hashCode => Object.hash(
+    runtimeType,
+    uid,
+    email,
+    authProvider,
+    displayName,
+    photoUrl,
+    phoneNumber,
+  );
 
   /// Create a copy of UserEntity
   /// with the given fields replaced by the non-null parameter values.
@@ -219,6 +244,7 @@ abstract class _UserEntity implements UserEntity {
   const factory _UserEntity({
     required final String uid,
     required final String email,
+    required final String authProvider,
     final String? displayName,
     final String? photoUrl,
     final String? phoneNumber,
@@ -228,6 +254,8 @@ abstract class _UserEntity implements UserEntity {
   String get uid;
   @override
   String get email;
+  @override
+  String get authProvider;
   @override
   String? get displayName;
   @override

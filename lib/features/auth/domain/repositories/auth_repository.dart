@@ -27,5 +27,7 @@ abstract class AuthRepository {
 
   Future<void> signOut();
 
+  Future<void> saveUser(UserEntity user);
+
   UserEntity? get currentUser;
 }
