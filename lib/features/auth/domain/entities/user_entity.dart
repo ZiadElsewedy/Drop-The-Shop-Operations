@@ -11,5 +11,7 @@ class UserEntity with _$UserEntity {
     String? displayName,
     String? photoUrl,
     String? phoneNumber,
+    @Default(false) bool isEmailVerified,
+    DateTime? createdAt,
   }) = _UserEntity;
 }

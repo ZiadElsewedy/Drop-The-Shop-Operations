@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fbro/core/routes/route_names.dart';
+
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
@@ -116,7 +117,7 @@ class _LoginPageState extends State<LoginPage> {
                   child: Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () {},
+                      onPressed: () => context.push(RouteNames.forgotPassword),
                       style: TextButton.styleFrom(
                           padding: EdgeInsets.zero,
                           minimumSize: Size.zero,
@@ -184,19 +185,31 @@ class _LoginPageState extends State<LoginPage> {
 
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 420),
-                  child: AppButton.secondary(
-                    label: 'Continue with Google',
-                    icon: Image.asset(
-                      'assets/icons/google.png',
-                      width: 20,
-                      height: 20,
-                      errorBuilder: (context, error, stackTrace) => const Icon(
-                        Icons.g_mobiledata_rounded,
-                        size: 22,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    onPressed: () {},
+                  child: BlocBuilder<AuthCubit, AuthState>(
+                    builder: (context, state) {
+                      final isLoading =
+                          state.maybeWhen(loading: () => true, orElse: () => false);
+                      return AppButton.secondary(
+                        label: 'Continue with Google',
+                        isLoading: isLoading,
+                        icon: isLoading
+                            ? null
+                            : Image.asset(
+                                'assets/icons/google.png',
+                                width: 20,
+                                height: 20,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    const Icon(
+                                  Icons.g_mobiledata_rounded,
+                                  size: 22,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                        onPressed: isLoading
+                            ? null
+                            : () => context.read<AuthCubit>().signInWithGoogle(),
+                      );
+                    },
                   ),
                 ),
 

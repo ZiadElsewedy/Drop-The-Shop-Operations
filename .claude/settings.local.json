@@ -4,7 +4,10 @@
       "Bash(flutter pub *)",
       "Bash(dart run *)",
       "Bash(flutter analyze *)",
-      "Bash(flutter --version)"
+      "Bash(flutter --version)",
+      "mcp__visualize__read_me",
+      "mcp__visualize__show_widget",
+      "Bash(dart analyze *)"
     ]
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
@@ -9,24 +10,24 @@ import 'package:fbro/features/auth/presentation/cubit/auth_state.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
 
-class RegisterPage extends StatefulWidget {
-  const RegisterPage({super.key});
+class ChangePasswordPage extends StatefulWidget {
+  const ChangePasswordPage({super.key});
 
   @override
-  State<RegisterPage> createState() => _RegisterPageState();
+  State<ChangePasswordPage> createState() => _ChangePasswordPageState();
 }
 
-class _RegisterPageState extends State<RegisterPage> {
-  final _nameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+class _ChangePasswordPageState extends State<ChangePasswordPage> {
+  final _currentPasswordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
-    _nameController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
+    _currentPasswordController.dispose();
+    _newPasswordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
@@ -35,13 +36,32 @@ class _RegisterPageState extends State<RegisterPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: AppColors.darkBg,
       appBar: AppBar(
-        leading: const BackButton(),
-        backgroundColor: Colors.transparent,
+        backgroundColor: AppColors.darkBg,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: AppColors.textSecondary, size: 20),
+          onPressed: () => context.pop(),
+        ),
+        title: Text('Change Password', style: AppTypography.h3),
       ),
       body: BlocListener<AuthCubit, AuthState>(
         listener: (context, state) {
           state.whenOrNull(
+            passwordChanged: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Password changed successfully'),
+                  backgroundColor: AppColors.success,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+              );
+              context.pop();
+            },
             error: (msg) => ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(msg),
@@ -65,7 +85,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 50),
                   child: Text(
-                    'Create\nAccount',
+                    'Change\nPassword',
                     style: AppTypography.displayMedium.copyWith(
                       color: isDark ? AppColors.textPrimary : AppColors.textDark,
                     ),
@@ -75,7 +95,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 120),
                   child: const Text(
-                    'Fill in the details below to get started.',
+                    'Enter your current password and choose a new one.',
                     style: AppTypography.bodyLarge,
                   ),
                 ),
@@ -85,12 +105,12 @@ class _RegisterPageState extends State<RegisterPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 180),
                   child: AppTextField(
-                    controller: _nameController,
-                    label: 'Full Name',
-                    hint: 'John Doe',
-                    prefixIcon: Icons.person_outline_rounded,
+                    controller: _currentPasswordController,
+                    label: 'Current Password',
+                    prefixIcon: Icons.lock_outline_rounded,
+                    obscureText: true,
                     validator: (v) =>
-                        v == null || v.isEmpty ? 'Enter your name' : null,
+                        v == null || v.isEmpty ? 'Enter your current password' : null,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -98,13 +118,19 @@ class _RegisterPageState extends State<RegisterPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 230),
                   child: AppTextField(
-                    controller: _emailController,
-                    label: 'Email Address',
-                    hint: 'example@gmail.com',
-                    prefixIcon: Icons.mail_outline_rounded,
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Enter your email' : null,
+                    controller: _newPasswordController,
+                    label: 'New Password',
+                    prefixIcon: Icons.lock_outline_rounded,
+                    obscureText: true,
+                    validator: (v) {
+                      if (v == null || v.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      if (v == _currentPasswordController.text) {
+                        return 'New password must be different from current';
+                      }
+                      return null;
+                    },
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -112,13 +138,17 @@ class _RegisterPageState extends State<RegisterPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 280),
                   child: AppTextField(
-                    controller: _passwordController,
-                    label: 'Password',
+                    controller: _confirmPasswordController,
+                    label: 'Confirm New Password',
                     prefixIcon: Icons.lock_outline_rounded,
                     obscureText: true,
                     textInputAction: TextInputAction.done,
-                    validator: (v) =>
-                        v == null || v.length < 6 ? 'Min 6 characters' : null,
+                    validator: (v) {
+                      if (v != _newPasswordController.text) {
+                        return 'Passwords do not match';
+                      }
+                      return null;
+                    },
                   ),
                 ),
 
@@ -129,37 +159,22 @@ class _RegisterPageState extends State<RegisterPage> {
                   beginOffset: const Offset(0, 16),
                   child: BlocBuilder<AuthCubit, AuthState>(
                     builder: (context, state) {
-                      final isLoading = state.maybeWhen(
-                        loading: () => true,
-                        orElse: () => false,
-                      );
+                      final isLoading =
+                          state.maybeWhen(loading: () => true, orElse: () => false);
                       return AppButton(
-                        label: 'Create Account',
+                        label: 'Update Password',
                         isLoading: isLoading,
                         onPressed: () {
                           if (_formKey.currentState!.validate()) {
-                            context.read<AuthCubit>().registerWithEmail(
-                                  _emailController.text.trim(),
-                                  _passwordController.text,
-                                  displayName: _nameController.text.trim(),
+                            context.read<AuthCubit>().changePassword(
+                                  currentPassword:
+                                      _currentPasswordController.text,
+                                  newPassword: _newPasswordController.text,
                                 );
                           }
                         },
                       );
                     },
-                  ),
-                ),
-
-                const SizedBox(height: AppSpacing.xl),
-
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 380),
-                  child: Center(
-                    child: Text(
-                      'By creating an account, you agree to our\nTerms of Service and Privacy Policy.',
-                      textAlign: TextAlign.center,
-                      style: AppTypography.caption,
-                    ),
                   ),
                 ),
 

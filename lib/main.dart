@@ -18,8 +18,11 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: AppDependencies.authCubit,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: AppDependencies.authCubit),
+        BlocProvider.value(value: AppDependencies.profileCubit),
+      ],
       child: Builder(
         builder: (context) {
           final router = createRouter(AppDependencies.authCubit);

@@ -10,5 +10,8 @@ class AuthState with _$AuthState {
   const factory AuthState.authenticated(UserEntity user) = _Authenticated;
   const factory AuthState.unauthenticated() = _Unauthenticated;
   const factory AuthState.otpSent(String verificationId) = _OtpSent;
+  const factory AuthState.awaitingEmailVerification(UserEntity user) = _AwaitingEmailVerification;
+  const factory AuthState.passwordResetSent() = _PasswordResetSent;
+  const factory AuthState.passwordChanged() = _PasswordChanged;
   const factory AuthState.error(String message) = _Error;
 }

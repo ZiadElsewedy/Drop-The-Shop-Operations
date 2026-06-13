@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "450092605249-5qi6k65qr5n8l4dpoom1e2e11h8k3lad.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.fbro",
+            "certificate_hash": "5a058416e0d2201223a980cb4724ef5de6cfa04f"
+          }
+        },
+        {
           "client_id": "450092605249-jqe0gbephbh3jtfejh3dkp68dcftpe8c.apps.googleusercontent.com",
           "client_type": 3
         }

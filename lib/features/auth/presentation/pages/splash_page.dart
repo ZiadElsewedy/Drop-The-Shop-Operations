@@ -57,11 +57,17 @@ class _SplashPageState extends State<SplashPage>
     ]);
     if (!mounted) return;
 
-    final isAuthenticated = AppDependencies.authCubit.state.maybeWhen(
-      authenticated: (_) => true,
-      orElse: () => false,
+    AppDependencies.authCubit.state.when(
+      initial: () => context.go(RouteNames.welcome),
+      loading: () => context.go(RouteNames.welcome),
+      authenticated: (_) => context.go(RouteNames.home),
+      unauthenticated: () => context.go(RouteNames.welcome),
+      otpSent: (_) => context.go(RouteNames.welcome),
+      awaitingEmailVerification: (_) => context.go(RouteNames.emailVerification),
+      passwordResetSent: () => context.go(RouteNames.welcome),
+      passwordChanged: () => context.go(RouteNames.home),
+      error: (_) => context.go(RouteNames.welcome),
     );
-    context.go(isAuthenticated ? RouteNames.home : RouteNames.welcome);
   }
 
   @override

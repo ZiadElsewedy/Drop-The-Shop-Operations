@@ -23,6 +23,8 @@ mixin _$UserEntity {
   String? get displayName => throw _privateConstructorUsedError;
   String? get photoUrl => throw _privateConstructorUsedError;
   String? get phoneNumber => throw _privateConstructorUsedError;
+  bool get isEmailVerified => throw _privateConstructorUsedError;
+  DateTime? get createdAt => throw _privateConstructorUsedError;
 
   /// Create a copy of UserEntity
   /// with the given fields replaced by the non-null parameter values.
@@ -45,6 +47,8 @@ abstract class $UserEntityCopyWith<$Res> {
     String? displayName,
     String? photoUrl,
     String? phoneNumber,
+    bool isEmailVerified,
+    DateTime? createdAt,
   });
 }
 
@@ -69,6 +73,8 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
     Object? displayName = freezed,
     Object? photoUrl = freezed,
     Object? phoneNumber = freezed,
+    Object? isEmailVerified = null,
+    Object? createdAt = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -96,6 +102,14 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
                 ? _value.phoneNumber
                 : phoneNumber // ignore: cast_nullable_to_non_nullable
                       as String?,
+            isEmailVerified: null == isEmailVerified
+                ? _value.isEmailVerified
+                : isEmailVerified // ignore: cast_nullable_to_non_nullable
+                      as bool,
+            createdAt: freezed == createdAt
+                ? _value.createdAt
+                : createdAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
           )
           as $Val,
     );
@@ -118,6 +132,8 @@ abstract class _$$UserEntityImplCopyWith<$Res>
     String? displayName,
     String? photoUrl,
     String? phoneNumber,
+    bool isEmailVerified,
+    DateTime? createdAt,
   });
 }
 
@@ -141,6 +157,8 @@ class __$$UserEntityImplCopyWithImpl<$Res>
     Object? displayName = freezed,
     Object? photoUrl = freezed,
     Object? phoneNumber = freezed,
+    Object? isEmailVerified = null,
+    Object? createdAt = freezed,
   }) {
     return _then(
       _$UserEntityImpl(
@@ -168,6 +186,14 @@ class __$$UserEntityImplCopyWithImpl<$Res>
             ? _value.phoneNumber
             : phoneNumber // ignore: cast_nullable_to_non_nullable
                   as String?,
+        isEmailVerified: null == isEmailVerified
+            ? _value.isEmailVerified
+            : isEmailVerified // ignore: cast_nullable_to_non_nullable
+                  as bool,
+        createdAt: freezed == createdAt
+            ? _value.createdAt
+            : createdAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
       ),
     );
   }
@@ -183,6 +209,8 @@ class _$UserEntityImpl implements _UserEntity {
     this.displayName,
     this.photoUrl,
     this.phoneNumber,
+    this.isEmailVerified = false,
+    this.createdAt,
   });
 
   @override
@@ -197,10 +225,15 @@ class _$UserEntityImpl implements _UserEntity {
   final String? photoUrl;
   @override
   final String? phoneNumber;
+  @override
+  @JsonKey()
+  final bool isEmailVerified;
+  @override
+  final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'UserEntity(uid: $uid, email: $email, authProvider: $authProvider, displayName: $displayName, photoUrl: $photoUrl, phoneNumber: $phoneNumber)';
+    return 'UserEntity(uid: $uid, email: $email, authProvider: $authProvider, displayName: $displayName, photoUrl: $photoUrl, phoneNumber: $phoneNumber, isEmailVerified: $isEmailVerified, createdAt: $createdAt)';
   }
 
   @override
@@ -217,7 +250,11 @@ class _$UserEntityImpl implements _UserEntity {
             (identical(other.photoUrl, photoUrl) ||
                 other.photoUrl == photoUrl) &&
             (identical(other.phoneNumber, phoneNumber) ||
-                other.phoneNumber == phoneNumber));
+                other.phoneNumber == phoneNumber) &&
+            (identical(other.isEmailVerified, isEmailVerified) ||
+                other.isEmailVerified == isEmailVerified) &&
+            (identical(other.createdAt, createdAt) ||
+                other.createdAt == createdAt));
   }
 
   @override
@@ -229,6 +266,8 @@ class _$UserEntityImpl implements _UserEntity {
     displayName,
     photoUrl,
     phoneNumber,
+    isEmailVerified,
+    createdAt,
   );
 
   /// Create a copy of UserEntity
@@ -248,6 +287,8 @@ abstract class _UserEntity implements UserEntity {
     final String? displayName,
     final String? photoUrl,
     final String? phoneNumber,
+    final bool isEmailVerified,
+    final DateTime? createdAt,
   }) = _$UserEntityImpl;
 
   @override
@@ -262,6 +303,10 @@ abstract class _UserEntity implements UserEntity {
   String? get photoUrl;
   @override
   String? get phoneNumber;
+  @override
+  bool get isEmailVerified;
+  @override
+  DateTime? get createdAt;
 
   /// Create a copy of UserEntity
   /// with the given fields replaced by the non-null parameter values.

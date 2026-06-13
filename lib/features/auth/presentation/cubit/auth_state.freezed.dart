@@ -24,6 +24,9 @@ mixin _$AuthState {
     required TResult Function(UserEntity user) authenticated,
     required TResult Function() unauthenticated,
     required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
     required TResult Function(String message) error,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
@@ -33,6 +36,9 @@ mixin _$AuthState {
     TResult? Function(UserEntity user)? authenticated,
     TResult? Function()? unauthenticated,
     TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
     TResult? Function(String message)? error,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
@@ -42,6 +48,9 @@ mixin _$AuthState {
     TResult Function(UserEntity user)? authenticated,
     TResult Function()? unauthenticated,
     TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
@@ -52,6 +61,10 @@ mixin _$AuthState {
     required TResult Function(_Authenticated value) authenticated,
     required TResult Function(_Unauthenticated value) unauthenticated,
     required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
     required TResult Function(_Error value) error,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
@@ -61,6 +74,10 @@ mixin _$AuthState {
     TResult? Function(_Authenticated value)? authenticated,
     TResult? Function(_Unauthenticated value)? unauthenticated,
     TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
     TResult? Function(_Error value)? error,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
@@ -70,6 +87,10 @@ mixin _$AuthState {
     TResult Function(_Authenticated value)? authenticated,
     TResult Function(_Unauthenticated value)? unauthenticated,
     TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
     TResult Function(_Error value)? error,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
@@ -143,6 +164,9 @@ class _$InitialImpl implements _Initial {
     required TResult Function(UserEntity user) authenticated,
     required TResult Function() unauthenticated,
     required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
     required TResult Function(String message) error,
   }) {
     return initial();
@@ -156,6 +180,9 @@ class _$InitialImpl implements _Initial {
     TResult? Function(UserEntity user)? authenticated,
     TResult? Function()? unauthenticated,
     TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
     TResult? Function(String message)? error,
   }) {
     return initial?.call();
@@ -169,6 +196,9 @@ class _$InitialImpl implements _Initial {
     TResult Function(UserEntity user)? authenticated,
     TResult Function()? unauthenticated,
     TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -186,6 +216,10 @@ class _$InitialImpl implements _Initial {
     required TResult Function(_Authenticated value) authenticated,
     required TResult Function(_Unauthenticated value) unauthenticated,
     required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
     required TResult Function(_Error value) error,
   }) {
     return initial(this);
@@ -199,6 +233,10 @@ class _$InitialImpl implements _Initial {
     TResult? Function(_Authenticated value)? authenticated,
     TResult? Function(_Unauthenticated value)? unauthenticated,
     TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
     TResult? Function(_Error value)? error,
   }) {
     return initial?.call(this);
@@ -212,6 +250,10 @@ class _$InitialImpl implements _Initial {
     TResult Function(_Authenticated value)? authenticated,
     TResult Function(_Unauthenticated value)? unauthenticated,
     TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
     TResult Function(_Error value)? error,
     required TResult orElse(),
   }) {
@@ -274,6 +316,9 @@ class _$LoadingImpl implements _Loading {
     required TResult Function(UserEntity user) authenticated,
     required TResult Function() unauthenticated,
     required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
     required TResult Function(String message) error,
   }) {
     return loading();
@@ -287,6 +332,9 @@ class _$LoadingImpl implements _Loading {
     TResult? Function(UserEntity user)? authenticated,
     TResult? Function()? unauthenticated,
     TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
     TResult? Function(String message)? error,
   }) {
     return loading?.call();
@@ -300,6 +348,9 @@ class _$LoadingImpl implements _Loading {
     TResult Function(UserEntity user)? authenticated,
     TResult Function()? unauthenticated,
     TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -317,6 +368,10 @@ class _$LoadingImpl implements _Loading {
     required TResult Function(_Authenticated value) authenticated,
     required TResult Function(_Unauthenticated value) unauthenticated,
     required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
     required TResult Function(_Error value) error,
   }) {
     return loading(this);
@@ -330,6 +385,10 @@ class _$LoadingImpl implements _Loading {
     TResult? Function(_Authenticated value)? authenticated,
     TResult? Function(_Unauthenticated value)? unauthenticated,
     TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
     TResult? Function(_Error value)? error,
   }) {
     return loading?.call(this);
@@ -343,6 +402,10 @@ class _$LoadingImpl implements _Loading {
     TResult Function(_Authenticated value)? authenticated,
     TResult Function(_Unauthenticated value)? unauthenticated,
     TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
     TResult Function(_Error value)? error,
     required TResult orElse(),
   }) {
@@ -444,6 +507,9 @@ class _$AuthenticatedImpl implements _Authenticated {
     required TResult Function(UserEntity user) authenticated,
     required TResult Function() unauthenticated,
     required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
     required TResult Function(String message) error,
   }) {
     return authenticated(user);
@@ -457,6 +523,9 @@ class _$AuthenticatedImpl implements _Authenticated {
     TResult? Function(UserEntity user)? authenticated,
     TResult? Function()? unauthenticated,
     TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
     TResult? Function(String message)? error,
   }) {
     return authenticated?.call(user);
@@ -470,6 +539,9 @@ class _$AuthenticatedImpl implements _Authenticated {
     TResult Function(UserEntity user)? authenticated,
     TResult Function()? unauthenticated,
     TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -487,6 +559,10 @@ class _$AuthenticatedImpl implements _Authenticated {
     required TResult Function(_Authenticated value) authenticated,
     required TResult Function(_Unauthenticated value) unauthenticated,
     required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
     required TResult Function(_Error value) error,
   }) {
     return authenticated(this);
@@ -500,6 +576,10 @@ class _$AuthenticatedImpl implements _Authenticated {
     TResult? Function(_Authenticated value)? authenticated,
     TResult? Function(_Unauthenticated value)? unauthenticated,
     TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
     TResult? Function(_Error value)? error,
   }) {
     return authenticated?.call(this);
@@ -513,6 +593,10 @@ class _$AuthenticatedImpl implements _Authenticated {
     TResult Function(_Authenticated value)? authenticated,
     TResult Function(_Unauthenticated value)? unauthenticated,
     TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
     TResult Function(_Error value)? error,
     required TResult orElse(),
   }) {
@@ -583,6 +667,9 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
     required TResult Function(UserEntity user) authenticated,
     required TResult Function() unauthenticated,
     required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
     required TResult Function(String message) error,
   }) {
     return unauthenticated();
@@ -596,6 +683,9 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
     TResult? Function(UserEntity user)? authenticated,
     TResult? Function()? unauthenticated,
     TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
     TResult? Function(String message)? error,
   }) {
     return unauthenticated?.call();
@@ -609,6 +699,9 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
     TResult Function(UserEntity user)? authenticated,
     TResult Function()? unauthenticated,
     TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -626,6 +719,10 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
     required TResult Function(_Authenticated value) authenticated,
     required TResult Function(_Unauthenticated value) unauthenticated,
     required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
     required TResult Function(_Error value) error,
   }) {
     return unauthenticated(this);
@@ -639,6 +736,10 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
     TResult? Function(_Authenticated value)? authenticated,
     TResult? Function(_Unauthenticated value)? unauthenticated,
     TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
     TResult? Function(_Error value)? error,
   }) {
     return unauthenticated?.call(this);
@@ -652,6 +753,10 @@ class _$UnauthenticatedImpl implements _Unauthenticated {
     TResult Function(_Authenticated value)? authenticated,
     TResult Function(_Unauthenticated value)? unauthenticated,
     TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
     TResult Function(_Error value)? error,
     required TResult orElse(),
   }) {
@@ -742,6 +847,9 @@ class _$OtpSentImpl implements _OtpSent {
     required TResult Function(UserEntity user) authenticated,
     required TResult Function() unauthenticated,
     required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
     required TResult Function(String message) error,
   }) {
     return otpSent(verificationId);
@@ -755,6 +863,9 @@ class _$OtpSentImpl implements _OtpSent {
     TResult? Function(UserEntity user)? authenticated,
     TResult? Function()? unauthenticated,
     TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
     TResult? Function(String message)? error,
   }) {
     return otpSent?.call(verificationId);
@@ -768,6 +879,9 @@ class _$OtpSentImpl implements _OtpSent {
     TResult Function(UserEntity user)? authenticated,
     TResult Function()? unauthenticated,
     TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -785,6 +899,10 @@ class _$OtpSentImpl implements _OtpSent {
     required TResult Function(_Authenticated value) authenticated,
     required TResult Function(_Unauthenticated value) unauthenticated,
     required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
     required TResult Function(_Error value) error,
   }) {
     return otpSent(this);
@@ -798,6 +916,10 @@ class _$OtpSentImpl implements _OtpSent {
     TResult? Function(_Authenticated value)? authenticated,
     TResult? Function(_Unauthenticated value)? unauthenticated,
     TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
     TResult? Function(_Error value)? error,
   }) {
     return otpSent?.call(this);
@@ -811,6 +933,10 @@ class _$OtpSentImpl implements _OtpSent {
     TResult Function(_Authenticated value)? authenticated,
     TResult Function(_Unauthenticated value)? unauthenticated,
     TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
     TResult Function(_Error value)? error,
     required TResult orElse(),
   }) {
@@ -831,6 +957,513 @@ abstract class _OtpSent implements AuthState {
   @JsonKey(includeFromJson: false, includeToJson: false)
   _$$OtpSentImplCopyWith<_$OtpSentImpl> get copyWith =>
       throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$AwaitingEmailVerificationImplCopyWith<$Res> {
+  factory _$$AwaitingEmailVerificationImplCopyWith(
+    _$AwaitingEmailVerificationImpl value,
+    $Res Function(_$AwaitingEmailVerificationImpl) then,
+  ) = __$$AwaitingEmailVerificationImplCopyWithImpl<$Res>;
+  @useResult
+  $Res call({UserEntity user});
+
+  $UserEntityCopyWith<$Res> get user;
+}
+
+/// @nodoc
+class __$$AwaitingEmailVerificationImplCopyWithImpl<$Res>
+    extends _$AuthStateCopyWithImpl<$Res, _$AwaitingEmailVerificationImpl>
+    implements _$$AwaitingEmailVerificationImplCopyWith<$Res> {
+  __$$AwaitingEmailVerificationImplCopyWithImpl(
+    _$AwaitingEmailVerificationImpl _value,
+    $Res Function(_$AwaitingEmailVerificationImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of AuthState
+  /// with the given fields replaced by the non-null parameter values.
+  @pragma('vm:prefer-inline')
+  @override
+  $Res call({Object? user = null}) {
+    return _then(
+      _$AwaitingEmailVerificationImpl(
+        null == user
+            ? _value.user
+            : user // ignore: cast_nullable_to_non_nullable
+                  as UserEntity,
+      ),
+    );
+  }
+
+  /// Create a copy of AuthState
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $UserEntityCopyWith<$Res> get user {
+    return $UserEntityCopyWith<$Res>(_value.user, (value) {
+      return _then(_value.copyWith(user: value));
+    });
+  }
+}
+
+/// @nodoc
+
+class _$AwaitingEmailVerificationImpl implements _AwaitingEmailVerification {
+  const _$AwaitingEmailVerificationImpl(this.user);
+
+  @override
+  final UserEntity user;
+
+  @override
+  String toString() {
+    return 'AuthState.awaitingEmailVerification(user: $user)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType &&
+            other is _$AwaitingEmailVerificationImpl &&
+            (identical(other.user, user) || other.user == user));
+  }
+
+  @override
+  int get hashCode => Object.hash(runtimeType, user);
+
+  /// Create a copy of AuthState
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  @override
+  @pragma('vm:prefer-inline')
+  _$$AwaitingEmailVerificationImplCopyWith<_$AwaitingEmailVerificationImpl>
+  get copyWith =>
+      __$$AwaitingEmailVerificationImplCopyWithImpl<
+        _$AwaitingEmailVerificationImpl
+      >(this, _$identity);
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() initial,
+    required TResult Function() loading,
+    required TResult Function(UserEntity user) authenticated,
+    required TResult Function() unauthenticated,
+    required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
+    required TResult Function(String message) error,
+  }) {
+    return awaitingEmailVerification(user);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? initial,
+    TResult? Function()? loading,
+    TResult? Function(UserEntity user)? authenticated,
+    TResult? Function()? unauthenticated,
+    TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
+    TResult? Function(String message)? error,
+  }) {
+    return awaitingEmailVerification?.call(user);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? initial,
+    TResult Function()? loading,
+    TResult Function(UserEntity user)? authenticated,
+    TResult Function()? unauthenticated,
+    TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
+    TResult Function(String message)? error,
+    required TResult orElse(),
+  }) {
+    if (awaitingEmailVerification != null) {
+      return awaitingEmailVerification(user);
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(_Initial value) initial,
+    required TResult Function(_Loading value) loading,
+    required TResult Function(_Authenticated value) authenticated,
+    required TResult Function(_Unauthenticated value) unauthenticated,
+    required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
+    required TResult Function(_Error value) error,
+  }) {
+    return awaitingEmailVerification(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(_Initial value)? initial,
+    TResult? Function(_Loading value)? loading,
+    TResult? Function(_Authenticated value)? authenticated,
+    TResult? Function(_Unauthenticated value)? unauthenticated,
+    TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
+    TResult? Function(_Error value)? error,
+  }) {
+    return awaitingEmailVerification?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(_Initial value)? initial,
+    TResult Function(_Loading value)? loading,
+    TResult Function(_Authenticated value)? authenticated,
+    TResult Function(_Unauthenticated value)? unauthenticated,
+    TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
+    TResult Function(_Error value)? error,
+    required TResult orElse(),
+  }) {
+    if (awaitingEmailVerification != null) {
+      return awaitingEmailVerification(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class _AwaitingEmailVerification implements AuthState {
+  const factory _AwaitingEmailVerification(final UserEntity user) =
+      _$AwaitingEmailVerificationImpl;
+
+  UserEntity get user;
+
+  /// Create a copy of AuthState
+  /// with the given fields replaced by the non-null parameter values.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  _$$AwaitingEmailVerificationImplCopyWith<_$AwaitingEmailVerificationImpl>
+  get copyWith => throw _privateConstructorUsedError;
+}
+
+/// @nodoc
+abstract class _$$PasswordResetSentImplCopyWith<$Res> {
+  factory _$$PasswordResetSentImplCopyWith(
+    _$PasswordResetSentImpl value,
+    $Res Function(_$PasswordResetSentImpl) then,
+  ) = __$$PasswordResetSentImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$PasswordResetSentImplCopyWithImpl<$Res>
+    extends _$AuthStateCopyWithImpl<$Res, _$PasswordResetSentImpl>
+    implements _$$PasswordResetSentImplCopyWith<$Res> {
+  __$$PasswordResetSentImplCopyWithImpl(
+    _$PasswordResetSentImpl _value,
+    $Res Function(_$PasswordResetSentImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of AuthState
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$PasswordResetSentImpl implements _PasswordResetSent {
+  const _$PasswordResetSentImpl();
+
+  @override
+  String toString() {
+    return 'AuthState.passwordResetSent()';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is _$PasswordResetSentImpl);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() initial,
+    required TResult Function() loading,
+    required TResult Function(UserEntity user) authenticated,
+    required TResult Function() unauthenticated,
+    required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
+    required TResult Function(String message) error,
+  }) {
+    return passwordResetSent();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? initial,
+    TResult? Function()? loading,
+    TResult? Function(UserEntity user)? authenticated,
+    TResult? Function()? unauthenticated,
+    TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
+    TResult? Function(String message)? error,
+  }) {
+    return passwordResetSent?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? initial,
+    TResult Function()? loading,
+    TResult Function(UserEntity user)? authenticated,
+    TResult Function()? unauthenticated,
+    TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
+    TResult Function(String message)? error,
+    required TResult orElse(),
+  }) {
+    if (passwordResetSent != null) {
+      return passwordResetSent();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(_Initial value) initial,
+    required TResult Function(_Loading value) loading,
+    required TResult Function(_Authenticated value) authenticated,
+    required TResult Function(_Unauthenticated value) unauthenticated,
+    required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
+    required TResult Function(_Error value) error,
+  }) {
+    return passwordResetSent(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(_Initial value)? initial,
+    TResult? Function(_Loading value)? loading,
+    TResult? Function(_Authenticated value)? authenticated,
+    TResult? Function(_Unauthenticated value)? unauthenticated,
+    TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
+    TResult? Function(_Error value)? error,
+  }) {
+    return passwordResetSent?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(_Initial value)? initial,
+    TResult Function(_Loading value)? loading,
+    TResult Function(_Authenticated value)? authenticated,
+    TResult Function(_Unauthenticated value)? unauthenticated,
+    TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
+    TResult Function(_Error value)? error,
+    required TResult orElse(),
+  }) {
+    if (passwordResetSent != null) {
+      return passwordResetSent(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class _PasswordResetSent implements AuthState {
+  const factory _PasswordResetSent() = _$PasswordResetSentImpl;
+}
+
+/// @nodoc
+abstract class _$$PasswordChangedImplCopyWith<$Res> {
+  factory _$$PasswordChangedImplCopyWith(
+    _$PasswordChangedImpl value,
+    $Res Function(_$PasswordChangedImpl) then,
+  ) = __$$PasswordChangedImplCopyWithImpl<$Res>;
+}
+
+/// @nodoc
+class __$$PasswordChangedImplCopyWithImpl<$Res>
+    extends _$AuthStateCopyWithImpl<$Res, _$PasswordChangedImpl>
+    implements _$$PasswordChangedImplCopyWith<$Res> {
+  __$$PasswordChangedImplCopyWithImpl(
+    _$PasswordChangedImpl _value,
+    $Res Function(_$PasswordChangedImpl) _then,
+  ) : super(_value, _then);
+
+  /// Create a copy of AuthState
+  /// with the given fields replaced by the non-null parameter values.
+}
+
+/// @nodoc
+
+class _$PasswordChangedImpl implements _PasswordChanged {
+  const _$PasswordChangedImpl();
+
+  @override
+  String toString() {
+    return 'AuthState.passwordChanged()';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return identical(this, other) ||
+        (other.runtimeType == runtimeType && other is _$PasswordChangedImpl);
+  }
+
+  @override
+  int get hashCode => runtimeType.hashCode;
+
+  @override
+  @optionalTypeArgs
+  TResult when<TResult extends Object?>({
+    required TResult Function() initial,
+    required TResult Function() loading,
+    required TResult Function(UserEntity user) authenticated,
+    required TResult Function() unauthenticated,
+    required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
+    required TResult Function(String message) error,
+  }) {
+    return passwordChanged();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? whenOrNull<TResult extends Object?>({
+    TResult? Function()? initial,
+    TResult? Function()? loading,
+    TResult? Function(UserEntity user)? authenticated,
+    TResult? Function()? unauthenticated,
+    TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
+    TResult? Function(String message)? error,
+  }) {
+    return passwordChanged?.call();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeWhen<TResult extends Object?>({
+    TResult Function()? initial,
+    TResult Function()? loading,
+    TResult Function(UserEntity user)? authenticated,
+    TResult Function()? unauthenticated,
+    TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
+    TResult Function(String message)? error,
+    required TResult orElse(),
+  }) {
+    if (passwordChanged != null) {
+      return passwordChanged();
+    }
+    return orElse();
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult map<TResult extends Object?>({
+    required TResult Function(_Initial value) initial,
+    required TResult Function(_Loading value) loading,
+    required TResult Function(_Authenticated value) authenticated,
+    required TResult Function(_Unauthenticated value) unauthenticated,
+    required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
+    required TResult Function(_Error value) error,
+  }) {
+    return passwordChanged(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult? mapOrNull<TResult extends Object?>({
+    TResult? Function(_Initial value)? initial,
+    TResult? Function(_Loading value)? loading,
+    TResult? Function(_Authenticated value)? authenticated,
+    TResult? Function(_Unauthenticated value)? unauthenticated,
+    TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
+    TResult? Function(_Error value)? error,
+  }) {
+    return passwordChanged?.call(this);
+  }
+
+  @override
+  @optionalTypeArgs
+  TResult maybeMap<TResult extends Object?>({
+    TResult Function(_Initial value)? initial,
+    TResult Function(_Loading value)? loading,
+    TResult Function(_Authenticated value)? authenticated,
+    TResult Function(_Unauthenticated value)? unauthenticated,
+    TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
+    TResult Function(_Error value)? error,
+    required TResult orElse(),
+  }) {
+    if (passwordChanged != null) {
+      return passwordChanged(this);
+    }
+    return orElse();
+  }
+}
+
+abstract class _PasswordChanged implements AuthState {
+  const factory _PasswordChanged() = _$PasswordChangedImpl;
 }
 
 /// @nodoc
@@ -908,6 +1541,9 @@ class _$ErrorImpl implements _Error {
     required TResult Function(UserEntity user) authenticated,
     required TResult Function() unauthenticated,
     required TResult Function(String verificationId) otpSent,
+    required TResult Function(UserEntity user) awaitingEmailVerification,
+    required TResult Function() passwordResetSent,
+    required TResult Function() passwordChanged,
     required TResult Function(String message) error,
   }) {
     return error(message);
@@ -921,6 +1557,9 @@ class _$ErrorImpl implements _Error {
     TResult? Function(UserEntity user)? authenticated,
     TResult? Function()? unauthenticated,
     TResult? Function(String verificationId)? otpSent,
+    TResult? Function(UserEntity user)? awaitingEmailVerification,
+    TResult? Function()? passwordResetSent,
+    TResult? Function()? passwordChanged,
     TResult? Function(String message)? error,
   }) {
     return error?.call(message);
@@ -934,6 +1573,9 @@ class _$ErrorImpl implements _Error {
     TResult Function(UserEntity user)? authenticated,
     TResult Function()? unauthenticated,
     TResult Function(String verificationId)? otpSent,
+    TResult Function(UserEntity user)? awaitingEmailVerification,
+    TResult Function()? passwordResetSent,
+    TResult Function()? passwordChanged,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -951,6 +1593,10 @@ class _$ErrorImpl implements _Error {
     required TResult Function(_Authenticated value) authenticated,
     required TResult Function(_Unauthenticated value) unauthenticated,
     required TResult Function(_OtpSent value) otpSent,
+    required TResult Function(_AwaitingEmailVerification value)
+    awaitingEmailVerification,
+    required TResult Function(_PasswordResetSent value) passwordResetSent,
+    required TResult Function(_PasswordChanged value) passwordChanged,
     required TResult Function(_Error value) error,
   }) {
     return error(this);
@@ -964,6 +1610,10 @@ class _$ErrorImpl implements _Error {
     TResult? Function(_Authenticated value)? authenticated,
     TResult? Function(_Unauthenticated value)? unauthenticated,
     TResult? Function(_OtpSent value)? otpSent,
+    TResult? Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult? Function(_PasswordResetSent value)? passwordResetSent,
+    TResult? Function(_PasswordChanged value)? passwordChanged,
     TResult? Function(_Error value)? error,
   }) {
     return error?.call(this);
@@ -977,6 +1627,10 @@ class _$ErrorImpl implements _Error {
     TResult Function(_Authenticated value)? authenticated,
     TResult Function(_Unauthenticated value)? unauthenticated,
     TResult Function(_OtpSent value)? otpSent,
+    TResult Function(_AwaitingEmailVerification value)?
+    awaitingEmailVerification,
+    TResult Function(_PasswordResetSent value)? passwordResetSent,
+    TResult Function(_PasswordChanged value)? passwordChanged,
     TResult Function(_Error value)? error,
     required TResult orElse(),
   }) {

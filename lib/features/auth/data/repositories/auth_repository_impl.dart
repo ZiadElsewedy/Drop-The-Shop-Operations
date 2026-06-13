@@ -46,19 +46,34 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<UserEntity> signInWithGoogle() async {
+    try {
+      final model = await _remote.signInWithGoogle();
+      return model.toEntity();
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
+
+  @override
   Future<void> verifyPhoneNumber({
     required String phoneNumber,
     required void Function(String verificationId) onCodeSent,
     required void Function(String error) onFailed,
     void Function(UserEntity user)? onAutoVerified,
-  }) =>
-      _remote.verifyPhoneNumber(
+  }) async {
+    try {
+      await _remote.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         onCodeSent: onCodeSent,
         onFailed: onFailed,
         onAutoVerified:
             onAutoVerified != null ? (m) => onAutoVerified(m.toEntity()) : null,
       );
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
 
   @override
   Future<UserEntity> signInWithOtp({
@@ -86,15 +101,83 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<UserEntity> reloadUser() async {
+    try {
+      final model = await _remote.reloadUser();
+      return model.toEntity();
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
+
+  @override
   Future<void> saveUser(UserEntity user) async {
-    final model = UserModel(
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName,
-      photoUrl: user.photoUrl,
-      phoneNumber: user.phoneNumber,
-      authProvider: user.authProvider,
-    );
-    await _userRemote.saveUser(model);
+    await _userRemote.saveUser(UserModel.fromEntity(user));
+  }
+
+  @override
+  Future<void> sendPasswordResetEmail(String email) async {
+    try {
+      await _remote.sendPasswordResetEmail(email);
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> sendEmailVerification() async {
+    try {
+      await _remote.sendEmailVerification();
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> updateDisplayName(String displayName) async {
+    try {
+      await _remote.updateDisplayName(displayName);
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> updatePhotoUrl(String photoUrl) async {
+    try {
+      await _remote.updatePhotoUrl(photoUrl);
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    try {
+      await _remote.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> deleteAccount({
+    required String? currentPassword,
+    required String? accessToken,
+  }) async {
+    try {
+      await _remote.deleteAccount(
+        currentPassword: currentPassword,
+        accessToken: accessToken,
+      );
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
   }
 }
