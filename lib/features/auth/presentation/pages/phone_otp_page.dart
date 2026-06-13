@@ -1,7 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fbro/core/theme/app_colors.dart';
+import 'package:fbro/core/theme/app_spacing.dart';
+import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/features/auth/presentation/animations/fade_slide_transition.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_state.dart';
+import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
+import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:fbro/features/auth/presentation/widgets/otp_input.dart';
 
 class PhoneOtpPage extends StatefulWidget {
   const PhoneOtpPage({super.key});
@@ -12,117 +20,338 @@ class PhoneOtpPage extends StatefulWidget {
 
 class _PhoneOtpPageState extends State<PhoneOtpPage> {
   final _phoneController = TextEditingController();
-  final _otpController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
   String? _verificationId;
+  String _otp = '';
+
+  // Resend timer
+  Timer? _timer;
+  int _secondsLeft = 0;
 
   @override
   void dispose() {
     _phoneController.dispose();
-    _otpController.dispose();
+    _timer?.cancel();
     super.dispose();
+  }
+
+  void _startResendTimer() {
+    _timer?.cancel();
+    setState(() => _secondsLeft = 60);
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_secondsLeft == 0) {
+        t.cancel();
+      } else {
+        setState(() => _secondsLeft--);
+      }
+    });
+  }
+
+  String get _timerLabel {
+    final m = (_secondsLeft ~/ 60).toString().padLeft(2, '0');
+    final s = (_secondsLeft % 60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Phone Sign In')),
+      appBar: AppBar(
+        leading: const BackButton(),
+        backgroundColor: Colors.transparent,
+      ),
       body: BlocListener<AuthCubit, AuthState>(
         listener: (context, state) {
           state.whenOrNull(
-            otpSent: (id) => setState(() => _verificationId = id),
-            error: (msg) => ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text(msg))),
+            otpSent: (id) {
+              setState(() => _verificationId = id);
+              _startResendTimer();
+            },
+            error: (msg) => ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(msg),
+                backgroundColor: AppColors.error,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
           );
         },
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 350),
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position:
+                  Tween<Offset>(begin: const Offset(0.1, 0), end: Offset.zero)
+                      .animate(anim),
+              child: child,
+            ),
+          ),
+          child: _verificationId == null
+              ? _PhoneStep(
+                  key: const ValueKey('phone'),
+                  controller: _phoneController,
+                  isDark: isDark,
+                )
+              : _OtpStep(
+                  key: const ValueKey('otp'),
+                  phone: _phoneController.text,
+                  secondsLeft: _secondsLeft,
+                  timerLabel: _timerLabel,
+                  verificationId: _verificationId!,
+                  onOtpChanged: (v) => _otp = v,
+                  onResend: () {
+                    context
+                        .read<AuthCubit>()
+                        .verifyPhone(_phoneController.text.trim());
+                  },
+                  otp: _otp,
+                  isDark: isDark,
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PhoneStep extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isDark;
+
+  const _PhoneStep({
+    super.key,
+    required this.controller,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.xl),
+
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 50),
+            child: Text(
+              'Your Phone\nNumber',
+              style: AppTypography.displayMedium.copyWith(
+                color: isDark ? AppColors.textPrimary : AppColors.textDark,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 120),
+            child: const Text(
+              "We'll send a verification code to this number.",
+              style: AppTypography.bodyLarge,
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.xxxl),
+
+          // Country + phone
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 200),
+            child: Row(
               children: [
-                if (_verificationId == null) ...[
-                  TextFormField(
-                    controller: _phoneController,
-                    decoration:
-                        const InputDecoration(labelText: 'Phone (+201234567890)'),
+                // Country picker stub
+                Container(
+                  height: 60,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color:
+                        isDark ? AppColors.darkSurface : AppColors.lightSurface,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark
+                          ? AppColors.darkBorder
+                          : AppColors.lightBorder,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Text('🇪🇬', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 6),
+                      Text(
+                        '+20',
+                        style: AppTypography.label.copyWith(
+                          color: isDark
+                              ? AppColors.textPrimary
+                              : AppColors.textDark,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: AppColors.textTertiary,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: AppTextField(
+                    controller: controller,
+                    label: 'Phone Number',
+                    hint: '100 000 0000',
+                    prefixIcon: Icons.phone_outlined,
                     keyboardType: TextInputType.phone,
-                    validator: (v) =>
-                        v == null || v.isEmpty ? 'Enter phone number' : null,
                   ),
-                  const SizedBox(height: 24),
-                  BlocBuilder<AuthCubit, AuthState>(
-                    builder: (context, state) {
-                      final isLoading = state.maybeWhen(
-                        loading: () => true,
-                        orElse: () => false,
-                      );
-                      return ElevatedButton(
-                        onPressed: isLoading
-                            ? null
-                            : () {
-                                if (_formKey.currentState!.validate()) {
-                                  context
-                                      .read<AuthCubit>()
-                                      .verifyPhone(_phoneController.text.trim());
-                                }
-                              },
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Send OTP'),
-                      );
-                    },
-                  ),
-                ] else ...[
-                  const Text('Enter the OTP sent to your phone'),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _otpController,
-                    decoration: const InputDecoration(labelText: 'OTP Code'),
-                    keyboardType: TextInputType.number,
-                    validator: (v) =>
-                        v == null || v.length < 6 ? 'Enter 6-digit code' : null,
-                  ),
-                  const SizedBox(height: 24),
-                  BlocBuilder<AuthCubit, AuthState>(
-                    builder: (context, state) {
-                      final isLoading = state.maybeWhen(
-                        loading: () => true,
-                        orElse: () => false,
-                      );
-                      return ElevatedButton(
-                        onPressed: isLoading
-                            ? null
-                            : () {
-                                if (_formKey.currentState!.validate()) {
-                                  context.read<AuthCubit>().verifyOtp(
-                                        _verificationId!,
-                                        _otpController.text.trim(),
-                                      );
-                                }
-                              },
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Verify OTP'),
-                      );
-                    },
-                  ),
-                ],
+                ),
               ],
             ),
           ),
-        ),
+
+          const SizedBox(height: AppSpacing.xxxl),
+
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 280),
+            beginOffset: const Offset(0, 16),
+            child: BlocBuilder<AuthCubit, AuthState>(
+              builder: (context, state) {
+                final isLoading =
+                    state.maybeWhen(loading: () => true, orElse: () => false);
+                return AppButton(
+                  label: 'Continue',
+                  isLoading: isLoading,
+                  onPressed: () {
+                    final phone = controller.text.trim();
+                    if (phone.isEmpty) return;
+                    context.read<AuthCubit>().verifyPhone(phone);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OtpStep extends StatelessWidget {
+  final String phone;
+  final int secondsLeft;
+  final String timerLabel;
+  final String verificationId;
+  final String otp;
+  final void Function(String) onOtpChanged;
+  final VoidCallback onResend;
+  final bool isDark;
+
+  const _OtpStep({
+    super.key,
+    required this.phone,
+    required this.secondsLeft,
+    required this.timerLabel,
+    required this.verificationId,
+    required this.otp,
+    required this.onOtpChanged,
+    required this.onResend,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.pagePadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: AppSpacing.xl),
+
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 50),
+            child: Text(
+              'Enter the\nCode',
+              style: AppTypography.displayMedium.copyWith(
+                color: isDark ? AppColors.textPrimary : AppColors.textDark,
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 120),
+            child: RichText(
+              text: TextSpan(
+                style: AppTypography.bodyLarge,
+                children: [
+                  const TextSpan(text: 'Sent to '),
+                  TextSpan(
+                    text: phone,
+                    style: AppTypography.bodyLarge.copyWith(
+                      color: isDark ? AppColors.textPrimary : AppColors.textDark,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.xxxl),
+
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 200),
+            child: OtpInput(
+              onCompleted: onOtpChanged,
+              onChanged: onOtpChanged,
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.xl),
+
+          // Resend timer
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 260),
+            child: Center(
+              child: secondsLeft > 0
+                  ? Text(
+                      'Resend code in $timerLabel',
+                      style: AppTypography.body,
+                    )
+                  : GestureDetector(
+                      onTap: onResend,
+                      child: Text(
+                        'Resend code',
+                        style: AppTypography.label.copyWith(
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+            ),
+          ),
+
+          const SizedBox(height: AppSpacing.xxxl),
+
+          FadeSlideTransition(
+            delay: const Duration(milliseconds: 320),
+            beginOffset: const Offset(0, 16),
+            child: BlocBuilder<AuthCubit, AuthState>(
+              builder: (context, state) {
+                final isLoading =
+                    state.maybeWhen(loading: () => true, orElse: () => false);
+                return AppButton(
+                  label: 'Verify',
+                  isLoading: isLoading,
+                  onPressed: otp.length == 6
+                      ? () => context
+                          .read<AuthCubit>()
+                          .verifyOtp(verificationId, otp)
+                      : null,
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
