@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fbro/core/constants/app_constants.dart';
 import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/errors/exceptions.dart';
@@ -21,12 +24,20 @@ abstract class TaskRemoteDataSource {
     required String taskId,
     required TaskStatus status,
   });
+  Future<void> reviewTask({
+    required String taskId,
+    required bool approved,
+    required String reviewerId,
+    String? reviewNotes,
+  });
+  Future<String> uploadProof(String taskId, File file);
 }
 
 class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   final FirebaseFirestore _firestore;
+  final FirebaseStorage _storage;
 
-  TaskRemoteDataSourceImpl(this._firestore);
+  TaskRemoteDataSourceImpl(this._firestore, this._storage);
 
   CollectionReference<Map<String, dynamic>> get _tasks =>
       _firestore.collection(AppConstants.tasksCollection);
@@ -146,6 +157,48 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
       }, SetOptions(merge: true));
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to update task status.');
+    }
+  }
+
+  @override
+  Future<void> reviewTask({
+    required String taskId,
+    required bool approved,
+    required String reviewerId,
+    String? reviewNotes,
+  }) async {
+    try {
+      await _tasks.doc(taskId).set({
+        'status':
+            (approved ? TaskStatus.approved : TaskStatus.rejected).value,
+        if (approved) ...{
+          'approvedBy': reviewerId,
+          'approvedAt': FieldValue.serverTimestamp(),
+        } else ...{
+          'rejectedBy': reviewerId,
+          'rejectedAt': FieldValue.serverTimestamp(),
+        },
+        'reviewNotes': ?reviewNotes,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to review task.');
+    }
+  }
+
+  @override
+  Future<String> uploadProof(String taskId, File file) async {
+    try {
+      // Fixed path → re-uploading overwrites the previous proof. Firebase issues
+      // a fresh download token on overwrite, so the saved URL changes.
+      final ref = _storage.ref('${AppConstants.tasksCollection}/$taskId/proof.jpg');
+      final snapshot = await ref.putFile(
+        file,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+      return await snapshot.ref.getDownloadURL();
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Proof upload failed. Please try again.');
     }
   }
 }

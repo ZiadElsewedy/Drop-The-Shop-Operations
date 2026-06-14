@@ -22,6 +22,7 @@ class App extends StatelessWidget {
       providers: [
         BlocProvider.value(value: AppDependencies.authCubit),
         BlocProvider.value(value: AppDependencies.profileCubit),
+        BlocProvider.value(value: AppDependencies.taskCubit),
       ],
       child: Builder(
         builder: (context) {

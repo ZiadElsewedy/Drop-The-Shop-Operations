@@ -31,24 +31,35 @@ import 'package:fbro/features/profile/presentation/cubit/profile_cubit.dart';
 import 'package:fbro/features/shift/data/datasources/shift_remote_datasource.dart';
 import 'package:fbro/features/shift/data/repositories/shift_repository_impl.dart';
 import 'package:fbro/features/shift/domain/repositories/shift_repository.dart';
+import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:fbro/features/task/data/datasources/task_remote_datasource.dart';
 import 'package:fbro/features/task/data/repositories/task_repository_impl.dart';
 import 'package:fbro/features/task/domain/repositories/task_repository.dart';
+import 'package:fbro/features/task/domain/usecases/get_all_tasks.dart';
+import 'package:fbro/features/task/domain/usecases/get_tasks_by_branch.dart';
+import 'package:fbro/features/task/domain/usecases/get_employee_tasks.dart';
+import 'package:fbro/features/task/domain/usecases/create_task.dart';
+import 'package:fbro/features/task/domain/usecases/update_task.dart';
+import 'package:fbro/features/task/domain/usecases/delete_task.dart';
+import 'package:fbro/features/task/domain/usecases/assign_task.dart';
+import 'package:fbro/features/task/domain/usecases/change_task_status.dart';
+import 'package:fbro/features/task/domain/usecases/review_task.dart';
+import 'package:fbro/features/task/domain/usecases/upload_task_proof.dart';
+import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 
 class AppDependencies {
   AppDependencies._();
 
   static late final AuthCubit authCubit;
   static late final ProfileCubit profileCubit;
+  static late final TaskCubit taskCubit;
 
   /// Phase 2 shift foundation. Composed here and ready for the shift UI (a
   /// `ShiftCubit` + use cases) to consume in the next phase; no in-app shift
   /// management screens drive it yet.
   static late final ShiftRepository shiftRepository;
 
-  /// Phase 3 task foundation. Composed here and ready for the task UI (a
-  /// `TaskCubit` + use cases) to consume in the next phase; the task screens are
-  /// placeholders for now.
+  /// Phase 3 task foundation, activated by the Phase 4 [taskCubit] + use cases.
   static late final TaskRepository taskRepository;
 
   static void init() {
@@ -60,8 +71,10 @@ class AppDependencies {
     );
     final shiftRemoteDataSource =
         ShiftRemoteDataSourceImpl(FirebaseFirestore.instance);
-    final taskRemoteDataSource =
-        TaskRemoteDataSourceImpl(FirebaseFirestore.instance);
+    final taskRemoteDataSource = TaskRemoteDataSourceImpl(
+      FirebaseFirestore.instance,
+      FirebaseStorage.instance,
+    );
 
     final AuthRepository authRepository =
         AuthRepositoryImpl(authRemoteDataSource, userRemoteDataSource);
@@ -95,6 +108,20 @@ class AppDependencies {
       uploadProfileImage: UploadProfileImage(profileRepository),
       uploadCoverImage: UploadCoverImage(profileRepository),
       checkUsername: CheckUsername(profileRepository),
+    );
+
+    taskCubit = TaskCubit(
+      getAllTasks: GetAllTasks(taskRepository),
+      getTasksByBranch: GetTasksByBranch(taskRepository),
+      getEmployeeTasks: GetEmployeeTasks(taskRepository),
+      createTask: CreateTask(taskRepository),
+      updateTask: UpdateTask(taskRepository),
+      deleteTask: DeleteTask(taskRepository),
+      assignTask: AssignTask(taskRepository),
+      changeTaskStatus: ChangeTaskStatus(taskRepository),
+      reviewTask: ReviewTask(taskRepository),
+      uploadTaskProof: UploadTaskProof(taskRepository),
+      getUsersByBranch: GetUsersByBranch(authRepository),
     );
   }
 }

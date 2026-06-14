@@ -41,7 +41,18 @@ mixin _$TaskEntity {
   String? get notes => throw _privateConstructorUsedError;
 
   /// Download URL of the proof image the employee uploads on completion.
-  String? get proofImageUrl => throw _privateConstructorUsedError;
+  String? get proofImageUrl =>
+      throw _privateConstructorUsedError; // ─── Review audit (Phase 4 — lightweight, not a full history) ───
+  /// uid of the manager/admin who approved the task, + when.
+  String? get approvedBy => throw _privateConstructorUsedError;
+  DateTime? get approvedAt => throw _privateConstructorUsedError;
+
+  /// uid of the manager/admin who rejected the task, + when.
+  String? get rejectedBy => throw _privateConstructorUsedError;
+  DateTime? get rejectedAt => throw _privateConstructorUsedError;
+
+  /// Reviewer's note left on approve/reject.
+  String? get reviewNotes => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
 
@@ -73,6 +84,11 @@ abstract class $TaskEntityCopyWith<$Res> {
     DateTime? deadline,
     String? notes,
     String? proofImageUrl,
+    String? approvedBy,
+    DateTime? approvedAt,
+    String? rejectedBy,
+    DateTime? rejectedAt,
+    String? reviewNotes,
     DateTime? createdAt,
     DateTime? updatedAt,
   });
@@ -106,6 +122,11 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? deadline = freezed,
     Object? notes = freezed,
     Object? proofImageUrl = freezed,
+    Object? approvedBy = freezed,
+    Object? approvedAt = freezed,
+    Object? rejectedBy = freezed,
+    Object? rejectedAt = freezed,
+    Object? reviewNotes = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -163,6 +184,26 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.proofImageUrl
                 : proofImageUrl // ignore: cast_nullable_to_non_nullable
                       as String?,
+            approvedBy: freezed == approvedBy
+                ? _value.approvedBy
+                : approvedBy // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            approvedAt: freezed == approvedAt
+                ? _value.approvedAt
+                : approvedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            rejectedBy: freezed == rejectedBy
+                ? _value.rejectedBy
+                : rejectedBy // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            rejectedAt: freezed == rejectedAt
+                ? _value.rejectedAt
+                : rejectedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            reviewNotes: freezed == reviewNotes
+                ? _value.reviewNotes
+                : reviewNotes // ignore: cast_nullable_to_non_nullable
+                      as String?,
             createdAt: freezed == createdAt
                 ? _value.createdAt
                 : createdAt // ignore: cast_nullable_to_non_nullable
@@ -200,6 +241,11 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     DateTime? deadline,
     String? notes,
     String? proofImageUrl,
+    String? approvedBy,
+    DateTime? approvedAt,
+    String? rejectedBy,
+    DateTime? rejectedAt,
+    String? reviewNotes,
     DateTime? createdAt,
     DateTime? updatedAt,
   });
@@ -232,6 +278,11 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? deadline = freezed,
     Object? notes = freezed,
     Object? proofImageUrl = freezed,
+    Object? approvedBy = freezed,
+    Object? approvedAt = freezed,
+    Object? rejectedBy = freezed,
+    Object? rejectedAt = freezed,
+    Object? reviewNotes = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -289,6 +340,26 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.proofImageUrl
             : proofImageUrl // ignore: cast_nullable_to_non_nullable
                   as String?,
+        approvedBy: freezed == approvedBy
+            ? _value.approvedBy
+            : approvedBy // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        approvedAt: freezed == approvedAt
+            ? _value.approvedAt
+            : approvedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
+        rejectedBy: freezed == rejectedBy
+            ? _value.rejectedBy
+            : rejectedBy // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        rejectedAt: freezed == rejectedAt
+            ? _value.rejectedAt
+            : rejectedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
+        reviewNotes: freezed == reviewNotes
+            ? _value.reviewNotes
+            : reviewNotes // ignore: cast_nullable_to_non_nullable
+                  as String?,
         createdAt: freezed == createdAt
             ? _value.createdAt
             : createdAt // ignore: cast_nullable_to_non_nullable
@@ -319,6 +390,11 @@ class _$TaskEntityImpl implements _TaskEntity {
     this.deadline,
     this.notes,
     this.proofImageUrl,
+    this.approvedBy,
+    this.approvedAt,
+    this.rejectedBy,
+    this.rejectedAt,
+    this.reviewNotes,
     this.createdAt,
     this.updatedAt,
   });
@@ -364,6 +440,22 @@ class _$TaskEntityImpl implements _TaskEntity {
   /// Download URL of the proof image the employee uploads on completion.
   @override
   final String? proofImageUrl;
+  // ─── Review audit (Phase 4 — lightweight, not a full history) ───
+  /// uid of the manager/admin who approved the task, + when.
+  @override
+  final String? approvedBy;
+  @override
+  final DateTime? approvedAt;
+
+  /// uid of the manager/admin who rejected the task, + when.
+  @override
+  final String? rejectedBy;
+  @override
+  final DateTime? rejectedAt;
+
+  /// Reviewer's note left on approve/reject.
+  @override
+  final String? reviewNotes;
   @override
   final DateTime? createdAt;
   @override
@@ -371,7 +463,7 @@ class _$TaskEntityImpl implements _TaskEntity {
 
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assignedEmployeeId: $assignedEmployeeId, createdBy: $createdBy, assignedShiftId: $assignedShiftId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assignedEmployeeId: $assignedEmployeeId, createdBy: $createdBy, assignedShiftId: $assignedShiftId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -400,6 +492,16 @@ class _$TaskEntityImpl implements _TaskEntity {
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.proofImageUrl, proofImageUrl) ||
                 other.proofImageUrl == proofImageUrl) &&
+            (identical(other.approvedBy, approvedBy) ||
+                other.approvedBy == approvedBy) &&
+            (identical(other.approvedAt, approvedAt) ||
+                other.approvedAt == approvedAt) &&
+            (identical(other.rejectedBy, rejectedBy) ||
+                other.rejectedBy == rejectedBy) &&
+            (identical(other.rejectedAt, rejectedAt) ||
+                other.rejectedAt == rejectedAt) &&
+            (identical(other.reviewNotes, reviewNotes) ||
+                other.reviewNotes == reviewNotes) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -407,7 +509,7 @@ class _$TaskEntityImpl implements _TaskEntity {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     runtimeType,
     id,
     title,
@@ -422,9 +524,14 @@ class _$TaskEntityImpl implements _TaskEntity {
     deadline,
     notes,
     proofImageUrl,
+    approvedBy,
+    approvedAt,
+    rejectedBy,
+    rejectedAt,
+    reviewNotes,
     createdAt,
     updatedAt,
-  );
+  ]);
 
   /// Create a copy of TaskEntity
   /// with the given fields replaced by the non-null parameter values.
@@ -450,6 +557,11 @@ abstract class _TaskEntity implements TaskEntity {
     final DateTime? deadline,
     final String? notes,
     final String? proofImageUrl,
+    final String? approvedBy,
+    final DateTime? approvedAt,
+    final String? rejectedBy,
+    final DateTime? rejectedAt,
+    final String? reviewNotes,
     final DateTime? createdAt,
     final DateTime? updatedAt,
   }) = _$TaskEntityImpl;
@@ -491,7 +603,22 @@ abstract class _TaskEntity implements TaskEntity {
 
   /// Download URL of the proof image the employee uploads on completion.
   @override
-  String? get proofImageUrl;
+  String? get proofImageUrl; // ─── Review audit (Phase 4 — lightweight, not a full history) ───
+  /// uid of the manager/admin who approved the task, + when.
+  @override
+  String? get approvedBy;
+  @override
+  DateTime? get approvedAt;
+
+  /// uid of the manager/admin who rejected the task, + when.
+  @override
+  String? get rejectedBy;
+  @override
+  DateTime? get rejectedAt;
+
+  /// Reviewer's note left on approve/reject.
+  @override
+  String? get reviewNotes;
   @override
   DateTime? get createdAt;
   @override

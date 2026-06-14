@@ -20,8 +20,11 @@ operations** (admin · manager · employee) — it is **not a social network**. 
 currently ships a complete authentication system with an **account-approval
 gate** (new sign-ups start *pending* and can't use the app until a
 manager/admin approves them), a role system with role-based navigation + route
-guards (Phase 1), a production-ready user profile module, and account settings,
-all dressed in a custom monochrome (black & white) design system.
+guards (Phase 1), a production-ready user profile module, account settings, a
+**shift** foundation (Phase 2), and a **task management workflow** (Phase 3–4):
+managers/admins create + assign tasks, employees execute them (start → complete
+→ submit, with notes + proof image), and managers/admins review (approve /
+reject). All dressed in a custom monochrome (black & white) design system.
 
 > There is **no marketing / Welcome page** — FBRO is an internal tool, so the
 > unauthenticated landing screen is **Login** (with Register one tap away).
@@ -86,7 +89,7 @@ lib/
     ├── auth/                 # Sign-in/up, phone OTP, Google, email verify, password, role, approval
     ├── profile/              # View + edit profile, image uploads, username checks
     ├── shift/                # Shift data/domain (entity·model·repository·datasource) + role shift screens (Phase 2)
-    ├── task/                 # Task data/domain (entity·model·repository·datasource) + role task screens (Phase 3)
+    ├── task/                 # Task feature — data/domain + use cases + TaskCubit + functional role screens (Phase 3–4)
     ├── admin/                # AdminShell + AdminDashboardScreen (presentation only)
     ├── manager/              # ManagerShell + ManagerHomeScreen (presentation only)
     ├── employee/             # EmployeeShell + EmployeeHomeScreen (presentation only)
@@ -98,12 +101,13 @@ lib/
 > their own data/domain layers. Each user is dispatched to exactly one role
 > shell after login.
 >
-> The `shift` (Phase 2) and `task` (Phase 3) features each own a full **data +
-> domain** layer (`XEntity`/`XModel`/`XRepository`/`XRemoteDataSource`) but their
-> presentation is still **functional placeholders** — there are **no
-> `ShiftCubit`/`TaskCubit`/use cases yet**; the repositories are wired in DI
-> (`AppDependencies.shiftRepository` / `taskRepository`) ready for the real UI in
-> a later phase.
+> The `task` feature (Phase 3–4) is the first fully-vertical operations feature:
+> data + domain + **use cases + `TaskCubit`** + functional role screens (employee
+> My Tasks, manager Branch Tasks, admin Task Management). The `shift` feature
+> (Phase 2) still owns only data + domain (`ShiftEntity`/…/`ShiftRepository`) with
+> **placeholder screens** — no `ShiftCubit` yet. Both repositories are wired in DI
+> (`AppDependencies.shiftRepository` / `taskRepository`); `taskCubit` is also
+> provided app-wide via `main.dart`.
 
 ---
 
@@ -229,34 +233,46 @@ Cloud Firestore  shifts/{shiftId}
   their own assigned shift (read-only). The user's `assignedShift` (Phase 1)
   references the assigned `shiftId`; the shift's `employeeId` references back.
 
-### Task chain (Phase 3 — foundation only)
+### Task chain (Phase 3–4 — full vertical slice)
 
 ```
-TaskManagementScreen / BranchTasksScreen / MyTasksScreen    (presentation/pages)
-  (functional placeholders — NO TaskCubit/use cases yet)
-                              ⋮  (next phase wires a TaskCubit + use cases here)
+MyTasksScreen (employee)                ManagerTasksView          (presentation/pages + widgets)
++ _CompleteSheet (notes+proof)          ← BranchTasksScreen (manager) / TaskManagementScreen (admin)
++ TaskCard / task_action_sheets (create·assign·review)
+        ↓  context.read<TaskCubit>()      (provided app-wide in main.dart)
+TaskCubit  + TaskState                                        (presentation/cubit)
+        ↓  one use case per action
+GetAllTasks · GetTasksByBranch · GetEmployeeTasks · CreateTask
+UpdateTask · DeleteTask · AssignTask · ChangeTaskStatus
+ReviewTask · UploadTaskProof            (domain/usecases)
+GetUsersByBranch (auth use case — assignee picker)
+        ↓
 TaskRepository (abstract)                                    (domain/repositories)
         ↓   AppDependencies.taskRepository  (composed in injection.dart)
 TaskRepositoryImpl                                           (data/repositories)
         ↓
 TaskRemoteDataSource                                         (data/datasources)
-        ↓
-Cloud Firestore  tasks/{taskId}
+        ↓                          ↓
+Cloud Firestore  tasks/{taskId}    Firebase Storage  tasks/{taskId}/proof.jpg
 ```
 
-- The task **data + domain** layers are complete (`TaskEntity`, `TaskModel`,
-  `TaskRepository(+Impl)`, `TaskRemoteDataSource(+Impl)`) and exposed via
-  `AppDependencies.taskRepository`. Same error pattern as shifts
-  (`ServerException` → `ServerFailure`). Repository surface: list (all / by
-  branch / by employee), get, create, update, delete, `assignTask`
-  (employee + optional shift), and `updateStatus` (the workflow transitions).
-- **Core workflow:** a manager/admin creates + assigns a task; the employee
-  drives it `pending → started → completed → waitingReview`; a manager/admin
-  reviews → `approved` | `rejected`. `TaskType` (daily/special), `TaskStatus`
-  and `TaskPriority` are enums in `core/enums`. Access is enforced in
-  `firestore.rules` (`tasks/{taskId}`): admin all branches, manager own branch,
-  employee own assigned tasks with **limited writes** (may advance status / add
-  notes / proof but may not reassign, change branch, or approve/reject).
+- Full vertical slice: `TaskCubit` (app-wide, provided in `main.dart`) injects
+  **one use case per action**; each wraps a `TaskRepository` method. Datasource
+  throws `ServerException`; repo → `ServerFailure`; maps `TaskModel → TaskEntity`.
+- **Core workflow:** a manager/admin creates + assigns a task (assignee picked
+  from branch employees via the auth `GetUsersByBranch`); the employee drives it
+  `pending → started → completed (+notes/proof) → waitingReview`; a manager/admin
+  reviews → `approved` | `rejected` (writing the audit fields). `TaskType`
+  (daily/special), `TaskStatus` and `TaskPriority` are enums in `core/enums`.
+- **Status transitions are validated in `TaskCubit._canTransition`** (invalid
+  moves are blocked client-side and surfaced as an error snackbar); WHO may write
+  is enforced in `firestore.rules` (`tasks/{taskId}`): admin all branches,
+  manager own branch, employee own assigned tasks with **limited writes** (may
+  advance status / add notes / proof but may not reassign, change branch, or
+  approve/reject). Proof images upload to Storage `tasks/{taskId}/proof.jpg`.
+- The `TaskCubit` loads the list **by role** (admin: all · manager: own branch ·
+  employee: own) and keeps it visible during mutations (`loaded(tasks, busy)`),
+  re-emitting the previous list on error so the UI never flickers/loses data.
 
 ### Shared (core) dependencies
 
@@ -288,10 +304,14 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Shift screens (admin/manager/employee)**| `lib/features/shift/presentation/pages/` (`shift_management_screen` · `branch_shift_screen` · `my_shift_screen`) |
 | **Shift routes / role entry point**       | `lib/core/routes/route_names.dart` (`adminShifts`/`managerShifts`/`myShift` + `shiftsForRole`) + `app_router.dart` + `role_scaffold.dart` (Shifts icon) |
 | **Task type/status/priority values**      | `lib/core/enums/task_type.dart` · `task_status.dart` · `task_priority.dart` |
-| **Task schema / serialization**           | `lib/features/task/domain/entities/task_entity.dart` + `data/models/task_model.dart` (then run codegen) |
-| **Task reads/writes (Firestore)**         | `lib/features/task/data/datasources/task_remote_datasource.dart`        |
+| **Task schema / serialization (incl. audit fields)** | `lib/features/task/domain/entities/task_entity.dart` + `data/models/task_model.dart` (then run codegen) |
+| **Task reads/writes / review / proof upload** | `lib/features/task/data/datasources/task_remote_datasource.dart` (Firestore + Storage `tasks/{id}/proof.jpg`) |
 | **Task repository contract / impl**       | `lib/features/task/domain/repositories/task_repository.dart` + `data/repositories/task_repository_impl.dart` (wired in `core/di/injection.dart`) |
-| **Task screens (admin/manager/employee)** | `lib/features/task/presentation/pages/` (`task_management_screen` · `branch_tasks_screen` · `my_tasks_screen`) |
+| **Task workflow logic / status transitions / state** | `lib/features/task/presentation/cubit/task_cubit.dart` (`_canTransition`) + `task_state.dart` |
+| **A new task action**                     | add `domain/usecases/`, a `TaskRepository(+Impl)` method, a datasource method, wire in `task_cubit.dart` **and** `core/di/injection.dart` |
+| **Task screens (admin/manager/employee)** | `lib/features/task/presentation/pages/` (`my_tasks_screen` employee · `branch_tasks_screen`/`task_management_screen` → shared `widgets/manager_tasks_view.dart`) |
+| **Task UI actions (create/assign/review/complete) + card** | `lib/features/task/presentation/widgets/` (`task_action_sheets.dart`, `task_card.dart`, `task_empty_state.dart`) |
+| **Assignee picker (branch employees)**    | `AuthRepository.getUsersByBranch` + `auth/domain/usecases/get_users_by_branch.dart` → `TaskCubit.branchEmployees` |
 | **Task routes / role entry point**        | `lib/core/routes/route_names.dart` (`adminTasks`/`managerTasks`/`myTasks` + `tasksForRole`) + `app_router.dart` + `role_scaffold.dart` (Tasks icon) |
 | **A role's home/dashboard screen**        | `lib/features/{employee,manager,admin}/presentation/pages/`              |
 | **Shared role chrome / placeholder**      | `lib/core/widgets/role_scaffold.dart` · `role_placeholder.dart`         |

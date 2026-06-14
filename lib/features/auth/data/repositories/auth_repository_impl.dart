@@ -101,6 +101,16 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<List<UserEntity>> getUsersByBranch(String branchId) async {
+    try {
+      final models = await _userRemote.getUsersByBranch(branchId);
+      return models.map((m) => m.toEntity()).toList();
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
+
+  @override
   Future<UserEntity> reloadUser() async {
     try {
       final model = await _remote.reloadUser();

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/errors/exceptions.dart';
 import 'package:fbro/core/errors/failures.dart';
@@ -103,6 +105,34 @@ class TaskRepositoryImpl implements TaskRepository {
   }) async {
     try {
       await _remote.updateStatus(taskId: taskId, status: status);
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> reviewTask({
+    required String taskId,
+    required bool approved,
+    required String reviewerId,
+    String? reviewNotes,
+  }) async {
+    try {
+      await _remote.reviewTask(
+        taskId: taskId,
+        approved: approved,
+        reviewerId: reviewerId,
+        reviewNotes: reviewNotes,
+      );
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<String> uploadProof(String taskId, File file) async {
+    try {
+      return await _remote.uploadProof(taskId, file);
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

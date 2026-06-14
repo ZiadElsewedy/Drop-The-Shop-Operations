@@ -36,6 +36,15 @@ class TaskEntity with _$TaskEntity {
     String? notes,
     /// Download URL of the proof image the employee uploads on completion.
     String? proofImageUrl,
+    // ─── Review audit (Phase 4 — lightweight, not a full history) ───
+    /// uid of the manager/admin who approved the task, + when.
+    String? approvedBy,
+    DateTime? approvedAt,
+    /// uid of the manager/admin who rejected the task, + when.
+    String? rejectedBy,
+    DateTime? rejectedAt,
+    /// Reviewer's note left on approve/reject.
+    String? reviewNotes,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) = _TaskEntity;

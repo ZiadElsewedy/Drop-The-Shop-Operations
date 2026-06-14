@@ -19,6 +19,11 @@ class TaskModel {
   final DateTime? deadline;
   final String? notes;
   final String? proofImageUrl;
+  final String? approvedBy;
+  final DateTime? approvedAt;
+  final String? rejectedBy;
+  final DateTime? rejectedAt;
+  final String? reviewNotes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -36,6 +41,11 @@ class TaskModel {
     this.deadline,
     this.notes,
     this.proofImageUrl,
+    this.approvedBy,
+    this.approvedAt,
+    this.rejectedBy,
+    this.rejectedAt,
+    this.reviewNotes,
     this.createdAt,
     this.updatedAt,
   });
@@ -54,6 +64,11 @@ class TaskModel {
         deadline: (map['deadline'] as Timestamp?)?.toDate(),
         notes: map['notes'] as String?,
         proofImageUrl: map['proofImageUrl'] as String?,
+        approvedBy: map['approvedBy'] as String?,
+        approvedAt: (map['approvedAt'] as Timestamp?)?.toDate(),
+        rejectedBy: map['rejectedBy'] as String?,
+        rejectedAt: (map['rejectedAt'] as Timestamp?)?.toDate(),
+        reviewNotes: map['reviewNotes'] as String?,
         createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
         updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
       );
@@ -72,6 +87,11 @@ class TaskModel {
         deadline: e.deadline,
         notes: e.notes,
         proofImageUrl: e.proofImageUrl,
+        approvedBy: e.approvedBy,
+        approvedAt: e.approvedAt,
+        rejectedBy: e.rejectedBy,
+        rejectedAt: e.rejectedAt,
+        reviewNotes: e.reviewNotes,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
       );
@@ -93,6 +113,11 @@ class TaskModel {
         'deadline': deadline == null ? null : Timestamp.fromDate(deadline!),
         'notes': notes,
         'proofImageUrl': proofImageUrl,
+        'approvedBy': approvedBy,
+        'approvedAt': approvedAt == null ? null : Timestamp.fromDate(approvedAt!),
+        'rejectedBy': rejectedBy,
+        'rejectedAt': rejectedAt == null ? null : Timestamp.fromDate(rejectedAt!),
+        'reviewNotes': reviewNotes,
       };
 
   /// Returns a copy with the Firestore-generated [id] applied (used on create).
@@ -110,6 +135,11 @@ class TaskModel {
         deadline: deadline,
         notes: notes,
         proofImageUrl: proofImageUrl,
+        approvedBy: approvedBy,
+        approvedAt: approvedAt,
+        rejectedBy: rejectedBy,
+        rejectedAt: rejectedAt,
+        reviewNotes: reviewNotes,
         createdAt: createdAt,
         updatedAt: updatedAt,
       );
@@ -128,6 +158,11 @@ class TaskModel {
         deadline: deadline,
         notes: notes,
         proofImageUrl: proofImageUrl,
+        approvedBy: approvedBy,
+        approvedAt: approvedAt,
+        rejectedBy: rejectedBy,
+        rejectedAt: rejectedAt,
+        reviewNotes: reviewNotes,
         createdAt: createdAt,
         updatedAt: updatedAt,
       );

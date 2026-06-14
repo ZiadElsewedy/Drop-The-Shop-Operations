@@ -28,6 +28,54 @@ and [Semantic Versioning](https://semver.org).
 
 ---
 
+## 2026-06-15 — Phase 4: Task Workflow & Review System
+
+Activates the Phase 3 task foundation into the **real operations workflow** —
+managers/admins create + assign, employees execute, managers/admins review — with
+a `TaskCubit`, functional role screens, proof images, audit fields and
+status-transition rules. Reuses the existing architecture; no foundations rewritten.
+
+### Added
+- **`TaskCubit` + `TaskState`** ([cubit](lib/features/task/presentation/cubit/task_cubit.dart))
+  driving the workflow for all three roles (loads by role; keeps the list visible
+  during mutations; surfaces errors as snackbars). Provided app-wide in
+  [main.dart](lib/main.dart).
+- **10 task use cases** (`GetAllTasks`, `GetTasksByBranch`, `GetEmployeeTasks`,
+  `CreateTask`, `UpdateTask`, `DeleteTask`, `AssignTask`, `ChangeTaskStatus`,
+  `ReviewTask`, `UploadTaskProof`) + the auth `GetUsersByBranch` (assignee picker).
+- **Functional screens** replacing the Phase 3 placeholders:
+  - Employee **My Tasks** — start → complete (notes + optional **proof image**
+    via `image_picker`) → submit for review; restart a rejected task.
+  - Manager **Branch Tasks** / Admin **Task Management** (shared
+    `ManagerTasksView`) — create, edit, **assign** (branch-employee picker),
+    delete, and **review** (approve/reject + note).
+  - Shared `TaskCard`, `task_action_sheets` (create/assign/review), and
+    `TaskEmptyState` widgets.
+- **Status-transition validation** in `TaskCubit._canTransition`
+  (pending→started→completed→waitingReview→approved/rejected, plus rejected→started
+  for redo); invalid moves are blocked with an error.
+- **Review audit fields** on `TaskEntity`/`TaskModel`: `approvedBy`/`approvedAt`/
+  `rejectedBy`/`rejectedAt`/`reviewNotes` (written together by `reviewTask`).
+- **Proof image upload** to Firebase Storage `tasks/{taskId}/proof.jpg`
+  (`TaskRepository.uploadProof`); `storage.rules` updated.
+- `AuthRepository.getUsersByBranch` + `UserRemoteDataSource.getUsersByBranch`
+  (branch employees for the assignee picker).
+
+### Changed
+- `TaskRepository` gained `reviewTask` + `uploadProof`; `TaskRemoteDataSourceImpl`
+  now also takes `FirebaseStorage`.
+- `firestore.rules` (`tasks/{taskId}`): the employee self-update now also forbids
+  changing the review-attribution fields (`approvedBy`/`rejectedBy`).
+- DI: `AppDependencies.taskCubit` added and wired.
+
+### Notes
+- Status-flow order is enforced **client-side** (`TaskCubit`); `firestore.rules`
+  still enforce *who* may write. Hardening the transition matrix server-side,
+  resolving assignee uid → name on cards, and `users.assignedShift` sync are
+  follow-ups. **No notifications, no analytics** (out of scope).
+
+---
+
 ## 2026-06-15 — Phase 3: Task Management foundation
 
 Adds the **core FBRO workflow** foundation — managers create/assign tasks,

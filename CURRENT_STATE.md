@@ -22,7 +22,7 @@
 | Account approval | ✅ Complete*   | New sign-ups seeded `pending` + inactive → **Pending Approval** screen; gate in router (`hasAppAccess`). *In-app approval UI (manager/admin) still pending — approve out of band (console) until Phase 5 |
 | Roles & routing  | ✅ Complete    | `UserRole` enum, role dispatch + guards; **admin ⊇ manager** hierarchy + branch-scoped access model (admin global · manager own-branch · employee self) |
 | Shifts (Phase 2) | 🟡 Foundation | `ShiftEntity`/`ShiftModel`/`ShiftRepository`/`ShiftRemoteDataSource` + `shifts/{shiftId}` rules + 3 role placeholder screens. **No `ShiftCubit`/use cases or real UI yet** — data layer ready, wired in DI |
-| Tasks (Phase 3)  | 🟡 Foundation | `TaskEntity`/`TaskModel`/`TaskRepository`/`TaskRemoteDataSource` + `TaskType`/`TaskStatus`/`TaskPriority` enums + `tasks/{taskId}` rules + 3 role placeholder screens. **No `TaskCubit`/use cases or real UI yet** — data layer ready, wired in DI |
+| Tasks (Phase 3–4) | ✅ Workflow   | Full vertical slice: `TaskCubit` + 10 use cases, functional employee/manager/admin screens (create·assign·start·complete+notes/proof·submit·review approve/reject), client-side status-transition rules, audit fields, proof upload to Storage |
 | Profile          | ✅ Complete    | View/edit, avatar+cover upload, username checks                |
 | Settings         | ✅ Complete    | Settings page + change password + delete account              |
 | Role shells      | 🟡 Scaffolded | Employee / Manager / Admin shells + screens (functional placeholders) |
@@ -53,13 +53,20 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
   screens (`/admin/shifts`, `/manager/shifts`, `/my-shift`) reachable via a
   Shifts icon in the role chrome, repo wired in DI. **No `ShiftCubit`/use cases
   or real CRUD UI yet** (intentionally minimal — next phase).
-- **Phase 3 — Task foundation** — new `task` feature with full data + domain
+- **Phase 3 — Task foundation** — new `task` feature: data + domain
   (`TaskEntity`/`TaskModel`/`TaskRepository(+Impl)`/`TaskRemoteDataSource(+Impl)`),
-  `TaskType`/`TaskStatus`/`TaskPriority` enums, `tasks/{taskId}` Firestore rules
-  (branch-scoped + limited employee self-update), three role placeholder screens
-  (`/admin/tasks`, `/manager/tasks`, `/my-tasks`) reachable via a Tasks icon in
-  the role chrome, repo wired in DI. **No `TaskCubit`/use cases or real workflow
-  UI yet** (intentionally minimal — next phase).
+  `TaskType`/`TaskStatus`/`TaskPriority` enums, `tasks/{taskId}` Firestore rules,
+  three role routes/screens, repo wired in DI.
+- **Phase 4 — Task workflow (activated)** — `TaskCubit` + `TaskState` + 10 use
+  cases; the three screens are now **functional**: employee My Tasks
+  (start → complete with notes + optional proof image → submit for review,
+  restart if rejected); manager Branch Tasks / admin Task Management (create,
+  edit, assign employee from a branch picker, delete, review → approve/reject
+  with notes). Added review **audit fields** (`approvedBy`/`approvedAt`/
+  `rejectedBy`/`rejectedAt`/`reviewNotes`), **proof image upload** to Storage,
+  **client-side status-transition validation** (`TaskCubit._canTransition`), and
+  `AuthRepository.getUsersByBranch` (assignee picker). `TaskCubit` is provided
+  app-wide in `main.dart`. No notifications / analytics (out of scope).
 - **Action needed:** commit; deploy `firestore.rules` / `storage.rules` and
   enable Firebase Storage; bootstrap the first admin (set
   `role/approvalStatus/isActive` in the console) before production.
@@ -121,12 +128,15 @@ landing is **Login** (the social Welcome page was removed).
   `assignedShift`, `approvalStatus`). **`shifts/{shiftId}` (Phase 2)** is the
   first branch-scoped collection wired to `canReachBranch()`: admin = all
   branches, manager = own branch, employee = their own assigned shift
-  (read-only). **`tasks/{taskId}` (Phase 3)** follows the same model with an
-  added **limited employee self-update** (the assignee may advance status / add
-  notes / proof, but not reassign, move branch, or approve/reject). Reusable
-  `isAdmin()` / `isManager()` / `canReachBranch()` helpers + a commented template
-  remain for future collections. ⚠️ Still need to be **deployed** (`firebase
-  deploy --only firestore:rules,storage`).
+  (read-only). **`tasks/{taskId}` (Phase 3–4)** follows the same model with a
+  **limited employee self-update** — the assignee may advance status / add notes /
+  proof, but not reassign, move branch, set approved/rejected, or forge the
+  review-attribution fields (`approvedBy`/`rejectedBy`). **Storage** (`storage.rules`)
+  now also allows task proof images at `tasks/{taskId}/proof.jpg` (any signed-in
+  user read/write; the meaningful gate is the Firestore `proofImageUrl` write).
+  Reusable `isAdmin()` / `isManager()` / `canReachBranch()` helpers + a commented
+  template remain for future collections. ⚠️ Still need to be **deployed**
+  (`firebase deploy --only firestore:rules,storage`).
 
 ### Firestore schema — `users/{uid}`
 
@@ -189,6 +199,9 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 | `deadline`           | Timestamp? | due date/time                                         |
 | `notes`              | string?    | employee's free-text notes                            |
 | `proofImageUrl`      | string?    | proof image download URL (uploaded on completion)     |
+| `approvedBy`, `approvedAt`   | string? / Timestamp? | reviewer uid + time on approve (Phase 4 audit) |
+| `rejectedBy`, `rejectedAt`   | string? / Timestamp? | reviewer uid + time on reject (Phase 4 audit) |
+| `reviewNotes`        | string?    | reviewer's note on approve/reject (Phase 4)           |
 | `createdAt`, `updatedAt` | Timestamp | server timestamps written by the datasource       |
 
 > Workflow: manager/admin creates + assigns → employee `started`→`completed`→
@@ -199,10 +212,11 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 
 ### Storage schema
 
-| Path                      | Content                            |
-| ------------------------- | ---------------------------------- |
-| `users/{uid}/avatar.jpg`  | profile image (overwrite-in-place) |
-| `users/{uid}/cover.jpg`   | cover image (overwrite-in-place)   |
+| Path                       | Content                            |
+| -------------------------- | ---------------------------------- |
+| `users/{uid}/avatar.jpg`   | profile image (overwrite-in-place) |
+| `users/{uid}/cover.jpg`    | cover image (overwrite-in-place)   |
+| `tasks/{taskId}/proof.jpg` | task proof image (overwrite-in-place, Phase 4) |
 
 ---
 
@@ -226,14 +240,16 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
   real CRUD/assignment UI (admin) + branch scheduling (manager) + my-shift view
   (employee) is the next phase. The `assignEmployee` foundation updates the shift
   side only; syncing `users/{uid}.assignedShift` lands with the assignment UI.
-- **Task UI is a placeholder** — the `task` data/domain layer + Firestore rules
-  are done and DI-wired (`AppDependencies.taskRepository`), but there is **no
-  `TaskCubit`/use cases** and the three task screens don't read/write yet. The
-  real workflow UI (admin/manager create·assign·review, employee
-  start·complete·notes·proof) is the next phase. Proof-image **upload to Storage**
-  isn't wired (`proofImageUrl` is just a field today); `assignTask` updates the
-  task side only — syncing `users/{uid}.assignedShift` / status automation comes
-  with the UI. **Notifications and analytics are intentionally out of scope.**
+- **Task workflow is live** (Phase 4) but a few deliberate simplifications remain:
+  - **Status transitions are validated client-side** (`TaskCubit._canTransition`),
+    not in `firestore.rules` — the rules enforce *who* can write, not the exact
+    flow order. Hardening the transition matrix server-side is a follow-up.
+  - **Assignee picker** lists branch employees; resolving an assigned uid → name
+    on the card isn't done (the card shows "assigned"/"unassigned").
+  - `assignTask` writes the task side only — **`users/{uid}.assignedShift` is not
+    auto-synced**, and there's no status automation. Storage proof write is
+    loosely gated (see security rules).
+  - **Notifications and analytics are intentionally out of scope.**
 - **Account deletion** removes the Firebase Auth account but **not** the
   `users/{uid}` Firestore document — that cleanup belongs in a Cloud Function
   (`auth.user().onDelete`); see note in
@@ -262,11 +278,12 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
    register → Pending Approval → approve → role dispatch flow end to end.
 4. **Phase 5 (bring forward?)** — in-app approval console so managers/admins can
    approve pending users from the app instead of the Firebase console.
-5. **Shift & Task UI:** add `ShiftCubit` / `TaskCubit` + use cases on top of the
-   repositories, then build the admin/manager management + assignment UI, the
-   employee my-shift / my-tasks views, and the task workflow (start → complete →
-   review). Wire proof-image upload to Storage; sync `users/{uid}.assignedShift`
-   on assignment. Seed the two V1 shifts (Morning/Night).
-6. Add a Cloud Function to clean up the user document on account deletion.
-7. Add widget/cubit tests, starting with `AuthCubit`, the approval gate, and the
-   router redirect.
+5. **Shift UI:** add a `ShiftCubit` + use cases on top of `ShiftRepository`
+   (mirroring the now-built task feature), then the admin/manager shift
+   management + assignment UI and the employee my-shift view; sync
+   `users/{uid}.assignedShift` on assignment. Seed the two V1 shifts.
+6. **Task workflow hardening:** enforce status transitions in `firestore.rules`,
+   resolve assignee uid → name on cards, link tasks to shifts in the UI.
+7. Add a Cloud Function to clean up the user document on account deletion.
+8. Add widget/cubit tests, starting with `AuthCubit`, the approval gate, the
+   `TaskCubit` transition rules, and the router redirect.

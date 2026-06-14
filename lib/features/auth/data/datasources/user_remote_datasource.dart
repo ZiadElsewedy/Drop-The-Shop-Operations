@@ -5,6 +5,7 @@ import 'package:fbro/features/auth/data/models/user_model.dart';
 abstract class UserRemoteDataSource {
   Future<void> saveUser(UserModel user);
   Future<UserModel?> getUser(String uid);
+  Future<List<UserModel>> getUsersByBranch(String branchId);
 }
 
 class UserRemoteDataSourceImpl implements UserRemoteDataSource {
@@ -60,5 +61,19 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
     final doc = await _firestore.collection('users').doc(uid).get();
     if (!doc.exists || doc.data() == null) return null;
     return UserModel.fromMap(doc.data()!);
+  }
+
+  @override
+  Future<List<UserModel>> getUsersByBranch(String branchId) async {
+    // Used by managers/admins to pick an assignee. Security rules let a manager
+    // read users in their own branch and an admin read any.
+    final snap = await _firestore
+        .collection('users')
+        .where('branchId', isEqualTo: branchId)
+        .get();
+    return snap.docs
+        .where((d) => d.data().isNotEmpty)
+        .map((d) => UserModel.fromMap(d.data()))
+        .toList();
   }
 }

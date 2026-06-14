@@ -18,6 +18,7 @@ abstract class AuthRepository {
 
   Future<void> saveUser(UserEntity user);
   Future<UserEntity?> getUser(String uid);
+  Future<List<UserEntity>> getUsersByBranch(String branchId);
   Future<UserEntity> reloadUser();
 
   Future<void> sendPasswordResetEmail(String email);

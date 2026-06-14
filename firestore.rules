@@ -120,7 +120,12 @@ service cloud.firestore {
             && request.resource.data.get('createdBy', '')
                  == resource.data.get('createdBy', '')
             && request.resource.data.get('status', 'pending') != 'approved'
-            && request.resource.data.get('status', 'pending') != 'rejected');
+            && request.resource.data.get('status', 'pending') != 'rejected'
+            // employees can't forge review attribution
+            && request.resource.data.get('approvedBy', '')
+                 == resource.data.get('approvedBy', '')
+            && request.resource.data.get('rejectedBy', '')
+                 == resource.data.get('rejectedBy', ''));
 
       allow delete: if canReachBranch(resource.data.get('branchId', ''));
     }
