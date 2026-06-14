@@ -13,7 +13,20 @@
       "Bash(grep -E '\\\\.dart$')",
       "Bash(grep -E 'md$')",
       "Bash(cat .claude/settings.json)",
-      "Bash(cat .claude/settings.local.json)"
+      "Bash(cat .claude/settings.local.json)",
+      "Bash(ls -la firestore.rules storage.rules firebase.json)",
+      "Bash(cat firebase.json)",
+      "Bash(git rm *)",
+      "Bash(rmdir -p lib/features/home/presentation/pages)",
+      "Bash(flutter devices *)",
+      "Bash(flutter run *)",
+      "Bash(lsof -ti:8099)",
+      "Bash(xargs kill)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(pkill -f \"flutter run -d macos\")",
+      "Bash(pkill -f \"fbro.app\")",
+      "Bash(git checkout *)",
+      "Bash(rm -f macos/Podfile.lock)"
     ]
   }
 }

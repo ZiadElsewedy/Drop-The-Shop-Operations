@@ -15,6 +15,7 @@ import 'package:fbro/features/auth/domain/usecases/check_email_verified.dart';
 import 'package:fbro/features/auth/domain/usecases/change_password.dart';
 import 'package:fbro/features/auth/domain/usecases/delete_account.dart';
 import 'package:fbro/features/auth/domain/repositories/auth_repository.dart';
+import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'auth_state.dart';
 
 class AuthCubit extends Cubit<AuthState> {
@@ -78,6 +79,20 @@ class AuthCubit extends Cubit<AuthState> {
     _listenToAuthChanges();
   }
 
+  /// Firebase-derived sign-ins (email/Google/OTP) only know the Auth profile,
+  /// which has no role. Re-read the Firestore document so the emitted
+  /// [AuthState.authenticated] carries the authoritative role/branch and the
+  /// router can dispatch to the correct role shell. Falls back to the Firebase
+  /// user if the read fails.
+  Future<UserEntity> _withStoredProfile(UserEntity fallback) async {
+    try {
+      final stored = await _getUser(fallback.uid);
+      return stored ?? fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
+
   void _listenToAuthChanges() {
     _authSub = _repository.authStateChanges.listen((user) {
       if (user == null) {
@@ -96,7 +111,7 @@ class AuthCubit extends Cubit<AuthState> {
       if (!user.isEmailVerified) {
         emit(AuthState.awaitingEmailVerification(user));
       } else {
-        emit(AuthState.authenticated(user));
+        emit(AuthState.authenticated(await _withStoredProfile(user)));
       }
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));
@@ -130,7 +145,7 @@ class AuthCubit extends Cubit<AuthState> {
     try {
       final user = await _signInWithGoogle();
       await _saveUser(user);
-      emit(AuthState.authenticated(user));
+      emit(AuthState.authenticated(await _withStoredProfile(user)));
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));
     }
@@ -162,7 +177,7 @@ class AuthCubit extends Cubit<AuthState> {
         smsCode: smsCode,
       );
       await _saveUser(user);
-      emit(AuthState.authenticated(user));
+      emit(AuthState.authenticated(await _withStoredProfile(user)));
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));
     }
@@ -192,7 +207,7 @@ class AuthCubit extends Cubit<AuthState> {
       final user = await _checkEmailVerified();
       if (user.isEmailVerified) {
         await _saveUser(user);
-        emit(AuthState.authenticated(user));
+        emit(AuthState.authenticated(await _withStoredProfile(user)));
       } else {
         emit(AuthState.awaitingEmailVerification(user));
       }

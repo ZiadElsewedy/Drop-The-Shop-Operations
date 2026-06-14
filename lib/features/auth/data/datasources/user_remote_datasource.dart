@@ -33,6 +33,15 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
         'profileImage': '',
         'coverImage': '',
       });
+      // Seed the role foundation ONCE. These are deliberately NOT part of
+      // UserModel.toMap(), so subsequent re-login merges never reset an
+      // admin-assigned role/branch. New users always start as employee.
+      data.addAll({
+        'role': user.role.value,
+        'branchId': user.branchId,
+        'isActive': user.isActive,
+        'assignedShift': user.assignedShift,
+      });
     }
 
     await docRef.set(data, SetOptions(merge: true));

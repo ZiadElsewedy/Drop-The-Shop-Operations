@@ -1,0 +1,74 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // The signed-in user's own document — their role/branch live here. Firestore
+    // caches this get() per request, so repeated calls bill a single read.
+    function selfDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function selfRole()   { return isSignedIn() ? selfDoc().get('role', 'employee') : 'none'; }
+    function selfBranch() { return selfDoc().get('branchId', ''); }
+
+    function isAdmin()   { return isSignedIn() && selfRole() == 'admin'; }
+    function isManager() { return isSignedIn() && selfRole() == 'manager'; }
+
+    // Branch scoping. Admin is global (any branch); a manager reaches only their
+    // own branch. Employees never reach a whole branch — only their own data.
+    function canReachBranch(branch) {
+      return isAdmin() || (isManager() && branch == selfBranch());
+    }
+
+    // ── Users ──────────────────────────────────────────────────────
+    // Self: read own doc + limited self-update (cannot touch role fields).
+    // Manager: read employees in their own branch.
+    // Admin: read/write everything — promotions, branch moves, (de)activation.
+    match /users/{uid} {
+      allow read: if isOwner(uid)
+        || isAdmin()
+        || (isManager() && resource.data.get('branchId', '') == selfBranch());
+
+      // Self-registration only — always as an active employee. Promotion to
+      // manager/admin and branch assignment are admin-only updates below.
+      allow create: if isOwner(uid)
+        && request.resource.data.get('role', 'employee') == 'employee'
+        && request.resource.data.get('isActive', true) == true;
+
+      allow update: if isAdmin()
+        || (isOwner(uid)
+            && request.resource.data.get('role', 'employee')
+                 == resource.data.get('role', 'employee')
+            && request.resource.data.get('isActive', true)
+                 == resource.data.get('isActive', true)
+            && request.resource.data.get('branchId', '')
+                 == resource.data.get('branchId', '')
+            && request.resource.data.get('assignedShift', '')
+                 == resource.data.get('assignedShift', ''));
+
+      // Deactivate via isActive (an admin update), never a hard delete; document
+      // cleanup on account removal belongs to a Cloud Function.
+      allow delete: if false;
+    }
+
+    // ── Branch-scoped collections (Phase 2+) ───────────────────────
+    // Branches, shifts and tasks all carry a `branchId` and follow the same
+    // model: admin global, manager own-branch, employee own data. Plug each new
+    // collection in with the canReachBranch() helper, e.g.:
+    //
+    //   match /tasks/{taskId} {
+    //     allow read:          if canReachBranch(resource.data.branchId)
+    //                             || resource.data.assignedTo == request.auth.uid;
+    //     allow create:        if canReachBranch(request.resource.data.branchId);
+    //     allow update, delete: if canReachBranch(resource.data.branchId);
+    //   }
+  }
+}

@@ -8,7 +8,9 @@ import 'package:fbro/features/auth/presentation/pages/register_page.dart';
 import 'package:fbro/features/auth/presentation/pages/phone_otp_page.dart';
 import 'package:fbro/features/auth/presentation/pages/forgot_password_page.dart';
 import 'package:fbro/features/auth/presentation/pages/email_verification_page.dart';
-import 'package:fbro/features/home/presentation/pages/home_page.dart';
+import 'package:fbro/features/admin/presentation/pages/admin_shell.dart';
+import 'package:fbro/features/manager/presentation/pages/manager_shell.dart';
+import 'package:fbro/features/employee/presentation/pages/employee_shell.dart';
 import 'package:fbro/features/profile/presentation/pages/profile_page.dart';
 import 'package:fbro/features/profile/presentation/pages/edit_profile_page.dart';
 import 'package:fbro/features/settings/presentation/pages/settings_page.dart';
@@ -26,10 +28,11 @@ GoRouter createRouter(AuthCubit authCubit) {
 
       final authState = authCubit.state;
 
-      final isAuthenticated = authState.maybeWhen(
-        authenticated: (_) => true,
-        orElse: () => false,
+      final user = authState.maybeWhen(
+        authenticated: (u) => u,
+        orElse: () => null,
       );
+      final isAuthenticated = user != null;
 
       final isAwaitingVerification = authState.maybeWhen(
         awaitingEmailVerification: (_) => true,
@@ -48,12 +51,31 @@ GoRouter createRouter(AuthCubit authCubit) {
         return RouteNames.emailVerification;
       }
 
-      if (isAuthenticated && isOnAuthFlow) return RouteNames.home;
-      if (isAuthenticated && loc == RouteNames.emailVerification) {
-        return RouteNames.home;
+      if (isAuthenticated) {
+        final roleHome = RouteNames.homeForRole(user.role);
+
+        // Role guard. Admin ⊇ manager: admin areas are admin-only, but manager
+        // areas admit admins too (admin can do everything a manager can). The
+        // employee home (/) is employee-only. Anyone landing in an area that
+        // isn't theirs (incl. manual URL hacking) is bounced to their own home.
+        // Shared routes (/profile, /settings) stay open to all roles.
+        if (_isAdminArea(loc) && !user.role.isAdmin) return roleHome;
+        if (_isManagerArea(loc) && !(user.role.isManager || user.role.isAdmin)) {
+          return roleHome;
+        }
+        if (loc == RouteNames.home && !user.role.isEmployee) {
+          return roleHome;
+        }
+
+        // Leaving the auth flow / verification screen → role home.
+        if (isOnAuthFlow || loc == RouteNames.emailVerification) {
+          return roleHome;
+        }
+
+        return null;
       }
 
-      if (!isAuthenticated && !isAwaitingVerification && !isOnAuthFlow) {
+      if (!isAwaitingVerification && !isOnAuthFlow) {
         if (loc != RouteNames.splash) return RouteNames.welcome;
       }
 
@@ -77,7 +99,21 @@ GoRouter createRouter(AuthCubit authCubit) {
         path: RouteNames.home,
         pageBuilder: (context, state) => _fadeTransition(
           state,
-          const HomePage(),
+          const EmployeeShell(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.adminDashboard,
+        pageBuilder: (context, state) => _fadeTransition(
+          state,
+          const AdminShell(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.managerHome,
+        pageBuilder: (context, state) => _fadeTransition(
+          state,
+          const ManagerShell(),
         ),
       ),
       GoRoute(
@@ -188,6 +224,16 @@ CustomTransitionPage<void> _slideTransition(
         );
       },
     );
+
+/// True when [loc] is anywhere inside the admin area (`/admin` or `/admin/...`).
+bool _isAdminArea(String loc) =>
+    loc == RouteNames.adminDashboard ||
+    loc.startsWith('${RouteNames.adminDashboard}/');
+
+/// True when [loc] is anywhere inside the manager area (`/manager` or `/manager/...`).
+bool _isManagerArea(String loc) =>
+    loc == RouteNames.managerHome ||
+    loc.startsWith('${RouteNames.managerHome}/');
 
 class _AuthStateNotifier extends ChangeNotifier {
   _AuthStateNotifier(AuthCubit cubit) {

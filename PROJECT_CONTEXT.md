@@ -15,10 +15,16 @@
 
 ## 1. Overview
 
-**FBRO** is a Flutter social app built on Firebase. It currently ships a
-complete authentication system, a production-ready user profile module, and
-account settings, all dressed in a custom monochrome (black & white) design
-system.
+**FBRO** is a Flutter app built on Firebase for **role-based branch / shift
+operations** (admin · manager · employee) — it is **not a social network**. It
+currently ships a complete authentication system, a role system with
+role-based navigation + route guards (Phase 1), a production-ready user profile
+module, and account settings, all dressed in a custom monochrome (black &
+white) design system.
+
+> ⚠️ Some legacy social fields (follower / post counters) linger in the profile
+> schema from an earlier iteration. They are **unused** and slated for removal —
+> do not build on them.
 
 ### Tech stack
 
@@ -67,19 +73,24 @@ lib/
 ├── core/
 │   ├── constants/            # app_constants.dart (appName, collection names)
 │   ├── di/                   # injection.dart — AppDependencies service locator
+│   ├── enums/                # user_role.dart (admin/manager/employee)
 │   ├── errors/               # exceptions.dart (data layer) / failures.dart (domain)
-│   ├── routes/               # app_router.dart, route_names.dart
+│   ├── routes/               # app_router.dart (role dispatch + guards), route_names.dart
 │   ├── theme/                # app_colors / typography / spacing / radius / app_theme
-│   └── widgets/              # app_snackbar, fbro_logo, skeleton (cross-feature)
+│   └── widgets/              # app_snackbar, fbro_logo, skeleton, role_scaffold, role_placeholder
 └── features/
-    ├── auth/                 # Sign-in/up, phone OTP, Google, email verify, password
+    ├── auth/                 # Sign-in/up, phone OTP, Google, email verify, password, role
     ├── profile/              # View + edit profile, image uploads, username checks
-    ├── home/                 # Authenticated landing screen (presentation only)
+    ├── admin/                # AdminShell + AdminDashboardScreen (presentation only)
+    ├── manager/              # ManagerShell + ManagerHomeScreen (presentation only)
+    ├── employee/             # EmployeeShell + EmployeeHomeScreen (presentation only)
     └── settings/             # Settings + change password (presentation only)
 ```
 
-> `home` and `settings` are presentation-only — they reuse `auth` and
-> `profile` cubits rather than owning their own data/domain layers.
+> The role shells (`admin`/`manager`/`employee`) and `settings` are
+> presentation-only — they reuse `auth`/`profile` cubits rather than owning
+> their own data/domain layers. Each user is dispatched to exactly one role
+> shell after login.
 
 ---
 
@@ -126,16 +137,24 @@ AuthCubit.stream
         ↓
 _AuthStateNotifier (ChangeNotifier)   ← refreshListenable
         ↓
-GoRouter.redirect                     ← guards every navigation
+GoRouter.redirect                     ← auth guard + ROLE guard on every nav
         ↓
-splash → welcome/login/... → home     (based on auth state)
+splash → welcome/login/... → role shell   (/ employee · /admin · /manager)
 ```
 
 `createRouter(AuthCubit)` ([core/routes/app_router.dart](lib/core/routes/app_router.dart))
-re-evaluates its `redirect` whenever `AuthCubit` emits, routing
-unauthenticated users to the auth flow, `awaitingEmailVerification` users to the
-verification page, and authenticated users to `home`. `SplashPage` calls
-`AuthCubit.restoreSession()` once on cold start.
+re-evaluates its `redirect` whenever `AuthCubit` emits, routing unauthenticated
+users to the auth flow, `awaitingEmailVerification` users to the verification
+page, and authenticated users to **their role shell**
+(`RouteNames.homeForRole(user.role)` → `/` employee, `/admin`, `/manager`). The
+redirect also **role-guards** every navigation: admin areas are admin-only,
+manager areas admit manager + admin (**admin ⊇ manager**), the employee home
+(`/`) is employee-only; anyone entering an area that isn't theirs is bounced to
+their own home. `/profile` & `/settings` are shared across roles.
+`SplashPage` calls `AuthCubit.restoreSession()` once on cold start and dispatches
+by role. Because Firebase sign-ins don't know the role, `AuthCubit` re-reads the
+Firestore user after email/Google/OTP sign-in so the emitted `authenticated`
+state carries the authoritative role/branch.
 
 ### Profile chain
 
@@ -190,9 +209,14 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Profile reads/writes / image uploads**  | `lib/features/profile/data/datasources/profile_remote_datasource.dart`   |
 | **Profile schema / serialization**        | `lib/features/profile/domain/entities/profile_entity.dart` + `data/models/profile_model.dart` (then run codegen) |
 | **Auth ⇄ Profile sync (name/avatar)**     | `lib/features/profile/data/repositories/profile_repository_impl.dart`    |
-| **Home screen**                           | `lib/features/home/presentation/pages/home_page.dart`                    |
+| **A role's home/dashboard screen**        | `lib/features/{employee,manager,admin}/presentation/pages/`              |
+| **Shared role chrome / placeholder**      | `lib/core/widgets/role_scaffold.dart` · `role_placeholder.dart`         |
+| **Roles enum / role values**              | `lib/core/enums/user_role.dart`                                         |
+| **Role on the user model / seeding**      | `lib/features/auth/data/models/user_model.dart` + `data/datasources/user_remote_datasource.dart` (seed-once block) |
+| **Role-based redirect / route guards**    | `lib/core/routes/app_router.dart` (redirect + `_isAdminArea`/`_isManagerArea`) + `RouteNames.homeForRole` |
 | **Settings / change password UI**         | `lib/features/settings/presentation/pages/`                              |
 | **Routes / navigation guards**            | `lib/core/routes/app_router.dart` + `route_names.dart`                    |
+| **Firestore / Storage security rules**    | `firestore.rules` · `storage.rules` (registered in `firebase.json`)     |
 | **Dependency injection / wiring**         | `lib/core/di/injection.dart`                                             |
 | **Colors / typography / spacing / radius**| `lib/core/theme/app_colors.dart` · `app_typography.dart` · `app_spacing.dart` · `app_radius.dart` |
 | **Global ThemeData (inputs, buttons…)**   | `lib/core/theme/app_theme.dart`                                          |
@@ -295,6 +319,36 @@ Patterns below are established across the codebase and **must be reused**.
   `AppColors`, `AppTypography`, `AppSpacing`, `AppRadius`.
 - Global component styling (inputs, buttons, app bar) lives in `AppTheme`; tune
   it there rather than per-widget.
+
+### Roles & access model
+- The access role is the `UserRole` enum (`core/enums/user_role.dart`), stored
+  as a string in `users/{uid}.role`. Parse stored strings with
+  `UserRole.fromString`, which **defaults unknown/missing to `employee`** so a
+  bad document can never escalate privileges. Use the `isAdmin`/`isManager`/
+  `isEmployee`/`isGlobal` getters rather than re-comparing enum values.
+- **Access model (single source of truth, mirrored in `firestore.rules`):**
+  - **admin** — *global*. Not restricted by `branchId`; can do everything a
+    manager can, across every branch (**admin ⊇ manager**).
+  - **manager** — belongs to exactly one branch; limited to data where
+    `resource.branchId == manager.branchId`.
+  - **employee** — limited to their own assigned data and profile.
+- **Privileged role fields** (`role`, `branchId`, `isActive`, `assignedShift`)
+  are seeded **once** in the `saveUser` first-creation block and are kept **out
+  of `UserModel.toMap()`**, because `saveUser` merges on every login — including
+  them would reset an admin's role on the next sign-in. Only an admin may change
+  these (enforced by `firestore.rules`).
+- **Enforcement** lives in `firestore.rules`: reusable `isAdmin()`/`isManager()`/
+  `selfBranch()`/`canReachBranch(branch)` helpers read the requester's own user
+  doc. New branch-scoped collections (branches, shifts, tasks) plug into
+  `canReachBranch()` — see the template at the bottom of the rules file.
+- Routes are role-guarded in the GoRouter `redirect`: admin areas are
+  admin-only, manager areas admit **manager + admin** (the hierarchy), the
+  employee home (`/`) is employee-only. Add a new role area as a path prefix
+  with an `_isXArea` helper + a guard line, and extend `RouteNames.homeForRole`.
+  Never gate role access in the UI only.
+- New role-facing screens are presentation-only features
+  (`features/<role>/presentation/pages/`) wrapped in a `RoleScaffold`; reuse
+  `RolePlaceholder` for not-yet-built screens.
 
 ### Codegen
 After editing any `freezed` file (`*_entity.dart`, `*_state.dart`):

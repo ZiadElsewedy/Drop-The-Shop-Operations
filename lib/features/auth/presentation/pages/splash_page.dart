@@ -61,7 +61,7 @@ class _SplashPageState extends State<SplashPage>
     AppDependencies.authCubit.state.when(
       initial: () => context.go(RouteNames.welcome),
       loading: (_) => context.go(RouteNames.welcome),
-      authenticated: (_) => context.go(RouteNames.home),
+      authenticated: (user) => context.go(RouteNames.homeForRole(user.role)),
       unauthenticated: () => context.go(RouteNames.welcome),
       otpSent: (_) => context.go(RouteNames.welcome),
       awaitingEmailVerification: (_) => context.go(RouteNames.emailVerification),
