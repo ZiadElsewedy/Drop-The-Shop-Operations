@@ -18,16 +18,12 @@ class ProfileCubit extends Cubit<ProfileState> {
   final CheckUsername _checkUsername;
 
   ProfileCubit({
-    required GetProfile getProfile,
+    required this._getProfile,
     required UpdateProfile updateProfile,
-    required UploadProfileImage uploadProfileImage,
-    required UploadCoverImage uploadCoverImage,
-    required CheckUsername checkUsername,
-  })  : _getProfile = getProfile,
-        _updateProfile = updateProfile,
-        _uploadProfileImage = uploadProfileImage,
-        _uploadCoverImage = uploadCoverImage,
-        _checkUsername = checkUsername,
+    required this._uploadProfileImage,
+    required this._uploadCoverImage,
+    required this._checkUsername,
+  })  : _updateProfile = updateProfile,
         super(const ProfileState.initial());
 
   /// The currently-known profile, regardless of transient state.
