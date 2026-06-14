@@ -18,7 +18,8 @@
 
 | Module           | Status        | Notes                                                          |
 | ---------------- | ------------- | ------------------------------------------------------------- |
-| Authentication   | ✅ Complete    | Email, phone OTP, Google, verify, forgot/change pw, delete     |
+| Authentication   | ✅ Complete    | Email, phone OTP, Google, verify, forgot/change pw, delete; landing = **Login** (social Welcome page removed) |
+| Account approval | ✅ Complete*   | New sign-ups seeded `pending` + inactive → **Pending Approval** screen; gate in router (`hasAppAccess`). *In-app approval UI (manager/admin) still pending — approve out of band (console) until Phase 5 |
 | Roles & routing  | ✅ Complete    | `UserRole` enum, role dispatch + guards; **admin ⊇ manager** hierarchy + branch-scoped access model (admin global · manager own-branch · employee self) |
 | Profile          | ✅ Complete    | View/edit, avatar+cover upload, username checks                |
 | Settings         | ✅ Complete    | Settings page + change password + delete account              |
@@ -37,8 +38,16 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 - **Phase 1 (Roles & Foundation) implemented** — `UserRole` enum, extended
   user model, role seeding, role-based routing + guards, three role shells, and
   Firestore/Storage security rules. `flutter analyze` is clean.
-- **Action needed:** commit Phase 1; deploy `firestore.rules` / `storage.rules`
-  and enable Firebase Storage before production.
+- **Auth-flow rework** — removed the social **Welcome** page (landing is now
+  **Login**); added the **account-approval gate**: new sign-ups are seeded
+  `pending` + inactive and confined to a new **Pending Approval** screen
+  (`/pending-approval`) until a manager/admin approves them (`hasAppAccess`
+  gate in the router). New `ApprovalStatus` enum + `approvalStatus` user field +
+  `AuthCubit.refreshUser` (polled by the pending screen). `firestore.rules`
+  updated for pending self-registration + manager/admin approval.
+- **Action needed:** commit; deploy `firestore.rules` / `storage.rules` and
+  enable Firebase Storage; bootstrap the first admin (set
+  `role/approvalStatus/isActive` in the console) before production.
 
 ---
 
@@ -47,26 +56,28 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 | Name                | Path                         | Page                    | Access        |
 | ------------------- | ---------------------------- | ----------------------- | ------------- |
 | splash              | `/splash`                    | `SplashPage`            | public        |
-| welcome             | `/welcome`                   | `WelcomePage`           | unauth        |
 | home                | `/`                          | `EmployeeShell`         | **employee**  |
 | adminDashboard      | `/admin`                     | `AdminShell`            | **admin**     |
 | managerHome         | `/manager`                   | `ManagerShell`          | **manager**   |
-| login               | `/login`                     | `LoginPage`             | unauth        |
+| login               | `/login`                     | `LoginPage`             | unauth (landing) |
 | register            | `/register`                  | `RegisterPage`          | unauth        |
 | phone               | `/phone`                     | `PhoneOtpPage`          | unauth        |
 | forgotPassword      | `/forgot-password`           | `ForgotPasswordPage`    | unauth        |
 | emailVerification   | `/email-verification`        | `EmailVerificationPage` | awaiting verif|
+| pendingApproval     | `/pending-approval`          | `PendingApprovalPage`   | auth, not approved |
 | profile             | `/profile`                   | `ProfilePage`           | any auth      |
 | editProfile         | `/profile/edit`              | `EditProfilePage`       | any auth      |
 | settings            | `/settings`                  | `SettingsPage`          | any auth      |
 | changePassword      | `/settings/change-password`  | `ChangePasswordPage`    | any auth      |
 
 Defined in [route_names.dart](lib/core/routes/route_names.dart) /
-[app_router.dart](lib/core/routes/app_router.dart). Navigation is auth-guarded
-**and role-guarded**: after login each user is dispatched to their role shell
-(`RouteNames.homeForRole`), and attempts to enter another role's area (incl.
-manual URL hacking) are bounced back to their own home. `/profile` & `/settings`
-are shared across all roles.
+[app_router.dart](lib/core/routes/app_router.dart). Navigation is auth-guarded,
+**approval-gated**, **and role-guarded**: an authenticated-but-unapproved user
+(`!user.hasAppAccess`) is held on `/pending-approval`; once approved each user is
+dispatched to their role shell (`RouteNames.homeForRole`), and attempts to enter
+another role's area (incl. manual URL hacking) are bounced back to their own
+home. `/profile` & `/settings` are shared across all roles. The unauthenticated
+landing is **Login** (the social Welcome page was removed).
 
 ---
 
@@ -79,14 +90,17 @@ are shared across all roles.
   uploads to work in production.
 - **Security rules** — ✅ **In the repo:** [`firestore.rules`](firestore.rules)
   and [`storage.rules`](storage.rules), wired into [`firebase.json`](firebase.json).
-  Firestore rules encode the role/branch **access model**: **admin** reads/writes
-  any user (promotions, branch moves, (de)activation); **manager** reads users in
-  their **own branch**; **employee** reads/edits only their own doc and may **not**
-  change the privileged role fields (`role`, `branchId`, `isActive`,
-  `assignedShift`). Reusable `isAdmin()` / `isManager()` / `canReachBranch()`
-  helpers + a commented template are ready for the Phase 2+ branch-scoped
-  collections. ⚠️ Still need to be **deployed** (`firebase deploy --only
-  firestore:rules,storage`).
+  Firestore rules encode the role/branch + **approval** access model: **self
+  registration** is allowed only as a `pending`, **inactive** employee;
+  **admin** reads/writes any user (approve/reject, promotions, branch moves,
+  (de)activation); **manager** reads users in their **own branch** + any pending
+  newcomer and may approve/manage employees into their own branch (never elevate
+  role or assign another branch); **employee** reads/edits only their own doc and
+  may **not** change the privileged fields (`role`, `branchId`, `isActive`,
+  `assignedShift`, `approvalStatus`). Reusable `isAdmin()` / `isManager()` /
+  `canReachBranch()` helpers + a commented template are ready for the Phase 2+
+  branch-scoped collections. ⚠️ Still need to be **deployed** (`firebase deploy
+  --only firestore:rules,storage`).
 
 ### Firestore schema — `users/{uid}`
 
@@ -98,7 +112,8 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 | `role`                                                 | string    | **Phase 1** — `admin` (global) / `manager` (one branch) / `employee` (own data); seeded `employee` once, role-guarded |
 | `branchId`                                             | string?   | **Phase 1** — owning branch. **admin:** null/ignored (global); **manager:** their one branch; **employee:** their branch. Assigned by an admin. |
 | `assignedShift`                                        | string?   | **Phase 1** — shift; null until assigned (Phase 2) |
-| `isActive`                                             | bool      | **Phase 1** — soft-disable (default `true`) |
+| `isActive`                                             | bool      | **Phase 1** — activation/soft-disable. **New sign-ups seeded `false`** (pending approval); set `true` on approval |
+| `approvalStatus`                                       | string    | **Approval** — `pending` / `approved` / `rejected`. New sign-ups seeded `pending`; missing → treated as `approved` (legacy). Flipped by admin/own-branch manager |
 | `displayName`, `photoUrl`                              | string    | **legacy** auth keys, kept in sync |
 | `fullName`, `username`, `profileImage`, `coverImage`   | string    | profile identity               |
 | `phoneNumber`, `bio`, `gender`, `country`, `city`, `website` | string?  | personal                       |
@@ -108,10 +123,11 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 | `accountStatus`                                        | string    | default `active`               |
 | `followersCount`, `followingCount`, `postsCount`, `likesCount` | int | **legacy/unused** — FBRO is not a social app |
 
-> **Role-field seeding:** `role`/`branchId`/`isActive`/`assignedShift` are
-> seeded **once** on first document creation and are deliberately excluded from
-> `UserModel.toMap()`, so a routine re-login (which merges) can never reset an
-> admin-assigned role/branch.
+> **Privileged-field seeding:** `role`/`branchId`/`isActive`/`assignedShift`/
+> `approvalStatus` are seeded **once** on first document creation (a new account
+> is seeded as a `pending`, **inactive** employee) and are deliberately excluded
+> from `UserModel.toMap()`, so a routine re-login (which merges) can never reset
+> an admin-assigned role/branch or re-pend an approved account.
 
 ### Storage schema
 
@@ -126,9 +142,13 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 
 - ⚠️ **Enable Firebase Storage** and **deploy** the committed
   `firestore.rules` / `storage.rules` before production.
-- **Role promotion** is not yet in-app — an admin promotes a user by editing
-  `users/{uid}.role` in the Firebase console / Admin SDK (the client rules
-  forbid self-elevation). An in-app admin console arrives in Phase 5.
+- **Approval & role promotion are not yet in-app** — a manager/admin approves a
+  user (sets `approvalStatus: approved`, `isActive: true`, assigns `branchId` /
+  `role`) by editing `users/{uid}` in the Firebase console / Admin SDK (the
+  client rules already permit admin + own-branch manager approval, but there is
+  **no approval UI yet**). The **first admin** must be bootstrapped this way too,
+  since every sign-up — including the founder's — is seeded `pending`/inactive.
+  An in-app admin/manager approval console arrives in Phase 5.
 - **Role shells** (`AdminShell` / `ManagerShell` / `EmployeeShell`) are
   functional placeholders — real content lands in Phase 3 (manager/employee)
   and Phase 5 (admin).
@@ -155,8 +175,12 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 
 1. Commit Phase 1 on `feature/roles-and-foundation`; open a PR into `main`.
 2. Deploy `firestore.rules` / `storage.rules` and enable Storage.
-3. Seed a test admin/manager (set `role` in the Firebase console) and verify
-   role-based dispatch + guards end to end.
-4. **Phase 2** — Shifts (uses `assignedShift` / `branchId`).
-5. Add a Cloud Function to clean up the user document on account deletion.
-6. Add widget/cubit tests, starting with `AuthCubit` and the router redirect.
+3. Bootstrap the first admin (in the Firebase console set
+   `role: admin`, `approvalStatus: approved`, `isActive: true`); then verify the
+   register → Pending Approval → approve → role dispatch flow end to end.
+4. **Phase 5 (bring forward?)** — in-app approval console so managers/admins can
+   approve pending users from the app instead of the Firebase console.
+5. **Phase 2** — Shifts (uses `assignedShift` / `branchId`).
+6. Add a Cloud Function to clean up the user document on account deletion.
+7. Add widget/cubit tests, starting with `AuthCubit`, the approval gate, and the
+   router redirect.

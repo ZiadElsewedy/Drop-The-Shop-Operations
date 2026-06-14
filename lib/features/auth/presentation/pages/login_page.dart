@@ -37,7 +37,9 @@ class _LoginPageState extends State<LoginPage> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: const BackButton(),
+        // Login is the unauthenticated landing screen, so it usually has nothing
+        // to pop back to; only show a back button when it was pushed onto a stack.
+        leading: context.canPop() ? const BackButton() : null,
         backgroundColor: Colors.transparent,
       ),
       body: BlocListener<AuthCubit, AuthState>(

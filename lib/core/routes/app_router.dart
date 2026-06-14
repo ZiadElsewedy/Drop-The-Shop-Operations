@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/auth/presentation/pages/splash_page.dart';
-import 'package:fbro/features/auth/presentation/pages/welcome_page.dart';
 import 'package:fbro/features/auth/presentation/pages/login_page.dart';
 import 'package:fbro/features/auth/presentation/pages/register_page.dart';
 import 'package:fbro/features/auth/presentation/pages/phone_otp_page.dart';
 import 'package:fbro/features/auth/presentation/pages/forgot_password_page.dart';
 import 'package:fbro/features/auth/presentation/pages/email_verification_page.dart';
+import 'package:fbro/features/auth/presentation/pages/pending_approval_page.dart';
 import 'package:fbro/features/admin/presentation/pages/admin_shell.dart';
 import 'package:fbro/features/manager/presentation/pages/manager_shell.dart';
 import 'package:fbro/features/employee/presentation/pages/employee_shell.dart';
@@ -39,8 +39,7 @@ GoRouter createRouter(AuthCubit authCubit) {
         orElse: () => false,
       );
 
-      final isOnAuthFlow = loc == RouteNames.welcome ||
-          loc == RouteNames.login ||
+      final isOnAuthFlow = loc == RouteNames.login ||
           loc == RouteNames.register ||
           loc == RouteNames.phone ||
           loc == RouteNames.forgotPassword;
@@ -52,6 +51,16 @@ GoRouter createRouter(AuthCubit authCubit) {
       }
 
       if (isAuthenticated) {
+        // Approval gate (checked before role dispatch). FBRO is an internal ops
+        // system: an authenticated account that hasn't been approved — or has
+        // been deactivated — is confined to the Pending Approval screen until a
+        // manager/admin approves it. Sign-out is the only way off the screen.
+        if (!user.hasAppAccess) {
+          return loc == RouteNames.pendingApproval
+              ? null
+              : RouteNames.pendingApproval;
+        }
+
         final roleHome = RouteNames.homeForRole(user.role);
 
         // Role guard. Admin ⊇ manager: admin areas are admin-only, but manager
@@ -67,16 +76,21 @@ GoRouter createRouter(AuthCubit authCubit) {
           return roleHome;
         }
 
-        // Leaving the auth flow / verification screen → role home.
-        if (isOnAuthFlow || loc == RouteNames.emailVerification) {
+        // Approved users never see the auth flow / verification / pending
+        // screens → bounce them to their role home.
+        if (isOnAuthFlow ||
+            loc == RouteNames.emailVerification ||
+            loc == RouteNames.pendingApproval) {
           return roleHome;
         }
 
         return null;
       }
 
+      // Unauthenticated → confine to the auth flow; the landing screen is Login
+      // (the old social Welcome page has been removed).
       if (!isAwaitingVerification && !isOnAuthFlow) {
-        if (loc != RouteNames.splash) return RouteNames.welcome;
+        if (loc != RouteNames.splash) return RouteNames.login;
       }
 
       return null;
@@ -89,10 +103,10 @@ GoRouter createRouter(AuthCubit authCubit) {
         ),
       ),
       GoRoute(
-        path: RouteNames.welcome,
+        path: RouteNames.pendingApproval,
         pageBuilder: (context, state) => _fadeTransition(
           state,
-          const WelcomePage(),
+          const PendingApprovalPage(),
         ),
       ),
       GoRoute(

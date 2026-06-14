@@ -93,6 +93,20 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  /// Re-reads the current user's Firestore document and re-emits
+  /// [AuthState.authenticated] so the router re-evaluates access. Used by the
+  /// Pending Approval screen to detect when a manager/admin has approved the
+  /// account (`approvalStatus` → approved, `isActive` → true) and let the user
+  /// through to their role shell without forcing a sign-out / sign-in.
+  Future<void> refreshUser() async {
+    final firebaseUser = _repository.currentUser;
+    if (firebaseUser == null) {
+      emit(const AuthState.unauthenticated());
+      return;
+    }
+    emit(AuthState.authenticated(await _withStoredProfile(firebaseUser)));
+  }
+
   void _listenToAuthChanges() {
     _authSub = _repository.authStateChanges.listen((user) {
       if (user == null) {

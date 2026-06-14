@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fbro/core/enums/approval_status.dart';
 import 'package:fbro/features/auth/data/models/user_model.dart';
 
 abstract class UserRemoteDataSource {
@@ -33,14 +34,21 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
         'profileImage': '',
         'coverImage': '',
       });
-      // Seed the role foundation ONCE. These are deliberately NOT part of
-      // UserModel.toMap(), so subsequent re-login merges never reset an
-      // admin-assigned role/branch. New users always start as employee.
+      // Seed the role + approval foundation ONCE. These are deliberately NOT
+      // part of UserModel.toMap(), so subsequent re-login merges never reset an
+      // admin-assigned role/branch or re-pend an approved account.
+      //
+      // FBRO is an internal ops system: a new account is NOT usable yet. It is
+      // seeded as a PENDING, INACTIVE employee with no branch and is confined to
+      // the Pending Approval screen until a manager/admin approves it (flips
+      // approvalStatus → approved, isActive → true, assigns role + branch).
+      // The very first admin is bootstrapped out of band (Firebase console).
       data.addAll({
         'role': user.role.value,
         'branchId': user.branchId,
-        'isActive': user.isActive,
+        'isActive': false,
         'assignedShift': user.assignedShift,
+        'approvalStatus': ApprovalStatus.pending.value,
       });
     }
 

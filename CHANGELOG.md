@@ -28,6 +28,52 @@ and [Semantic Versioning](https://semver.org).
 
 ---
 
+## 2026-06-14 — Account approval flow & Welcome removal
+
+Reworks the authentication entry flow for an internal ops tool: no public
+marketing page, and new accounts must be approved before they can be used.
+
+### Added
+- `ApprovalStatus` enum (`pending` / `approved` / `rejected`) in
+  [core/enums/approval_status.dart](lib/core/enums/approval_status.dart) with
+  safe string (de)serialization that defaults unknown/missing → `approved` so
+  legacy user documents are never locked out.
+- `approvalStatus` field on `UserEntity` / `UserModel`, plus
+  `UserEntity.isApproved` and `UserEntity.hasAppAccess` (`isApproved &&
+  isActive`) computed getters.
+- **Pending Approval screen** ([pending_approval_page.dart](lib/features/auth/presentation/pages/pending_approval_page.dart),
+  route `/pending-approval`): the holding screen for authenticated-but-unapproved
+  accounts. Polls `AuthCubit.refreshUser` so an approval lands the user in their
+  role shell without a re-login; offers Sign Out.
+- `AuthCubit.refreshUser` — re-reads the Firestore user and re-emits
+  `authenticated` so the router re-evaluates access.
+- **Approval gate** in the router redirect (checked **before** role dispatch):
+  `!user.hasAppAccess` → confined to `/pending-approval`.
+
+### Changed
+- **New accounts are seeded `pending` + `isActive: false`** (employee, no branch)
+  in the `saveUser` first-creation block; `approvalStatus` joins the
+  seeded-once / excluded-from-`toMap()` privileged fields.
+- **`firestore.rules`**: self-registration now requires `isActive == false` &&
+  `approvalStatus == 'pending'`; employees can't change `approvalStatus`;
+  **managers** can approve/manage employees of their **own branch** (and claim
+  pending newcomers into it) without elevating role/branch; admins approve
+  anyone; managers can read pending newcomers.
+- Unauthenticated landing is now **Login** (router redirect + `SplashPage`);
+  `LoginPage` shows a back button only when it can pop.
+
+### Removed
+- The social-style **Welcome / marketing page** (`welcome_page.dart`) and the
+  `/welcome` route — FBRO is an internal tool, not a social network.
+
+### Notes
+- No in-app approval UI yet: approval is done out of band (Firebase console),
+  like role promotion. The **first admin** must be bootstrapped there
+  (`role: admin`, `approvalStatus: approved`, `isActive: true`) since every
+  sign-up is seeded pending.
+
+---
+
 ## 2026-06-14 — Role architecture refinement
 
 Refines the Phase 1 foundation into a role **hierarchy** + **branch-scoped**

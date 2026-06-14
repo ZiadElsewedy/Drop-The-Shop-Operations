@@ -17,10 +17,14 @@
 
 **FBRO** is a Flutter app built on Firebase for **role-based branch / shift
 operations** (admin · manager · employee) — it is **not a social network**. It
-currently ships a complete authentication system, a role system with
-role-based navigation + route guards (Phase 1), a production-ready user profile
-module, and account settings, all dressed in a custom monochrome (black &
-white) design system.
+currently ships a complete authentication system with an **account-approval
+gate** (new sign-ups start *pending* and can't use the app until a
+manager/admin approves them), a role system with role-based navigation + route
+guards (Phase 1), a production-ready user profile module, and account settings,
+all dressed in a custom monochrome (black & white) design system.
+
+> There is **no marketing / Welcome page** — FBRO is an internal tool, so the
+> unauthenticated landing screen is **Login** (with Register one tap away).
 
 > ⚠️ Some legacy social fields (follower / post counters) linger in the profile
 > schema from an earlier iteration. They are **unused** and slated for removal —
@@ -73,7 +77,7 @@ lib/
 ├── core/
 │   ├── constants/            # app_constants.dart (appName, collection names)
 │   ├── di/                   # injection.dart — AppDependencies service locator
-│   ├── enums/                # user_role.dart (admin/manager/employee)
+│   ├── enums/                # user_role.dart, approval_status.dart (pending/approved/rejected)
 │   ├── errors/               # exceptions.dart (data layer) / failures.dart (domain)
 │   ├── routes/               # app_router.dart (role dispatch + guards), route_names.dart
 │   ├── theme/                # app_colors / typography / spacing / radius / app_theme
@@ -105,7 +109,8 @@ app-wide cubits (`AuthCubit`, `ProfileCubit`) are provided at the root via
 ### Authentication chain
 
 ```
-LoginPage / RegisterPage / PhoneOtpPage / WelcomePage   (presentation/pages)
+LoginPage / RegisterPage / PhoneOtpPage                  (presentation/pages)
+EmailVerificationPage / PendingApprovalPage
         ↓  context.read<AuthCubit>()
 AuthCubit                                                (presentation/cubit)
         ↓  calls one use case per action
@@ -137,24 +142,29 @@ AuthCubit.stream
         ↓
 _AuthStateNotifier (ChangeNotifier)   ← refreshListenable
         ↓
-GoRouter.redirect                     ← auth guard + ROLE guard on every nav
+GoRouter.redirect                     ← auth guard + APPROVAL gate + ROLE guard
         ↓
-splash → welcome/login/... → role shell   (/ employee · /admin · /manager)
+splash → login/register/... → pending-approval → role shell  (/ employee · /admin · /manager)
 ```
 
 `createRouter(AuthCubit)` ([core/routes/app_router.dart](lib/core/routes/app_router.dart))
 re-evaluates its `redirect` whenever `AuthCubit` emits, routing unauthenticated
-users to the auth flow, `awaitingEmailVerification` users to the verification
-page, and authenticated users to **their role shell**
-(`RouteNames.homeForRole(user.role)` → `/` employee, `/admin`, `/manager`). The
-redirect also **role-guards** every navigation: admin areas are admin-only,
-manager areas admit manager + admin (**admin ⊇ manager**), the employee home
-(`/`) is employee-only; anyone entering an area that isn't theirs is bounced to
-their own home. `/profile` & `/settings` are shared across roles.
-`SplashPage` calls `AuthCubit.restoreSession()` once on cold start and dispatches
-by role. Because Firebase sign-ins don't know the role, `AuthCubit` re-reads the
-Firestore user after email/Google/OTP sign-in so the emitted `authenticated`
-state carries the authoritative role/branch.
+users to the auth flow (landing = **Login**), `awaitingEmailVerification` users
+to the verification page, and authenticated users onward. Before role dispatch,
+the redirect applies the **approval gate**: an authenticated user whose account
+is not approved/active (`user.hasAppAccess == false`) is confined to the
+**Pending Approval** screen (`/pending-approval`) — sign-out is the only way off
+it. Approved users go to **their role shell** (`RouteNames.homeForRole(user.role)`
+→ `/` employee, `/admin`, `/manager`). The redirect also **role-guards** every
+navigation: admin areas are admin-only, manager areas admit manager + admin
+(**admin ⊇ manager**), the employee home (`/`) is employee-only; anyone entering
+an area that isn't theirs is bounced to their own home. `/profile` & `/settings`
+are shared across roles. `SplashPage` calls `AuthCubit.restoreSession()` once on
+cold start and dispatches by approval + role. Because Firebase sign-ins don't
+know the role/approval, `AuthCubit` re-reads the Firestore user after
+email/Google/OTP sign-in (and on `refreshUser()`, which the Pending Approval
+screen polls) so the emitted `authenticated` state carries the authoritative
+role/branch/approval.
 
 ### Profile chain
 
@@ -212,7 +222,9 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **A role's home/dashboard screen**        | `lib/features/{employee,manager,admin}/presentation/pages/`              |
 | **Shared role chrome / placeholder**      | `lib/core/widgets/role_scaffold.dart` · `role_placeholder.dart`         |
 | **Roles enum / role values**              | `lib/core/enums/user_role.dart`                                         |
-| **Role on the user model / seeding**      | `lib/features/auth/data/models/user_model.dart` + `data/datasources/user_remote_datasource.dart` (seed-once block) |
+| **Approval status enum / values**         | `lib/core/enums/approval_status.dart` (pending/approved/rejected)        |
+| **Role + approval on the user model / seeding** | `lib/features/auth/data/models/user_model.dart` + `data/datasources/user_remote_datasource.dart` (seed-once block: pending + inactive employee) |
+| **Approval gate (pending → dashboard)**   | `lib/core/routes/app_router.dart` (redirect `hasAppAccess` check) + `UserEntity.hasAppAccess`/`isApproved` + `pending_approval_page.dart` + `AuthCubit.refreshUser` |
 | **Role-based redirect / route guards**    | `lib/core/routes/app_router.dart` (redirect + `_isAdminArea`/`_isManagerArea`) + `RouteNames.homeForRole` |
 | **Settings / change password UI**         | `lib/features/settings/presentation/pages/`                              |
 | **Routes / navigation guards**            | `lib/core/routes/app_router.dart` + `route_names.dart`                    |
@@ -332,11 +344,23 @@ Patterns below are established across the codebase and **must be reused**.
   - **manager** — belongs to exactly one branch; limited to data where
     `resource.branchId == manager.branchId`.
   - **employee** — limited to their own assigned data and profile.
-- **Privileged role fields** (`role`, `branchId`, `isActive`, `assignedShift`)
-  are seeded **once** in the `saveUser` first-creation block and are kept **out
-  of `UserModel.toMap()`**, because `saveUser` merges on every login — including
-  them would reset an admin's role on the next sign-in. Only an admin may change
-  these (enforced by `firestore.rules`).
+- **Account approval (activation gate).** A new sign-up is **not** usable: it is
+  seeded as a `pending` + `isActive: false` employee with no branch and is
+  confined to the **Pending Approval** screen. A manager/admin approves it
+  (`approvalStatus → approved`, `isActive → true`, assigns role + branch); only
+  then does it reach a role shell. Gate logic = `UserEntity.hasAppAccess`
+  (`isApproved && isActive`), checked in the router redirect **before** role
+  dispatch. `ApprovalStatus.fromString` defaults missing → `approved` so legacy
+  docs aren't locked out; **new** accounts are explicitly seeded `pending`.
+  Managers approve employees of their **own branch** (and may claim pending
+  newcomers into it); admins approve anyone — mirrored in `firestore.rules`. The
+  **first admin** must be bootstrapped out of band (Firebase console).
+- **Privileged fields** (`role`, `branchId`, `isActive`, `assignedShift`,
+  `approvalStatus`) are seeded **once** in the `saveUser` first-creation block
+  and are kept **out of `UserModel.toMap()`**, because `saveUser` merges on every
+  login — including them would reset an admin's role / re-pend an approved
+  account on the next sign-in. Self cannot change these (enforced by
+  `firestore.rules`); an admin (or own-branch manager, for approval) may.
 - **Enforcement** lives in `firestore.rules`: reusable `isAdmin()`/`isManager()`/
   `selfBranch()`/`canReachBranch(branch)` helpers read the requester's own user
   doc. New branch-scoped collections (branches, shifts, tasks) plug into

@@ -59,15 +59,19 @@ class _SplashPageState extends State<SplashPage>
     if (!mounted) return;
 
     AppDependencies.authCubit.state.when(
-      initial: () => context.go(RouteNames.welcome),
-      loading: (_) => context.go(RouteNames.welcome),
-      authenticated: (user) => context.go(RouteNames.homeForRole(user.role)),
-      unauthenticated: () => context.go(RouteNames.welcome),
-      otpSent: (_) => context.go(RouteNames.welcome),
+      initial: () => context.go(RouteNames.login),
+      loading: (_) => context.go(RouteNames.login),
+      authenticated: (user) => context.go(
+        user.hasAppAccess
+            ? RouteNames.homeForRole(user.role)
+            : RouteNames.pendingApproval,
+      ),
+      unauthenticated: () => context.go(RouteNames.login),
+      otpSent: (_) => context.go(RouteNames.login),
       awaitingEmailVerification: (_) => context.go(RouteNames.emailVerification),
-      passwordResetSent: () => context.go(RouteNames.welcome),
-      passwordChanged: () => context.go(RouteNames.home),
-      error: (_) => context.go(RouteNames.welcome),
+      passwordResetSent: () => context.go(RouteNames.login),
+      passwordChanged: () => context.go(RouteNames.login),
+      error: (_) => context.go(RouteNames.login),
     );
   }
 
