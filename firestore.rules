@@ -130,13 +130,14 @@ service cloud.firestore {
       allow delete: if canReachBranch(resource.data.get('branchId', ''));
     }
 
-    // ── Other branch-scoped collections (Phase 3+) ─────────────────
-    // Branches carry a `branchId` and follow the same model — plug each new
-    // collection in with the canReachBranch() helper, e.g.:
-    //
-    //   match /branches/{branchId} {
-    //     allow read:           if canReachBranch(branchId);
-    //     allow create, update, delete: if isAdmin();
-    //   }
+    // ── Branches (Phase 5) ─────────────────────────────────────────
+    // Any signed-in user may READ branches (names are shown in pickers and on
+    // cards across roles). Only an admin may create/edit. "Delete" is a soft
+    // delete (an admin update setting `deletedAt`), so hard deletes are denied.
+    match /branches/{branchId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
   }
 }

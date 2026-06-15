@@ -39,6 +39,13 @@ class RouteNames {
   static const String managerTasks = '/manager/tasks';
   static const String myTasks = '/my-tasks';
 
+  // ─── Admin module (Phase 5) ─────────────────────────────────
+  // All under the admin area, so the existing `_isAdminArea` guard covers them.
+  static const String adminBranches = '/admin/branches';
+  static const String adminManagers = '/admin/managers';
+  static const String adminEmployees = '/admin/employees';
+  static const String adminApprovals = '/admin/approvals';
+
   /// The landing route for a given role, used by the router redirect and the
   /// splash screen to dispatch each user to their own shell.
   static String homeForRole(UserRole role) {

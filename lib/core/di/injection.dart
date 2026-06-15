@@ -46,6 +46,15 @@ import 'package:fbro/features/task/domain/usecases/change_task_status.dart';
 import 'package:fbro/features/task/domain/usecases/review_task.dart';
 import 'package:fbro/features/task/domain/usecases/upload_task_proof.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
+import 'package:fbro/features/branch/data/datasources/branch_remote_datasource.dart';
+import 'package:fbro/features/branch/data/repositories/branch_repository_impl.dart';
+import 'package:fbro/features/branch/domain/repositories/branch_repository.dart';
+import 'package:fbro/features/branch/presentation/cubit/branch_cubit.dart';
+import 'package:fbro/features/admin/data/datasources/user_admin_remote_datasource.dart';
+import 'package:fbro/features/admin/data/repositories/user_admin_repository_impl.dart';
+import 'package:fbro/features/admin/domain/repositories/user_admin_repository.dart';
+import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
+import 'package:fbro/features/admin/presentation/cubit/admin_stats_cubit.dart';
 
 class AppDependencies {
   AppDependencies._();
@@ -53,6 +62,11 @@ class AppDependencies {
   static late final AuthCubit authCubit;
   static late final ProfileCubit profileCubit;
   static late final TaskCubit taskCubit;
+
+  // ─── Admin module (Phase 5) ─────────────────────────────────
+  static late final BranchCubit branchCubit;
+  static late final AdminUsersCubit adminUsersCubit;
+  static late final AdminStatsCubit adminStatsCubit;
 
   /// Phase 2 shift foundation. Composed here and ready for the shift UI (a
   /// `ShiftCubit` + use cases) to consume in the next phase; no in-app shift
@@ -123,5 +137,20 @@ class AppDependencies {
       uploadTaskProof: UploadTaskProof(taskRepository),
       getUsersByBranch: GetUsersByBranch(authRepository),
     );
+
+    // ─── Admin module (Phase 5) ───────────────────────────────
+    final branchRemoteDataSource =
+        BranchRemoteDataSourceImpl(FirebaseFirestore.instance);
+    final BranchRepository branchRepository =
+        BranchRepositoryImpl(branchRemoteDataSource);
+    final userAdminRemoteDataSource =
+        UserAdminRemoteDataSourceImpl(FirebaseFirestore.instance);
+    final UserAdminRepository userAdminRepository =
+        UserAdminRepositoryImpl(userAdminRemoteDataSource);
+
+    branchCubit = BranchCubit(branchRepository);
+    adminUsersCubit = AdminUsersCubit(userAdminRepository, branchRepository);
+    adminStatsCubit =
+        AdminStatsCubit(branchRepository, userAdminRepository, taskRepository);
   }
 }

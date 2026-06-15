@@ -17,6 +17,10 @@ import 'package:fbro/features/shift/presentation/pages/my_shift_screen.dart';
 import 'package:fbro/features/task/presentation/pages/task_management_screen.dart';
 import 'package:fbro/features/task/presentation/pages/branch_tasks_screen.dart';
 import 'package:fbro/features/task/presentation/pages/my_tasks_screen.dart';
+import 'package:fbro/features/branch/presentation/pages/branch_management_screen.dart';
+import 'package:fbro/features/admin/presentation/pages/manager_management_screen.dart';
+import 'package:fbro/features/admin/presentation/pages/employee_management_screen.dart';
+import 'package:fbro/features/admin/presentation/pages/pending_approvals_screen.dart';
 import 'package:fbro/features/profile/presentation/pages/profile_page.dart';
 import 'package:fbro/features/profile/presentation/pages/edit_profile_page.dart';
 import 'package:fbro/features/settings/presentation/pages/settings_page.dart';
@@ -182,6 +186,36 @@ GoRouter createRouter(AuthCubit authCubit) {
         pageBuilder: (context, state) => _slideTransition(
           state,
           const MyTasksScreen(),
+        ),
+      ),
+      // ─── Admin module (Phase 5) ────────────────────────────────
+      // All under /admin/*, covered by the admin-only `_isAdminArea` guard.
+      GoRoute(
+        path: RouteNames.adminBranches,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const BranchManagementScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.adminManagers,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const ManagerManagementScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.adminEmployees,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const EmployeeManagementScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.adminApprovals,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const PendingApprovalsScreen(),
         ),
       ),
       GoRoute(

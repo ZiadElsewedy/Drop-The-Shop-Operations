@@ -23,9 +23,11 @@
 | Roles & routing  | ✅ Complete    | `UserRole` enum, role dispatch + guards; **admin ⊇ manager** hierarchy + branch-scoped access model (admin global · manager own-branch · employee self) |
 | Shifts (Phase 2) | 🟡 Foundation | `ShiftEntity`/`ShiftModel`/`ShiftRepository`/`ShiftRemoteDataSource` + `shifts/{shiftId}` rules + 3 role placeholder screens. **No `ShiftCubit`/use cases or real UI yet** — data layer ready, wired in DI |
 | Tasks (Phase 3–4) | ✅ Workflow   | Full vertical slice: `TaskCubit` + 10 use cases, functional employee/manager/admin screens (create·assign·start·complete+notes/proof·submit·review approve/reject), client-side status-transition rules, audit fields, proof upload to Storage |
+| Branches (Phase 5) | ✅ Complete   | `BranchEntity`/`Model`/`Repository`/`RemoteDataSource` + `BranchCubit`; admin CRUD + activate/deactivate + soft delete; `branches/{id}` rules |
+| Admin module (Phase 5) | ✅ Complete | Admin dashboard (reports overview) + branch / manager / employee management + in-app pending-user approval + branch assignment. `AdminUsersCubit` + `AdminStatsCubit`, `UserAdminRepository` over `users/{uid}` |
 | Profile          | ✅ Complete    | View/edit, avatar+cover upload, username checks                |
 | Settings         | ✅ Complete    | Settings page + change password + delete account              |
-| Role shells      | 🟡 Scaffolded | Employee / Manager / Admin shells + screens (functional placeholders) |
+| Role shells      | 🟡 Partial    | **Admin** shell is now the full admin module (Phase 5); Employee / Manager home dashboards are still functional placeholders |
 | Design system    | ✅ Complete    | Monochrome B&W, **dark-mode only**; branded **DROP** (`DropLogo` wordmark, FBRO removed) |
 | Security rules   | ✅ In repo     | `firestore.rules` + `storage.rules` — committed, need deploy   |
 | Social fields    | ⛔ Legacy      | Counter/presence fields linger in schema but are unused — **FBRO is not a social app** |
@@ -67,6 +69,17 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
   **client-side status-transition validation** (`TaskCubit._canTransition`), and
   `AuthRepository.getUsersByBranch` (assignee picker). `TaskCubit` is provided
   app-wide in `main.dart`. No notifications / analytics (out of scope).
+- **Phase 5 — Admin module** — new `branch` feature (full vertical slice +
+  `BranchCubit`: CRUD, activate/deactivate, soft delete) and `admin` module
+  (`UserAdminRepository` over `users/{uid}`, `AdminUsersCubit` + `AdminStatsCubit`):
+  admin dashboard with a **reports overview** (branches/managers/employees/
+  pending/active+completed tasks) and management screens for **branches,
+  managers, employees, and pending approvals** (`/admin/branches|managers|
+  employees|approvals`). Admin can approve/reject users, (de)activate, change
+  role/branch, assign managers to branches, and move employees between branches.
+  `branches/{branchId}` Firestore rules added. **Managers are promoted from
+  existing approved users** (no client-side Auth account creation — no Cloud
+  Functions). admin/branch cubits call repositories directly (no use-case layer).
 - **Action needed:** commit; deploy `firestore.rules` / `storage.rules` and
   enable Firebase Storage; bootstrap the first admin (set
   `role/approvalStatus/isActive` in the console) before production.
@@ -87,6 +100,10 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 | adminTasks          | `/admin/tasks`               | `TaskManagementScreen`  | **admin**     |
 | managerTasks        | `/manager/tasks`             | `BranchTasksScreen`     | **manager** (+admin) |
 | myTasks             | `/my-tasks`                  | `MyTasksScreen`         | any approved auth (self) |
+| adminBranches       | `/admin/branches`            | `BranchManagementScreen`| **admin**     |
+| adminManagers       | `/admin/managers`            | `ManagerManagementScreen`| **admin**    |
+| adminEmployees      | `/admin/employees`           | `EmployeeManagementScreen`| **admin**   |
+| adminApprovals      | `/admin/approvals`           | `PendingApprovalsScreen`| **admin**     |
 | login               | `/login`                     | `LoginPage`             | unauth (landing) |
 | register            | `/register`                  | `RegisterPage`          | unauth        |
 | phone               | `/phone`                     | `PhoneOtpPage`          | unauth        |
@@ -134,9 +151,11 @@ landing is **Login** (the social Welcome page was removed).
   review-attribution fields (`approvedBy`/`rejectedBy`). **Storage** (`storage.rules`)
   now also allows task proof images at `tasks/{taskId}/proof.jpg` (any signed-in
   user read/write; the meaningful gate is the Firestore `proofImageUrl` write).
-  Reusable `isAdmin()` / `isManager()` / `canReachBranch()` helpers + a commented
-  template remain for future collections. ⚠️ Still need to be **deployed**
-  (`firebase deploy --only firestore:rules,storage`).
+  **`branches/{branchId}` (Phase 5)** is admin-write / any-signed-in-read with
+  hard delete denied (soft delete only); admin user-administration uses the
+  existing `users` admin-update rule. Reusable `isAdmin()` / `isManager()` /
+  `canReachBranch()` helpers remain for future collections. ⚠️ Still need to be
+  **deployed** (`firebase deploy --only firestore:rules,storage`).
 
 ### Firestore schema — `users/{uid}`
 
@@ -164,6 +183,21 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 > is seeded as a `pending`, **inactive** employee) and are deliberately excluded
 > from `UserModel.toMap()`, so a routine re-login (which merges) can never reset
 > an admin-assigned role/branch or re-pend an approved account.
+
+### Firestore schema — `branches/{branchId}` (Phase 5)
+
+| Field        | Type       | Notes                                              |
+| ------------ | ---------- | -------------------------------------------------- |
+| `id`         | string     | mirrors the doc id                                 |
+| `name`       | string     | branch name                                        |
+| `location`   | string?    | optional area / address                            |
+| `isActive`   | bool       | activate / deactivate                              |
+| `deletedAt`  | Timestamp? | soft-delete marker (null = live; excluded from list)|
+| `createdAt`, `updatedAt` | Timestamp | server timestamps                      |
+
+> Admin-only writes; any signed-in user may read (branch names show in pickers).
+> Managers/employees belong to a branch via `users/{uid}.branchId` (single source
+> of truth for assignment).
 
 ### Firestore schema — `shifts/{shiftId}` (Phase 2)
 
@@ -224,16 +258,24 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 
 - ⚠️ **Enable Firebase Storage** and **deploy** the committed
   `firestore.rules` / `storage.rules` before production.
-- **Approval & role promotion are not yet in-app** — a manager/admin approves a
-  user (sets `approvalStatus: approved`, `isActive: true`, assigns `branchId` /
-  `role`) by editing `users/{uid}` in the Firebase console / Admin SDK (the
-  client rules already permit admin + own-branch manager approval, but there is
-  **no approval UI yet**). The **first admin** must be bootstrapped this way too,
-  since every sign-up — including the founder's — is seeded `pending`/inactive.
-  An in-app admin/manager approval console arrives in Phase 5.
-- **Role shells** (`AdminShell` / `ManagerShell` / `EmployeeShell`) are
-  functional placeholders — real content lands in Phase 3 (manager/employee)
-  and Phase 5 (admin).
+- **Approval & user administration are now in-app (Phase 5)** — admins approve/
+  reject users, (de)activate, change role/branch, assign managers to branches and
+  move employees between branches from the admin module. The **first admin** must
+  still be bootstrapped in the Firebase console (set `role: admin`,
+  `approvalStatus: approved`, `isActive: true`), since every sign-up — including
+  the founder's — is seeded `pending`/inactive.
+- **Managers are promoted, not created** — there is no admin "create account"
+  flow: client-side Firebase Auth account creation would sign the admin out, and
+  there are no Cloud Functions (no Node.js). "Add Manager" promotes an existing
+  approved employee to `role: manager`; new staff self-register, then an admin
+  approves them (optionally directly as a manager).
+- **In-app manager-side approval has no dedicated screen yet** — the rules allow
+  own-branch managers to approve their pending newcomers, but the approval UI
+  lives in the admin module. A manager-facing approval screen is a follow-up.
+- **Manager / Employee home dashboards** (`ManagerHomeScreen` /
+  `EmployeeHomeScreen`) are still functional placeholders — their shifts/tasks
+  live behind the Shifts/Tasks icons in the role chrome. The **Admin** shell is
+  the full admin module (Phase 5).
 - **Shift UI is a placeholder** — the `shift` data/domain layer + Firestore rules
   are done and DI-wired (`AppDependencies.shiftRepository`), but there is **no
   `ShiftCubit`/use cases** and the three shift screens don't read/write yet. The
@@ -276,8 +318,8 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 3. Bootstrap the first admin (in the Firebase console set
    `role: admin`, `approvalStatus: approved`, `isActive: true`); then verify the
    register → Pending Approval → approve → role dispatch flow end to end.
-4. **Phase 5 (bring forward?)** — in-app approval console so managers/admins can
-   approve pending users from the app instead of the Firebase console.
+4. Verify Phase 5 end to end: create a branch, approve a pending user as
+   employee/manager, assign branches, and confirm the dashboard counts.
 5. **Shift UI:** add a `ShiftCubit` + use cases on top of `ShiftRepository`
    (mirroring the now-built task feature), then the admin/manager shift
    management + assignment UI and the employee my-shift view; sync

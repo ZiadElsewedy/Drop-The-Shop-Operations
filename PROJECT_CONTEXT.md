@@ -21,10 +21,13 @@ currently ships a complete authentication system with an **account-approval
 gate** (new sign-ups start *pending* and can't use the app until a
 manager/admin approves them), a role system with role-based navigation + route
 guards (Phase 1), a production-ready user profile module, account settings, a
-**shift** foundation (Phase 2), and a **task management workflow** (Phase 3–4):
+**shift** foundation (Phase 2), a **task management workflow** (Phase 3–4):
 managers/admins create + assign tasks, employees execute them (start → complete
 → submit, with notes + proof image), and managers/admins review (approve /
-reject). All dressed in a custom monochrome (black & white) design system.
+reject); and an **admin management module** (Phase 5): branch CRUD, manager /
+employee management, in-app pending-user approval, branch assignment, and a
+reports overview. All dressed in a custom monochrome (black & white) design
+system.
 
 > There is **no marketing / Welcome page** — FBRO is an internal tool, so the
 > unauthenticated landing screen is **Login** (with Register one tap away).
@@ -90,24 +93,29 @@ lib/
     ├── profile/              # View + edit profile, image uploads, username checks
     ├── shift/                # Shift data/domain (entity·model·repository·datasource) + role shift screens (Phase 2)
     ├── task/                 # Task feature — data/domain + use cases + TaskCubit + functional role screens (Phase 3–4)
-    ├── admin/                # AdminShell + AdminDashboardScreen (presentation only)
+    ├── branch/               # Branch feature — data/domain + BranchCubit + branch management (Phase 5)
+    ├── admin/                # Admin module — user-admin data/domain + AdminUsers/AdminStats cubits + dashboard/managers/employees/approvals (Phase 5)
     ├── manager/              # ManagerShell + ManagerHomeScreen (presentation only)
     ├── employee/             # EmployeeShell + EmployeeHomeScreen (presentation only)
     └── settings/             # Settings + change password (presentation only)
 ```
 
-> The role shells (`admin`/`manager`/`employee`) and `settings` are
-> presentation-only — they reuse `auth`/`profile` cubits rather than owning
-> their own data/domain layers. Each user is dispatched to exactly one role
-> shell after login.
+> The `manager`/`employee` role shells and `settings` are presentation-only —
+> they reuse `auth`/`profile` cubits rather than owning their own data/domain.
+> Each user is dispatched to exactly one role shell after login.
 >
-> The `task` feature (Phase 3–4) is the first fully-vertical operations feature:
-> data + domain + **use cases + `TaskCubit`** + functional role screens (employee
-> My Tasks, manager Branch Tasks, admin Task Management). The `shift` feature
-> (Phase 2) still owns only data + domain (`ShiftEntity`/…/`ShiftRepository`) with
-> **placeholder screens** — no `ShiftCubit` yet. Both repositories are wired in DI
-> (`AppDependencies.shiftRepository` / `taskRepository`); `taskCubit` is also
-> provided app-wide via `main.dart`.
+> The `task` feature (Phase 3–4) and the `branch` + `admin` modules (Phase 5)
+> are full vertical slices. The `admin` shell now hosts the **admin management
+> module** (branches, managers, employees, approvals, reports). The `shift`
+> feature (Phase 2) still owns only data + domain with **placeholder screens** —
+> no `ShiftCubit` yet.
+>
+> **Cubit→repository convention varies by feature:** `auth`/`profile`/`task`
+> cubits go through **use cases**; the Phase 5 `branch`/`admin` cubits call their
+> **repositories directly** (no use-case layer) — a deliberate scope choice for
+> the admin module (the Phase 5 spec enumerated layers without use cases). All
+> app-wide cubits are provided in `main.dart`
+> (`auth`/`profile`/`task`/`branch`/`adminUsers`/`adminStats`).
 
 ---
 
@@ -274,6 +282,42 @@ Cloud Firestore  tasks/{taskId}    Firebase Storage  tasks/{taskId}/proof.jpg
   employee: own) and keeps it visible during mutations (`loaded(tasks, busy)`),
   re-emitting the previous list on error so the UI never flickers/loses data.
 
+### Admin module chain (Phase 5)
+
+```
+AdminShell ▸ AdminDashboardScreen (reports + nav)            (admin/presentation/pages)
+  ├─ BranchManagementScreen ────────────┐
+  ├─ ManagerManagementScreen            │  (push /admin/* routes)
+  ├─ EmployeeManagementScreen           │
+  └─ PendingApprovalsScreen             │
+        ↓ context.read<…Cubit>()  (all provided app-wide in main.dart)
+BranchCubit          AdminUsersCubit          AdminStatsCubit     (cubits — NO use-case layer)
+        ↓                  ↓                         ↓
+BranchRepository     UserAdminRepository      (Branch + UserAdmin + Task repos)
+        ↓                  ↓
+BranchRepositoryImpl UserAdminRepositoryImpl
+        ↓                  ↓
+BranchRemoteDataSource  UserAdminRemoteDataSource
+        ↓                  ↓
+Firestore branches/{id}   Firestore users/{uid}  (admin reads/writes; reuses UserModel/UserEntity)
+```
+
+- **Branch** is a full vertical slice (`BranchEntity`/`BranchModel`/
+  `BranchRepository(+Impl)`/`BranchRemoteDataSource`). "Delete" is a **soft
+  delete** (`deletedAt` set; excluded from the default list). Admin-only writes
+  per `firestore.rules` (`branches/{branchId}`); any signed-in user may read.
+- **`admin`** owns user administration over `users/{uid}` via its own
+  `UserAdminRemoteDataSource` (reusing the auth `UserModel`/`UserEntity`) — a
+  third datasource on `users` alongside `auth` and `profile`. `AdminUsersCubit`
+  loads a slice by `AdminUserFilter` (pending / managers / employees) and
+  performs approve/reject, (de)activate, change-branch, change-role, and
+  **promote-to-manager**. `AdminStatsCubit` aggregates counts from the branch,
+  user and task repositories for the reports overview.
+- **Manager creation:** with no Cloud Functions/Admin SDK (client can't create
+  Auth accounts without signing the admin out), a "manager" is an existing
+  approved user **promoted** to `role: manager` (then assigned a branch) — there
+  is no admin-creates-account flow.
+
 ### Shared (core) dependencies
 
 Every layer may import `core/errors` (failures/exceptions). Presentation
@@ -313,6 +357,13 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Task UI actions (create/assign/review/complete) + card** | `lib/features/task/presentation/widgets/` (`task_action_sheets.dart`, `task_card.dart`, `task_empty_state.dart`) |
 | **Assignee picker (branch employees)**    | `AuthRepository.getUsersByBranch` + `auth/domain/usecases/get_users_by_branch.dart` → `TaskCubit.branchEmployees` |
 | **Task routes / role entry point**        | `lib/core/routes/route_names.dart` (`adminTasks`/`managerTasks`/`myTasks` + `tasksForRole`) + `app_router.dart` + `role_scaffold.dart` (Tasks icon) |
+| **Branch schema / data**                  | `lib/features/branch/domain/entities/branch_entity.dart` + `data/models/branch_model.dart` + `data/datasources/branch_remote_datasource.dart` (then run codegen) |
+| **Branch logic / repo / UI**              | `lib/features/branch/domain/repositories/branch_repository.dart` (+impl) · `presentation/cubit/branch_cubit.dart` · `presentation/pages/branch_management_screen.dart` · `widgets/branch_form_sheet.dart` |
+| **Admin user administration (data)**      | `lib/features/admin/data/datasources/user_admin_remote_datasource.dart` + `domain/repositories/user_admin_repository.dart` (+impl) — operates on `users/{uid}`, reuses auth `UserModel` |
+| **Admin user lists / actions (pending·managers·employees)** | `lib/features/admin/presentation/cubit/admin_users_cubit.dart` (`AdminUserFilter`) + `presentation/pages/{manager,employee}_management_screen.dart` · `pending_approvals_screen.dart` · `widgets/admin_user_card.dart` · `admin_user_sheets.dart` · `admin_users_list_view.dart` |
+| **Admin reports / dashboard stats**       | `lib/features/admin/presentation/cubit/admin_stats_cubit.dart` + `domain/entities/admin_stats.dart` + `presentation/pages/admin_dashboard_screen.dart` |
+| **Admin routes**                          | `lib/core/routes/route_names.dart` (`adminBranches`/`adminManagers`/`adminEmployees`/`adminApprovals`) + `app_router.dart` (under `_isAdminArea`) |
+| **Admin/branch DI wiring**                | `lib/core/di/injection.dart` (`branchCubit`/`adminUsersCubit`/`adminStatsCubit`) + `main.dart` providers |
 | **A role's home/dashboard screen**        | `lib/features/{employee,manager,admin}/presentation/pages/`              |
 | **Shared role chrome / placeholder**      | `lib/core/widgets/role_scaffold.dart` · `role_placeholder.dart`         |
 | **Roles enum / role values**              | `lib/core/enums/user_role.dart`                                         |
@@ -463,8 +514,10 @@ Patterns below are established across the codebase and **must be reused**.
   own-branch · employee own assigned data). Shifts are employee read-only; tasks
   additionally allow the **assigned employee a limited self-update** (advance
   status / add notes / proof, but not reassign, move branch, or approve/reject).
-  Copy these as the pattern for future collections (branches); a commented
-  template remains at the bottom of the rules file.
+  **`branches/{branchId}` (Phase 5)** is admin-write / any-signed-in-read (a
+  branch isn't branch-scoped *data* — it defines the branches), with "delete" as
+  a soft delete (admin update). Admin user-administration writes go through the
+  existing `users` admin-update rule (`isAdmin()`).
 - Routes are role-guarded in the GoRouter `redirect`: admin areas are
   admin-only, manager areas admit **manager + admin** (the hierarchy), the
   employee home (`/`) is employee-only. Add a new role area as a path prefix

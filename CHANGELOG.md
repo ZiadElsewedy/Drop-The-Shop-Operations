@@ -28,6 +28,47 @@ and [Semantic Versioning](https://semver.org).
 
 ---
 
+## 2026-06-15 — Phase 5: Admin Management module
+
+Builds the complete admin module: branch management, manager/employee/pending
+user administration, branch assignment, and a reports overview. Reuses the
+existing Clean Architecture and Firebase backend; no working code rewritten.
+
+### Added
+- **`branch` feature** (full vertical slice): `BranchEntity` (freezed) /
+  `BranchModel` / `BranchRepository(+Impl)` / `BranchRemoteDataSource` +
+  `BranchCubit`/`BranchState` + `BranchManagementScreen` + `branch_form_sheet`.
+  Admin CRUD, activate/deactivate, and **soft delete** (`deletedAt`).
+  Collection `branches/{branchId}` + `AppConstants.branchesCollection`.
+- **`admin` module**: `UserAdminRemoteDataSource` + `UserAdminRepository(+Impl)`
+  over `users/{uid}` (reusing the auth `UserModel`/`UserEntity`); `AdminUsersCubit`
+  (loads pending / managers / employees by `AdminUserFilter`; approve, reject,
+  (de)activate, change role, change branch, promote-to-manager) and
+  `AdminStatsCubit` (+ `AdminStats`) for the reports overview.
+- **Admin screens**: reworked `AdminDashboardScreen` (reports overview — branches,
+  managers, employees, pending approvals, active + completed tasks — plus
+  navigation) and `BranchManagementScreen`, `ManagerManagementScreen`,
+  `EmployeeManagementScreen` (branch filter + details), `PendingApprovalsScreen`;
+  shared `AdminUserCard` / `admin_user_sheets` (approve, assign branch, promote) /
+  `admin_users_list_view`.
+- **Routes** `/admin/branches|managers|employees|approvals` (under the existing
+  admin-only `_isAdminArea` guard); `branchCubit`/`adminUsersCubit`/
+  `adminStatsCubit` wired in DI and provided app-wide in `main.dart`.
+- **Firestore rules** for `branches/{branchId}` (admin write · any signed-in
+  read · hard delete denied). Admin user-administration uses the existing `users`
+  admin-update rule.
+
+### Notes
+- **Managers are promoted from existing approved users** — no client-side Firebase
+  Auth account creation (it would sign the admin out) and no Cloud Functions
+  (no Node.js). New staff self-register → admin approves (optionally as manager).
+- The Phase 5 `admin`/`branch` **cubits call repositories directly** (no use-case
+  layer), unlike `auth`/`profile`/`task` — a deliberate scope choice.
+- The first admin is still bootstrapped manually in the Firebase console.
+- No notifications, no analytics (out of scope).
+
+---
+
 ## 2026-06-15 — Rebrand to DROP
 
 Replaces the **FBRO** visual identity with **DROP** across the app.
