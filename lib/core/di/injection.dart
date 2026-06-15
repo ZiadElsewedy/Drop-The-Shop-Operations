@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:fbro/core/services/notification_service.dart';
 import 'package:fbro/features/auth/data/datasources/auth_remote_datasource.dart';
 import 'package:fbro/features/auth/data/datasources/user_remote_datasource.dart';
 import 'package:fbro/features/auth/data/repositories/auth_repository_impl.dart';
@@ -54,7 +56,10 @@ import 'package:fbro/features/admin/data/datasources/user_admin_remote_datasourc
 import 'package:fbro/features/admin/data/repositories/user_admin_repository_impl.dart';
 import 'package:fbro/features/admin/domain/repositories/user_admin_repository.dart';
 import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
-import 'package:fbro/features/admin/presentation/cubit/admin_stats_cubit.dart';
+import 'package:fbro/features/statistics/data/datasources/statistics_remote_datasource.dart';
+import 'package:fbro/features/statistics/data/repositories/statistics_repository_impl.dart';
+import 'package:fbro/features/statistics/domain/repositories/statistics_repository.dart';
+import 'package:fbro/features/statistics/presentation/cubit/statistics_cubit.dart';
 
 class AppDependencies {
   AppDependencies._();
@@ -66,7 +71,12 @@ class AppDependencies {
   // ─── Admin module (Phase 5) ─────────────────────────────────
   static late final BranchCubit branchCubit;
   static late final AdminUsersCubit adminUsersCubit;
-  static late final AdminStatsCubit adminStatsCubit;
+
+  // ─── Statistics / dashboards (Phase 6) ──────────────────────
+  static late final StatisticsCubit statisticsCubit;
+
+  /// FCM foundation (Phase 6) — token registration + foreground handling.
+  static late final NotificationService notificationService;
 
   /// Phase 2 shift foundation. Composed here and ready for the shift UI (a
   /// `ShiftCubit` + use cases) to consume in the next phase; no in-app shift
@@ -150,7 +160,16 @@ class AppDependencies {
 
     branchCubit = BranchCubit(branchRepository);
     adminUsersCubit = AdminUsersCubit(userAdminRepository, branchRepository);
-    adminStatsCubit =
-        AdminStatsCubit(branchRepository, userAdminRepository, taskRepository);
+
+    // ─── Statistics / dashboards (Phase 6) ────────────────────
+    final StatisticsRepository statisticsRepository = StatisticsRepositoryImpl(
+      StatisticsRemoteDataSourceImpl(FirebaseFirestore.instance),
+    );
+    statisticsCubit = StatisticsCubit(statisticsRepository);
+
+    notificationService = NotificationService(
+      FirebaseMessaging.instance,
+      FirebaseFirestore.instance,
+    );
   }
 }

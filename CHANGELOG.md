@@ -28,6 +28,49 @@ and [Semantic Versioning](https://semver.org).
 
 ---
 
+## 2026-06-15 — Phase 6: Operations Dashboards & Notifications
+
+Makes the app feel like a DROP THE SHOP operations center: live role-scoped
+dashboards and a Firebase Cloud Messaging foundation. Reuses existing
+architecture; no analytics engine, no Node.js, no chat/inbox.
+
+### Added
+- **`statistics` feature**: `StatisticsEntity` (freezed) / `StatisticsModel` /
+  `StatisticsRepository(+Impl)` / `StatisticsRemoteDataSource` + `StatisticsCubit`.
+  `load(user)` dispatches by role — `adminStats()` (global) / `managerStats(branchId)`
+  / `employeeStats(uid)` — computing operational counts from branch-scoped
+  single-field queries + client-side aggregation (no composite indexes).
+- **Live dashboards** via a shared `StatGrid`: admin (branches, managers,
+  employees, pending approvals, active/completed tasks, waiting reviews, rejected
+  today, no-manager branches), manager (own-branch employees, active/waiting/
+  completed-today/rejected/daily/special tasks, morning/night shift staff),
+  employee (current shift, assigned/pending/waiting-review/completed tasks).
+  `AdminDashboardScreen`, `ManagerHomeScreen` and `EmployeeHomeScreen` now show
+  real data (the manager/employee placeholders are gone).
+- **FCM foundation**: `core/services/notification_service.dart` (permission,
+  device-token persistence on `users/{uid}.fcmToken`, foreground → in-app
+  snackbar) + `core/enums/notification_type.dart` (the employee/manager/admin
+  event contract). Wired in `main.dart` (background handler, init, token
+  register/forget on auth changes, `scaffoldMessengerKey`). Added the
+  `firebase_messaging` dependency.
+
+### Changed
+- **Account approval is now admin-only** — removed the manager user-write path
+  (approve/claim) and the manager pending-read from `firestore.rules`. Managers
+  read their own-branch team but manage **operations only** (shifts/tasks), not
+  accounts. (Workflow: register → pending → **admin** approves → role + branch →
+  active.)
+- Replaced the Phase 5 `AdminStatsCubit`/`AdminStats` with the unified
+  `StatisticsCubit` (admin dashboard migrated; redundant files removed).
+
+### Notes
+- Push **sending** is out of scope (needs a server trigger / Cloud Function —
+  no Node.js). This phase ships the client foundation only; `NotificationType`
+  is the event contract. iOS still needs an APNs key + Push capability.
+- `count()` aggregate queries are a documented future optimization if data grows.
+
+---
+
 ## 2026-06-15 — Phase 5: Admin Management module
 
 Builds the complete admin module: branch management, manager/employee/pending

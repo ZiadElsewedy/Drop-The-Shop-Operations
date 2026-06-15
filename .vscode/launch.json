@@ -1,0 +1,45 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "fbro",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": "fbro (profile mode)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "fbro (release mode)",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        },
+        {
+            "name": "quirky-colden-0d6942",
+            "cwd": ".claude/worktrees/quirky-colden-0d6942",
+            "request": "launch",
+            "type": "dart"
+        },
+        {
+            "name": "quirky-colden-0d6942 (profile mode)",
+            "cwd": ".claude/worktrees/quirky-colden-0d6942",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "profile"
+        },
+        {
+            "name": "quirky-colden-0d6942 (release mode)",
+            "cwd": ".claude/worktrees/quirky-colden-0d6942",
+            "request": "launch",
+            "type": "dart",
+            "flutterMode": "release"
+        }
+    ]
+}

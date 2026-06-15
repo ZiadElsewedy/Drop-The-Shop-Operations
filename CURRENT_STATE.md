@@ -24,10 +24,12 @@
 | Shifts (Phase 2) | 🟡 Foundation | `ShiftEntity`/`ShiftModel`/`ShiftRepository`/`ShiftRemoteDataSource` + `shifts/{shiftId}` rules + 3 role placeholder screens. **No `ShiftCubit`/use cases or real UI yet** — data layer ready, wired in DI |
 | Tasks (Phase 3–4) | ✅ Workflow   | Full vertical slice: `TaskCubit` + 10 use cases, functional employee/manager/admin screens (create·assign·start·complete+notes/proof·submit·review approve/reject), client-side status-transition rules, audit fields, proof upload to Storage |
 | Branches (Phase 5) | ✅ Complete   | `BranchEntity`/`Model`/`Repository`/`RemoteDataSource` + `BranchCubit`; admin CRUD + activate/deactivate + soft delete; `branches/{id}` rules |
-| Admin module (Phase 5) | ✅ Complete | Admin dashboard (reports overview) + branch / manager / employee management + in-app pending-user approval + branch assignment. `AdminUsersCubit` + `AdminStatsCubit`, `UserAdminRepository` over `users/{uid}` |
+| Admin module (Phase 5) | ✅ Complete | Branch / manager / employee management + **admin-only** pending-user approval + branch assignment. `AdminUsersCubit`, `UserAdminRepository` over `users/{uid}` |
+| Dashboards / Statistics (Phase 6) | ✅ Complete | `statistics` feature (`StatisticsCubit`) drives **live** admin / manager / employee dashboards (branch-scoped counts; no analytics engine) |
+| Notifications (Phase 6) | 🟡 Foundation | FCM client foundation: permission + device-token persistence + foreground snackbars. **Sending** the events needs a server trigger (out of scope) |
 | Profile          | ✅ Complete    | View/edit, avatar+cover upload, username checks                |
 | Settings         | ✅ Complete    | Settings page + change password + delete account              |
-| Role shells      | 🟡 Partial    | **Admin** shell is now the full admin module (Phase 5); Employee / Manager home dashboards are still functional placeholders |
+| Role shells      | ✅ Live        | All three role dashboards show live operational stats (Phase 6); Admin shell hosts the full admin module (Phase 5) |
 | Design system    | ✅ Complete    | Monochrome B&W, **dark-mode only**; branded **DROP** (`DropLogo` wordmark, FBRO removed) |
 | Security rules   | ✅ In repo     | `firestore.rules` + `storage.rules` — committed, need deploy   |
 | Social fields    | ⛔ Legacy      | Counter/presence fields linger in schema but are unused — **FBRO is not a social app** |
@@ -45,10 +47,10 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 - **Auth-flow rework** — removed the social **Welcome** page (landing is now
   **Login**); added the **account-approval gate**: new sign-ups are seeded
   `pending` + inactive and confined to a new **Pending Approval** screen
-  (`/pending-approval`) until a manager/admin approves them (`hasAppAccess`
-  gate in the router). New `ApprovalStatus` enum + `approvalStatus` user field +
-  `AuthCubit.refreshUser` (polled by the pending screen). `firestore.rules`
-  updated for pending self-registration + manager/admin approval.
+  (`/pending-approval`) until an admin approves them (`hasAppAccess` gate in the
+  router; approval became **admin-only** in Phase 6). New `ApprovalStatus` enum +
+  `approvalStatus` user field + `AuthCubit.refreshUser` (polled by the pending
+  screen).
 - **Phase 2 — Shift foundation** — new `shift` feature with full data + domain
   (`ShiftEntity`/`ShiftModel`/`ShiftRepository(+Impl)`/`ShiftRemoteDataSource(+Impl)`),
   `shifts/{shiftId}` Firestore rules (branch-scoped), three role placeholder
@@ -71,15 +73,24 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
   app-wide in `main.dart`. No notifications / analytics (out of scope).
 - **Phase 5 — Admin module** — new `branch` feature (full vertical slice +
   `BranchCubit`: CRUD, activate/deactivate, soft delete) and `admin` module
-  (`UserAdminRepository` over `users/{uid}`, `AdminUsersCubit` + `AdminStatsCubit`):
-  admin dashboard with a **reports overview** (branches/managers/employees/
-  pending/active+completed tasks) and management screens for **branches,
-  managers, employees, and pending approvals** (`/admin/branches|managers|
-  employees|approvals`). Admin can approve/reject users, (de)activate, change
-  role/branch, assign managers to branches, and move employees between branches.
-  `branches/{branchId}` Firestore rules added. **Managers are promoted from
-  existing approved users** (no client-side Auth account creation — no Cloud
-  Functions). admin/branch cubits call repositories directly (no use-case layer).
+  (`UserAdminRepository` over `users/{uid}`, `AdminUsersCubit`): management
+  screens for **branches, managers, employees, and pending approvals**
+  (`/admin/branches|managers|employees|approvals`). Admin can approve/reject
+  users, (de)activate, change role/branch, assign managers to branches, and move
+  employees between branches. `branches/{branchId}` Firestore rules added.
+  **Managers are promoted from existing approved users** (no client-side Auth
+  account creation — no Cloud Functions). admin/branch cubits call repositories
+  directly (no use-case layer).
+- **Phase 6 — Dashboards & notifications** — new `statistics` feature
+  (`StatisticsEntity`/`Model`/`Repository(+Impl)`/`RemoteDataSource` +
+  `StatisticsCubit`) computes **role-scoped operational counts** (branch-scoped
+  single-field queries + client-side aggregation). The admin / manager / employee
+  home dashboards now render **live stats** via a shared `StatGrid`. Added the
+  **FCM foundation** (`core/services/notification_service.dart` +
+  `core/enums/notification_type.dart`): permission, device-token persistence on
+  `users/{uid}.fcmToken`, foreground snackbars, wired in `main.dart`. **Approval
+  made admin-only** — the manager user-write path was removed from
+  `firestore.rules`. Replaced the Phase 5 `AdminStatsCubit` with `StatisticsCubit`.
 - **Action needed:** commit; deploy `firestore.rules` / `storage.rules` and
   enable Firebase Storage; bootstrap the first admin (set
   `role/approvalStatus/isActive` in the console) before production.
@@ -138,11 +149,11 @@ landing is **Login** (the social Welcome page was removed).
   Firestore rules encode the role/branch + **approval** access model: **self
   registration** is allowed only as a `pending`, **inactive** employee;
   **admin** reads/writes any user (approve/reject, promotions, branch moves,
-  (de)activation); **manager** reads users in their **own branch** + any pending
-  newcomer and may approve/manage employees into their own branch (never elevate
-  role or assign another branch); **employee** reads/edits only their own doc and
-  may **not** change the privileged fields (`role`, `branchId`, `isActive`,
-  `assignedShift`, `approvalStatus`). **`shifts/{shiftId}` (Phase 2)** is the
+  (de)activation) — **account approval is admin-only (Phase 6)**; **manager**
+  **reads** users in their **own branch** (their team) but does **not** write
+  user docs; **employee** reads/edits only their own doc and may **not** change
+  the privileged fields (`role`, `branchId`, `isActive`, `assignedShift`,
+  `approvalStatus`) — non-privileged fields (profile, `fcmToken`) are allowed. **`shifts/{shiftId}` (Phase 2)** is the
   first branch-scoped collection wired to `canReachBranch()`: admin = all
   branches, manager = own branch, employee = their own assigned shift
   (read-only). **`tasks/{taskId}` (Phase 3–4)** follows the same model with a
@@ -168,7 +179,8 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 | `branchId`                                             | string?   | **Phase 1** — owning branch. **admin:** null/ignored (global); **manager:** their one branch; **employee:** their branch. Assigned by an admin. |
 | `assignedShift`                                        | string?   | **Phase 1/2** — references the assigned `shifts/{shiftId}`; null until a manager assigns one |
 | `isActive`                                             | bool      | **Phase 1** — activation/soft-disable. **New sign-ups seeded `false`** (pending approval); set `true` on approval |
-| `approvalStatus`                                       | string    | **Approval** — `pending` / `approved` / `rejected`. New sign-ups seeded `pending`; missing → treated as `approved` (legacy). Flipped by admin/own-branch manager |
+| `approvalStatus`                                       | string    | **Approval** — `pending` / `approved` / `rejected`. New sign-ups seeded `pending`; missing → treated as `approved` (legacy). **Flipped by admin only (Phase 6)** |
+| `fcmToken`, `fcmTokenUpdatedAt`                        | string? / Timestamp? | **Phase 6** — device push token (self-written, best-effort) |
 | `displayName`, `photoUrl`                              | string    | **legacy** auth keys, kept in sync |
 | `fullName`, `username`, `profileImage`, `coverImage`   | string    | profile identity               |
 | `phoneNumber`, `bio`, `gender`, `country`, `city`, `website` | string?  | personal                       |
@@ -269,9 +281,15 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
   there are no Cloud Functions (no Node.js). "Add Manager" promotes an existing
   approved employee to `role: manager`; new staff self-register, then an admin
   approves them (optionally directly as a manager).
-- **In-app manager-side approval has no dedicated screen yet** — the rules allow
-  own-branch managers to approve their pending newcomers, but the approval UI
-  lives in the admin module. A manager-facing approval screen is a follow-up.
+- **Approval is admin-only (Phase 6)** — managers no longer approve or write user
+  accounts (rules + UI); they manage branch operations (shifts/tasks) only.
+- **Push notifications need a sender** — the FCM **client** foundation is in
+  place (permission, `users/{uid}.fcmToken`, foreground snackbars), but actually
+  **emitting** the events (task assigned, waiting review, new registration, …)
+  requires a server trigger. With no Node.js/Cloud Functions in scope, a sender
+  (Cloud Function or external) is the remaining piece. FCM also needs native
+  setup: **APNs key + Push capability (iOS)**; Android works via `google-services`.
+  `NotificationType` documents the event contract for whatever sends them.
 - **Manager / Employee home dashboards** (`ManagerHomeScreen` /
   `EmployeeHomeScreen`) are still functional placeholders — their shifts/tasks
   live behind the Shifts/Tasks icons in the role chrome. The **Admin** shell is
@@ -326,6 +344,11 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
    `users/{uid}.assignedShift` on assignment. Seed the two V1 shifts.
 6. **Task workflow hardening:** enforce status transitions in `firestore.rules`,
    resolve assignee uid → name on cards, link tasks to shifts in the UI.
-7. Add a Cloud Function to clean up the user document on account deletion.
-8. Add widget/cubit tests, starting with `AuthCubit`, the approval gate, the
-   `TaskCubit` transition rules, and the router redirect.
+7. **Notifications sender:** add the server trigger that emits the
+   `NotificationType` events to device tokens (Cloud Function or external) +
+   native FCM setup (APNs key + Push capability on iOS).
+8. **Stats optimization (if data grows):** move the dashboard counts to Firestore
+   `count()` aggregate queries (with the needed composite indexes).
+9. Add a Cloud Function to clean up the user document on account deletion.
+10. Add widget/cubit tests, starting with `AuthCubit`, the approval gate, the
+    `TaskCubit` transition rules, and the router redirect.

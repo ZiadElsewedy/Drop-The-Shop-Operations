@@ -29,20 +29,19 @@ service cloud.firestore {
     }
 
     // ── Users ──────────────────────────────────────────────────────
-    // Self: read own doc + limited self-update (cannot touch privileged fields).
-    // Manager: read employees in their own branch + any pending (unassigned)
-    //   newcomer awaiting approval.
+    // Self: read own doc + limited self-update (cannot touch privileged fields,
+    //   but may write non-privileged fields like the FCM token).
+    // Manager: read users in their own branch (their team) — read only; managers
+    //   do NOT manage user accounts.
     // Admin: read/write everything — approvals, promotions, branch moves,
-    //   (de)activation.
+    //   (de)activation. **Account approval is admin-only (Phase 6).**
     match /users/{uid} {
       allow read: if isOwner(uid)
         || isAdmin()
-        || (isManager()
-            && (resource.data.get('branchId', '') == selfBranch()
-                || resource.data.get('approvalStatus', 'approved') == 'pending'));
+        || (isManager() && resource.data.get('branchId', '') == selfBranch());
 
       // Self-registration only — always as a PENDING, INACTIVE employee. A new
-      // account cannot use the app until it is approved (update rule below).
+      // account cannot use the app until an ADMIN approves it (update below).
       // Promotion to manager/admin, branch assignment and activation are never
       // self-service.
       allow create: if isOwner(uid)
@@ -51,20 +50,11 @@ service cloud.firestore {
         && request.resource.data.get('approvalStatus', 'pending') == 'pending';
 
       // Admin: full control — approve/reject, promote, move branch, (de)activate.
-      // Manager: may approve/manage EMPLOYEES of their OWN branch only. They can
-      //   flip approvalStatus / isActive / assignedShift and claim a pending
-      //   newcomer into their branch, but can NEVER elevate role or assign a
-      //   different branch (request.role must stay employee + request.branch must
-      //   be their own; the target must already be in their branch OR be a
-      //   pending employee newcomer).
-      // Self: profile-only updates — all privileged fields stay frozen.
+      // Self: profile-only updates — all privileged fields stay frozen (role,
+      //   isActive, branchId, assignedShift, approvalStatus). Non-privileged
+      //   fields (profile data, fcmToken) are free to change.
+      // Managers do NOT write user docs (they manage branch operations only).
       allow update: if isAdmin()
-        || (isManager()
-            && request.resource.data.get('role', 'employee') == 'employee'
-            && request.resource.data.get('branchId', '') == selfBranch()
-            && (resource.data.get('branchId', '') == selfBranch()
-                || (resource.data.get('approvalStatus', 'approved') == 'pending'
-                    && resource.data.get('role', 'employee') == 'employee')))
         || (isOwner(uid)
             && request.resource.data.get('role', 'employee')
                  == resource.data.get('role', 'employee')
@@ -77,8 +67,8 @@ service cloud.firestore {
             && request.resource.data.get('approvalStatus', 'approved')
                  == resource.data.get('approvalStatus', 'approved'));
 
-      // Deactivate via isActive (an admin/manager update), never a hard delete;
-      // document cleanup on account removal belongs to a Cloud Function.
+      // Deactivate via isActive (an admin update), never a hard delete; document
+      // cleanup on account removal belongs to a Cloud Function.
       allow delete: if false;
     }
 
