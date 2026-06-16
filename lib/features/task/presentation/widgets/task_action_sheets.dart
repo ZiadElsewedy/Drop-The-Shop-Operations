@@ -5,10 +5,12 @@ import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
+import 'package:fbro/features/task/domain/entities/checklist_item.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
@@ -36,7 +38,8 @@ Future<void> showTaskFormSheet({
       ),
     );
 
-/// Pick an employee in the task's branch to assign (or unassign).
+/// Pick one or more employees in the task's branch to assign (or the whole
+/// team), or clear the assignment.
 Future<void> showAssignSheet({
   required BuildContext context,
   required TaskCubit cubit,
@@ -183,6 +186,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
         priority: _priority,
         branchId: branchId,
         deadline: _deadline,
+        // A task created from a checklist template gets its checklist generated.
+        checklist: widget.prefill?.buildTaskChecklist() ?? const [],
       );
     } else {
       widget.cubit.editTask(existing.copyWith(
@@ -228,6 +233,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             label: 'Description (optional)',
             prefixIcon: Icons.notes_rounded,
           ),
+          if (widget.existing == null &&
+              (widget.prefill?.checklistItems.isNotEmpty ?? false)) ...[
+            const SizedBox(height: AppSpacing.md),
+            _ChecklistPreview(items: widget.prefill!.checklistItems),
+          ],
           if (widget.isAdmin) ...[
             const SizedBox(height: AppSpacing.md),
             _BranchDropdown(
@@ -390,7 +400,57 @@ class _BranchDropdown extends StatelessWidget {
       );
 }
 
-// ─── Assign ──────────────────────────────────────────────────────
+/// Read-only preview of a template's checklist, shown in the New Task form so
+/// the manager sees what the employee will be asked to complete.
+class _ChecklistPreview extends StatelessWidget {
+  const _ChecklistPreview({required this.items});
+  final List<ChecklistItemTemplate> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.checklist_rounded,
+                  size: 16, color: AppColors.textTertiary),
+              const SizedBox(width: AppSpacing.sm),
+              Text('Checklist · ${items.length} steps',
+                  style: AppTypography.labelSmall),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final i in items)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  const Icon(Icons.radio_button_unchecked_rounded,
+                      size: 15, color: AppColors.textTertiary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                      child: Text(i.title, style: AppTypography.bodySmall)),
+                  if (!i.isRequired)
+                    Text('optional', style: AppTypography.caption),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Assign (multi-select) ───────────────────────────────────────
 class _AssignSheet extends StatefulWidget {
   const _AssignSheet({required this.cubit, required this.task});
   final TaskCubit cubit;
@@ -403,28 +463,21 @@ class _AssignSheetState extends State<_AssignSheet> {
   late final Future<List<UserEntity>> _future =
       widget.cubit.branchEmployees(widget.task.branchId ?? '');
 
-  void _assign(String? employeeId) {
+  late final Set<String> _selected = {...widget.task.assigneeIds};
+
+  void _save() {
     widget.cubit
-        .assignEmployee(taskId: widget.task.id, employeeId: employeeId);
+        .assignEmployees(taskId: widget.task.id, employeeIds: _selected.toList());
     Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final assigned = widget.task.assignedEmployeeId;
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SheetTitle('Assign Employee'),
-        if (assigned != null && assigned.isNotEmpty)
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.person_off_outlined,
-                color: AppColors.textSecondary),
-            title: Text('Unassign', style: AppTypography.label),
-            onTap: () => _assign(null),
-          ),
+        const SheetTitle('Assign Employees'),
         FutureBuilder<List<UserEntity>>(
           future: _future,
           builder: (context, snap) {
@@ -444,35 +497,143 @@ class _AssignSheetState extends State<_AssignSheet> {
                     style: AppTypography.bodySmall),
               );
             }
-            return ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 360),
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: employees.length,
-                itemBuilder: (context, i) {
-                  final u = employees[i];
-                  final name = (u.displayName != null &&
-                          u.displayName!.isNotEmpty)
-                      ? u.displayName!
-                      : u.email;
-                  return ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.person_outline_rounded,
-                        color: AppColors.primary),
-                    title: Text(name, style: AppTypography.label),
-                    subtitle: Text(u.email, style: AppTypography.caption),
-                    trailing: u.uid == assigned
-                        ? const Icon(Icons.check_rounded,
-                            color: AppColors.success, size: 18)
-                        : null,
-                    onTap: () => _assign(u.uid),
-                  );
-                },
-              ),
+            final allSelected =
+                employees.every((u) => _selected.contains(u.uid));
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Quick actions: whole team / clear.
+                Row(
+                  children: [
+                    _QuickAction(
+                      icon: Icons.groups_2_outlined,
+                      label: allSelected ? 'Team selected' : 'Assign whole team',
+                      active: allSelected,
+                      onTap: () => setState(() {
+                        if (allSelected) {
+                          _selected.clear();
+                        } else {
+                          _selected.addAll(employees.map((u) => u.uid));
+                        }
+                      }),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    _QuickAction(
+                      icon: Icons.person_off_outlined,
+                      label: 'Clear',
+                      active: false,
+                      onTap: _selected.isEmpty
+                          ? null
+                          : () => setState(_selected.clear),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: employees.length,
+                    itemBuilder: (context, i) {
+                      final u = employees[i];
+                      final name =
+                          (u.displayName != null && u.displayName!.isNotEmpty)
+                              ? u.displayName!
+                              : u.email;
+                      final selected = _selected.contains(u.uid);
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: UserAvatar.fromUser(u, size: 38),
+                        title: Text(name, style: AppTypography.label),
+                        subtitle: Text(u.email, style: AppTypography.caption),
+                        trailing: Icon(
+                          selected
+                              ? Icons.check_circle_rounded
+                              : Icons.radio_button_unchecked_rounded,
+                          color: selected
+                              ? AppColors.success
+                              : AppColors.textTertiary,
+                          size: 22,
+                        ),
+                        onTap: () => setState(() {
+                          if (selected) {
+                            _selected.remove(u.uid);
+                          } else {
+                            _selected.add(u.uid);
+                          }
+                        }),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                AppButton(
+                  label: _selected.isEmpty
+                      ? 'Unassign'
+                      : 'Assign ${_selected.length}',
+                  onPressed: _save,
+                ),
+              ],
             );
           },
         ),
       ],
+    );
+  }
+}
+
+class _QuickAction extends StatelessWidget {
+  const _QuickAction({
+    required this.icon,
+    required this.label,
+    required this.active,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String label;
+  final bool active;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final disabled = onTap == null;
+    return Expanded(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Opacity(
+          opacity: disabled ? 0.5 : 1,
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: active
+                  ? AppColors.primary.withAlpha(28)
+                  : AppColors.darkSurfaceElevated,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                  color: active ? AppColors.primary : AppColors.darkBorder),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon,
+                    size: 16,
+                    color: active ? AppColors.primary : AppColors.textSecondary),
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  child: Text(label,
+                      style: AppTypography.caption.copyWith(
+                          color: active
+                              ? AppColors.primary
+                              : AppColors.textSecondary),
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -506,6 +667,10 @@ class _ReviewSheetState extends State<_ReviewSheet> {
         children: [
           const SheetTitle('Review Task'),
           Text(widget.task.title, style: AppTypography.label),
+          if (widget.task.hasChecklist) ...[
+            const SizedBox(height: AppSpacing.md),
+            _ReviewChecklist(task: widget.task),
+          ],
           const SizedBox(height: AppSpacing.lg),
           AppTextField(
             controller: _notes,
@@ -530,6 +695,75 @@ class _ReviewSheetState extends State<_ReviewSheet> {
               Navigator.of(context).pop();
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Read-only checklist progress for the manager review sheet ("4 / 5 completed"
+/// or "100% complete") with each item's state.
+class _ReviewChecklist extends StatelessWidget {
+  const _ReviewChecklist({required this.task});
+  final TaskEntity task;
+
+  @override
+  Widget build(BuildContext context) {
+    final done = task.checklistDone;
+    final total = task.checklistTotal;
+    final complete = done == total;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.checklist_rounded,
+                  size: 16,
+                  color: complete ? AppColors.success : AppColors.textTertiary),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                complete ? '100% complete' : '$done / $total completed',
+                style: AppTypography.labelSmall.copyWith(
+                  color:
+                      complete ? AppColors.success : AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final i in task.checklist)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  Icon(
+                    i.completed
+                        ? Icons.check_circle_rounded
+                        : Icons.radio_button_unchecked_rounded,
+                    size: 16,
+                    color:
+                        i.completed ? AppColors.success : AppColors.textTertiary,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(i.title,
+                        style: AppTypography.bodySmall.copyWith(
+                          color: i.completed
+                              ? AppColors.textTertiary
+                              : AppColors.textPrimary,
+                        )),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

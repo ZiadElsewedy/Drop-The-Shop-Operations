@@ -28,6 +28,90 @@ and [Semantic Versioning](https://semver.org).
 
 ---
 
+## 2026-06-16 — Phase 9: Task UX, Admin UX & Design Overhaul
+
+A premium-operations redesign pass: checklist task templates, multi-assignee
+tasks, redesigned task/admin/branch cards, reliable avatars, an admin dashboard
+restructure, and tasteful motion. **Reuses the existing Clean Architecture** —
+no new layers, no duplicate features; the task data layer keeps backward
+compatibility (legacy `assignedEmployeeId` mirror) so the Firestore schema isn't
+broken.
+
+### Added
+- **Checklist templates** (was title + description). New `ChecklistItem` (task
+  level: `id/title/isRequired/completed/completedAt`) and `ChecklistItemTemplate`
+  (template level: `id/title/isRequired`) freezed entities
+  ([checklist_item.dart](lib/features/task/domain/entities/checklist_item.dart)).
+  `TaskTemplateEntity.checklistItems` + `TaskEntity.checklist`; creating a task
+  from a template **generates its checklist** (`buildTaskChecklist`). The
+  template form gained a **checklist editor** (add/remove steps, mark each
+  required/optional).
+- **Checklist completion rule** — a task cannot be marked completed until every
+  **required** checklist item is done (`TaskEntity.requiredChecklistComplete`,
+  enforced in `TaskCubit.completeTask`). Employees tick items off on the card
+  while a task is in progress (`TaskCubit.toggleChecklistItem`); the manager
+  review sheet shows progress ("4 / 5 completed" / "100% complete").
+- **Multi-assignee tasks** — `assigneeIds[]` replaces the single
+  `assignedEmployeeId` (kept as a mirror for backward compatibility). Assign one,
+  several, or the **whole team** (multi-select assign sheet). Employee task query
+  + stats now use `assigneeIds arrayContains`.
+- **`UserAvatar` + `AvatarStack`** ([user_avatar.dart](lib/core/widgets/user_avatar.dart))
+  — the **assignee image bug fix**: a reliable circular avatar that renders
+  `users/{uid}.photoUrl` (kept in sync with the profile `profileImage`) and falls
+  back to **initials** on any missing/empty URL, network failure, or decode error
+  — never a broken-image icon or crash. Decode size is capped; `gaplessPlayback`
+  avoids flicker. `AvatarStack` shows overlapping avatars + a "+N" overflow.
+- **`EntranceFade` + `staggerDelay`** ([app_motion.dart](lib/core/widgets/app_motion.dart))
+  — tasteful, performance-conscious card/list entrance motion (used on task,
+  admin, branch and KPI cards).
+- **`AppSearchField`** ([app_search_field.dart](lib/core/widgets/app_search_field.dart))
+  — shared search box; added to the Managers, Employees, Approvals and Branches
+  pages.
+- **Admin Analytics page** ([admin_analytics_screen.dart](lib/features/admin/presentation/pages/admin_analytics_screen.dart),
+  route `/admin/analytics`) — the full metric wall (grouped Workforce / Tasks /
+  Coverage), moved off the Admin Home.
+
+### Changed (UI redesign — no business-logic change unless noted)
+- **Task cards** — glass-like gradient cards with a priority rail, status badge,
+  **assignee avatars** (name + role for a single assignee; stack + count for
+  many; tap → assignee sheet), **checklist progress bar**, priority/category/
+  deadline chips, and the existing actions. Employee identity is now visible
+  (avatar · name · role) instead of "assigned/unassigned".
+- **Admin Home** restructured to **four headline KPIs** (Branches · Employees ·
+  Managers · Active tasks) + a clean module nav (Branches · Schedules · Managers
+  · Employees · Analytics · Approvals · Settings). The crowded stat wall is gone
+  (now on Analytics).
+- **Branches page** — premium cards showing **manager + employee count + status**
+  (resolved via `AdminUsersCubit.usersWithRole`), search, animated entrance.
+- **Managers / Employees / Approvals** — avatar-led `AdminUserCard`s; Employees
+  gained **search + active/inactive + branch** filters; Managers/Approvals gained
+  search.
+- **Schedule** (no logic change) — day **coverage indicator**, **shift badges**,
+  **employee chips with avatars**, avatar-led picker, and the employee "My Week"
+  team/manager shown with avatars.
+- **Firestore rules** (`tasks/{taskId}`) — read/own-task-update now key off
+  `assigneeIds` (`request.auth.uid in assigneeIds`, with a legacy
+  `assignedEmployeeId` fallback); the assigned employee still can't reassign
+  (`assigneeIds` frozen on self-update), move branch, or set the terminal
+  approved/rejected status.
+
+### Verified
+- `flutter analyze` — clean (only the 2 pre-existing `prefer_initializing_formals`
+  infos). `build_runner` regenerated the freezed entities/state. New unit tests
+  ([task_checklist_test.dart](test/task_checklist_test.dart), 7 passing) cover the
+  checklist completion rule, multi-assignee (de)serialization + legacy fallback,
+  and template→task checklist generation. Existing task & schedule workflows are
+  unchanged in shape; admin navigation reaches every module.
+
+### Notes / honest limitations
+- Tasks created **before** Phase 9 carry only `assignedEmployeeId`; the model
+  reads it into `assigneeIds` on load and re-writes the array on the next save,
+  so they migrate transparently as they're touched (no bulk migration needed for
+  a pre-production dataset). `firestore.rules` were edited but **not deployed** in
+  this environment.
+
+---
+
 ## 2026-06-16 — Stabilization & Workflow Integration
 
 Production-usability pass making the task workflow reliable end-to-end, plus a

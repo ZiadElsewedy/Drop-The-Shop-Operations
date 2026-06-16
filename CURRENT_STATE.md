@@ -10,7 +10,7 @@
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
 **Last updated:** 2026-06-16
-**Version:** 1.0.0+1 · **Branch:** `stabilization-and-optimization`
+**Version:** 1.0.0+1 · **Branch:** `claude/upbeat-knuth-7ch3wu` (Phase 9)
 
 ---
 
@@ -24,16 +24,16 @@
 | Shifts (Phase 2) | 🟡 Foundation | `ShiftEntity`/`ShiftModel`/`ShiftRepository`/`ShiftRemoteDataSource` + `shifts/{shiftId}` rules. Data layer only; **superseded by the Weekly Schedule** (Phase 7) for production scheduling — placeholder shift screens no longer linked from the role chrome |
 | Weekly Schedule (Phase 7) | ✅ Complete | `schedule` feature: `WeeklyScheduleEntity` + `ScheduleCubit` + manager editor / admin override / employee my-week view. Roster `day → morning/night → employees`; `weekly_schedules/{id}` rules. Reuses Role/Branch systems |
 | Shift Swap (Phase 7) | ✅ Complete | `ShiftSwapEntity` + `ShiftSwapCubit`: employee requests → coworker approves → manager approves → schedule auto-updates; `shift_swaps/{id}` rules. Statuses pending/employeeApproved/managerApproved/rejected |
-| Tasks (Phase 3–4, +Stabilization) | ✅ Workflow + realtime | Full vertical slice: `TaskCubit` + use cases, functional employee/manager/admin screens (create·assign·start·complete+notes/proof·submit·review approve/reject), client-side status-transition rules, audit fields, proof upload to Storage. **Stabilization:** task lists are now **live Firestore streams** (assigned task appears immediately); admin create uses a **branch dropdown** (no more free-text → no orphaned tasks) |
-| Task Templates (Stabilization) | ✅ Complete | Reusable task blueprints ("Open Shop", "Night Checklist", …). `TaskTemplateEntity`/`Model` + template CRUD on the task repo/cubit; `task_templates/{id}` rules (admin global/any · manager own-branch). New Task → Blank vs. From a template (prefills the form) + Manage Templates sheet |
-| Branches (Phase 5) | ✅ Complete   | `BranchEntity`/`Model`/`Repository`/`RemoteDataSource` + `BranchCubit`; admin CRUD + activate/deactivate + soft delete; `branches/{id}` rules |
-| Admin module (Phase 5) | ✅ Complete | Branch / manager / employee management + **admin-only** pending-user approval + branch assignment. `AdminUsersCubit`, `UserAdminRepository` over `users/{uid}` |
-| Dashboards / Statistics (Phase 6, +Phase 7) | ✅ Complete | `statistics` feature (`StatisticsCubit`) drives **live** admin / manager / employee dashboards. **Phase 7:** shift/coverage figures now read the weekly schedule (employee current+upcoming shift · manager scheduled/morning/night today · admin schedule coverage) |
+| Tasks (Phase 3–4, +Stabilization, +Phase 9) | ✅ Workflow + realtime + multi-assignee | Full vertical slice: `TaskCubit` + use cases, functional employee/manager/admin screens (create·assign·start·complete+notes/proof·submit·review approve/reject), client-side status-transition rules, audit fields, proof upload, **live Firestore streams**, admin **branch dropdown**. **Phase 9:** **multiple assignees** (`assigneeIds[]`, replaces single `assignedEmployeeId` — kept as a mirror), optional **checklist** generated from a template + completion gate, **redesigned task cards** (avatars · name/role · checklist progress · glass cards), employee directory resolution |
+| Task / Checklist Templates (Stabilization, +Phase 9) | ✅ Complete | Reusable blueprints ("Open Shop", "Close Shop"). **Phase 9:** templates are now **checklists** — `TaskTemplateEntity.checklistItems` (`ChecklistItemTemplate`: id/title/isRequired) with a checklist editor; creating a task generates its `checklist`. `task_templates/{id}` rules (admin global/any · manager own-branch). New Task → Blank vs. From a template + Manage Templates sheet |
+| Branches (Phase 5, +Phase 9) | ✅ Complete   | `BranchEntity`/`Model`/`Repository`/`RemoteDataSource` + `BranchCubit`; admin CRUD + activate/deactivate + soft delete; `branches/{id}` rules. **Phase 9:** premium cards (manager + employee count + status) + search |
+| Admin module (Phase 5, +Phase 9 UX) | ✅ Complete | Branch / manager / employee management + **admin-only** pending-user approval + branch assignment. `AdminUsersCubit`, `UserAdminRepository` over `users/{uid}`. **Phase 9:** Admin Home restructured to **4 KPIs** + module nav; new **Analytics** page (`/admin/analytics`); avatar-led user cards; search + active/inactive/branch filters |
+| Dashboards / Statistics (Phase 6, +Phase 7) | ✅ Complete | `statistics` feature (`StatisticsCubit`) drives **live** admin / manager / employee dashboards. **Phase 7:** shift/coverage figures read the weekly schedule. **Phase 9:** the full metric wall moved to the Analytics page; the Admin Home shows only 4 headline KPIs |
 | Notifications (Phase 6, +Phase 7) | 🟡 Foundation | FCM client foundation: permission + device-token persistence + foreground snackbars. `NotificationType` extended with Phase 7 swap/schedule events. **Sending** the events needs a server trigger (out of scope) |
 | Profile          | ✅ Complete    | View/edit, avatar+cover upload, username checks                |
 | Settings         | ✅ Complete    | Settings page + change password + delete account              |
 | Role shells      | ✅ Live        | All three role dashboards show live operational stats (Phase 6); Admin shell hosts the full admin module (Phase 5) |
-| Design system    | ✅ Complete    | Monochrome B&W, **dark-mode only**; branded **DROP** (`DropLogo` wordmark, FBRO removed) |
+| Design system    | ✅ Complete    | Monochrome B&W, **dark-mode only**; branded **DROP** (`DropLogo` wordmark). **Phase 9:** premium glass cards (subtle gradient + shadow), reusable `UserAvatar`/`AvatarStack` (reliable images + initials fallback), `EntranceFade` motion, `AppSearchField` |
 | Security rules   | ✅ In repo     | `firestore.rules` + `storage.rules` — committed, need deploy   |
 | Social fields    | ⛔ Legacy      | Counter/presence fields linger in schema but are unused — **FBRO is not a social app** |
 
@@ -122,6 +122,22 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
   the **profile image freeze** (upload timeouts + smaller picked images +
   `cacheWidth` decode caps). Removed the now-dead one-shot task use cases. `flutter
   analyze` clean (2 pre-existing infos).
+- **Phase 9 — Task UX, Admin UX & Design Overhaul (branch `claude/upbeat-knuth-7ch3wu`)**
+  — premium-operations redesign, reusing the existing architecture. **Checklist
+  templates:** `ChecklistItem` / `ChecklistItemTemplate` entities;
+  `TaskTemplateEntity.checklistItems` + `TaskEntity.checklist`; create-from-template
+  generates the checklist; **completion gate** (`requiredChecklistComplete`) +
+  per-item toggling + manager-review progress. **Multi-assignee:** `assigneeIds[]`
+  replaces single `assignedEmployeeId` (kept as a synced primary mirror for
+  rules/stats/back-compat); assign one/many/whole-team; `assigneeIds arrayContains`
+  query + rules. **Redesigned** task cards (avatars · name/role · checklist
+  progress · glass), admin Home (4 KPIs + nav + **Analytics** page), branch cards
+  (manager + employee count), and avatar-led admin user cards with search/filters.
+  **Avatar bug fixed** via reusable `UserAvatar`/`AvatarStack` (initials fallback,
+  no broken icons). New shared widgets `app_motion.dart` (`EntranceFade`),
+  `app_search_field.dart`, `user_avatar.dart`. Schedule polished (coverage,
+  shift badges, avatar chips — no logic change). `flutter analyze` clean (2
+  pre-existing infos); 7 new unit tests pass.
 - **Action needed:** commit; deploy `firestore.rules` / `storage.rules` and
   enable Firebase Storage; bootstrap the first admin (set
   `role/approvalStatus/isActive` in the console) before production.
@@ -148,6 +164,7 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 | adminBranches       | `/admin/branches`            | `BranchManagementScreen`| **admin**     |
 | adminManagers       | `/admin/managers`            | `ManagerManagementScreen`| **admin**    |
 | adminEmployees      | `/admin/employees`           | `EmployeeManagementScreen`| **admin**   |
+| adminAnalytics      | `/admin/analytics`           | `AdminAnalyticsScreen`  | **admin**     |
 | adminApprovals      | `/admin/approvals`           | `PendingApprovalsScreen`| **admin**     |
 | login               | `/login`                     | `LoginPage`             | unauth (landing) |
 | register            | `/register`                  | `RegisterPage`          | unauth        |
@@ -289,7 +306,9 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 | `status`             | string     | `pending`→`started`→`completed`→`waitingReview`→`approved`/`rejected` |
 | `priority`           | string     | `low` / `normal` / `high`                             |
 | `branchId`           | string?    | owning branch (admin: any · manager: own branch)      |
-| `assignedEmployeeId` | string?    | the employee executing the task; null while unassigned |
+| `assigneeIds`        | string[]   | **Phase 9** — employees assigned to the task (multi-assignee). Empty = unassigned |
+| `assignedEmployeeId` | string?    | **legacy mirror** of the primary assignee (`assigneeIds.first`), kept in sync for back-compat rules/stats; read falls back to it when `assigneeIds` is absent |
+| `checklist`          | array<map> | **Phase 9** — `{id, title, isRequired, completed, completedAt}` items generated from the template; the task can't complete until all required items are `completed` |
 | `createdBy`          | string?    | uid of the manager/admin who created it               |
 | `assignedShiftId`    | string?    | optional link to `shifts/{shiftId}`                   |
 | `deadline`           | Timestamp? | due date/time                                         |
@@ -318,6 +337,7 @@ assignment or status (those are set when a task is created from it).
 | `description` | string?    | optional details                                           |
 | `type`        | string     | `daily` / `special`                                        |
 | `priority`    | string     | `low` / `normal` / `high`                                  |
+| `checklistItems` | array<map> | **Phase 9** — reusable checklist: `{id, title, isRequired}` per step (e.g. Unlock entrance · Turn on lights). Generated into a task's `checklist` on create |
 | `branchId`    | string?    | owning branch; `''`/null = **global** (admin-made, all branches) |
 | `createdBy`   | string?    | uid of the manager/admin who created it                    |
 | `createdAt`, `updatedAt` | Timestamp | server timestamps                              |
@@ -443,8 +463,9 @@ week's Sunday), so a week is addressed directly without a query.
   - **Status transitions are validated client-side** (`TaskCubit._canTransition`),
     not in `firestore.rules` — the rules enforce *who* can write, not the exact
     flow order. Hardening the transition matrix server-side is a follow-up.
-  - **Assignee picker** lists branch employees; resolving an assigned uid → name
-    on the card isn't done (the card shows "assigned"/"unassigned").
+  - ~~Assignee uid → name isn't resolved on the card~~ **DONE (Phase 9)** — the
+    `TaskCubit` resolves a per-branch user **directory** so cards show real
+    avatars · names · roles (multi-assignee shown as an avatar stack + count).
   - `assignTask` writes the task side only — **`users/{uid}.assignedShift` is not
     auto-synced**, and there's no status automation. Storage proof write is
     loosely gated (see security rules).

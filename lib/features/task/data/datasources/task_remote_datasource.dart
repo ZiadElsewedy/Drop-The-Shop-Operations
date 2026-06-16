@@ -25,7 +25,7 @@ abstract class TaskRemoteDataSource {
   Future<void> deleteTask(String taskId);
   Future<void> assignTask({
     required String taskId,
-    required String? employeeId,
+    required List<String> employeeIds,
     String? assignedShiftId,
   });
   Future<void> updateStatus({
@@ -85,8 +85,10 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   @override
   Future<List<TaskModel>> getEmployeeTasks(String employeeId) async {
     try {
+      // Multi-assignee (Phase 9): a task belongs to an employee if their uid is
+      // in the `assigneeIds` array.
       final snap =
-          await _tasks.where('assignedEmployeeId', isEqualTo: employeeId).get();
+          await _tasks.where('assigneeIds', arrayContains: employeeId).get();
       return snap.docs
           .map((d) => TaskModel.fromMap(d.data(), id: d.id))
           .toList();
@@ -108,7 +110,7 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
 
   @override
   Stream<List<TaskModel>> watchEmployeeTasks(String employeeId) => _tasks
-      .where('assignedEmployeeId', isEqualTo: employeeId)
+      .where('assigneeIds', arrayContains: employeeId)
       .snapshots()
       .map(_mapSnap);
 
@@ -163,12 +165,14 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   @override
   Future<void> assignTask({
     required String taskId,
-    required String? employeeId,
+    required List<String> employeeIds,
     String? assignedShiftId,
   }) async {
     try {
       await _tasks.doc(taskId).set({
-        'assignedEmployeeId': employeeId,
+        'assigneeIds': employeeIds,
+        // Keep the legacy primary-assignee mirror in sync (rules / statistics).
+        'assignedEmployeeId': employeeIds.isEmpty ? null : employeeIds.first,
         // Only touch the shift link when one is supplied (merge preserves it).
         'assignedShiftId': ?assignedShiftId,
         'updatedAt': FieldValue.serverTimestamp(),

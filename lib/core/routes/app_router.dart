@@ -23,6 +23,7 @@ import 'package:fbro/features/schedule/presentation/pages/my_schedule_screen.dar
 import 'package:fbro/features/branch/presentation/pages/branch_management_screen.dart';
 import 'package:fbro/features/admin/presentation/pages/manager_management_screen.dart';
 import 'package:fbro/features/admin/presentation/pages/employee_management_screen.dart';
+import 'package:fbro/features/admin/presentation/pages/admin_analytics_screen.dart';
 import 'package:fbro/features/admin/presentation/pages/pending_approvals_screen.dart';
 import 'package:fbro/features/profile/presentation/pages/profile_page.dart';
 import 'package:fbro/features/profile/presentation/pages/edit_profile_page.dart';
@@ -236,6 +237,13 @@ GoRouter createRouter(AuthCubit authCubit) {
         pageBuilder: (context, state) => _slideTransition(
           state,
           const EmployeeManagementScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.adminAnalytics,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const AdminAnalyticsScreen(),
         ),
       ),
       GoRoute(

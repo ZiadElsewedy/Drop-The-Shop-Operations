@@ -8,6 +8,7 @@ import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:fbro/features/task/domain/entities/checklist_item.dart';
 import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 import 'package:fbro/features/task/presentation/widgets/task_action_sheets.dart';
@@ -180,14 +181,15 @@ class _TemplateList extends StatelessWidget {
                 itemBuilder: (context, i) {
                   final t = templates[i];
                   final global = (t.branchId ?? '').isEmpty;
+                  final count = t.checklistItems.length;
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.checklist_rtl_rounded,
                         color: AppColors.primary),
                     title: Text(t.title, style: AppTypography.label),
                     subtitle: Text(
-                      '${t.type.value} · ${t.priority.value}'
-                      '${global ? ' · global' : ''}',
+                      '${count == 0 ? 'no steps' : '$count steps'} · '
+                      '${t.type.value}${global ? ' · global' : ''}',
                       style: AppTypography.caption,
                     ),
                     trailing: trailingBuilder?.call(t),
@@ -301,19 +303,51 @@ class _TemplateForm extends StatefulWidget {
   State<_TemplateForm> createState() => _TemplateFormState();
 }
 
+/// Holds the live editing state of one checklist row (its text + required flag).
+class _ChecklistRow {
+  _ChecklistRow(this.id, {String text = ''})
+      : controller = TextEditingController(text: text);
+  final String id;
+  final TextEditingController controller;
+  bool isRequired = true;
+}
+
 class _TemplateFormState extends State<_TemplateForm> {
   final _title = TextEditingController();
   final _desc = TextEditingController();
   TaskType _type = TaskType.daily;
   TaskPriority _priority = TaskPriority.normal;
+  final List<_ChecklistRow> _items = [];
+  int _idSeq = 0;
   bool _saving = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    // Start with a couple of empty steps to invite a checklist.
+    _items
+      ..add(_ChecklistRow('c${_idSeq++}'))
+      ..add(_ChecklistRow('c${_idSeq++}'));
+  }
 
   @override
   void dispose() {
     _title.dispose();
     _desc.dispose();
+    for (final i in _items) {
+      i.controller.dispose();
+    }
     super.dispose();
+  }
+
+  void _addItem() => setState(() => _items.add(_ChecklistRow('c${_idSeq++}')));
+
+  void _removeItem(_ChecklistRow row) {
+    setState(() {
+      _items.remove(row);
+      row.controller.dispose();
+    });
   }
 
   Future<void> _save() async {
@@ -322,6 +356,15 @@ class _TemplateFormState extends State<_TemplateForm> {
       setState(() => _error = 'Title is required.');
       return;
     }
+    final checklist = <ChecklistItemTemplate>[
+      for (final row in _items)
+        if (row.controller.text.trim().isNotEmpty)
+          ChecklistItemTemplate(
+            id: row.id,
+            title: row.controller.text.trim(),
+            isRequired: row.isRequired,
+          ),
+    ];
     if (_saving) return;
     setState(() => _saving = true);
     try {
@@ -330,6 +373,7 @@ class _TemplateFormState extends State<_TemplateForm> {
         description: _desc.text.trim().isEmpty ? null : _desc.text.trim(),
         type: _type,
         priority: _priority,
+        checklistItems: checklist,
         // Admin templates are global ('' = every branch); a manager's are
         // scoped to their own branch.
         branchId: widget.isAdmin ? '' : widget.defaultBranchId,
@@ -352,7 +396,7 @@ class _TemplateFormState extends State<_TemplateForm> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SheetTitle('New Template'),
+          const SheetTitle('New Checklist Template'),
           AppTextField(
             controller: _title,
             label: 'Title',
@@ -382,16 +426,86 @@ class _TemplateFormState extends State<_TemplateForm> {
             labelOf: (p) => p.value,
             onChanged: (v) => setState(() => _priority = v),
           ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              const Icon(Icons.checklist_rounded,
+                  size: 16, color: AppColors.textSecondary),
+              const SizedBox(width: AppSpacing.sm),
+              Text('Checklist steps', style: AppTypography.labelSmall),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          for (final row in _items) _checklistRow(row),
+          const SizedBox(height: AppSpacing.sm),
+          TextButton.icon(
+            onPressed: _addItem,
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Add step'),
+            style: TextButton.styleFrom(foregroundColor: AppColors.primary),
+          ),
           if (_error != null) ...[
             const SizedBox(height: AppSpacing.md),
             Text(_error!,
                 style: AppTypography.caption.copyWith(color: AppColors.error)),
           ],
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.lg),
           AppButton(
             label: 'Save Template',
             isLoading: _saving,
             onPressed: _saving ? null : _save,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _checklistRow(_ChecklistRow row) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.darkSurfaceElevated,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: TextField(
+                controller: row.controller,
+                style: AppTypography.body
+                    .copyWith(color: AppColors.textPrimary, fontSize: 15),
+                decoration: InputDecoration(
+                  isDense: true,
+                  border: InputBorder.none,
+                  hintText: 'Step description',
+                  hintStyle: AppTypography.body
+                      .copyWith(color: AppColors.textTertiary),
+                ),
+              ),
+            ),
+          ),
+          // Required / optional toggle.
+          IconButton(
+            tooltip: row.isRequired ? 'Required' : 'Optional',
+            onPressed: () => setState(() => row.isRequired = !row.isRequired),
+            icon: Icon(
+              row.isRequired
+                  ? Icons.star_rounded
+                  : Icons.star_outline_rounded,
+              size: 20,
+              color: row.isRequired
+                  ? AppColors.primary
+                  : AppColors.textTertiary,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Remove',
+            onPressed: () => _removeItem(row),
+            icon: const Icon(Icons.close_rounded,
+                size: 18, color: AppColors.textTertiary),
           ),
         ],
       ),

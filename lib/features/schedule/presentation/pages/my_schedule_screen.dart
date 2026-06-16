@@ -7,6 +7,7 @@ import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
+import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
@@ -169,8 +170,10 @@ class _MyWeekTab extends StatelessWidget {
     }
 
     final manager = members.where((m) => m.role.isManager).toList();
-    final managerName =
-        manager.isEmpty ? '—' : userDisplayName(manager.first);
+    final teamUsers = [
+      for (final t in team)
+        if (userForUid(t, members) != null) userForUid(t, members)!,
+    ];
 
     final shiftLabel = myShifts.isEmpty
         ? 'Off today'
@@ -204,29 +207,43 @@ class _MyWeekTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          _todayRow(
-            'Working with',
-            team.isEmpty
-                ? (myShifts.isEmpty ? '—' : 'Just you')
-                : team.map((u) => nameForUid(u, members)).join(', '),
-          ),
+          Text('Working with', style: AppTypography.caption),
           const SizedBox(height: AppSpacing.sm),
-          _todayRow('Manager', managerName),
+          if (teamUsers.isEmpty)
+            Text(myShifts.isEmpty ? '—' : 'Just you',
+                style: AppTypography.bodySmall)
+          else
+            Row(
+              children: [
+                AvatarStack(users: teamUsers, size: 30),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(
+                      teamUsers.map(userDisplayName).join(', '),
+                      style: AppTypography.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          const SizedBox(height: AppSpacing.md),
+          Text('Manager', style: AppTypography.caption),
+          const SizedBox(height: AppSpacing.sm),
+          if (manager.isEmpty)
+            Text('—', style: AppTypography.bodySmall)
+          else
+            Row(
+              children: [
+                UserAvatar.fromUser(manager.first, size: 30),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Text(userDisplayName(manager.first),
+                      style: AppTypography.bodySmall),
+                ),
+              ],
+            ),
         ],
       ),
-    );
-  }
-
-  Widget _todayRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 100,
-          child: Text(label, style: AppTypography.caption),
-        ),
-        Expanded(child: Text(value, style: AppTypography.bodySmall)),
-      ],
     );
   }
 

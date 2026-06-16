@@ -35,11 +35,11 @@ abstract class TaskRepository {
   /// Deletes a task (manager/admin).
   Future<void> deleteTask(String taskId);
 
-  /// Assigns an employee (and optionally a shift) to the task; pass null to
-  /// unassign.
+  /// Sets the task's assignees (Phase 9 — multi-assignee) and optionally a
+  /// shift. Pass an empty list to unassign.
   Future<void> assignTask({
     required String taskId,
-    required String? employeeId,
+    required List<String> employeeIds,
     String? assignedShiftId,
   });
 

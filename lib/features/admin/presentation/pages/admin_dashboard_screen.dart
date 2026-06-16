@@ -6,14 +6,17 @@ import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_motion.dart';
+import 'package:fbro/core/widgets/skeleton.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/statistics/domain/entities/statistics_entity.dart';
 import 'package:fbro/features/statistics/presentation/cubit/statistics_cubit.dart';
 import 'package:fbro/features/statistics/presentation/cubit/statistics_state.dart';
-import 'package:fbro/features/statistics/presentation/widgets/stat_grid.dart';
 
-/// Admin dashboard (Phase 5 nav + Phase 6 live stats): a global operational
-/// overview plus navigation into the management modules. Hosted in `AdminShell`.
+/// Admin Home (Phase 9 restructure): a focused operations cockpit — only the
+/// four headline KPIs (Branches · Employees · Managers · Active Tasks), then
+/// clean navigation into each dedicated module. The full metric wall lives on
+/// the Analytics page now, so this screen stays uncluttered.
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -43,95 +46,199 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.pagePadding),
         children: [
-          Text('Store overview', style: AppTypography.h3),
+          Text('Overview', style: AppTypography.labelSmall),
           const SizedBox(height: AppSpacing.md),
           BlocBuilder<StatisticsCubit, StatisticsState>(
             builder: (context, state) => state.maybeWhen(
-              loaded: (s) => StatGrid(items: _items(s)),
-              error: (m) => _errorCard(m),
-              orElse: () => const StatGridSkeleton(count: 9),
+              loaded: (s) => _kpis(s),
+              error: (_) => _kpis(null),
+              orElse: () => const _KpiSkeleton(),
             ),
           ),
           const SizedBox(height: AppSpacing.xxl),
-          Text('Manage', style: AppTypography.h3),
+          Text('Manage', style: AppTypography.labelSmall),
           const SizedBox(height: AppSpacing.md),
-          _navTile(Icons.store_mall_directory_outlined, 'Branches',
+          _navTile(0, Icons.store_mall_directory_outlined, 'Branches',
               'Create and manage branches', RouteNames.adminBranches),
-          _navTile(Icons.calendar_view_week_outlined, 'Schedules',
+          _navTile(1, Icons.calendar_view_week_outlined, 'Schedules',
               'View and edit any branch schedule', RouteNames.adminSchedule),
-          _navTile(Icons.supervisor_account_outlined, 'Managers',
+          _navTile(2, Icons.supervisor_account_outlined, 'Managers',
               'Assign managers to branches', RouteNames.adminManagers),
-          _navTile(Icons.groups_outlined, 'Employees',
+          _navTile(3, Icons.groups_outlined, 'Employees',
               'View and manage employees', RouteNames.adminEmployees),
-          _navTile(Icons.how_to_reg_outlined, 'Pending Approvals',
+          _navTile(4, Icons.insights_outlined, 'Analytics',
+              'Full operational metrics', RouteNames.adminAnalytics),
+          _navTile(5, Icons.how_to_reg_outlined, 'Approvals',
               'Approve or reject new sign-ups', RouteNames.adminApprovals),
+          _navTile(6, Icons.settings_outlined, 'Settings',
+              'Account and app settings', RouteNames.settings),
         ],
       ),
     );
   }
 
-  List<StatItem> _items(StatisticsEntity s) => [
-        StatItem('Branches', '${s.totalBranches}',
-            Icons.store_mall_directory_outlined),
-        StatItem('Managers', '${s.totalManagers}',
-            Icons.supervisor_account_outlined),
-        StatItem('Employees', '${s.totalEmployees}', Icons.groups_outlined),
-        StatItem('Pending approvals', '${s.pendingApprovals}',
-            Icons.how_to_reg_outlined),
-        StatItem('Schedule coverage', '${s.branchesWithSchedule}/${s.totalBranches}',
-            Icons.event_available_outlined),
-        StatItem('Active tasks', '${s.activeTasks}', Icons.assignment_outlined),
-        StatItem('Completed tasks', '${s.completedTasks}',
-            Icons.task_alt_outlined),
-        StatItem('Waiting reviews', '${s.waitingReviews}',
-            Icons.rate_review_outlined),
-        StatItem('Rejected today', '${s.rejectedTasksToday}',
-            Icons.cancel_outlined),
-        StatItem('No-manager branches', '${s.branchesWithoutManagers}',
-            Icons.report_gmailerrorred_outlined),
-      ];
+  Widget _kpis(StatisticsEntity? s) {
+    final cards = [
+      _Kpi('Branches', s == null ? '—' : '${s.totalBranches}',
+          Icons.store_mall_directory_outlined, RouteNames.adminBranches),
+      _Kpi('Employees', s == null ? '—' : '${s.totalEmployees}',
+          Icons.groups_outlined, RouteNames.adminEmployees),
+      _Kpi('Managers', s == null ? '—' : '${s.totalManagers}',
+          Icons.supervisor_account_outlined, RouteNames.adminManagers),
+      _Kpi('Active tasks', s == null ? '—' : '${s.activeTasks}',
+          Icons.assignment_outlined, RouteNames.adminTasks),
+    ];
+    return LayoutBuilder(
+      builder: (context, c) {
+        const gap = AppSpacing.md;
+        final w = (c.maxWidth - gap) / 2;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (var i = 0; i < cards.length; i++)
+              SizedBox(
+                width: w,
+                child: EntranceFade(
+                  delay: staggerDelay(i),
+                  child: _KpiCard(
+                    kpi: cards[i],
+                    onTap: () => context.push(cards[i].route),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
 
-  Widget _errorCard(String message) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurface,
-        borderRadius: AppRadius.cardAll,
-        border: Border.all(color: AppColors.darkBorder),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline_rounded,
-              size: 18, color: AppColors.error),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(message,
-                style:
-                    AppTypography.bodySmall.copyWith(color: AppColors.error)),
+  Widget _navTile(
+      int index, IconData icon, String title, String subtitle, String route) {
+    return EntranceFade(
+      delay: staggerDelay(index),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.darkSurface,
+          borderRadius: AppRadius.cardAll,
+          border: Border.all(color: AppColors.darkBorder),
+        ),
+        child: ListTile(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          leading: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.darkSurfaceElevated,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: AppColors.primary, size: 20),
           ),
-        ],
+          title: Text(title, style: AppTypography.label),
+          subtitle: Text(subtitle, style: AppTypography.caption),
+          trailing: const Icon(Icons.chevron_right_rounded,
+              color: AppColors.textTertiary),
+          onTap: () => context.push(route),
+        ),
       ),
     );
   }
+}
 
-  Widget _navTile(IconData icon, String title, String subtitle, String route) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurface,
-        borderRadius: AppRadius.cardAll,
-        border: Border.all(color: AppColors.darkBorder),
+class _Kpi {
+  const _Kpi(this.label, this.value, this.icon, this.route);
+  final String label;
+  final String value;
+  final IconData icon;
+  final String route;
+}
+
+class _KpiCard extends StatelessWidget {
+  const _KpiCard({required this.kpi, required this.onTap});
+  final _Kpi kpi;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.cardAll,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [AppColors.darkSurfaceElevated, AppColors.darkSurface],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: AppRadius.cardAll,
+          border: Border.all(color: AppColors.darkBorder),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.black.withAlpha(40),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(kpi.icon, size: 22, color: AppColors.primary),
+            const SizedBox(height: AppSpacing.lg),
+            Text(kpi.value, style: AppTypography.h1, maxLines: 1),
+            const SizedBox(height: 2),
+            Text(kpi.label, style: AppTypography.caption),
+          ],
+        ),
       ),
-      child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        leading: Icon(icon, color: AppColors.primary),
-        title: Text(title, style: AppTypography.label),
-        subtitle: Text(subtitle, style: AppTypography.caption),
-        trailing: const Icon(Icons.chevron_right_rounded,
-            color: AppColors.textTertiary),
-        onTap: () => context.push(route),
-      ),
+    );
+  }
+}
+
+class _KpiSkeleton extends StatelessWidget {
+  const _KpiSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, c) {
+        const gap = AppSpacing.md;
+        final w = (c.maxWidth - gap) / 2;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (var i = 0; i < 4; i++)
+              SizedBox(
+                width: w,
+                child: Container(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkSurface,
+                    borderRadius: AppRadius.cardAll,
+                    border: Border.all(color: AppColors.darkBorder),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Skeleton(
+                          width: 22,
+                          height: 22,
+                          borderRadius:
+                              BorderRadius.all(Radius.circular(6))),
+                      SizedBox(height: AppSpacing.lg),
+                      Skeleton(width: 54, height: 28),
+                      SizedBox(height: 6),
+                      Skeleton(width: 70, height: 11),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

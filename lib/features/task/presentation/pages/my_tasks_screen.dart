@@ -8,7 +8,9 @@ import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
+import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
@@ -78,14 +80,15 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
             state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
         builder: (context, state) => state.maybeWhen(
           loading: () => const Center(child: CircularProgressIndicator()),
-          loaded: (tasks, busy) => _list(tasks, busy),
+          loaded: (tasks, busy, directory) => _list(tasks, busy, directory),
           orElse: () => const SizedBox.shrink(),
         ),
       ),
     );
   }
 
-  Widget _list(List<TaskEntity> tasks, bool busy) {
+  Widget _list(
+      List<TaskEntity> tasks, bool busy, Map<String, UserEntity> directory) {
     return Column(
       children: [
         if (busy) const LinearProgressIndicator(minHeight: 2),
@@ -104,7 +107,13 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
                       AppSpacing.pagePadding,
                       AppSpacing.xxxl,
                     ),
-                    children: [for (final t in tasks) _card(t)],
+                    children: [
+                      for (var i = 0; i < tasks.length; i++)
+                        EntranceFade(
+                          delay: staggerDelay(i),
+                          child: _card(tasks[i], directory),
+                        ),
+                    ],
                   ),
           ),
         ),
@@ -112,7 +121,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
     );
   }
 
-  Widget _card(TaskEntity task) {
+  Widget _card(TaskEntity task, Map<String, UserEntity> directory) {
     final cubit = context.read<TaskCubit>();
     final actions = <Widget>[];
     switch (task.status) {
@@ -145,7 +154,16 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
       case TaskStatus.approved:
         break;
     }
-    return TaskCard(task: task, actions: actions);
+    // The employee ticks checklist items off while the task is in progress.
+    final interactive = task.status == TaskStatus.started;
+    return TaskCard(
+      task: task,
+      directory: directory,
+      actions: actions,
+      onChecklistToggle: interactive
+          ? (item) => cubit.toggleChecklistItem(task, item.id)
+          : null,
+    );
   }
 }
 

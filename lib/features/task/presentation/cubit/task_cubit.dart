@@ -10,6 +10,7 @@ import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
 import 'package:fbro/features/branch/domain/repositories/branch_repository.dart';
+import 'package:fbro/features/task/domain/entities/checklist_item.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 import 'package:fbro/features/task/domain/repositories/task_repository.dart';
@@ -23,12 +24,16 @@ import 'package:fbro/features/task/domain/usecases/upload_task_proof.dart';
 import 'task_state.dart';
 
 /// Drives the task workflow for all three roles. The list loaded depends on the
-/// signed-in user's role (admin: all · manager: own branch · employee: own
-/// tasks) and is now **realtime** — a Firestore snapshot stream, so a task an
-/// employee is assigned (or any status change) appears immediately, with no
-/// manual refresh, backed by the offline cache. Workflow transitions are
-/// validated here ([_canTransition]); the branch/role write rules are enforced
-/// server-side in `firestore.rules`.
+/// signed-in user's role (admin: all · manager: own branch · employee: tasks
+/// they're assigned to) and is **realtime** — a Firestore snapshot stream, so a
+/// task an employee is assigned (or any status change) appears immediately, with
+/// no manual refresh, backed by the offline cache.
+///
+/// Phase 9: tasks support **multiple assignees** and an optional **checklist**.
+/// The cubit also resolves assignee uids → [UserEntity] (the [directory]) so
+/// cards can show real names/avatars, and gates "complete" on the required
+/// checklist items. Workflow transitions are validated here ([_canTransition]);
+/// the branch/role write rules are enforced server-side in `firestore.rules`.
 class TaskCubit extends Cubit<TaskState> {
   final TaskRepository _repository; // realtime streams + templates
   final BranchRepository _branchRepository; // branch picker (admin task form)
@@ -51,6 +56,14 @@ class TaskCubit extends Cubit<TaskState> {
   /// instead of flickering. Stream emissions during a mutation carry this flag.
   bool _mutating = false;
 
+  /// Resolved assignee directory (uid → user), filled in lazily per branch so
+  /// cards can render names/avatars. Cached across stream emissions.
+  final Map<String, UserEntity> _directory = {};
+  final Set<String> _fetchedBranches = {};
+
+  /// uid → user, for resolving assignees in the UI.
+  Map<String, UserEntity> get directory => Map.unmodifiable(_directory);
+
   TaskCubit({
     required this._repository,
     required this._branchRepository,
@@ -65,16 +78,24 @@ class TaskCubit extends Cubit<TaskState> {
   }) : super(const TaskState.initial());
 
   List<TaskEntity> get _tasks =>
-      state.maybeWhen(loaded: (t, _) => t, orElse: () => const []);
+      state.maybeWhen(loaded: (t, _, _) => t, orElse: () => const []);
 
   /// Subscribes to the live task list for [user] by role, remembering it so a
   /// pull-to-refresh can re-subscribe. Cancels any previous subscription first.
   Future<void> load(UserEntity user) async {
+    // Drop the resolved directory when the signed-in user changes (new session).
+    if (_user?.uid != user.uid) {
+      _directory.clear();
+      _fetchedBranches.clear();
+    }
     _user = user;
     emit(const TaskState.loading());
     await _sub?.cancel();
     _sub = _streamFor(user).listen(
-      (tasks) => emit(TaskState.loaded(tasks, busy: _mutating)),
+      (tasks) {
+        emit(TaskState.loaded(tasks, busy: _mutating, directory: _directory));
+        _ensureDirectory(tasks);
+      },
       onError: (_) =>
           emit(const TaskState.error('Failed to load tasks. Please try again.')),
     );
@@ -95,6 +116,36 @@ class TaskCubit extends Cubit<TaskState> {
     return _repository.watchEmployeeTasks(user.uid);
   }
 
+  /// Resolves the branches present in [tasks] to their members and merges them
+  /// into [_directory], then re-emits so cards pick up the names/avatars. Each
+  /// branch is fetched at most once.
+  Future<void> _ensureDirectory(List<TaskEntity> tasks) async {
+    final branchIds = <String>{
+      for (final t in tasks)
+        if ((t.branchId ?? '').isNotEmpty) t.branchId!,
+    }..removeAll(_fetchedBranches);
+    if (branchIds.isEmpty) return;
+
+    var changed = false;
+    for (final branchId in branchIds) {
+      _fetchedBranches.add(branchId);
+      try {
+        final users = await _getUsersByBranch(branchId);
+        for (final u in users) {
+          _directory[u.uid] = u;
+          changed = true;
+        }
+      } catch (_) {
+        // Leave it unfetched-but-marked; cards fall back to initials.
+      }
+    }
+    if (changed && !isClosed) {
+      state.mapOrNull(
+        loaded: (s) => emit(s.copyWith(directory: Map.of(_directory))),
+      );
+    }
+  }
+
   // ─── Manager / admin actions ───────────────────────────────────
   Future<void> createTask({
     required String title,
@@ -103,6 +154,7 @@ class TaskCubit extends Cubit<TaskState> {
     required TaskPriority priority,
     required String branchId,
     DateTime? deadline,
+    List<ChecklistItem> checklist = const [],
   }) =>
       _mutate(() => _createTask(TaskEntity(
             id: '',
@@ -111,6 +163,7 @@ class TaskCubit extends Cubit<TaskState> {
             type: type,
             priority: priority,
             branchId: branchId,
+            checklist: checklist,
             createdBy: _user?.uid,
             deadline: deadline,
           )));
@@ -120,14 +173,16 @@ class TaskCubit extends Cubit<TaskState> {
   Future<void> deleteTask(String taskId) =>
       _mutate(() => _deleteTask(taskId));
 
-  Future<void> assignEmployee({
+  /// Sets the task's assignees (one, several, or a whole team). Pass an empty
+  /// list to unassign.
+  Future<void> assignEmployees({
     required String taskId,
-    required String? employeeId,
+    required List<String> employeeIds,
     String? shiftId,
   }) =>
       _mutate(() => _assignTask(
             taskId: taskId,
-            employeeId: employeeId,
+            employeeIds: employeeIds,
             assignedShiftId: shiftId,
           ));
 
@@ -162,20 +217,48 @@ class TaskCubit extends Cubit<TaskState> {
         () => _changeTaskStatus(taskId: task.id, status: TaskStatus.started),
       );
 
+  /// Completes a task. Blocked until every **required** checklist item is ticked
+  /// (Phase 9 completion rule).
   Future<void> completeTask(
     TaskEntity task, {
     String? notes,
     File? proof,
-  }) =>
-      _transitionMutate(task, TaskStatus.completed, () async {
-        final proofUrl =
-            proof != null ? await _uploadTaskProof(task.id, proof) : null;
-        await _updateTask(task.copyWith(
-          status: TaskStatus.completed,
-          notes: notes ?? task.notes,
-          proofImageUrl: proofUrl ?? task.proofImageUrl,
-        ));
-      });
+  }) {
+    if (!task.requiredChecklistComplete) {
+      final prev = _tasks;
+      emit(const TaskState.error(
+          'Complete all required checklist items before marking this task done.'));
+      emit(TaskState.loaded(prev, directory: _directory));
+      return Future.value();
+    }
+    return _transitionMutate(task, TaskStatus.completed, () async {
+      final proofUrl =
+          proof != null ? await _uploadTaskProof(task.id, proof) : null;
+      await _updateTask(task.copyWith(
+        status: TaskStatus.completed,
+        notes: notes ?? task.notes,
+        proofImageUrl: proofUrl ?? task.proofImageUrl,
+      ));
+    });
+  }
+
+  /// Ticks / unticks a checklist item on a task the employee is working on.
+  Future<void> toggleChecklistItem(TaskEntity task, String itemId) {
+    final updated = [
+      for (final i in task.checklist)
+        if (i.id == itemId)
+          ChecklistItem(
+            id: i.id,
+            title: i.title,
+            isRequired: i.isRequired,
+            completed: !i.completed,
+            completedAt: i.completed ? null : DateTime.now(),
+          )
+        else
+          i,
+    ];
+    return _mutate(() => _updateTask(task.copyWith(checklist: updated)));
+  }
 
   Future<void> submitForReview(TaskEntity task) => _transitionMutate(
         task,
@@ -209,7 +292,7 @@ class TaskCubit extends Cubit<TaskState> {
     }
   }
 
-  // ─── Task templates (reusable blueprints) ──────────────────────
+  // ─── Task templates (reusable checklists) ──────────────────────
   /// Templates visible to the current view: GLOBAL templates (no branch) plus
   /// those scoped to [branchId]. An admin (null/empty [branchId]) sees all.
   Future<List<TaskTemplateEntity>> templates({String? branchId}) async {
@@ -225,14 +308,15 @@ class TaskCubit extends Cubit<TaskState> {
     }
   }
 
-  /// Saves a reusable template. Awaited by the template manager sheet (throws on
-  /// failure); it does not touch the task-list state.
+  /// Saves a reusable checklist template. Awaited by the template manager sheet
+  /// (throws on failure); it does not touch the task-list state.
   Future<void> saveTemplate({
     required String title,
     String? description,
     required TaskType type,
     required TaskPriority priority,
     String? branchId,
+    List<ChecklistItemTemplate> checklistItems = const [],
   }) =>
       _repository.createTemplate(TaskTemplateEntity(
         id: '',
@@ -241,6 +325,7 @@ class TaskCubit extends Cubit<TaskState> {
         type: type,
         priority: priority,
         branchId: branchId,
+        checklistItems: checklistItems,
         createdBy: _user?.uid,
       ));
 
@@ -255,21 +340,21 @@ class TaskCubit extends Cubit<TaskState> {
     if (_user == null || _mutating) return;
     final prev = _tasks;
     _mutating = true;
-    emit(TaskState.loaded(prev, busy: true));
+    emit(TaskState.loaded(prev, busy: true, directory: _directory));
     try {
       await action();
       _mutating = false;
       // The stream usually has already emitted the new list (cache reflects the
       // write); clear busy explicitly in case it is slow (e.g. offline).
-      emit(TaskState.loaded(_tasks, busy: false));
+      emit(TaskState.loaded(_tasks, busy: false, directory: _directory));
     } on Failure catch (e) {
       _mutating = false;
       emit(TaskState.error(e.message));
-      emit(TaskState.loaded(prev));
+      emit(TaskState.loaded(prev, directory: _directory));
     } catch (_) {
       _mutating = false;
       emit(const TaskState.error('Something went wrong. Please try again.'));
-      emit(TaskState.loaded(prev));
+      emit(TaskState.loaded(prev, directory: _directory));
     }
   }
 
@@ -283,7 +368,7 @@ class TaskCubit extends Cubit<TaskState> {
       final prev = _tasks;
       emit(const TaskState.error(
           "That action isn't allowed for this task's current status."));
-      emit(TaskState.loaded(prev));
+      emit(TaskState.loaded(prev, directory: _directory));
       return Future.value();
     }
     return _mutate(action);

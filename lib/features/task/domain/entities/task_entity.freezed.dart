@@ -27,8 +27,12 @@ mixin _$TaskEntity {
   /// Owning branch (admin: any · manager: own branch).
   String? get branchId => throw _privateConstructorUsedError;
 
-  /// The single employee assigned to execute the task; null while unassigned.
-  String? get assignedEmployeeId => throw _privateConstructorUsedError;
+  /// Employees assigned to execute the task (Phase 9 — multi-assignee). Empty
+  /// while unassigned. Supersedes the legacy single `assignedEmployeeId`.
+  List<String> get assigneeIds => throw _privateConstructorUsedError;
+
+  /// Checklist the employee must work through (generated from a template).
+  List<ChecklistItem> get checklist => throw _privateConstructorUsedError;
 
   /// uid of the manager/admin who created the task.
   String? get createdBy => throw _privateConstructorUsedError;
@@ -78,7 +82,8 @@ abstract class $TaskEntityCopyWith<$Res> {
     TaskStatus status,
     TaskPriority priority,
     String? branchId,
-    String? assignedEmployeeId,
+    List<String> assigneeIds,
+    List<ChecklistItem> checklist,
     String? createdBy,
     String? assignedShiftId,
     DateTime? deadline,
@@ -116,7 +121,8 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? status = null,
     Object? priority = null,
     Object? branchId = freezed,
-    Object? assignedEmployeeId = freezed,
+    Object? assigneeIds = null,
+    Object? checklist = null,
     Object? createdBy = freezed,
     Object? assignedShiftId = freezed,
     Object? deadline = freezed,
@@ -160,10 +166,14 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.branchId
                 : branchId // ignore: cast_nullable_to_non_nullable
                       as String?,
-            assignedEmployeeId: freezed == assignedEmployeeId
-                ? _value.assignedEmployeeId
-                : assignedEmployeeId // ignore: cast_nullable_to_non_nullable
-                      as String?,
+            assigneeIds: null == assigneeIds
+                ? _value.assigneeIds
+                : assigneeIds // ignore: cast_nullable_to_non_nullable
+                      as List<String>,
+            checklist: null == checklist
+                ? _value.checklist
+                : checklist // ignore: cast_nullable_to_non_nullable
+                      as List<ChecklistItem>,
             createdBy: freezed == createdBy
                 ? _value.createdBy
                 : createdBy // ignore: cast_nullable_to_non_nullable
@@ -235,7 +245,8 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     TaskStatus status,
     TaskPriority priority,
     String? branchId,
-    String? assignedEmployeeId,
+    List<String> assigneeIds,
+    List<ChecklistItem> checklist,
     String? createdBy,
     String? assignedShiftId,
     DateTime? deadline,
@@ -272,7 +283,8 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? status = null,
     Object? priority = null,
     Object? branchId = freezed,
-    Object? assignedEmployeeId = freezed,
+    Object? assigneeIds = null,
+    Object? checklist = null,
     Object? createdBy = freezed,
     Object? assignedShiftId = freezed,
     Object? deadline = freezed,
@@ -316,10 +328,14 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.branchId
             : branchId // ignore: cast_nullable_to_non_nullable
                   as String?,
-        assignedEmployeeId: freezed == assignedEmployeeId
-            ? _value.assignedEmployeeId
-            : assignedEmployeeId // ignore: cast_nullable_to_non_nullable
-                  as String?,
+        assigneeIds: null == assigneeIds
+            ? _value._assigneeIds
+            : assigneeIds // ignore: cast_nullable_to_non_nullable
+                  as List<String>,
+        checklist: null == checklist
+            ? _value._checklist
+            : checklist // ignore: cast_nullable_to_non_nullable
+                  as List<ChecklistItem>,
         createdBy: freezed == createdBy
             ? _value.createdBy
             : createdBy // ignore: cast_nullable_to_non_nullable
@@ -375,7 +391,7 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$TaskEntityImpl implements _TaskEntity {
+class _$TaskEntityImpl extends _TaskEntity {
   const _$TaskEntityImpl({
     required this.id,
     required this.title,
@@ -384,7 +400,8 @@ class _$TaskEntityImpl implements _TaskEntity {
     this.status = TaskStatus.pending,
     this.priority = TaskPriority.normal,
     this.branchId,
-    this.assignedEmployeeId,
+    final List<String> assigneeIds = const <String>[],
+    final List<ChecklistItem> checklist = const <ChecklistItem>[],
     this.createdBy,
     this.assignedShiftId,
     this.deadline,
@@ -397,7 +414,9 @@ class _$TaskEntityImpl implements _TaskEntity {
     this.reviewNotes,
     this.createdAt,
     this.updatedAt,
-  });
+  }) : _assigneeIds = assigneeIds,
+       _checklist = checklist,
+       super._();
 
   @override
   final String id;
@@ -419,9 +438,31 @@ class _$TaskEntityImpl implements _TaskEntity {
   @override
   final String? branchId;
 
-  /// The single employee assigned to execute the task; null while unassigned.
+  /// Employees assigned to execute the task (Phase 9 — multi-assignee). Empty
+  /// while unassigned. Supersedes the legacy single `assignedEmployeeId`.
+  final List<String> _assigneeIds;
+
+  /// Employees assigned to execute the task (Phase 9 — multi-assignee). Empty
+  /// while unassigned. Supersedes the legacy single `assignedEmployeeId`.
   @override
-  final String? assignedEmployeeId;
+  @JsonKey()
+  List<String> get assigneeIds {
+    if (_assigneeIds is EqualUnmodifiableListView) return _assigneeIds;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_assigneeIds);
+  }
+
+  /// Checklist the employee must work through (generated from a template).
+  final List<ChecklistItem> _checklist;
+
+  /// Checklist the employee must work through (generated from a template).
+  @override
+  @JsonKey()
+  List<ChecklistItem> get checklist {
+    if (_checklist is EqualUnmodifiableListView) return _checklist;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_checklist);
+  }
 
   /// uid of the manager/admin who created the task.
   @override
@@ -463,7 +504,7 @@ class _$TaskEntityImpl implements _TaskEntity {
 
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assignedEmployeeId: $assignedEmployeeId, createdBy: $createdBy, assignedShiftId: $assignedShiftId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, createdBy: $createdBy, assignedShiftId: $assignedShiftId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -481,8 +522,14 @@ class _$TaskEntityImpl implements _TaskEntity {
                 other.priority == priority) &&
             (identical(other.branchId, branchId) ||
                 other.branchId == branchId) &&
-            (identical(other.assignedEmployeeId, assignedEmployeeId) ||
-                other.assignedEmployeeId == assignedEmployeeId) &&
+            const DeepCollectionEquality().equals(
+              other._assigneeIds,
+              _assigneeIds,
+            ) &&
+            const DeepCollectionEquality().equals(
+              other._checklist,
+              _checklist,
+            ) &&
             (identical(other.createdBy, createdBy) ||
                 other.createdBy == createdBy) &&
             (identical(other.assignedShiftId, assignedShiftId) ||
@@ -518,7 +565,8 @@ class _$TaskEntityImpl implements _TaskEntity {
     status,
     priority,
     branchId,
-    assignedEmployeeId,
+    const DeepCollectionEquality().hash(_assigneeIds),
+    const DeepCollectionEquality().hash(_checklist),
     createdBy,
     assignedShiftId,
     deadline,
@@ -542,7 +590,7 @@ class _$TaskEntityImpl implements _TaskEntity {
       __$$TaskEntityImplCopyWithImpl<_$TaskEntityImpl>(this, _$identity);
 }
 
-abstract class _TaskEntity implements TaskEntity {
+abstract class _TaskEntity extends TaskEntity {
   const factory _TaskEntity({
     required final String id,
     required final String title,
@@ -551,7 +599,8 @@ abstract class _TaskEntity implements TaskEntity {
     final TaskStatus status,
     final TaskPriority priority,
     final String? branchId,
-    final String? assignedEmployeeId,
+    final List<String> assigneeIds,
+    final List<ChecklistItem> checklist,
     final String? createdBy,
     final String? assignedShiftId,
     final DateTime? deadline,
@@ -565,6 +614,7 @@ abstract class _TaskEntity implements TaskEntity {
     final DateTime? createdAt,
     final DateTime? updatedAt,
   }) = _$TaskEntityImpl;
+  const _TaskEntity._() : super._();
 
   @override
   String get id;
@@ -583,9 +633,14 @@ abstract class _TaskEntity implements TaskEntity {
   @override
   String? get branchId;
 
-  /// The single employee assigned to execute the task; null while unassigned.
+  /// Employees assigned to execute the task (Phase 9 — multi-assignee). Empty
+  /// while unassigned. Supersedes the legacy single `assignedEmployeeId`.
   @override
-  String? get assignedEmployeeId;
+  List<String> get assigneeIds;
+
+  /// Checklist the employee must work through (generated from a template).
+  @override
+  List<ChecklistItem> get checklist;
 
   /// uid of the manager/admin who created the task.
   @override

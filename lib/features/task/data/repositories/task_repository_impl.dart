@@ -100,13 +100,13 @@ class TaskRepositoryImpl implements TaskRepository {
   @override
   Future<void> assignTask({
     required String taskId,
-    required String? employeeId,
+    required List<String> employeeIds,
     String? assignedShiftId,
   }) async {
     try {
       await _remote.assignTask(
         taskId: taskId,
-        employeeId: employeeId,
+        employeeIds: employeeIds,
         assignedShiftId: assignedShiftId,
       );
     } on ServerException catch (e) {

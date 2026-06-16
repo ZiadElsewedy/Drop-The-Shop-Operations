@@ -88,26 +88,34 @@ service cloud.firestore {
       allow update, delete: if canReachBranch(resource.data.get('branchId', ''));
     }
 
-    // ── Tasks (Phase 3) ────────────────────────────────────────────
+    // ── Tasks (Phase 3, +Phase 9 multi-assignee) ───────────────────
     // Branch-scoped: admin = all branches; manager = own branch; employee =
-    // their own assigned tasks. A task carries `branchId` (owning branch) and
-    // `assignedEmployeeId` (the assignee).
-    //   read   — admin/own-branch manager, OR the assigned employee.
+    // tasks they're assigned to. A task carries `branchId` (owning branch) and
+    // `assigneeIds` (the assignees — Phase 9; `assignedEmployeeId` mirrors the
+    // primary assignee for backward compatibility).
+    //   read   — admin/own-branch manager, OR any assigned employee.
     //   create/delete — admin/own-branch manager only.
     //   update — admin/own-branch manager (full edit, incl. approve/reject), OR
-    //            the assigned employee on their OWN task with limits: they may
-    //            NOT reassign, move branch, change the creator, or set the
-    //            terminal approved/rejected status (review stays manager/admin).
+    //            an assigned employee on a task they're assigned to, with limits:
+    //            they may NOT reassign (assigneeIds frozen), move branch, change
+    //            the creator, or set the terminal approved/rejected status
+    //            (review stays manager/admin). They MAY tick checklist items,
+    //            add notes/proof, and advance status up to waitingReview.
+    function isTaskAssignee() {
+      return request.auth.uid in resource.data.get('assigneeIds', [])
+        || resource.data.get('assignedEmployeeId', '') == request.auth.uid;
+    }
     match /tasks/{taskId} {
       allow read: if canReachBranch(resource.data.get('branchId', ''))
-        || resource.data.get('assignedEmployeeId', '') == request.auth.uid;
+        || isTaskAssignee();
 
       allow create: if canReachBranch(request.resource.data.get('branchId', ''));
 
       allow update: if canReachBranch(resource.data.get('branchId', ''))
-        || (resource.data.get('assignedEmployeeId', '') == request.auth.uid
-            && request.resource.data.get('assignedEmployeeId', '')
-                 == resource.data.get('assignedEmployeeId', '')
+        || (isTaskAssignee()
+            // employees can't reassign the task (assignees frozen)
+            && request.resource.data.get('assigneeIds', [])
+                 == resource.data.get('assigneeIds', [])
             && request.resource.data.get('branchId', '')
                  == resource.data.get('branchId', '')
             && request.resource.data.get('createdBy', '')

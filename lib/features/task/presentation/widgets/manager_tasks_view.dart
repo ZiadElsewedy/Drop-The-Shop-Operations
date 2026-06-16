@@ -4,6 +4,7 @@ import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
@@ -163,14 +164,15 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
             state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
         builder: (context, state) => state.maybeWhen(
           loading: () => const Center(child: CircularProgressIndicator()),
-          loaded: (tasks, busy) => _list(tasks, busy),
+          loaded: (tasks, busy, directory) => _list(tasks, busy, directory),
           orElse: () => const SizedBox.shrink(),
         ),
       ),
     );
   }
 
-  Widget _list(List<TaskEntity> tasks, bool busy) {
+  Widget _list(
+      List<TaskEntity> tasks, bool busy, Map<String, UserEntity> directory) {
     return Column(
       children: [
         if (busy) const LinearProgressIndicator(minHeight: 2),
@@ -189,7 +191,13 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
                       AppSpacing.pagePadding,
                       AppSpacing.xxxl * 2,
                     ),
-                    children: [for (final t in tasks) _card(t)],
+                    children: [
+                      for (var i = 0; i < tasks.length; i++)
+                        EntranceFade(
+                          delay: staggerDelay(i),
+                          child: _card(tasks[i], directory),
+                        ),
+                    ],
                   ),
           ),
         ),
@@ -197,10 +205,13 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
     );
   }
 
-  Widget _card(TaskEntity task) {
+  Widget _card(TaskEntity task, Map<String, UserEntity> directory) {
     final cubit = context.read<TaskCubit>();
     return TaskCard(
       task: task,
+      directory: directory,
+      onAssigneesTap: () =>
+          showAssignSheet(context: context, cubit: cubit, task: task),
       actions: [
         if (task.status == TaskStatus.waitingReview)
           TaskActionButton(

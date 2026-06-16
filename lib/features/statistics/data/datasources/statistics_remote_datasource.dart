@@ -154,8 +154,10 @@ class StatisticsRemoteDataSourceImpl implements StatisticsRemoteDataSource {
   Future<StatisticsModel> employeeStats(String uid, String? branchId) async {
     try {
       final now = DateTime.now();
+      // Multi-assignee (Phase 9): a task counts for this employee if their uid
+      // is in `assigneeIds`.
       final tasks =
-          (await _tasks.where('assignedEmployeeId', isEqualTo: uid).get()).docs;
+          (await _tasks.where('assigneeIds', arrayContains: uid).get()).docs;
 
       String? currentShiftName;
       String? upcomingShiftName;

@@ -2,9 +2,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fbro/core/enums/task_type.dart';
 import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/enums/task_priority.dart';
+import 'package:fbro/features/task/domain/entities/checklist_item.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 
 /// Firestore (de)serialization for [TaskEntity] — collection `tasks/{taskId}`.
+///
+/// Multi-assignee (Phase 9): the canonical field is `assigneeIds` (array). For
+/// backward compatibility with the legacy single-assignee schema, [fromMap]
+/// falls back to a `assignedEmployeeId` string when no array is present, and
+/// [toMap] keeps `assignedEmployeeId` in sync as the **primary** assignee
+/// (first id, or null) so existing Firestore rules / statistics queries that
+/// key off it keep working without a migration.
 class TaskModel {
   final String id;
   final String title;
@@ -13,7 +21,8 @@ class TaskModel {
   final TaskStatus status;
   final TaskPriority priority;
   final String? branchId;
-  final String? assignedEmployeeId;
+  final List<String> assigneeIds;
+  final List<ChecklistItem> checklist;
   final String? createdBy;
   final String? assignedShiftId;
   final DateTime? deadline;
@@ -35,7 +44,8 @@ class TaskModel {
     this.status = TaskStatus.pending,
     this.priority = TaskPriority.normal,
     this.branchId,
-    this.assignedEmployeeId,
+    this.assigneeIds = const [],
+    this.checklist = const [],
     this.createdBy,
     this.assignedShiftId,
     this.deadline,
@@ -58,7 +68,8 @@ class TaskModel {
         status: TaskStatus.fromString(map['status'] as String?),
         priority: TaskPriority.fromString(map['priority'] as String?),
         branchId: map['branchId'] as String?,
-        assignedEmployeeId: map['assignedEmployeeId'] as String?,
+        assigneeIds: _assigneesFromMap(map),
+        checklist: _checklistFromList(map['checklist']),
         createdBy: map['createdBy'] as String?,
         assignedShiftId: map['assignedShiftId'] as String?,
         deadline: (map['deadline'] as Timestamp?)?.toDate(),
@@ -81,7 +92,8 @@ class TaskModel {
         status: e.status,
         priority: e.priority,
         branchId: e.branchId,
-        assignedEmployeeId: e.assignedEmployeeId,
+        assigneeIds: e.assigneeIds,
+        checklist: e.checklist,
         createdBy: e.createdBy,
         assignedShiftId: e.assignedShiftId,
         deadline: e.deadline,
@@ -98,7 +110,8 @@ class TaskModel {
 
   /// Persisted fields. `createdAt`/`updatedAt` are written by the datasource as
   /// server timestamps, so they are intentionally not included here. `deadline`
-  /// is converted to a [Timestamp] when present.
+  /// is converted to a [Timestamp] when present. `assignedEmployeeId` mirrors
+  /// the primary assignee for backward compatibility (rules / statistics).
   Map<String, dynamic> toMap() => {
         'id': id,
         'title': title,
@@ -107,7 +120,9 @@ class TaskModel {
         'status': status.value,
         'priority': priority.value,
         'branchId': branchId,
-        'assignedEmployeeId': assignedEmployeeId,
+        'assigneeIds': assigneeIds,
+        'assignedEmployeeId': assigneeIds.isEmpty ? null : assigneeIds.first,
+        'checklist': _checklistToList(checklist),
         'createdBy': createdBy,
         'assignedShiftId': assignedShiftId,
         'deadline': deadline == null ? null : Timestamp.fromDate(deadline!),
@@ -129,7 +144,8 @@ class TaskModel {
         status: status,
         priority: priority,
         branchId: branchId,
-        assignedEmployeeId: assignedEmployeeId,
+        assigneeIds: assigneeIds,
+        checklist: checklist,
         createdBy: createdBy,
         assignedShiftId: assignedShiftId,
         deadline: deadline,
@@ -152,7 +168,8 @@ class TaskModel {
         status: status,
         priority: priority,
         branchId: branchId,
-        assignedEmployeeId: assignedEmployeeId,
+        assigneeIds: assigneeIds,
+        checklist: checklist,
         createdBy: createdBy,
         assignedShiftId: assignedShiftId,
         deadline: deadline,
@@ -166,4 +183,48 @@ class TaskModel {
         createdAt: createdAt,
         updatedAt: updatedAt,
       );
+
+  /// Reads `assigneeIds` (array); falls back to the legacy single
+  /// `assignedEmployeeId` string for documents written before Phase 9.
+  static List<String> _assigneesFromMap(Map<String, dynamic> map) {
+    final raw = map['assigneeIds'];
+    if (raw is List) {
+      final ids = raw.whereType<String>().where((s) => s.isNotEmpty).toList();
+      if (ids.isNotEmpty) return ids;
+    }
+    final legacy = map['assignedEmployeeId'] as String?;
+    return (legacy != null && legacy.isNotEmpty) ? [legacy] : const [];
+  }
+
+  static List<ChecklistItem> _checklistFromList(dynamic raw) {
+    if (raw is! List) return const [];
+    final items = <ChecklistItem>[];
+    for (final e in raw) {
+      if (e is Map) {
+        final title = e['title'] as String? ?? '';
+        if (title.isEmpty) continue;
+        items.add(ChecklistItem(
+          id: e['id'] as String? ?? '',
+          title: title,
+          isRequired: e['isRequired'] as bool? ?? true,
+          completed: e['completed'] as bool? ?? false,
+          completedAt: (e['completedAt'] as Timestamp?)?.toDate(),
+        ));
+      }
+    }
+    return items;
+  }
+
+  static List<Map<String, dynamic>> _checklistToList(List<ChecklistItem> items) =>
+      [
+        for (final i in items)
+          {
+            'id': i.id,
+            'title': i.title,
+            'isRequired': i.isRequired,
+            'completed': i.completed,
+            'completedAt':
+                i.completedAt == null ? null : Timestamp.fromDate(i.completedAt!),
+          },
+      ];
 }

@@ -1,16 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fbro/core/enums/task_type.dart';
 import 'package:fbro/core/enums/task_priority.dart';
+import 'package:fbro/features/task/domain/entities/checklist_item.dart';
 import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 
 /// Firestore (de)serialization for [TaskTemplateEntity] — collection
-/// `task_templates/{templateId}`.
+/// `task_templates/{templateId}`. Stores the reusable checklist as a list of
+/// `{id, title, isRequired}` maps under `checklistItems`.
 class TaskTemplateModel {
   final String id;
   final String title;
   final String? description;
   final TaskType type;
   final TaskPriority priority;
+  final List<ChecklistItemTemplate> checklistItems;
   final String? branchId;
   final String? createdBy;
   final DateTime? createdAt;
@@ -22,6 +25,7 @@ class TaskTemplateModel {
     this.description,
     this.type = TaskType.daily,
     this.priority = TaskPriority.normal,
+    this.checklistItems = const [],
     this.branchId,
     this.createdBy,
     this.createdAt,
@@ -35,6 +39,7 @@ class TaskTemplateModel {
         description: map['description'] as String?,
         type: TaskType.fromString(map['type'] as String?),
         priority: TaskPriority.fromString(map['priority'] as String?),
+        checklistItems: checklistTemplatesFromList(map['checklistItems']),
         branchId: map['branchId'] as String?,
         createdBy: map['createdBy'] as String?,
         createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
@@ -48,6 +53,7 @@ class TaskTemplateModel {
         description: e.description,
         type: e.type,
         priority: e.priority,
+        checklistItems: e.checklistItems,
         branchId: e.branchId,
         createdBy: e.createdBy,
         createdAt: e.createdAt,
@@ -62,6 +68,7 @@ class TaskTemplateModel {
         'description': description,
         'type': type.value,
         'priority': priority.value,
+        'checklistItems': checklistTemplatesToList(checklistItems),
         'branchId': branchId,
         'createdBy': createdBy,
       };
@@ -73,6 +80,7 @@ class TaskTemplateModel {
         description: description,
         type: type,
         priority: priority,
+        checklistItems: checklistItems,
         branchId: branchId,
         createdBy: createdBy,
         createdAt: createdAt,
@@ -85,9 +93,37 @@ class TaskTemplateModel {
         description: description,
         type: type,
         priority: priority,
+        checklistItems: checklistItems,
         branchId: branchId,
         createdBy: createdBy,
         createdAt: createdAt,
         updatedAt: updatedAt,
       );
 }
+
+/// Parses a Firestore `checklistItems` array (list of maps) into template items.
+/// Tolerates missing/malformed entries.
+List<ChecklistItemTemplate> checklistTemplatesFromList(dynamic raw) {
+  if (raw is! List) return const [];
+  final items = <ChecklistItemTemplate>[];
+  for (final e in raw) {
+    if (e is Map) {
+      final title = e['title'] as String? ?? '';
+      if (title.isEmpty) continue;
+      items.add(ChecklistItemTemplate(
+        id: e['id'] as String? ?? '',
+        title: title,
+        isRequired: e['isRequired'] as bool? ?? true,
+      ));
+    }
+  }
+  return items;
+}
+
+/// Serializes template checklist items to a list of Firestore maps.
+List<Map<String, dynamic>> checklistTemplatesToList(
+        List<ChecklistItemTemplate> items) =>
+    [
+      for (final i in items)
+        {'id': i.id, 'title': i.title, 'isRequired': i.isRequired},
+    ];

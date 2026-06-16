@@ -1,4 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
+import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 
 part 'task_state.freezed.dart';
@@ -11,10 +12,13 @@ class TaskState with _$TaskState {
   const factory TaskState.loading() = _Loading;
 
   /// Tasks loaded. [busy] marks an in-flight mutation (create/assign/status/…)
-  /// while the list stays visible (no flicker).
+  /// while the list stays visible (no flicker). [directory] resolves assignee
+  /// uids → users so cards can show real names/avatars (Phase 9); it fills in
+  /// asynchronously after the tasks arrive.
   const factory TaskState.loaded(
     List<TaskEntity> tasks, {
     @Default(false) bool busy,
+    @Default(<String, UserEntity>{}) Map<String, UserEntity> directory,
   }) = _Loaded;
 
   /// Transient — surfaced as a snackbar; the cubit immediately re-emits the

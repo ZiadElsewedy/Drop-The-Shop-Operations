@@ -107,6 +107,16 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
     }
   }
 
+  /// Read-only fetch of users by [role] (does not touch the list state) — used
+  /// by the Branches page to resolve each branch's manager + employee count.
+  Future<List<UserEntity>> usersWithRole(UserRole role) async {
+    try {
+      return await _users.getUsersByRole(role);
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _mutate(Future<void> Function() action) async {
     if (_busy) return;
     final prev = _current;

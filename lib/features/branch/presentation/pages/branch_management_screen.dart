@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_motion.dart';
+import 'package:fbro/core/widgets/app_search_field.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
+import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
 import 'package:fbro/features/branch/presentation/cubit/branch_cubit.dart';
 import 'package:fbro/features/branch/presentation/cubit/branch_state.dart';
 import 'package:fbro/features/branch/presentation/widgets/branch_form_sheet.dart';
 
-/// Admin → Branches. Create, edit, activate/deactivate and (soft) delete
-/// branches.
+/// Admin → Branches (Phase 9 redesign). Premium branch cards showing the
+/// branch's manager, employee count and status, with create / edit /
+/// activate-deactivate / soft-delete and a search field.
 class BranchManagementScreen extends StatefulWidget {
   const BranchManagementScreen({super.key});
 
@@ -20,11 +25,63 @@ class BranchManagementScreen extends StatefulWidget {
 }
 
 class _BranchManagementScreenState extends State<BranchManagementScreen> {
+  String _query = '';
+
+  /// branchId → manager display name (first manager found).
+  Map<String, String> _managerByBranch = const {};
+
+  /// branchId → number of employees.
+  Map<String, int> _employeesByBranch = const {};
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => context.read<BranchCubit>().load());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<BranchCubit>().load();
+      _loadStaff();
+    });
+  }
+
+  Future<void> _loadStaff() async {
+    final cubit = context.read<AdminUsersCubit>();
+    final managers = await cubit.usersWithRole(UserRole.manager);
+    final employees = await cubit.usersWithRole(UserRole.employee);
+    if (!mounted) return;
+    final managerMap = <String, String>{};
+    for (final m in managers) {
+      final b = m.branchId;
+      if (b != null && b.isNotEmpty && !managerMap.containsKey(b)) {
+        managerMap[b] = (m.displayName != null && m.displayName!.isNotEmpty)
+            ? m.displayName!
+            : m.email;
+      }
+    }
+    final countMap = <String, int>{};
+    for (final e in employees) {
+      final b = e.branchId;
+      if (b != null && b.isNotEmpty) {
+        countMap[b] = (countMap[b] ?? 0) + 1;
+      }
+    }
+    setState(() {
+      _managerByBranch = managerMap;
+      _employeesByBranch = countMap;
+    });
+  }
+
+  Future<void> _refresh() async {
+    await context.read<BranchCubit>().load();
+    await _loadStaff();
+  }
+
+  List<BranchEntity> _filtered(List<BranchEntity> branches) {
+    if (_query.isEmpty) return branches;
+    final q = _query.toLowerCase();
+    return branches
+        .where((b) =>
+            b.name.toLowerCase().contains(q) ||
+            (b.location ?? '').toLowerCase().contains(q))
+        .toList();
   }
 
   Future<void> _confirmDelete(BranchEntity branch) async {
@@ -32,6 +89,8 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.darkSurface,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(20))),
         title: Text('Delete branch?', style: AppTypography.h3),
         content: Text(
           '"${branch.name}" will be archived (soft delete). Existing shifts, '
@@ -69,7 +128,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
             icon: const Icon(Icons.refresh_rounded,
                 color: AppColors.textSecondary),
             tooltip: 'Refresh',
-            onPressed: () => context.read<BranchCubit>().load(),
+            onPressed: _refresh,
           ),
         ],
       ),
@@ -84,35 +143,56 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
         label: Text('New Branch',
             style: AppTypography.label.copyWith(color: AppColors.textDark)),
       ),
-      body: BlocConsumer<BranchCubit, BranchState>(
-        listener: (context, state) =>
-            state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
-        builder: (context, state) => state.maybeWhen(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          loaded: (branches, busy) => _list(branches, busy),
-          orElse: () => const SizedBox.shrink(),
-        ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding,
+                AppSpacing.md, AppSpacing.pagePadding, AppSpacing.sm),
+            child: AppSearchField(
+              hint: 'Search branches',
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          Expanded(
+            child: BlocConsumer<BranchCubit, BranchState>(
+              listener: (context, state) =>
+                  state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
+              builder: (context, state) => state.maybeWhen(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                loaded: (branches, busy) => _list(branches, busy),
+                orElse: () => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _list(List<BranchEntity> branches, bool busy) {
+    final filtered = _filtered(branches);
     return Column(
       children: [
         if (busy) const LinearProgressIndicator(minHeight: 2),
         Expanded(
           child: RefreshIndicator(
-            onRefresh: () => context.read<BranchCubit>().load(),
-            child: branches.isEmpty
-                ? _empty()
+            onRefresh: _refresh,
+            child: filtered.isEmpty
+                ? _empty(branches.isEmpty)
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.pagePadding,
-                      AppSpacing.lg,
+                      AppSpacing.sm,
                       AppSpacing.pagePadding,
                       AppSpacing.xxxl * 2,
                     ),
-                    children: [for (final b in branches) _card(b)],
+                    children: [
+                      for (var i = 0; i < filtered.length; i++)
+                        EntranceFade(
+                          delay: staggerDelay(i),
+                          child: _card(filtered[i]),
+                        ),
+                    ],
                   ),
           ),
         ),
@@ -122,40 +202,89 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
 
   Widget _card(BranchEntity branch) {
     final cubit = context.read<BranchCubit>();
+    final manager = _managerByBranch[branch.id];
+    final employees = _employeesByBranch[branch.id] ?? 0;
+    final statusColor = branch.isActive ? AppColors.success : AppColors.error;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-      padding: const EdgeInsets.all(AppSpacing.lg),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        gradient: const LinearGradient(
+          colors: [AppColors.darkSurfaceElevated, AppColors.darkSurface],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: AppRadius.cardAll,
         border: Border.all(color: AppColors.darkBorder),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.black.withAlpha(40),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Expanded(child: Text(branch.name, style: AppTypography.label)),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: (branch.isActive ? AppColors.success : AppColors.error)
-                      .withAlpha(38),
-                  borderRadius: BorderRadius.circular(20),
+                  color: AppColors.darkSurface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.darkBorder),
                 ),
-                child: Text(
-                  branch.isActive ? 'active' : 'inactive',
-                  style: AppTypography.caption.copyWith(
-                    color: branch.isActive ? AppColors.success : AppColors.error,
-                  ),
+                child: const Icon(Icons.store_mall_directory_outlined,
+                    color: AppColors.primary, size: 22),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(branch.name,
+                        style: AppTypography.labelLarge
+                            .copyWith(fontWeight: FontWeight.w600),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    if ((branch.location ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(branch.location!,
+                          style: AppTypography.caption,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ],
+                ),
+              ),
+              _StatusPill(active: branch.isActive, color: statusColor),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: _Metric(
+                  icon: Icons.supervisor_account_outlined,
+                  label: 'Manager',
+                  value: manager ?? 'Unassigned',
+                  muted: manager == null,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _Metric(
+                  icon: Icons.groups_outlined,
+                  label: 'Employees',
+                  value: '$employees',
                 ),
               ),
             ],
           ),
-          if ((branch.location ?? '').isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(branch.location!, style: AppTypography.bodySmall),
-          ],
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.sm,
@@ -198,7 +327,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
     );
   }
 
-  Widget _empty() => LayoutBuilder(
+  Widget _empty(bool noBranchesAtAll) => LayoutBuilder(
         builder: (context, c) => SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: ConstrainedBox(
@@ -206,11 +335,95 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.pagePadding),
-                child: Text('No branches yet.\nTap "New Branch" to add one.',
-                    style: AppTypography.bodySmall, textAlign: TextAlign.center),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                        noBranchesAtAll
+                            ? Icons.store_mall_directory_outlined
+                            : Icons.search_off_rounded,
+                        size: 44,
+                        color: AppColors.textTertiary),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                        noBranchesAtAll
+                            ? 'No branches yet.\nTap "New Branch" to add one.'
+                            : 'No branches match "$_query".',
+                        style: AppTypography.bodySmall,
+                        textAlign: TextAlign.center),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       );
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.active, required this.color});
+  final bool active;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(38),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withAlpha(120)),
+      ),
+      child: Text(active ? 'active' : 'inactive',
+          style: AppTypography.caption.copyWith(color: color)),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.muted = false,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool muted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.textTertiary),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTypography.caption),
+                const SizedBox(height: 1),
+                Text(value,
+                    style: AppTypography.label.copyWith(
+                      color: muted
+                          ? AppColors.textTertiary
+                          : AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

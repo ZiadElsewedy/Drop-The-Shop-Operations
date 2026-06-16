@@ -4,6 +4,8 @@ import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_motion.dart';
+import 'package:fbro/core/widgets/app_search_field.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
@@ -14,6 +16,8 @@ import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
 
 const _kAll = '__all__';
 const _kNone = '__none__';
+
+enum _StatusFilter { all, active, inactive }
 
 /// Admin → Employees. List employees, filter by branch, change branch, activate
 /// or deactivate, and view details.
@@ -27,6 +31,8 @@ class EmployeeManagementScreen extends StatefulWidget {
 
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   String _branchFilter = _kAll;
+  _StatusFilter _statusFilter = _StatusFilter.all;
+  String _query = '';
   List<BranchEntity> _branches = const [];
   Map<String, String> _branchNames = const {};
 
@@ -50,16 +56,33 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   }
 
   List<UserEntity> _filter(List<UserEntity> users) {
+    Iterable<UserEntity> out = users;
+    // Branch.
     switch (_branchFilter) {
       case _kAll:
-        return users;
+        break;
       case _kNone:
-        return users
-            .where((u) => u.branchId == null || u.branchId!.isEmpty)
-            .toList();
+        out = out.where((u) => u.branchId == null || u.branchId!.isEmpty);
       default:
-        return users.where((u) => u.branchId == _branchFilter).toList();
+        out = out.where((u) => u.branchId == _branchFilter);
     }
+    // Status.
+    switch (_statusFilter) {
+      case _StatusFilter.all:
+        break;
+      case _StatusFilter.active:
+        out = out.where((u) => u.isActive);
+      case _StatusFilter.inactive:
+        out = out.where((u) => !u.isActive);
+    }
+    // Search.
+    if (_query.isNotEmpty) {
+      final q = _query.toLowerCase();
+      out = out.where((u) =>
+          (u.displayName ?? '').toLowerCase().contains(q) ||
+          u.email.toLowerCase().contains(q));
+    }
+    return out.toList();
   }
 
   @override
@@ -101,18 +124,21 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           child: RefreshIndicator(
             onRefresh: () => context.read<AdminUsersCubit>().refresh(),
             child: filtered.isEmpty
-                ? _empty()
+                ? _empty(users.isEmpty)
                 : ListView(
                     padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding,
                         AppSpacing.sm, AppSpacing.pagePadding, AppSpacing.xxxl),
                     children: [
-                      for (final u in filtered)
-                        AdminUserCard(
-                          user: u,
-                          branchLabel: u.branchId == null
-                              ? null
-                              : _branchNames[u.branchId],
-                          actions: _actions(u),
+                      for (var i = 0; i < filtered.length; i++)
+                        EntranceFade(
+                          delay: staggerDelay(i),
+                          child: AdminUserCard(
+                            user: filtered[i],
+                            branchLabel: filtered[i].branchId == null
+                                ? null
+                                : _branchNames[filtered[i].branchId],
+                            actions: _actions(filtered[i]),
+                          ),
                         ),
                     ],
                   ),
@@ -126,32 +152,84 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, AppSpacing.md,
           AppSpacing.pagePadding, AppSpacing.xs),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: AppColors.darkSurface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.darkBorder),
-        ),
-        child: DropdownButtonHideUnderline(
-          child: DropdownButton<String>(
-            value: _branchFilter,
-            isExpanded: true,
-            dropdownColor: AppColors.darkSurfaceElevated,
-            borderRadius: AppRadius.cardAll,
-            icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                color: AppColors.textTertiary),
-            style: AppTypography.body.copyWith(color: AppColors.textPrimary),
-            items: [
-              const DropdownMenuItem(value: _kAll, child: Text('All branches')),
-              const DropdownMenuItem(value: _kNone, child: Text('No branch')),
-              for (final b in _branches)
-                DropdownMenuItem(value: b.id, child: Text(b.name)),
-            ],
-            onChanged: (v) => setState(() => _branchFilter = v ?? _kAll),
+      child: Column(
+        children: [
+          AppSearchField(
+            hint: 'Search employees',
+            onChanged: (v) => setState(() => _query = v),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            children: [
+              Expanded(child: _branchDropdown()),
+              const SizedBox(width: AppSpacing.sm),
+              _statusChips(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _branchDropdown() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _branchFilter,
+          isExpanded: true,
+          dropdownColor: AppColors.darkSurfaceElevated,
+          borderRadius: AppRadius.cardAll,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded,
+              color: AppColors.textTertiary),
+          style: AppTypography.body.copyWith(color: AppColors.textPrimary),
+          items: [
+            const DropdownMenuItem(value: _kAll, child: Text('All branches')),
+            const DropdownMenuItem(value: _kNone, child: Text('No branch')),
+            for (final b in _branches)
+              DropdownMenuItem(value: b.id, child: Text(b.name)),
+          ],
+          onChanged: (v) => setState(() => _branchFilter = v ?? _kAll),
         ),
       ),
+    );
+  }
+
+  Widget _statusChips() {
+    Widget chip(_StatusFilter f, IconData icon) {
+      final active = _statusFilter == f;
+      return GestureDetector(
+        onTap: () => setState(() => _statusFilter = f),
+        child: Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color:
+                active ? AppColors.primary.withAlpha(28) : AppColors.darkSurface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+                color: active ? AppColors.primary : AppColors.darkBorder),
+          ),
+          child: Icon(icon,
+              size: 18,
+              color: active ? AppColors.primary : AppColors.textTertiary),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        chip(_StatusFilter.all, Icons.all_inclusive_rounded),
+        const SizedBox(width: 6),
+        chip(_StatusFilter.active, Icons.check_circle_outline_rounded),
+        const SizedBox(width: 6),
+        chip(_StatusFilter.inactive, Icons.block_rounded),
+      ],
     );
   }
 
@@ -234,7 +312,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         ),
       );
 
-  Widget _empty() => LayoutBuilder(
+  Widget _empty(bool noEmployeesAtAll) => LayoutBuilder(
         builder: (context, c) => SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           child: ConstrainedBox(
@@ -242,8 +320,24 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             child: Center(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.pagePadding),
-                child: Text('No employees match this filter.',
-                    style: AppTypography.bodySmall, textAlign: TextAlign.center),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                        noEmployeesAtAll
+                            ? Icons.groups_outlined
+                            : Icons.search_off_rounded,
+                        size: 44,
+                        color: AppColors.textTertiary),
+                    const SizedBox(height: AppSpacing.lg),
+                    Text(
+                        noEmployeesAtAll
+                            ? 'No employees yet.'
+                            : 'No employees match these filters.',
+                        style: AppTypography.bodySmall,
+                        textAlign: TextAlign.center),
+                  ],
+                ),
               ),
             ),
           ),

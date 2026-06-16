@@ -7,6 +7,7 @@ import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
+import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
@@ -227,11 +228,19 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     List<UserEntity> members,
   ) {
     final isToday = ScheduleDay.today() == day;
+    final covered = {
+      for (final shift in ScheduleShift.values)
+        ...schedule.employeesFor(day, shift),
+    }.length;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.lg),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        gradient: const LinearGradient(
+          colors: [AppColors.darkSurfaceElevated, AppColors.darkSurface],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: AppRadius.cardAll,
         border: Border.all(
             color: isToday ? AppColors.primary : AppColors.darkBorder),
@@ -244,8 +253,35 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
               Text(day.label, style: AppTypography.label),
               if (isToday) ...[
                 const SizedBox(width: AppSpacing.sm),
-                Text('Today', style: AppTypography.caption),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withAlpha(28),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text('Today',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.primary)),
+                ),
               ],
+              const Spacer(),
+              // Coverage indicator.
+              Icon(
+                covered == 0
+                    ? Icons.error_outline_rounded
+                    : Icons.people_alt_outlined,
+                size: 14,
+                color:
+                    covered == 0 ? AppColors.warning : AppColors.textTertiary,
+              ),
+              const SizedBox(width: 4),
+              Text('$covered',
+                  style: AppTypography.caption.copyWith(
+                    color: covered == 0
+                        ? AppColors.warning
+                        : AppColors.textSecondary,
+                  )),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -266,20 +302,35 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     List<UserEntity> members,
   ) {
     final uids = schedule.employeesFor(day, shift);
+    final isMorning = shift == ScheduleShift.morning;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(
-              shift == ScheduleShift.morning
-                  ? Icons.wb_sunny_outlined
-                  : Icons.nightlight_outlined,
-              size: 16,
-              color: AppColors.textTertiary,
+            // Shift badge.
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.darkSurface,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isMorning
+                        ? Icons.wb_sunny_outlined
+                        : Icons.nightlight_outlined,
+                    size: 14,
+                    color: isMorning ? AppColors.warning : AppColors.primary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(shift.label, style: AppTypography.labelSmall),
+                ],
+              ),
             ),
-            const SizedBox(width: AppSpacing.sm),
-            Text(shift.label, style: AppTypography.labelSmall),
             const Spacer(),
             TextButton.icon(
               onPressed: () => _pickEmployee(day, shift, schedule, members),
@@ -296,37 +347,48 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
         const SizedBox(height: AppSpacing.xs),
         if (uids.isEmpty)
           Padding(
-            padding: const EdgeInsets.only(left: 24, bottom: 2),
+            padding: const EdgeInsets.only(left: 4, bottom: 2),
             child: Text('No one assigned', style: AppTypography.caption),
           )
         else
-          Padding(
-            padding: const EdgeInsets.only(left: 24),
-            child: Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.xs,
-              children: [
-                for (final uid in uids)
-                  _employeeChip(nameForUid(uid, members),
-                      () => context.read<ScheduleCubit>().remove(day, shift, uid)),
-              ],
-            ),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              for (final uid in uids)
+                _employeeChip(
+                    uid,
+                    nameForUid(uid, members),
+                    userForUid(uid, members),
+                    () =>
+                        context.read<ScheduleCubit>().remove(day, shift, uid)),
+            ],
           ),
       ],
     );
   }
 
-  Widget _employeeChip(String name, VoidCallback onRemove) {
+  Widget _employeeChip(
+      String uid, String name, UserEntity? user, VoidCallback onRemove) {
     return Container(
-      padding: const EdgeInsets.only(
-          left: 12, right: 6, top: 6, bottom: 6),
+      padding: const EdgeInsets.only(left: 5, right: 6, top: 5, bottom: 5),
       decoration: BoxDecoration(
         color: AppColors.darkSurfaceElevated,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.darkBorder),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (user != null)
+            UserAvatar.fromUser(user,
+                size: 22, ringColor: AppColors.darkSurfaceElevated)
+          else
+            UserAvatar(
+                name: name,
+                size: 22,
+                ringColor: AppColors.darkSurfaceElevated),
+          const SizedBox(width: 6),
           Text(name, style: AppTypography.caption),
           const SizedBox(width: 4),
           GestureDetector(
@@ -384,8 +446,7 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
                         schedule.isAssigned(u.uid, day, shift);
                     return ListTile(
                       contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.person_outline_rounded,
-                          color: AppColors.primary),
+                      leading: UserAvatar.fromUser(u, size: 40),
                       title: Text(userDisplayName(u), style: AppTypography.label),
                       subtitle: Text(u.email, style: AppTypography.caption),
                       trailing: assigned

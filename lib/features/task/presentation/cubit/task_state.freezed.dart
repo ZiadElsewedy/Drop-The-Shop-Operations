@@ -21,21 +21,36 @@ mixin _$TaskState {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<TaskEntity> tasks, bool busy) loaded,
+    required TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )
+    loaded,
     required TResult Function(String message) error,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult? Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult? Function(String message)? error,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
@@ -128,7 +143,12 @@ class _$InitialImpl implements _Initial {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<TaskEntity> tasks, bool busy) loaded,
+    required TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )
+    loaded,
     required TResult Function(String message) error,
   }) {
     return initial();
@@ -139,7 +159,12 @@ class _$InitialImpl implements _Initial {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult? Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult? Function(String message)? error,
   }) {
     return initial?.call();
@@ -150,7 +175,12 @@ class _$InitialImpl implements _Initial {
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -247,7 +277,12 @@ class _$LoadingImpl implements _Loading {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<TaskEntity> tasks, bool busy) loaded,
+    required TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )
+    loaded,
     required TResult Function(String message) error,
   }) {
     return loading();
@@ -258,7 +293,12 @@ class _$LoadingImpl implements _Loading {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult? Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult? Function(String message)? error,
   }) {
     return loading?.call();
@@ -269,7 +309,12 @@ class _$LoadingImpl implements _Loading {
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -328,7 +373,11 @@ abstract class _$$LoadedImplCopyWith<$Res> {
     $Res Function(_$LoadedImpl) then,
   ) = __$$LoadedImplCopyWithImpl<$Res>;
   @useResult
-  $Res call({List<TaskEntity> tasks, bool busy});
+  $Res call({
+    List<TaskEntity> tasks,
+    bool busy,
+    Map<String, UserEntity> directory,
+  });
 }
 
 /// @nodoc
@@ -344,7 +393,11 @@ class __$$LoadedImplCopyWithImpl<$Res>
   /// with the given fields replaced by the non-null parameter values.
   @pragma('vm:prefer-inline')
   @override
-  $Res call({Object? tasks = null, Object? busy = null}) {
+  $Res call({
+    Object? tasks = null,
+    Object? busy = null,
+    Object? directory = null,
+  }) {
     return _then(
       _$LoadedImpl(
         null == tasks
@@ -355,6 +408,10 @@ class __$$LoadedImplCopyWithImpl<$Res>
             ? _value.busy
             : busy // ignore: cast_nullable_to_non_nullable
                   as bool,
+        directory: null == directory
+            ? _value._directory
+            : directory // ignore: cast_nullable_to_non_nullable
+                  as Map<String, UserEntity>,
       ),
     );
   }
@@ -363,8 +420,12 @@ class __$$LoadedImplCopyWithImpl<$Res>
 /// @nodoc
 
 class _$LoadedImpl implements _Loaded {
-  const _$LoadedImpl(final List<TaskEntity> tasks, {this.busy = false})
-    : _tasks = tasks;
+  const _$LoadedImpl(
+    final List<TaskEntity> tasks, {
+    this.busy = false,
+    final Map<String, UserEntity> directory = const <String, UserEntity>{},
+  }) : _tasks = tasks,
+       _directory = directory;
 
   final List<TaskEntity> _tasks;
   @override
@@ -377,10 +438,18 @@ class _$LoadedImpl implements _Loaded {
   @override
   @JsonKey()
   final bool busy;
+  final Map<String, UserEntity> _directory;
+  @override
+  @JsonKey()
+  Map<String, UserEntity> get directory {
+    if (_directory is EqualUnmodifiableMapView) return _directory;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableMapView(_directory);
+  }
 
   @override
   String toString() {
-    return 'TaskState.loaded(tasks: $tasks, busy: $busy)';
+    return 'TaskState.loaded(tasks: $tasks, busy: $busy, directory: $directory)';
   }
 
   @override
@@ -389,7 +458,11 @@ class _$LoadedImpl implements _Loaded {
         (other.runtimeType == runtimeType &&
             other is _$LoadedImpl &&
             const DeepCollectionEquality().equals(other._tasks, _tasks) &&
-            (identical(other.busy, busy) || other.busy == busy));
+            (identical(other.busy, busy) || other.busy == busy) &&
+            const DeepCollectionEquality().equals(
+              other._directory,
+              _directory,
+            ));
   }
 
   @override
@@ -397,6 +470,7 @@ class _$LoadedImpl implements _Loaded {
     runtimeType,
     const DeepCollectionEquality().hash(_tasks),
     busy,
+    const DeepCollectionEquality().hash(_directory),
   );
 
   /// Create a copy of TaskState
@@ -412,10 +486,15 @@ class _$LoadedImpl implements _Loaded {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<TaskEntity> tasks, bool busy) loaded,
+    required TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )
+    loaded,
     required TResult Function(String message) error,
   }) {
-    return loaded(tasks, busy);
+    return loaded(tasks, busy, directory);
   }
 
   @override
@@ -423,10 +502,15 @@ class _$LoadedImpl implements _Loaded {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult? Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult? Function(String message)? error,
   }) {
-    return loaded?.call(tasks, busy);
+    return loaded?.call(tasks, busy, directory);
   }
 
   @override
@@ -434,12 +518,17 @@ class _$LoadedImpl implements _Loaded {
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
     if (loaded != null) {
-      return loaded(tasks, busy);
+      return loaded(tasks, busy, directory);
     }
     return orElse();
   }
@@ -483,11 +572,15 @@ class _$LoadedImpl implements _Loaded {
 }
 
 abstract class _Loaded implements TaskState {
-  const factory _Loaded(final List<TaskEntity> tasks, {final bool busy}) =
-      _$LoadedImpl;
+  const factory _Loaded(
+    final List<TaskEntity> tasks, {
+    final bool busy,
+    final Map<String, UserEntity> directory,
+  }) = _$LoadedImpl;
 
   List<TaskEntity> get tasks;
   bool get busy;
+  Map<String, UserEntity> get directory;
 
   /// Create a copy of TaskState
   /// with the given fields replaced by the non-null parameter values.
@@ -568,7 +661,12 @@ class _$ErrorImpl implements _Error {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<TaskEntity> tasks, bool busy) loaded,
+    required TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )
+    loaded,
     required TResult Function(String message) error,
   }) {
     return error(message);
@@ -579,7 +677,12 @@ class _$ErrorImpl implements _Error {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult? Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult? Function(String message)? error,
   }) {
     return error?.call(message);
@@ -590,7 +693,12 @@ class _$ErrorImpl implements _Error {
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<TaskEntity> tasks, bool busy)? loaded,
+    TResult Function(
+      List<TaskEntity> tasks,
+      bool busy,
+      Map<String, UserEntity> directory,
+    )?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {

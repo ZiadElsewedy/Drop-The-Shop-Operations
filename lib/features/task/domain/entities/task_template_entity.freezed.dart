@@ -23,6 +23,10 @@ mixin _$TaskTemplateEntity {
   TaskType get type => throw _privateConstructorUsedError;
   TaskPriority get priority => throw _privateConstructorUsedError;
 
+  /// The reusable checklist (e.g. Unlock entrance · Turn on lights · …).
+  List<ChecklistItemTemplate> get checklistItems =>
+      throw _privateConstructorUsedError;
+
   /// Owning branch. Empty/null = a GLOBAL template (admin-made), available to
   /// every branch; otherwise scoped to that branch's managers/admins.
   String? get branchId => throw _privateConstructorUsedError;
@@ -52,6 +56,7 @@ abstract class $TaskTemplateEntityCopyWith<$Res> {
     String? description,
     TaskType type,
     TaskPriority priority,
+    List<ChecklistItemTemplate> checklistItems,
     String? branchId,
     String? createdBy,
     DateTime? createdAt,
@@ -79,6 +84,7 @@ class _$TaskTemplateEntityCopyWithImpl<$Res, $Val extends TaskTemplateEntity>
     Object? description = freezed,
     Object? type = null,
     Object? priority = null,
+    Object? checklistItems = null,
     Object? branchId = freezed,
     Object? createdBy = freezed,
     Object? createdAt = freezed,
@@ -106,6 +112,10 @@ class _$TaskTemplateEntityCopyWithImpl<$Res, $Val extends TaskTemplateEntity>
                 ? _value.priority
                 : priority // ignore: cast_nullable_to_non_nullable
                       as TaskPriority,
+            checklistItems: null == checklistItems
+                ? _value.checklistItems
+                : checklistItems // ignore: cast_nullable_to_non_nullable
+                      as List<ChecklistItemTemplate>,
             branchId: freezed == branchId
                 ? _value.branchId
                 : branchId // ignore: cast_nullable_to_non_nullable
@@ -143,6 +153,7 @@ abstract class _$$TaskTemplateEntityImplCopyWith<$Res>
     String? description,
     TaskType type,
     TaskPriority priority,
+    List<ChecklistItemTemplate> checklistItems,
     String? branchId,
     String? createdBy,
     DateTime? createdAt,
@@ -169,6 +180,7 @@ class __$$TaskTemplateEntityImplCopyWithImpl<$Res>
     Object? description = freezed,
     Object? type = null,
     Object? priority = null,
+    Object? checklistItems = null,
     Object? branchId = freezed,
     Object? createdBy = freezed,
     Object? createdAt = freezed,
@@ -196,6 +208,10 @@ class __$$TaskTemplateEntityImplCopyWithImpl<$Res>
             ? _value.priority
             : priority // ignore: cast_nullable_to_non_nullable
                   as TaskPriority,
+        checklistItems: null == checklistItems
+            ? _value._checklistItems
+            : checklistItems // ignore: cast_nullable_to_non_nullable
+                  as List<ChecklistItemTemplate>,
         branchId: freezed == branchId
             ? _value.branchId
             : branchId // ignore: cast_nullable_to_non_nullable
@@ -219,18 +235,21 @@ class __$$TaskTemplateEntityImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$TaskTemplateEntityImpl implements _TaskTemplateEntity {
+class _$TaskTemplateEntityImpl extends _TaskTemplateEntity {
   const _$TaskTemplateEntityImpl({
     required this.id,
     required this.title,
     this.description,
     this.type = TaskType.daily,
     this.priority = TaskPriority.normal,
+    final List<ChecklistItemTemplate> checklistItems =
+        const <ChecklistItemTemplate>[],
     this.branchId,
     this.createdBy,
     this.createdAt,
     this.updatedAt,
-  });
+  }) : _checklistItems = checklistItems,
+       super._();
 
   @override
   final String id;
@@ -244,6 +263,18 @@ class _$TaskTemplateEntityImpl implements _TaskTemplateEntity {
   @override
   @JsonKey()
   final TaskPriority priority;
+
+  /// The reusable checklist (e.g. Unlock entrance · Turn on lights · …).
+  final List<ChecklistItemTemplate> _checklistItems;
+
+  /// The reusable checklist (e.g. Unlock entrance · Turn on lights · …).
+  @override
+  @JsonKey()
+  List<ChecklistItemTemplate> get checklistItems {
+    if (_checklistItems is EqualUnmodifiableListView) return _checklistItems;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_checklistItems);
+  }
 
   /// Owning branch. Empty/null = a GLOBAL template (admin-made), available to
   /// every branch; otherwise scoped to that branch's managers/admins.
@@ -260,7 +291,7 @@ class _$TaskTemplateEntityImpl implements _TaskTemplateEntity {
 
   @override
   String toString() {
-    return 'TaskTemplateEntity(id: $id, title: $title, description: $description, type: $type, priority: $priority, branchId: $branchId, createdBy: $createdBy, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'TaskTemplateEntity(id: $id, title: $title, description: $description, type: $type, priority: $priority, checklistItems: $checklistItems, branchId: $branchId, createdBy: $createdBy, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -275,6 +306,10 @@ class _$TaskTemplateEntityImpl implements _TaskTemplateEntity {
             (identical(other.type, type) || other.type == type) &&
             (identical(other.priority, priority) ||
                 other.priority == priority) &&
+            const DeepCollectionEquality().equals(
+              other._checklistItems,
+              _checklistItems,
+            ) &&
             (identical(other.branchId, branchId) ||
                 other.branchId == branchId) &&
             (identical(other.createdBy, createdBy) ||
@@ -293,6 +328,7 @@ class _$TaskTemplateEntityImpl implements _TaskTemplateEntity {
     description,
     type,
     priority,
+    const DeepCollectionEquality().hash(_checklistItems),
     branchId,
     createdBy,
     createdAt,
@@ -311,18 +347,20 @@ class _$TaskTemplateEntityImpl implements _TaskTemplateEntity {
       );
 }
 
-abstract class _TaskTemplateEntity implements TaskTemplateEntity {
+abstract class _TaskTemplateEntity extends TaskTemplateEntity {
   const factory _TaskTemplateEntity({
     required final String id,
     required final String title,
     final String? description,
     final TaskType type,
     final TaskPriority priority,
+    final List<ChecklistItemTemplate> checklistItems,
     final String? branchId,
     final String? createdBy,
     final DateTime? createdAt,
     final DateTime? updatedAt,
   }) = _$TaskTemplateEntityImpl;
+  const _TaskTemplateEntity._() : super._();
 
   @override
   String get id;
@@ -334,6 +372,10 @@ abstract class _TaskTemplateEntity implements TaskTemplateEntity {
   TaskType get type;
   @override
   TaskPriority get priority;
+
+  /// The reusable checklist (e.g. Unlock entrance · Turn on lights · …).
+  @override
+  List<ChecklistItemTemplate> get checklistItems;
 
   /// Owning branch. Empty/null = a GLOBAL template (admin-made), available to
   /// every branch; otherwise scoped to that branch's managers/admins.

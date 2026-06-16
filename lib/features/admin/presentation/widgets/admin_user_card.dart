@@ -3,10 +3,13 @@ import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 
-/// Presentational card for a user in the admin lists (managers/employees/
-/// pending). The screen supplies role/status-aware [actions].
+/// Premium card for a user in the admin lists (managers / employees / pending).
+/// Phase 9: leads with the user's **avatar** (reliable image + initials
+/// fallback), then name · email, a status dot, and role/branch/status chips.
+/// The screen supplies role/status-aware [actions].
 class AdminUserCard extends StatelessWidget {
   const AdminUserCard({
     super.key,
@@ -27,23 +30,55 @@ class AdminUserCard extends StatelessWidget {
         ? user.displayName!
         : user.email;
     final hasBranch = user.branchId != null && user.branchId!.isNotEmpty;
+    final statusColor = user.isActive ? AppColors.success : AppColors.error;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        gradient: const LinearGradient(
+          colors: [AppColors.darkSurfaceElevated, AppColors.darkSurface],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         borderRadius: AppRadius.cardAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(name, style: AppTypography.label),
-          if (name != user.email) ...[
-            const SizedBox(height: 2),
-            Text(user.email, style: AppTypography.caption),
-          ],
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              UserAvatar.fromUser(user, size: 46),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name,
+                        style: AppTypography.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                    if (name != user.email) ...[
+                      const SizedBox(height: 2),
+                      Text(user.email,
+                          style: AppTypography.caption,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Container(
+                width: 8,
+                height: 8,
+                decoration:
+                    BoxDecoration(color: statusColor, shape: BoxShape.circle),
+              ),
+            ],
+          ),
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.sm,
@@ -61,7 +96,7 @@ class AdminUserCard extends StatelessWidget {
                     ? Icons.check_circle_outline_rounded
                     : Icons.block_rounded,
                 label: user.isActive ? 'active' : 'inactive',
-                color: user.isActive ? AppColors.success : AppColors.error,
+                color: statusColor,
               ),
               if (!user.approvalStatus.isApproved)
                 _Chip(

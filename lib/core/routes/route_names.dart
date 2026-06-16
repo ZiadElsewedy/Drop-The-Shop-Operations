@@ -52,6 +52,7 @@ class RouteNames {
   static const String adminBranches = '/admin/branches';
   static const String adminManagers = '/admin/managers';
   static const String adminEmployees = '/admin/employees';
+  static const String adminAnalytics = '/admin/analytics';
   static const String adminApprovals = '/admin/approvals';
 
   /// The landing route for a given role, used by the router redirect and the

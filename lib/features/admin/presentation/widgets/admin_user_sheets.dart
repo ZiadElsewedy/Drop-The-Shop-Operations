@@ -3,6 +3,7 @@ import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
@@ -325,8 +326,7 @@ class _PromoteManagerSheetState extends State<_PromoteManagerSheet> {
                       : u.email;
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.person_outline_rounded,
-                        color: AppColors.primary),
+                    leading: UserAvatar.fromUser(u, size: 40),
                     title: Text(name, style: AppTypography.label),
                     subtitle: Text(u.email, style: AppTypography.caption),
                     onTap: () {
