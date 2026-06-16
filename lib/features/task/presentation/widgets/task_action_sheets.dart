@@ -8,23 +8,29 @@ import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 
 /// Create or edit a task (manager/admin). For a manager the branch is fixed to
-/// [defaultBranchId]; an admin can type any branch.
+/// [defaultBranchId]; an admin **picks** an existing branch from a dropdown
+/// (loaded from Firestore — never free text, so a task can't be orphaned on a
+/// branch that doesn't exist). Pass [prefill] to seed the form from a template.
 Future<void> showTaskFormSheet({
   required BuildContext context,
   required TaskCubit cubit,
   TaskEntity? existing,
+  TaskTemplateEntity? prefill,
   required bool isAdmin,
   required String defaultBranchId,
 }) =>
-    _showSheet(
+    showSheet(
       context,
       _TaskFormSheet(
         cubit: cubit,
         existing: existing,
+        prefill: prefill,
         isAdmin: isAdmin,
         defaultBranchId: defaultBranchId,
       ),
@@ -36,7 +42,7 @@ Future<void> showAssignSheet({
   required TaskCubit cubit,
   required TaskEntity task,
 }) =>
-    _showSheet(context, _AssignSheet(cubit: cubit, task: task));
+    showSheet(context, _AssignSheet(cubit: cubit, task: task));
 
 /// Approve or reject a task with an optional review note (manager/admin).
 Future<void> showReviewSheet({
@@ -44,10 +50,12 @@ Future<void> showReviewSheet({
   required TaskCubit cubit,
   required TaskEntity task,
 }) =>
-    _showSheet(context, _ReviewSheet(cubit: cubit, task: task));
+    showSheet(context, _ReviewSheet(cubit: cubit, task: task));
 
-Future<void> _showSheet(BuildContext context, Widget child) =>
-    showModalBottomSheet(
+/// Shared bottom-sheet chrome (rounded top, drag handle, keyboard-aware
+/// padding). Reused by the task + template sheets so they all feel the same.
+Future<T?> showSheet<T>(BuildContext context, Widget child) =>
+    showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
       backgroundColor: AppColors.darkSurface,
@@ -58,20 +66,44 @@ Future<void> _showSheet(BuildContext context, Widget child) =>
         padding: EdgeInsets.only(
           left: AppSpacing.pagePadding,
           right: AppSpacing.pagePadding,
-          top: AppSpacing.lg,
+          top: AppSpacing.sm,
           bottom: MediaQuery.of(ctx).viewInsets.bottom + AppSpacing.xl,
         ),
-        child: child,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SheetHandle(),
+            Flexible(child: child),
+          ],
+        ),
       ),
     );
 
-class _SheetTitle extends StatelessWidget {
-  const _SheetTitle(this.text);
+/// A small centered drag handle shown at the top of every bottom sheet.
+class SheetHandle extends StatelessWidget {
+  const SheetHandle({super.key});
+  @override
+  Widget build(BuildContext context) => Container(
+        width: 36,
+        height: 4,
+        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        decoration: BoxDecoration(
+          color: AppColors.darkBorder,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      );
+}
+
+class SheetTitle extends StatelessWidget {
+  const SheetTitle(this.text, {super.key});
   final String text;
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-        child: Text(text, style: AppTypography.h3),
+  Widget build(BuildContext context) => Align(
+        alignment: Alignment.centerLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+          child: Text(text, style: AppTypography.h3),
+        ),
       );
 }
 
@@ -80,12 +112,14 @@ class _TaskFormSheet extends StatefulWidget {
   const _TaskFormSheet({
     required this.cubit,
     required this.existing,
+    required this.prefill,
     required this.isAdmin,
     required this.defaultBranchId,
   });
 
   final TaskCubit cubit;
   final TaskEntity? existing;
+  final TaskTemplateEntity? prefill;
   final bool isAdmin;
   final String defaultBranchId;
 
@@ -94,22 +128,35 @@ class _TaskFormSheet extends StatefulWidget {
 }
 
 class _TaskFormSheetState extends State<_TaskFormSheet> {
-  late final _title =
-      TextEditingController(text: widget.existing?.title ?? '');
-  late final _desc =
-      TextEditingController(text: widget.existing?.description ?? '');
-  late final _branch = TextEditingController(
-      text: widget.existing?.branchId ?? widget.defaultBranchId);
-  late TaskType _type = widget.existing?.type ?? TaskType.daily;
-  late TaskPriority _priority = widget.existing?.priority ?? TaskPriority.normal;
+  late final _title = TextEditingController(
+      text: widget.existing?.title ?? widget.prefill?.title ?? '');
+  late final _desc = TextEditingController(
+      text: widget.existing?.description ?? widget.prefill?.description ?? '');
+  late TaskType _type =
+      widget.existing?.type ?? widget.prefill?.type ?? TaskType.daily;
+  late TaskPriority _priority =
+      widget.existing?.priority ?? widget.prefill?.priority ?? TaskPriority.normal;
   late DateTime? _deadline = widget.existing?.deadline;
+
+  /// Admin-only branch selection (managers use their own fixed branch).
+  late String? _branchId = _initialBranch();
+  late final Future<List<BranchEntity>> _branchesFuture =
+      widget.isAdmin ? widget.cubit.branches() : Future.value(const []);
+
   String? _error;
+
+  String? _initialBranch() {
+    final fromExisting = widget.existing?.branchId;
+    if (fromExisting != null && fromExisting.isNotEmpty) return fromExisting;
+    final fromPrefill = widget.prefill?.branchId;
+    if (fromPrefill != null && fromPrefill.isNotEmpty) return fromPrefill;
+    return null;
+  }
 
   @override
   void dispose() {
     _title.dispose();
     _desc.dispose();
-    _branch.dispose();
     super.dispose();
   }
 
@@ -120,7 +167,11 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
       return;
     }
     final branchId =
-        widget.isAdmin ? _branch.text.trim() : widget.defaultBranchId;
+        widget.isAdmin ? (_branchId ?? '') : widget.defaultBranchId;
+    if (branchId.isEmpty) {
+      setState(() => _error = 'Please select a branch.');
+      return;
+    }
     final description = _desc.text.trim().isEmpty ? null : _desc.text.trim();
 
     final existing = widget.existing;
@@ -164,7 +215,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SheetTitle(widget.existing == null ? 'New Task' : 'Edit Task'),
+          SheetTitle(widget.existing == null ? 'New Task' : 'Edit Task'),
           AppTextField(
             controller: _title,
             label: 'Title',
@@ -179,11 +230,10 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
           ),
           if (widget.isAdmin) ...[
             const SizedBox(height: AppSpacing.md),
-            AppTextField(
-              controller: _branch,
-              label: 'Branch',
-              hint: 'e.g. cairo',
-              prefixIcon: Icons.store_mall_directory_outlined,
+            _BranchDropdown(
+              future: _branchesFuture,
+              value: _branchId,
+              onChanged: (v) => setState(() => _branchId = v),
             ),
           ],
           const SizedBox(height: AppSpacing.md),
@@ -223,7 +273,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                     child: Text(
                       _deadline == null
                           ? 'Set deadline (optional)'
-                          : 'Deadline: ${_deadline!.year}-${_deadline!.month.toString().padLeft(2, '0')}-${_deadline!.day.toString().padLeft(2, '0')}',
+                          : 'Deadline: ${_dateLabel(_deadline!)}',
                       style: AppTypography.body,
                     ),
                   ),
@@ -251,6 +301,93 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
       ),
     );
   }
+
+  static String _dateLabel(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+}
+
+/// Branch picker for the admin task form — loads active branches from Firestore
+/// and presents them as a dropdown of branch ids (label = name · location).
+class _BranchDropdown extends StatelessWidget {
+  const _BranchDropdown({
+    required this.future,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final Future<List<BranchEntity>> future;
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<BranchEntity>>(
+      future: future,
+      builder: (context, snap) {
+        final loading = snap.connectionState != ConnectionState.done;
+        final branches = snap.data ?? const <BranchEntity>[];
+        return Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg, vertical: 2),
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.store_mall_directory_outlined,
+                  size: 20, color: AppColors.textTertiary),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: loading
+                    ? _placeholder('Loading branches…')
+                    : branches.isEmpty
+                        ? _placeholder('No branches — create one first')
+                        : DropdownButtonHideUnderline(
+                            child: DropdownButton<String>(
+                              value: branches.any((b) => b.id == value)
+                                  ? value
+                                  : null,
+                              isExpanded: true,
+                              hint: Text('Select a branch',
+                                  style: AppTypography.body
+                                      .copyWith(color: AppColors.textTertiary)),
+                              dropdownColor: AppColors.darkSurfaceElevated,
+                              borderRadius: AppRadius.cardAll,
+                              icon: const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                  color: AppColors.textTertiary),
+                              style: AppTypography.body
+                                  .copyWith(color: AppColors.textPrimary),
+                              items: [
+                                for (final b in branches)
+                                  DropdownMenuItem<String>(
+                                    value: b.id,
+                                    child: Text(
+                                      b.location == null || b.location!.isEmpty
+                                          ? b.name
+                                          : '${b.name} · ${b.location}',
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                              ],
+                              onChanged: onChanged,
+                            ),
+                          ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _placeholder(String text) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+        child: Text(text,
+            style: AppTypography.body.copyWith(color: AppColors.textTertiary)),
+      );
 }
 
 // ─── Assign ──────────────────────────────────────────────────────
@@ -279,7 +416,7 @@ class _AssignSheetState extends State<_AssignSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SheetTitle('Assign Employee'),
+        const SheetTitle('Assign Employee'),
         if (assigned != null && assigned.isNotEmpty)
           ListTile(
             contentPadding: EdgeInsets.zero,
@@ -301,7 +438,9 @@ class _AssignSheetState extends State<_AssignSheet> {
             if (employees.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                child: Text('No employees found in this branch.',
+                child: Text(
+                    'No employees in this branch yet.\nAsk an admin to assign '
+                    'an approved employee to this branch first.',
                     style: AppTypography.bodySmall),
               );
             }
@@ -360,37 +499,39 @@ class _ReviewSheetState extends State<_ReviewSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const _SheetTitle('Review Task'),
-        Text(widget.task.title, style: AppTypography.label),
-        const SizedBox(height: AppSpacing.lg),
-        AppTextField(
-          controller: _notes,
-          label: 'Review note (optional)',
-          prefixIcon: Icons.rate_review_outlined,
-        ),
-        const SizedBox(height: AppSpacing.xl),
-        AppButton(
-          label: 'Approve',
-          icon: const Icon(Icons.check_circle_outline_rounded,
-              size: 20, color: AppColors.textDark),
-          onPressed: () {
-            widget.cubit.approveTask(widget.task, reviewNotes: _note);
-            Navigator.of(context).pop();
-          },
-        ),
-        const SizedBox(height: AppSpacing.md),
-        AppButton.secondary(
-          label: 'Reject',
-          onPressed: () {
-            widget.cubit.rejectTask(widget.task, reviewNotes: _note);
-            Navigator.of(context).pop();
-          },
-        ),
-      ],
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SheetTitle('Review Task'),
+          Text(widget.task.title, style: AppTypography.label),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: _notes,
+            label: 'Review note (optional)',
+            prefixIcon: Icons.rate_review_outlined,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(
+            label: 'Approve',
+            icon: const Icon(Icons.check_circle_outline_rounded,
+                size: 20, color: AppColors.textDark),
+            onPressed: () {
+              widget.cubit.approveTask(widget.task, reviewNotes: _note);
+              Navigator.of(context).pop();
+            },
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton.secondary(
+            label: 'Reject',
+            onPressed: () {
+              widget.cubit.rejectTask(widget.task, reviewNotes: _note);
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
     );
   }
 }

@@ -41,8 +41,12 @@ class ProfileAvatar extends StatelessWidget {
   }
 
   Widget _buildImage() {
+    // Cap the decoded bitmap to ~3× the logical size (covers high-DPI) so the
+    // avatar never decodes a full-resolution image into memory.
+    final decodeWidth = (size * 3).round();
     if (localFile != null) {
-      return Image.file(localFile!, fit: BoxFit.cover, width: size, height: size);
+      return Image.file(localFile!,
+          fit: BoxFit.cover, width: size, height: size, cacheWidth: decodeWidth);
     }
     if (imageUrl != null && imageUrl!.trim().isNotEmpty) {
       return Image.network(
@@ -50,6 +54,7 @@ class ProfileAvatar extends StatelessWidget {
         fit: BoxFit.cover,
         width: size,
         height: size,
+        cacheWidth: decodeWidth,
         loadingBuilder: (context, child, progress) =>
             progress == null ? child : _initialsLayer(),
         errorBuilder: (_, _, _) => _initialsLayer(),

@@ -28,6 +28,86 @@ and [Semantic Versioning](https://semver.org).
 
 ---
 
+## 2026-06-16 — Stabilization & Workflow Integration
+
+Production-usability pass making the task workflow reliable end-to-end, plus a
+new **Task Templates** feature. **No redesign, no rebuild** — reuses the
+existing task architecture, widgets, and theme.
+
+### Fixed
+- **Build was broken — `pubspec.yaml` had `name:Drop`** (invalid YAML *and* the
+  wrong package name; every import is `package:fbro/…`). Restored to
+  `name: fbro` so the project compiles, codegen runs, and `flutter analyze` works.
+- **Admin-created tasks could be orphaned / unassignable.** The admin task form
+  used a **free-text branch field** — a typo (`cairo`) stored a `branchId` that
+  matched no real branch, so the Assign sheet found no employees ("flow looks
+  broken"). The admin now **picks an existing branch from a Firestore-backed
+  dropdown** (`task_action_sheets._BranchDropdown` → `TaskCubit.branches()` →
+  `BranchRepository`), so the task's `branchId` always matches the employees'
+  `users/{uid}.branchId`. Managers still use their own fixed branch.
+- **Employees didn't see a task right after assignment.** Task lists were
+  one-shot reads, so a just-assigned task only appeared on manual refresh. Lists
+  are now **realtime** (see below).
+- **Profile image change could "freeze" the app.** Storage uploads had **no
+  timeout**, so a disabled/misconfigured bucket or a dropped connection hung the
+  UI indefinitely. Added a 60s upload + 20s download-URL timeout
+  (`ProfileRemoteDataSource`), surfaced as a clean error. Also shrank picked
+  images (avatar 800px / cover 1280px, q70) and capped decode size
+  (`cacheWidth`) on every avatar/cover/proof image so a large bitmap can't jank
+  the UI thread.
+
+### Added
+- **Task Templates** — reusable task blueprints ("Open Shop", "Close Shop",
+  "Morning/Night Checklist") so recurring daily work isn't retyped each shift.
+  Full slice folded into the **existing** task feature (faithful reuse, not a new
+  system): `TaskTemplateEntity` (freezed) + `TaskTemplateModel`, template CRUD on
+  `TaskRemoteDataSource`/`TaskRepository`(+Impl), and `TaskCubit.templates /
+  saveTemplate / deleteTemplate`. New collection `task_templates/{id}` with
+  branch-scoped `firestore.rules` (admin: global or any · manager: own branch;
+  employees don't read templates). UI: a two-step **New Task** chooser
+  (Blank vs. From a template), a template picker that **prefills** the task form,
+  and a **Manage Templates** sheet (add/delete) behind a new app-bar action on
+  the manager/admin task screen (`task_template_sheets.dart`).
+
+### Changed (realtime)
+- **Task lists are now live Firestore streams.** `TaskRepository.watch{AllTasks,
+  TasksByBranch,EmployeeTasks}` (added) drive `TaskCubit`, which subscribes by
+  role (admin: all · manager: branch · employee: own) instead of one-shot
+  fetches. A newly assigned task — or any status change — now appears
+  **immediately** with no manual refresh, backed by the offline cache. Mutations
+  keep the list visible (busy bar) and the stream reflects the result.
+  Pull-to-refresh re-subscribes. Other lists (schedule/branch/admin/swaps) keep
+  the instant reload-after-mutation model (per stabilization scope).
+
+### Removed
+- The three one-shot task **use cases** (`GetAllTasks`/`GetTasksByBranch`/
+  `GetEmployeeTasks`) — superseded by the realtime streams. `TaskCubit` now takes
+  the `TaskRepository` directly for streams/templates (+ `BranchRepository` for
+  the branch picker), per the documented cubit convention (repository injection
+  for stream/non-action access). The Future-based read methods remain on the
+  repository contract.
+
+### UI polish (safe, deterministic — visuals unverifiable in this env)
+- All task/template/review bottom sheets share rounded chrome with a **drag
+  handle** (`SheetHandle`); the assign empty-state copy now explains *why* a
+  branch has no employees; the delete-confirm dialog is rounded.
+
+### Verified (by code audit + tooling)
+- `flutter analyze` — clean (2 pre-existing infos only). Codegen
+  (`build_runner`) regenerates the new freezed template entity. Realtime task
+  queries are **rules-compatible** (each role's query is provably safe under
+  `tasks/{id}`). DI + routing unchanged in shape; the `branchRepository` is now
+  built once and shared by `TaskCubit` and the admin module.
+
+### Honest limitations
+- **Flutter mobile UI can't be run/rendered here**, so visual polish was kept to
+  safe, deterministic changes; the freeze fix is verified by code/logic, not an
+  on-device repro. `firestore.rules` were edited but **not deployed/tested** in
+  this environment. Storage still must be **enabled** in the Firebase console for
+  uploads to succeed at all (an unrelated precondition).
+
+---
+
 ## 2026-06-16 — Phase 8: QA, Hardening & UI Polish
 
 Stabilization + polish pass to make the app feel like a production operations

@@ -13,6 +13,7 @@ import 'package:fbro/features/task/presentation/cubit/task_state.dart';
 import 'package:fbro/features/task/presentation/widgets/task_action_sheets.dart';
 import 'package:fbro/features/task/presentation/widgets/task_card.dart';
 import 'package:fbro/features/task/presentation/widgets/task_empty_state.dart';
+import 'package:fbro/features/task/presentation/widgets/task_template_sheets.dart';
 
 /// Shared task screen for manager (own branch) and admin (global). Both create,
 /// edit, assign, delete and review tasks; admins additionally set the branch on
@@ -47,9 +48,50 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
 
   String get _branchId => _user?.branchId ?? '';
 
-  void _create() {
+  /// New Task is a two-step flow: choose blank vs. from-a-template, then open
+  /// the prefilled task form. Templates cut the daily retyping of "Open Shop",
+  /// "Night Checklist", etc.
+  Future<void> _create() async {
     if (_user == null) return;
+    final cubit = context.read<TaskCubit>();
+    // Admin sees all templates (branch picked in the form); a manager sees
+    // global + their own branch templates.
+    final branchFilter = widget.isAdmin ? null : _branchId;
+    final templates = await cubit.templates(branchId: branchFilter);
+    if (!mounted) return;
+
+    final choice =
+        await showNewTaskChooserSheet(context, hasTemplates: templates.isNotEmpty);
+    if (!mounted || choice == null) return;
+
+    if (choice == NewTaskChoice.blank) {
+      showTaskFormSheet(
+        context: context,
+        cubit: cubit,
+        isAdmin: widget.isAdmin,
+        defaultBranchId: _branchId,
+      );
+      return;
+    }
+
+    final template = await showTemplatePickerSheet(
+      context: context,
+      cubit: cubit,
+      branchId: branchFilter,
+    );
+    if (!mounted || template == null) return;
     showTaskFormSheet(
+      context: context,
+      cubit: cubit,
+      prefill: template,
+      isAdmin: widget.isAdmin,
+      defaultBranchId: _branchId,
+    );
+  }
+
+  void _manageTemplates() {
+    if (_user == null) return;
+    showManageTemplatesSheet(
       context: context,
       cubit: context.read<TaskCubit>(),
       isAdmin: widget.isAdmin,
@@ -62,6 +104,8 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.darkSurface,
+        shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(20))),
         title: Text('Delete task?', style: AppTypography.h3),
         content: Text('"${task.title}" will be permanently removed.',
             style: AppTypography.bodySmall),
@@ -92,6 +136,12 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
         elevation: 0,
         title: Text(widget.title, style: AppTypography.h3),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.dashboard_customize_outlined,
+                color: AppColors.textSecondary),
+            tooltip: 'Templates',
+            onPressed: _manageTemplates,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded,
                 color: AppColors.textSecondary),

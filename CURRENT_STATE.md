@@ -24,7 +24,8 @@
 | Shifts (Phase 2) | 🟡 Foundation | `ShiftEntity`/`ShiftModel`/`ShiftRepository`/`ShiftRemoteDataSource` + `shifts/{shiftId}` rules. Data layer only; **superseded by the Weekly Schedule** (Phase 7) for production scheduling — placeholder shift screens no longer linked from the role chrome |
 | Weekly Schedule (Phase 7) | ✅ Complete | `schedule` feature: `WeeklyScheduleEntity` + `ScheduleCubit` + manager editor / admin override / employee my-week view. Roster `day → morning/night → employees`; `weekly_schedules/{id}` rules. Reuses Role/Branch systems |
 | Shift Swap (Phase 7) | ✅ Complete | `ShiftSwapEntity` + `ShiftSwapCubit`: employee requests → coworker approves → manager approves → schedule auto-updates; `shift_swaps/{id}` rules. Statuses pending/employeeApproved/managerApproved/rejected |
-| Tasks (Phase 3–4) | ✅ Workflow   | Full vertical slice: `TaskCubit` + 10 use cases, functional employee/manager/admin screens (create·assign·start·complete+notes/proof·submit·review approve/reject), client-side status-transition rules, audit fields, proof upload to Storage |
+| Tasks (Phase 3–4, +Stabilization) | ✅ Workflow + realtime | Full vertical slice: `TaskCubit` + use cases, functional employee/manager/admin screens (create·assign·start·complete+notes/proof·submit·review approve/reject), client-side status-transition rules, audit fields, proof upload to Storage. **Stabilization:** task lists are now **live Firestore streams** (assigned task appears immediately); admin create uses a **branch dropdown** (no more free-text → no orphaned tasks) |
+| Task Templates (Stabilization) | ✅ Complete | Reusable task blueprints ("Open Shop", "Night Checklist", …). `TaskTemplateEntity`/`Model` + template CRUD on the task repo/cubit; `task_templates/{id}` rules (admin global/any · manager own-branch). New Task → Blank vs. From a template (prefills the form) + Manage Templates sheet |
 | Branches (Phase 5) | ✅ Complete   | `BranchEntity`/`Model`/`Repository`/`RemoteDataSource` + `BranchCubit`; admin CRUD + activate/deactivate + soft delete; `branches/{id}` rules |
 | Admin module (Phase 5) | ✅ Complete | Branch / manager / employee management + **admin-only** pending-user approval + branch assignment. `AdminUsersCubit`, `UserAdminRepository` over `users/{uid}` |
 | Dashboards / Statistics (Phase 6, +Phase 7) | ✅ Complete | `statistics` feature (`StatisticsCubit`) drives **live** admin / manager / employee dashboards. **Phase 7:** shift/coverage figures now read the weekly schedule (employee current+upcoming shift · manager scheduled/morning/night today · admin schedule coverage) |
@@ -108,6 +109,19 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
   **Dashboards integrated** — shift/coverage stats now come from the weekly
   schedule. `NotificationType` extended (swap + schedule events). `flutter analyze`
   clean.
+- **Stabilization & Workflow Integration (branch `stabilization-and-optimization`)**
+  — production-usability pass. Fixed a **broken build** (`pubspec.yaml` had
+  `name:Drop` → restored `name: fbro`). Fixed **admin task assignment**: the task
+  form's free-text branch field is replaced by a **Firestore-backed branch
+  dropdown** (`TaskCubit.branches()` → `BranchRepository`), so a task's
+  `branchId` always matches employees' `branchId` and the Assign picker is
+  populated. **Task lists are now realtime** (`TaskRepository.watch*` streams
+  drive `TaskCubit`) — an assigned task / status change shows immediately. Added
+  **Task Templates** (new `task_templates` collection + `TaskTemplateEntity`/
+  `Model`, repo/cubit CRUD, New-Task-from-template + Manage Templates UI). Fixed
+  the **profile image freeze** (upload timeouts + smaller picked images +
+  `cacheWidth` decode caps). Removed the now-dead one-shot task use cases. `flutter
+  analyze` clean (2 pre-existing infos).
 - **Action needed:** commit; deploy `firestore.rules` / `storage.rules` and
   enable Firebase Storage; bootstrap the first admin (set
   `role/approvalStatus/isActive` in the console) before production.
@@ -197,7 +211,10 @@ landing is **Login** (the social Welcome page was removed).
   **`shift_swaps/{id}` (Phase 7)**: read/act = the two involved employees + the
   branch manager/admin; create requires the requester to be self and the swap to
   be in their own branch (the exact status flow is validated client-side in
-  `ShiftSwapCubit`). Reusable `isAdmin()` / `isManager()` / `canReachBranch()`
+  `ShiftSwapCubit`). **`task_templates/{id}` (Stabilization)**: read = any
+  admin/manager; create = admin (global/any) or own-branch manager;
+  update/delete = admin or the owning-branch manager (employees don't read
+  templates). Reusable `isAdmin()` / `isManager()` / `canReachBranch()`
   helpers remain for future collections. ⚠️ Still need to be **deployed**
   (`firebase deploy --only firestore:rules,storage`).
 
@@ -288,6 +305,28 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 > the limited employee self-update are enforced by `firestore.rules`
 > (`tasks/{taskId}`). The employee cannot reassign, change branch, or set the
 > terminal approved/rejected status.
+
+### Firestore schema — `task_templates/{id}` (Stabilization)
+
+Reusable task blueprints. A template carries only task *content* — never an
+assignment or status (those are set when a task is created from it).
+
+| Field         | Type       | Notes                                                       |
+| ------------- | ---------- | ---------------------------------------------------------- |
+| `id`          | string     | mirrors the doc id (set on create)                         |
+| `title`       | string     | template title (e.g. `Open Shop`)                          |
+| `description` | string?    | optional details                                           |
+| `type`        | string     | `daily` / `special`                                        |
+| `priority`    | string     | `low` / `normal` / `high`                                  |
+| `branchId`    | string?    | owning branch; `''`/null = **global** (admin-made, all branches) |
+| `createdBy`   | string?    | uid of the manager/admin who created it                    |
+| `createdAt`, `updatedAt` | Timestamp | server timestamps                              |
+
+> Branch/role access is enforced by `firestore.rules` (`task_templates/{id}`):
+> read = any admin/manager; create = admin (global/any) or own-branch manager;
+> update/delete = admin or the owning-branch manager. Employees don't read
+> templates. Branch filtering (global + own branch) is applied client-side in
+> `TaskCubit.templates` (the collection is tiny).
 
 ### Firestore schema — `weekly_schedules/{id}` (Phase 7)
 
@@ -380,23 +419,23 @@ week's Sunday), so a week is addressed directly without a query.
   recommended for removal in a focused cleanup PR. The shift-visibility requirement
   is fully met by the Weekly Schedule (employee My Week · manager branch schedule ·
   admin all branches).
-- **Real-time is approval-only by design.** Pending-approval is now stream-driven
-  (instant). Task / schedule / branch / swap lists use **reload-after-mutation**
-  (instant for the user who made the change) + pull-to-refresh; another user's
-  open list reflects a change on next refresh, not push. Full cross-client
-  streaming would convert the Future-based repositories to streams — a larger
-  follow-up deliberately out of the stabilization scope (it would redesign the
-  data layer). Firestore offline persistence does back every read with the local
-  cache. **(Phase 8)** Within the manager schedule screen, approving a swap now
-  **auto-refreshes** the Schedule tab via a `BlocListener` (no manual refresh
-  needed).
-- **Integration-audit findings (not bugs).** (1) **Managers do not approve users**
-  — approval is admin-only (Phase 6 design); any "manager approves employee"
+- **Real-time: tasks (push) + everything else (reload-after-mutation).**
+  **Tasks are now fully streamed** (`TaskRepository.watch*` → `TaskCubit`): an
+  assigned task or status change appears on every open client immediately
+  (cross-client push), backed by the offline cache. Pending-approval is also
+  stream-driven. **Schedule / branch / admin / swap** lists still use
+  **reload-after-mutation** (instant for the acting user) + pull-to-refresh;
+  another user's open list reflects a change on next refresh. Converting those to
+  streams too is a deliberate follow-up (out of this pass's scope). **(Phase 8)**
+  approving a swap auto-refreshes the manager Schedule tab via a `BlocListener`.
+- **Integration-audit findings.** (1) **Managers do not approve users** —
+  approval is admin-only (Phase 6 design); any "manager approves employee"
   expectation is intentionally unsupported. (2) **Rejected users** land on the
   generic "Pending Approval" screen — access is correctly blocked, but the copy
-  doesn't distinguish *rejected* from *pending*. (3) **Admin task creation** uses a
-  free-text branch field — mistyping orphans the task; managers (the primary task
-  creators) use their own fixed branch and are safe.
+  doesn't distinguish *rejected* from *pending*. (3) ~~Admin task creation uses a
+  free-text branch field~~ **FIXED (Stabilization)** — admin now selects from a
+  Firestore-backed branch dropdown, so a task's `branchId` always matches a real
+  branch and the Assign picker is populated.
 - **Shift-swap status flow is validated client-side** (`ShiftSwapCubit`), like the
   task transitions — `firestore.rules` enforce *who* may write a swap, not the
   exact order. Hardening the transition matrix server-side is a follow-up.

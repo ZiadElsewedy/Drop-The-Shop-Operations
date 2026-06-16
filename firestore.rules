@@ -123,6 +123,25 @@ service cloud.firestore {
       allow delete: if canReachBranch(resource.data.get('branchId', ''));
     }
 
+    // ── Task templates (stabilization) ─────────────────────────────
+    // Reusable task blueprints ("Open Shop", "Night Checklist", …) managed by
+    // managers/admins. A template carries a `branchId` (owning branch) or '' for
+    // a GLOBAL template (admin-made, usable by every branch). Employees never
+    // need templates.
+    //   read   — any admin or manager (branch filtering is applied client-side;
+    //            the collection is tiny, so a full read is acceptable and a
+    //            collection query stays provably safe under this rule).
+    //   create — admin (any branch / global), OR an own-branch manager.
+    //   update/delete — admin, OR the owning-branch manager.
+    match /task_templates/{templateId} {
+      allow read: if isAdmin() || isManager();
+      allow create: if isAdmin()
+        || (isManager()
+            && request.resource.data.get('branchId', '') == selfBranch());
+      allow update, delete: if isAdmin()
+        || (isManager() && resource.data.get('branchId', '') == selfBranch());
+    }
+
     // ── Branches (Phase 5) ─────────────────────────────────────────
     // Any signed-in user may READ branches (names are shown in pickers and on
     // cards across roles). Only an admin may create/edit. "Delete" is a soft

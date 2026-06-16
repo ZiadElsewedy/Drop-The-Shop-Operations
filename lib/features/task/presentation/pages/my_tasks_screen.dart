@@ -174,7 +174,7 @@ class _CompleteSheetState extends State<_CompleteSheet> {
       final picked = await ImagePicker().pickImage(
         source: ImageSource.gallery,
         imageQuality: 70,
-        maxWidth: 1280,
+        maxWidth: 1024,
       );
       if (picked != null) setState(() => _proof = File(picked.path));
     } catch (_) {
@@ -230,7 +230,10 @@ class _CompleteSheetState extends State<_CompleteSheet> {
                       ClipRRect(
                         borderRadius: AppRadius.cardAll,
                         child: Image.file(_proof!,
-                            width: 44, height: 44, fit: BoxFit.cover),
+                            width: 44,
+                            height: 44,
+                            fit: BoxFit.cover,
+                            cacheWidth: 200),
                       )
                     else
                       const Icon(Icons.add_a_photo_outlined,

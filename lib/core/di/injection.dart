@@ -37,9 +37,6 @@ import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:fbro/features/task/data/datasources/task_remote_datasource.dart';
 import 'package:fbro/features/task/data/repositories/task_repository_impl.dart';
 import 'package:fbro/features/task/domain/repositories/task_repository.dart';
-import 'package:fbro/features/task/domain/usecases/get_all_tasks.dart';
-import 'package:fbro/features/task/domain/usecases/get_tasks_by_branch.dart';
-import 'package:fbro/features/task/domain/usecases/get_employee_tasks.dart';
 import 'package:fbro/features/task/domain/usecases/create_task.dart';
 import 'package:fbro/features/task/domain/usecases/update_task.dart';
 import 'package:fbro/features/task/domain/usecases/delete_task.dart';
@@ -118,6 +115,13 @@ class AppDependencies {
     shiftRepository = ShiftRepositoryImpl(shiftRemoteDataSource);
     taskRepository = TaskRepositoryImpl(taskRemoteDataSource);
 
+    // Branch repository is built early — the TaskCubit needs it for the admin's
+    // New Task branch dropdown (the admin module reuses the same instance).
+    final branchRemoteDataSource =
+        BranchRemoteDataSourceImpl(FirebaseFirestore.instance);
+    final BranchRepository branchRepository =
+        BranchRepositoryImpl(branchRemoteDataSource);
+
     authCubit = AuthCubit(
       repository: authRepository,
       signInWithEmail: SignInWithEmail(authRepository),
@@ -144,9 +148,8 @@ class AppDependencies {
     );
 
     taskCubit = TaskCubit(
-      getAllTasks: GetAllTasks(taskRepository),
-      getTasksByBranch: GetTasksByBranch(taskRepository),
-      getEmployeeTasks: GetEmployeeTasks(taskRepository),
+      repository: taskRepository,
+      branchRepository: branchRepository,
       createTask: CreateTask(taskRepository),
       updateTask: UpdateTask(taskRepository),
       deleteTask: DeleteTask(taskRepository),
@@ -158,10 +161,6 @@ class AppDependencies {
     );
 
     // ─── Admin module (Phase 5) ───────────────────────────────
-    final branchRemoteDataSource =
-        BranchRemoteDataSourceImpl(FirebaseFirestore.instance);
-    final BranchRepository branchRepository =
-        BranchRepositoryImpl(branchRemoteDataSource);
     final userAdminRemoteDataSource =
         UserAdminRemoteDataSourceImpl(FirebaseFirestore.instance);
     final UserAdminRepository userAdminRepository =

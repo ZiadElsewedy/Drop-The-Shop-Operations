@@ -5,7 +5,9 @@ import 'package:fbro/core/errors/exceptions.dart';
 import 'package:fbro/core/errors/failures.dart';
 import 'package:fbro/features/task/data/datasources/task_remote_datasource.dart';
 import 'package:fbro/features/task/data/models/task_model.dart';
+import 'package:fbro/features/task/data/models/task_template_model.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 import 'package:fbro/features/task/domain/repositories/task_repository.dart';
 
 class TaskRepositoryImpl implements TaskRepository {
@@ -42,6 +44,20 @@ class TaskRepositoryImpl implements TaskRepository {
       throw ServerFailure(e.message);
     }
   }
+
+  @override
+  Stream<List<TaskEntity>> watchAllTasks() =>
+      _remote.watchAllTasks().map((l) => l.map((m) => m.toEntity()).toList());
+
+  @override
+  Stream<List<TaskEntity>> watchTasksByBranch(String branchId) => _remote
+      .watchTasksByBranch(branchId)
+      .map((l) => l.map((m) => m.toEntity()).toList());
+
+  @override
+  Stream<List<TaskEntity>> watchEmployeeTasks(String employeeId) => _remote
+      .watchEmployeeTasks(employeeId)
+      .map((l) => l.map((m) => m.toEntity()).toList());
 
   @override
   Future<TaskEntity?> getTask(String taskId) async {
@@ -133,6 +149,37 @@ class TaskRepositoryImpl implements TaskRepository {
   Future<String> uploadProof(String taskId, File file) async {
     try {
       return await _remote.uploadProof(taskId, file);
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  // ─── Task templates ────────────────────────────────────────────
+  @override
+  Future<List<TaskTemplateEntity>> getTemplates() async {
+    try {
+      final models = await _remote.getTemplates();
+      return models.map((m) => m.toEntity()).toList();
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<TaskTemplateEntity> createTemplate(TaskTemplateEntity template) async {
+    try {
+      final created =
+          await _remote.createTemplate(TaskTemplateModel.fromEntity(template));
+      return created.toEntity();
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> deleteTemplate(String templateId) async {
+    try {
+      await _remote.deleteTemplate(templateId);
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

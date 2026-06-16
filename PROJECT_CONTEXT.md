@@ -103,7 +103,7 @@ lib/
     ├── auth/                 # Sign-in/up, phone OTP, Google, email verify, password, role, approval
     ├── profile/              # View + edit profile, image uploads, username checks
     ├── shift/                # Shift data/domain (entity·model·repository·datasource) + role shift screens (Phase 2)
-    ├── task/                 # Task feature — data/domain + use cases + TaskCubit + functional role screens (Phase 3–4)
+    ├── task/                 # Task feature — data/domain + use cases + TaskCubit + functional role screens (Phase 3–4); realtime list streams + reusable task templates (Stabilization)
     ├── branch/               # Branch feature — data/domain + BranchCubit + branch management (Phase 5)
     ├── admin/                # Admin module — user-admin data/domain + AdminUsersCubit + dashboard/managers/employees/approvals (Phase 5)
     ├── statistics/           # Statistics feature — entity/model/repo/datasource + StatisticsCubit; powers all 3 dashboards (Phase 6, +Phase 7 schedule figures)
@@ -124,10 +124,13 @@ lib/
 > and is **superseded** by `schedule` for production scheduling.
 >
 > **Cubit→repository convention varies by feature:** `auth`/`profile`/`task`
-> cubits go through **use cases**; `branch`/`admin`/`statistics`/`schedule` cubits
-> call their **repositories directly** (no use-case layer) — a deliberate scope
-> choice (the `schedule` cubits reuse the auth `GetUsersByBranch` use case for the
-> member/assignee list). All app-wide cubits are provided in `main.dart`
+> cubits go through **use cases** for write actions; `branch`/`admin`/
+> `statistics`/`schedule` cubits call their **repositories directly** (no
+> use-case layer) — a deliberate scope choice (the `schedule` cubits reuse the
+> auth `GetUsersByBranch` use case for the member/assignee list). `TaskCubit` is
+> a hybrid: use cases for writes, **`TaskRepository` directly** for realtime list
+> streams + template CRUD, and **`BranchRepository`** for the admin branch
+> picker. All app-wide cubits are provided in `main.dart`
 > (`auth`/`profile`/`task`/`branch`/`adminUsers`/`statistics`/`schedule`/`shiftSwap`).
 
 ---
@@ -265,38 +268,61 @@ MyTasksScreen (employee)                ManagerTasksView          (presentation/
 + TaskCard / task_action_sheets (create·assign·review)
         ↓  context.read<TaskCubit>()      (provided app-wide in main.dart)
 TaskCubit  + TaskState                                        (presentation/cubit)
-        ↓  one use case per action
-GetAllTasks · GetTasksByBranch · GetEmployeeTasks · CreateTask
-UpdateTask · DeleteTask · AssignTask · ChangeTaskStatus
-ReviewTask · UploadTaskProof            (domain/usecases)
+        ↓  one use case per WRITE action (reads/streams/templates: repo-direct)
+CreateTask · UpdateTask · DeleteTask · AssignTask
+ChangeTaskStatus · ReviewTask · UploadTaskProof   (domain/usecases)
 GetUsersByBranch (auth use case — assignee picker)
+TaskRepository.watch{AllTasks,TasksByBranch,EmployeeTasks}  (realtime lists)
+TaskRepository.{get,create,delete}Template                 (task templates)
+BranchRepository.getBranches                               (admin branch picker)
         ↓
 TaskRepository (abstract)                                    (domain/repositories)
         ↓   AppDependencies.taskRepository  (composed in injection.dart)
 TaskRepositoryImpl                                           (data/repositories)
         ↓
 TaskRemoteDataSource                                         (data/datasources)
-        ↓                          ↓
-Cloud Firestore  tasks/{taskId}    Firebase Storage  tasks/{taskId}/proof.jpg
+        ↓                              ↓                       ↓
+Cloud Firestore  tasks/{taskId}   task_templates/{id}   Storage tasks/{id}/proof.jpg
 ```
 
 - Full vertical slice: `TaskCubit` (app-wide, provided in `main.dart`) injects
-  **one use case per action**; each wraps a `TaskRepository` method. Datasource
-  throws `ServerException`; repo → `ServerFailure`; maps `TaskModel → TaskEntity`.
+  **one use case per write action**; each wraps a `TaskRepository` method. It
+  additionally takes the **`TaskRepository` directly** (for realtime list
+  **streams** + template CRUD) and **`BranchRepository`** (for the admin's New
+  Task branch dropdown) — the documented convention for stream/non-action repo
+  access. Datasource throws `ServerException`; repo → `ServerFailure`; maps
+  `TaskModel → TaskEntity`.
 - **Core workflow:** a manager/admin creates + assigns a task (assignee picked
   from branch employees via the auth `GetUsersByBranch`); the employee drives it
   `pending → started → completed (+notes/proof) → waitingReview`; a manager/admin
   reviews → `approved` | `rejected` (writing the audit fields). `TaskType`
   (daily/special), `TaskStatus` and `TaskPriority` are enums in `core/enums`.
+- **Branch is never free text.** A manager's task takes their own `branchId`; an
+  **admin picks an existing branch from a Firestore-backed dropdown**
+  (`TaskCubit.branches()` → `BranchRepository`). This guarantees the task's
+  `branchId` matches the employees' `users/{uid}.branchId`, so the Assign picker
+  (`branchEmployees`) is always populated — the fix for orphaned/unassignable
+  tasks.
+- **Realtime lists.** `TaskCubit.load` subscribes to a **live Firestore snapshot
+  stream** by role (admin: `watchAllTasks` · manager: `watchTasksByBranch` ·
+  employee: `watchEmployeeTasks`), so a newly assigned task or any status change
+  appears **immediately** (backed by the offline cache). Mutations keep the list
+  visible (`loaded(tasks, busy)`) and the stream reflects the result; on error the
+  previous list is restored. Pull-to-refresh re-subscribes. The subscription is
+  cancelled in `close()`.
 - **Status transitions are validated in `TaskCubit._canTransition`** (invalid
   moves are blocked client-side and surfaced as an error snackbar); WHO may write
   is enforced in `firestore.rules` (`tasks/{taskId}`): admin all branches,
   manager own branch, employee own assigned tasks with **limited writes** (may
   advance status / add notes / proof but may not reassign, change branch, or
   approve/reject). Proof images upload to Storage `tasks/{taskId}/proof.jpg`.
-- The `TaskCubit` loads the list **by role** (admin: all · manager: own branch ·
-  employee: own) and keeps it visible during mutations (`loaded(tasks, busy)`),
-  re-emitting the previous list on error so the UI never flickers/loses data.
+- **Task templates** (`task_templates/{id}`): reusable blueprints ("Open Shop",
+  "Night Checklist") that **prefill** the task form so daily work isn't retyped.
+  Same `TaskCubit`/`TaskRepository` (no new cubit/DI): `templates` (branch-scoped
+  read, filtered client-side), `saveTemplate`, `deleteTemplate`. UI is a two-step
+  New Task chooser (Blank / From a template) + a Manage Templates sheet
+  (`task_template_sheets.dart`). A template holds only content (title/desc/
+  type/priority) + `branchId` (`''` = global, admin-made).
 
 ### Admin module chain (Phase 5)
 
@@ -429,6 +455,11 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **A new task action**                     | add `domain/usecases/`, a `TaskRepository(+Impl)` method, a datasource method, wire in `task_cubit.dart` **and** `core/di/injection.dart` |
 | **Task screens (admin/manager/employee)** | `lib/features/task/presentation/pages/` (`my_tasks_screen` employee · `branch_tasks_screen`/`task_management_screen` → shared `widgets/manager_tasks_view.dart`) |
 | **Task UI actions (create/assign/review/complete) + card** | `lib/features/task/presentation/widgets/` (`task_action_sheets.dart`, `task_card.dart`, `task_empty_state.dart`) |
+| **Admin task branch picker (dropdown, not free text)** | `task_action_sheets.dart` (`_BranchDropdown`) ← `TaskCubit.branches()` ← `BranchRepository` (wired into `TaskCubit` in `injection.dart`) |
+| **Task realtime list streams**            | `TaskRepository.watch{AllTasks,TasksByBranch,EmployeeTasks}` (+impl + `TaskRemoteDataSource`) → `TaskCubit.load` subscribes by role |
+| **Task templates (schema / serialization)** | `lib/features/task/domain/entities/task_template_entity.dart` + `data/models/task_template_model.dart` (then run codegen) |
+| **Task templates (reads/writes)**         | `task_remote_datasource.dart` + `task_repository(_impl).dart` (`getTemplates`/`createTemplate`/`deleteTemplate`) → `TaskCubit.templates`/`saveTemplate`/`deleteTemplate`; rules `task_templates/{id}` |
+| **Task template UI (New Task chooser / picker / manage)** | `lib/features/task/presentation/widgets/task_template_sheets.dart` (reuses `showSheet`/`SheetTitle` from `task_action_sheets.dart`); invoked from `manager_tasks_view.dart` (FAB + Templates app-bar action) |
 | **Assignee picker (branch employees)**    | `AuthRepository.getUsersByBranch` + `auth/domain/usecases/get_users_by_branch.dart` → `TaskCubit.branchEmployees` |
 | **Task routes / role entry point**        | `lib/core/routes/route_names.dart` (`adminTasks`/`managerTasks`/`myTasks` + `tasksForRole`) + `app_router.dart` + `role_scaffold.dart` (Tasks icon) |
 | **Branch schema / data**                  | `lib/features/branch/domain/entities/branch_entity.dart` + `data/models/branch_model.dart` + `data/datasources/branch_remote_datasource.dart` (then run codegen) |
@@ -603,7 +634,10 @@ Patterns below are established across the codebase and **must be reused**.
   own-branch · employee own assigned data). Shifts are employee read-only; tasks
   additionally allow the **assigned employee a limited self-update** (advance
   status / add notes / proof, but not reassign, move branch, or approve/reject).
-  **`branches/{branchId}` (Phase 5)** is admin-write / any-signed-in-read (a
+  **`task_templates/{id}` (Stabilization)** are manager/admin-readable reusable
+  blueprints; create/update/delete are admin (global/any) or own-branch manager —
+  employees never read them. **`branches/{branchId}` (Phase 5)** is admin-write /
+  any-signed-in-read (a
   branch isn't branch-scoped *data* — it defines the branches), with "delete" as
   a soft delete (admin update). Admin user-administration writes go through the
   existing `users` admin-update rule (`isAdmin()`). **`weekly_schedules/{id}` and

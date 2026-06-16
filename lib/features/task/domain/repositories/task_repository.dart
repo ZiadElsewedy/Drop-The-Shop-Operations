@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 
 /// Contract for task data access (Phase 3 foundation). The branch/role access
 /// model is enforced server-side by `firestore.rules` (admin: all branches;
@@ -15,6 +16,12 @@ abstract class TaskRepository {
 
   /// Tasks assigned to [employeeId] (the employee's own view).
   Future<List<TaskEntity>> getEmployeeTasks(String employeeId);
+
+  /// Real-time task lists (admin: all · manager: branch · employee: own) — emit
+  /// on every change so assignments/updates appear immediately.
+  Stream<List<TaskEntity>> watchAllTasks();
+  Stream<List<TaskEntity>> watchTasksByBranch(String branchId);
+  Stream<List<TaskEntity>> watchEmployeeTasks(String employeeId);
 
   /// A single task by id, or null if it doesn't exist.
   Future<TaskEntity?> getTask(String taskId);
@@ -55,4 +62,14 @@ abstract class TaskRepository {
 
   /// Uploads a proof image to Storage for the task and returns its download URL.
   Future<String> uploadProof(String taskId, File file);
+
+  // ─── Task templates (reusable blueprints) ──────────────────────
+  /// All task templates (manager/admin). Branch scoping is applied by the cubit.
+  Future<List<TaskTemplateEntity>> getTemplates();
+
+  /// Creates a template and returns it with its generated id.
+  Future<TaskTemplateEntity> createTemplate(TaskTemplateEntity template);
+
+  /// Deletes a template.
+  Future<void> deleteTemplate(String templateId);
 }

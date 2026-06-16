@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -99,6 +100,11 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
           {void Function(double progress)? onProgress}) =>
       _upload('users/$uid/cover.jpg', file, onProgress);
 
+  /// Hard ceiling on an upload so a misconfigured/disabled Storage bucket (or a
+  /// dropped connection) can never hang the UI indefinitely — it fails cleanly
+  /// and the cubit surfaces an error instead of "freezing".
+  static const _uploadTimeout = Duration(seconds: 60);
+
   Future<String> _upload(
     String path,
     File file,
@@ -116,11 +122,23 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
         }
       });
       try {
-        final snapshot = await task;
-        return await snapshot.ref.getDownloadURL();
+        final snapshot = await task.timeout(
+          _uploadTimeout,
+          onTimeout: () {
+            task.cancel();
+            throw const AuthException(
+                'Upload timed out. Check your connection and try again.');
+          },
+        );
+        return await snapshot.ref
+            .getDownloadURL()
+            .timeout(const Duration(seconds: 20));
       } finally {
         await sub.cancel();
       }
+    } on TimeoutException {
+      throw const AuthException(
+          'Upload timed out. Check your connection and try again.');
     } on FirebaseException catch (e) {
       throw AuthException(e.message ?? 'Image upload failed. Please try again.');
     }

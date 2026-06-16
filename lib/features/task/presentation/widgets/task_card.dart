@@ -80,6 +80,7 @@ class TaskCard extends StatelessWidget {
                 height: 120,
                 width: double.infinity,
                 fit: BoxFit.cover,
+                cacheWidth: 800,
                 errorBuilder: (_, _, _) => Container(
                   height: 56,
                   alignment: Alignment.centerLeft,

@@ -89,10 +89,12 @@ class _EditProfilePageState extends State<EditProfilePage> {
 
     try {
       final picker = ImagePicker();
+      // Compress/downscale in the picker (native, off the UI isolate) so the
+      // upload stays small and the UI never stalls decoding a huge original.
       final picked = await picker.pickImage(
         source: source,
-        maxWidth: isCover ? 1600 : 1080,
-        imageQuality: 85,
+        maxWidth: isCover ? 1280 : 800,
+        imageQuality: 70,
       );
       if (picked == null) return;
       setState(() {
@@ -397,10 +399,15 @@ class _ImagesHeader extends StatelessWidget {
   }
 
   Widget _coverImage() {
-    if (coverFile != null) return Image.file(coverFile!, fit: BoxFit.cover);
+    // cacheWidth caps the decoded bitmap so a full-res image never decodes at
+    // native size for a short cover strip (avoids memory spikes / jank).
+    if (coverFile != null) {
+      return Image.file(coverFile!, fit: BoxFit.cover, cacheWidth: 1280);
+    }
     if (coverUrl != null && coverUrl!.isNotEmpty) {
       return Image.network(coverUrl!,
           fit: BoxFit.cover,
+          cacheWidth: 1280,
           errorBuilder: (_, _, _) => const ColoredBox(color: AppColors.darkSurface));
     }
     return const ColoredBox(color: AppColors.darkSurface);
