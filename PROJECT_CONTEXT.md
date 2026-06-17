@@ -32,8 +32,10 @@ registration for push; and a **weekly schedule + shift-swap system** (Phase 7):
 managers build their branch's weekly roster (Day → Morning / Night → Employees),
 employees view their week / today's team / manager and request shift swaps
 (coworker approves → manager approves → schedule updates automatically), and
-admins override any branch. All dressed in a custom monochrome (black & white)
-design system.
+admins override any branch. All dressed in the **DROP THE SHOP** design system —
+a **strictly monochrome** black / white / grey dark UI (the white `AppColors.primary`
+is the only accent; no chromatic brand color), with a **bottom navigation bar** as
+the role chrome.
 
 > **DROP THE SHOP operations system** — focused on daily store operations
 > (branches · shifts · tasks · employee activity · approvals). It is **not** a
@@ -99,7 +101,7 @@ lib/
 │   ├── errors/               # exceptions.dart (data layer) / failures.dart (domain)
 │   ├── routes/               # app_router.dart (role dispatch + guards), route_names.dart
 │   ├── theme/                # app_colors / typography / spacing / radius / app_theme
-│   └── widgets/              # app_snackbar, app_dialog (showConfirmDialog), app_card, app_empty_state, status_badge, drop_logo, skeleton, list_skeleton, role_scaffold, user_avatar (+AvatarStack), app_motion (EntranceFade), app_search_field
+│   └── widgets/              # app_snackbar, app_dialog (showConfirmDialog), app_card, app_empty_state, status_badge, drop_logo, skeleton, list_skeleton, role_scaffold (bottom-nav chrome), app_bottom_nav (AppBottomNav + AppNavItem), user_avatar (+AvatarStack), app_motion (EntranceFade), app_search_field
 └── features/
     ├── auth/                 # Sign-in/up, phone OTP, Google, email verify, password, role, approval
     ├── profile/              # View + edit profile, image uploads, username checks
@@ -485,7 +487,7 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Schedule UI polish (badges/avatars/coverage)** | `lib/features/schedule/presentation/widgets/manager_schedule_view.dart` + `schedule_helpers.dart` (`userForUid`) + `pages/my_schedule_screen.dart` (no logic change) |
 | **Admin/branch DI wiring**                | `lib/core/di/injection.dart` (`branchCubit`/`adminUsersCubit`/`adminStatsCubit`) + `main.dart` providers |
 | **A role's home/dashboard screen**        | `lib/features/{employee,manager,admin}/presentation/pages/`              |
-| **Shared role chrome**                    | `lib/core/widgets/role_scaffold.dart`                                    |
+| **Shared role chrome (header + bottom nav)** | `lib/core/widgets/role_scaffold.dart` (header bell/avatar + bottom nav) → `lib/core/widgets/app_bottom_nav.dart` (`AppBottomNav` + `AppNavItem`) |
 | **Signed-in user/role off a context**     | `lib/core/extensions/context_extensions.dart` (`context.currentUser` / `context.currentRole`) |
 | **Confirmation / delete dialogs**         | `lib/core/widgets/app_dialog.dart` (`showConfirmDialog(...)`)            |
 | **Form fields (text / password / dropdown)** | `lib/features/auth/presentation/widgets/` — `app_text_field.dart` (`AppTextField`: label·hint·prefix·suffix·readOnly·onTap·built-in show/hide), `app_password_field.dart` (`AppPasswordField`), `app_dropdown_field.dart` (`AppDropdownField<T>` — branch/role/status/priority) |
@@ -599,12 +601,22 @@ Patterns below are established across the codebase and **must be reused**.
 ### Theme conventions
 - The app is **dark-mode only** today (`themeMode: ThemeMode.dark`); a `light`
   theme exists in `AppTheme` but is not wired up.
-- **Strictly monochrome**: `AppColors.primary` is white; the only chromatic
-  colors are the semantic `success` / `error` / `warning`, used for status only.
+- **Strictly monochrome** (black / white / grey): `AppColors.primary` is white —
+  the only accent. It carries every primary action, focus state, active bottom-nav
+  tab, and key highlight. Text/icons that sit **on** the white accent use
+  `AppColors.onPrimary` (dark). Use `primarySurface` (white ~12% wash) for tinted
+  tiles / the active nav pill; `primaryGradient` is a white→grey (≈ flat white)
+  accent fill; `primaryGlow(...)` is kept **flat** (no shadow). The only chromatic
+  colors are the semantic `success` / `error` / `warning` (status only).
 - Never use raw `Color(...)` or `TextStyle(...)` in features — reference
-  `AppColors`, `AppTypography`, `AppSpacing`, `AppRadius`.
+  `AppColors`, `AppTypography`, `AppSpacing`, `AppRadius`. A primary fill is the
+  white `primary`/`primaryGradient` (dark `onPrimary` text).
 - Global component styling (inputs, buttons, app bar) lives in `AppTheme`; tune
   it there rather than per-widget.
+- **Role chrome is a bottom navigation bar.** `RoleScaffold` hosts each role
+  dashboard under a header (bell + avatar → profile) and an `AppBottomNav`
+  (Home · Tasks · Schedule · Profile); tabs push the role-scoped routes
+  (`tasksForRole`/`scheduleForRole`/`profile`). Add cross-role nav here.
 
 ### Roles & access model
 - The access role is the `UserRole` enum (`core/enums/user_role.dart`), stored

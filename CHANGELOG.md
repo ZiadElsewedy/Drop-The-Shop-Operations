@@ -28,6 +28,72 @@ and [Semantic Versioning](https://semver.org).
 
 ---
 
+## 2026-06-17 — DROP THE SHOP UI redesign + Tasks crash fix
+
+Restructures the role chrome to match the product mockups and redesigns the
+signature auth screens — **while keeping the strictly-monochrome black / white /
+grey palette** (the owner confirmed B&W/grey stays the main color; no indigo).
+Also fixes a **pre-existing layout crash** on the Tasks screen. **No business
+logic, routing model, entity/model, or Firebase-rule changes** — the work is the
+shared chrome, the signature screens, and one render fix. The `assets/drop_logo.png`
+wordmark is preserved and still rendered by `DropLogo`.
+
+### Fixed (crash — pre-existing, Phase 9)
+- **Opening the Tasks screen crashed with "BoxConstraints forces an infinite
+  height".** `TaskCard`'s root was a `Row(crossAxisAlignment: stretch)` with a
+  fixed-width priority rail; inside a `ListView` (unbounded height) `stretch`
+  forces the rail to infinite height → assertion (the `RenderFlex`/`RenderBox.size`
+  crash seen in the debugger). The rail is now a `PositionedDirectional` element in
+  a `Stack`, so it stretches to the card's real content height instead of forcing
+  infinity — identical look, no crash. Locked in with
+  [task_card_layout_test.dart](test/task_card_layout_test.dart) (pumps a `TaskCard`
+  in a `ListView`). Pre-existing since Phase 9 (surfaced now that the UI was run).
+
+### Changed (chrome — bottom navigation)
+- **`RoleScaffold`** rebuilt around a **bottom navigation bar**
+  (Home · Tasks · Schedule · Profile) plus a clean header (notification bell +
+  tappable avatar → profile). The old app-bar icon row (Tasks / Schedule) and the
+  overflow menu (Profile / Settings / Sign out) are gone — Tasks/Schedule are
+  bottom-nav tabs and the Profile tab still carries Settings + Sign out (both
+  verified reachable). Each tab pushes its existing role-scoped route (launcher
+  pattern; a persistent `StatefulShellRoute` is a noted follow-up).
+- New shared widget **`app_bottom_nav.dart`** (`AppBottomNav` + `AppNavItem`) — a
+  flat dark bar with a top hairline, a white-wash pill behind the active icon, and
+  a white active label (monochrome).
+
+### Changed (signature screens)
+- **Splash** — DROP brand lockup (logo + `THE SHOP` + "Operations Management
+  System"), a subtle neutral glow bloom, and a bottom loading bar + version.
+- **Pending Approval** — centered redesign around a **breathing clock** (mono
+  white-on-near-black, pulsing halo), a "Pending Approval" headline, the
+  under-review copy, and a **"What happens next?"** 3-step card + Log out. Keeps
+  the real-time `watchCurrentUser` redirect.
+- **Login / Register** — copy aligned to the mockups (`Welcome Back` / `Sign in to
+  continue`, `Create Account` / `Join DROP THE SHOP`).
+
+### Changed (design tokens — palette unchanged, names added)
+- **`AppColors`** stays **monochrome** (`primary` = white). Added token *names*
+  consumed by the new chrome/screens — `onPrimary` (dark text on the white
+  accent), `primarySurface` (white ~12% wash for the active nav pill / tiles), and
+  a `primaryGlow(...)` helper kept **flat** (returns no shadow, so buttons stay
+  flat white). `AppButton` primary uses `primaryGradient` (white→grey ≈ flat) +
+  dark `onPrimary` text. FABs use the white accent + dark `onPrimary` label
+  (unchanged look).
+
+### Verified
+- `flutter analyze` clean (only the 2 pre-existing `prefer_initializing_formals`
+  infos); **11 unit tests pass** (10 prior + the new TaskCard layout regression).
+  No entity/model/cubit/repository/route/Firebase-rule change (`git diff` confirms
+  only theme/widget/screen/doc files).
+
+### Notes / honest limitations
+- Flutter UI can't be rendered/clicked in this environment, so visual work was done
+  at the **token + shared-chrome** level and verified by `flutter analyze` + tests
+  (incl. a real layout-assertion reproduction for the Tasks crash). Per-screen pixel
+  polish is a natural follow-up.
+
+---
+
 ## 2026-06-17 — StatusBadge, AppCard & context helpers
 
 Second component-system increment. **No behaviour change.**

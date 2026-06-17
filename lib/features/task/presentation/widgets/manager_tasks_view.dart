@@ -137,11 +137,11 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _create,
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.textDark,
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.onPrimary,
         icon: const Icon(Icons.add_rounded),
         label: Text('New Task',
-            style: AppTypography.label.copyWith(color: AppColors.textDark)),
+            style: AppTypography.label.copyWith(color: AppColors.onPrimary)),
       ),
       body: BlocConsumer<TaskCubit, TaskState>(
         listener: (context, state) =>

@@ -122,11 +122,11 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
           context: context,
           cubit: context.read<BranchCubit>(),
         ),
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.textDark,
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.onPrimary,
         icon: const Icon(Icons.add_rounded),
         label: Text('New Branch',
-            style: AppTypography.label.copyWith(color: AppColors.textDark)),
+            style: AppTypography.label.copyWith(color: AppColors.onPrimary)),
       ),
       body: Column(
         children: [

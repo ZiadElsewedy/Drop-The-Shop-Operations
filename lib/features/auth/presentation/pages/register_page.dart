@@ -67,7 +67,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 50),
                   child: Text(
-                    'Create\nAccount',
+                    'Create Account',
                     style: AppTypography.displayMedium.copyWith(
                       color: isDark ? AppColors.textPrimary : AppColors.textDark,
                     ),
@@ -77,7 +77,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 120),
                   child: const Text(
-                    'Fill in the details below to get started.',
+                    'Join DROP THE SHOP',
                     style: AppTypography.bodyLarge,
                   ),
                 ),

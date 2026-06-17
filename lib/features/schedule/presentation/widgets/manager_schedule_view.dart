@@ -208,8 +208,8 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
                 .read<ScheduleCubit>()
                 .createSchedule(createdBy: _user?.uid),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.white,
-              foregroundColor: AppColors.textDark,
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.onPrimary,
             ),
             icon: const Icon(Icons.add_rounded),
             label: const Text('Create Schedule'),

@@ -70,7 +70,7 @@ class _LoginPageState extends State<LoginPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 50),
                   child: Text(
-                    'Welcome\nBack',
+                    'Welcome Back',
                     style: AppTypography.displayMedium.copyWith(
                       color: isDark ? AppColors.textPrimary : AppColors.textDark,
                     ),
@@ -80,7 +80,7 @@ class _LoginPageState extends State<LoginPage> {
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 120),
                   child: const Text(
-                    'Sign in to continue to your account.',
+                    'Sign in to continue',
                     style: AppTypography.bodyLarge,
                   ),
                 ),

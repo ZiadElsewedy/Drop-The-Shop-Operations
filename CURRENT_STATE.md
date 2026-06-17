@@ -10,11 +10,27 @@
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
 **Last updated:** 2026-06-17
-**Version:** 1.0.0+1 · **Branch:** `main` (Stability + De-duplication)
+**Version:** 1.0.0+1 · **Branch:** `redesign` (DROP THE SHOP indigo redesign)
+
+> **DROP THE SHOP UI redesign (2026-06-17):** restructured the role chrome into a
+> **bottom navigation bar** (Home · Tasks · Schedule · Profile) and redesigned the
+> signature auth screens (splash brand lockup, the breathing-clock Pending Approval,
+> login/register copy) — **keeping the strictly-monochrome black / white / grey
+> palette** (owner confirmed B&W/grey stays; no indigo). Added the
+> `app_bottom_nav.dart` widget + rebuilt `RoleScaffold`, plus token *names*
+> (`onPrimary`, `primarySurface`, flat `primaryGlow`) consumed by the new chrome —
+> `AppColors.primary` stays white. **Also fixed a pre-existing Tasks-screen crash**
+> ("BoxConstraints forces an infinite height" in `TaskCard`'s priority rail → now a
+> `Stack`/`PositionedDirectional`; regression test added). **No logic / routing /
+> data / rule changes** (`git diff` = theme/widget/screen/doc only). The
+> `assets/drop_logo.png` wordmark is preserved. `flutter analyze` clean; **11 tests
+> pass**. See [CHANGELOG.md](CHANGELOG.md).
 
 > **Stability & UX Audit (2026-06-17):** hardened `UserModel`/`ProfileModel`
 > `fromMap` against malformed docs (no more crash on a partial `users/{uid}`),
-> simplified the role chrome to an overflow menu + **confirmed sign-out**, and
+> simplified the role chrome to an overflow menu + **confirmed sign-out** (the
+> overflow menu was later replaced by the **bottom-nav chrome** in the indigo
+> redesign — Profile tab now carries Settings + Sign out), and
 > standardized all auth/settings snackbars on `AppSnackbar`. Role separation,
 > list states, and button flows audited clean.
 >
@@ -57,7 +73,7 @@
 | Profile          | ✅ Complete    | View/edit, avatar+cover upload, username checks                |
 | Settings         | ✅ Complete    | Settings page + change password + delete account              |
 | Role shells      | ✅ Live        | All three role dashboards show live operational stats (Phase 6); Admin shell hosts the full admin module (Phase 5) |
-| Design system    | ✅ Complete    | Monochrome B&W, **dark-mode only**; branded **DROP** (`DropLogo` wordmark). **Phase 9:** premium glass cards (subtle gradient + shadow), reusable `UserAvatar`/`AvatarStack` (reliable images + initials fallback), `EntranceFade` motion, `AppSearchField` |
+| Design system    | ✅ Complete    | **Strictly monochrome** black / white / grey dark UI (`AppColors.primary` = white, the only accent; `onPrimary`/`primarySurface`/flat `primaryGlow`), **dark-mode only**; branded **DROP** (`DropLogo` wordmark, preserved). Role chrome is a **bottom navigation bar** (`AppBottomNav` + rebuilt `RoleScaffold`: Home · Tasks · Schedule · Profile). Signature screens: splash brand lockup, breathing-clock Pending Approval. **Phase 9:** premium glass cards, reusable `UserAvatar`/`AvatarStack`, `EntranceFade` motion, `AppSearchField` |
 | Security rules   | ✅ In repo     | `firestore.rules` + `storage.rules` — committed, need deploy   |
 | Social fields    | ⛔ Legacy      | Counter/presence fields linger in schema but are unused — **FBRO is not a social app** |
 

@@ -64,107 +64,112 @@ class TaskCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
         children: [
-          // Priority rail.
-          Container(
-            width: 4,
-            decoration: BoxDecoration(
-              color: priorityColor,
-              borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(AppRadius.card)),
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg,
-                  AppSpacing.lg, AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(task.title,
-                            style: AppTypography.labelLarge
-                                .copyWith(fontWeight: FontWeight.w600)),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      StatusBadge.task(task.status),
-                    ],
-                  ),
-                  if (description.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(description,
-                        style: AppTypography.bodySmall,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                  ],
-                  const SizedBox(height: AppSpacing.md),
-                  _AssigneesRow(
-                    task: task,
-                    directory: directory,
-                    onTap: onAssigneesTap,
-                  ),
-                  if (task.hasChecklist) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _ChecklistSection(
-                      task: task,
-                      onToggle: onChecklistToggle,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg + AppSpacing.xs,
+                AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(task.title,
+                          style: AppTypography.labelLarge
+                              .copyWith(fontWeight: FontWeight.w600)),
                     ),
+                    const SizedBox(width: AppSpacing.sm),
+                    StatusBadge.task(task.status),
                   ],
+                ),
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(description,
+                      style: AppTypography.bodySmall,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                ],
+                const SizedBox(height: AppSpacing.md),
+                _AssigneesRow(
+                  task: task,
+                  directory: directory,
+                  onTap: onAssigneesTap,
+                ),
+                if (task.hasChecklist) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _ChecklistSection(
+                    task: task,
+                    onToggle: onChecklistToggle,
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  children: [
+                    _PriorityChip(priority: task.priority),
+                    _MetaChip(
+                        icon: Icons.category_outlined, label: task.type.value),
+                    if (task.deadline != null)
+                      _MetaChip(
+                          icon: Icons.event_outlined,
+                          label: _date(task.deadline!)),
+                  ],
+                ),
+                if (notes.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  _NoteLine(label: 'Notes', text: notes),
+                ],
+                if (reviewNotes.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  _NoteLine(label: 'Review', text: reviewNotes),
+                ],
+                if (proof.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      proof,
+                      height: 120,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      cacheWidth: 800,
+                      errorBuilder: (_, _, _) => Container(
+                        height: 56,
+                        alignment: Alignment.centerLeft,
+                        child: Text('Proof image attached',
+                            style: AppTypography.caption),
+                      ),
+                    ),
+                  ),
+                ],
+                if (actions.isNotEmpty) ...[
                   const SizedBox(height: AppSpacing.md),
                   Wrap(
                     spacing: AppSpacing.sm,
                     runSpacing: AppSpacing.xs,
-                    children: [
-                      _PriorityChip(priority: task.priority),
-                      _MetaChip(
-                          icon: Icons.category_outlined, label: task.type.value),
-                      if (task.deadline != null)
-                        _MetaChip(
-                            icon: Icons.event_outlined,
-                            label: _date(task.deadline!)),
-                    ],
+                    children: actions,
                   ),
-                  if (notes.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _NoteLine(label: 'Notes', text: notes),
-                  ],
-                  if (reviewNotes.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    _NoteLine(label: 'Review', text: reviewNotes),
-                  ],
-                  if (proof.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        proof,
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        cacheWidth: 800,
-                        errorBuilder: (_, _, _) => Container(
-                          height: 56,
-                          alignment: Alignment.centerLeft,
-                          child: Text('Proof image attached',
-                              style: AppTypography.caption),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (actions.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.xs,
-                      children: actions,
-                    ),
-                  ],
                 ],
+              ],
+            ),
+          ),
+          // Full-height priority rail — a positioned element (not a stretched
+          // flex child) so it can't force an infinite height inside an
+          // unbounded-height list. Fixes the Tasks-screen layout crash
+          // ("BoxConstraints forces an infinite height").
+          PositionedDirectional(
+            start: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: priorityColor,
+                borderRadius: const BorderRadiusDirectional.horizontal(
+                    start: Radius.circular(AppRadius.card)),
               ),
             ),
           ),
