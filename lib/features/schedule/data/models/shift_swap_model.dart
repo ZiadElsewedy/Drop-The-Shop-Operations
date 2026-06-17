@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:fbro/core/enums/schedule_day.dart';
 import 'package:fbro/core/enums/schedule_shift.dart';
 import 'package:fbro/core/enums/swap_status.dart';
@@ -42,7 +43,7 @@ class ShiftSwapModel {
         id: id ?? map['id'] as String? ?? '',
         branchId: map['branchId'] as String? ?? '',
         weekStart:
-            (map['weekStart'] as Timestamp?)?.toDate() ?? DateTime(1970),
+            map.date('weekStart') ?? DateTime(1970),
         day: ScheduleDay.fromString(map['day'] as String?),
         shift: ScheduleShift.fromString(map['shift'] as String?),
         requesterId: map['requesterId'] as String? ?? '',
@@ -51,8 +52,8 @@ class ShiftSwapModel {
         targetName: map['targetName'] as String?,
         status: SwapStatus.fromString(map['status'] as String?),
         note: map['note'] as String?,
-        createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
-        updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
+        createdAt: map.date('createdAt'),
+        updatedAt: map.date('updatedAt'),
       );
 
   factory ShiftSwapModel.fromEntity(ShiftSwapEntity e) => ShiftSwapModel(

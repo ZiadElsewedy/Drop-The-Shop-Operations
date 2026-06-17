@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:fbro/core/enums/schedule_day.dart';
 import 'package:fbro/core/enums/schedule_shift.dart';
 import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
@@ -42,11 +43,11 @@ class WeeklyScheduleModel {
       id: id ?? map['id'] as String? ?? '',
       branchId: map['branchId'] as String? ?? '',
       weekStart:
-          (map['weekStart'] as Timestamp?)?.toDate() ?? DateTime(1970),
+          map.date('weekStart') ?? DateTime(1970),
       assignments: assignments,
       createdBy: map['createdBy'] as String?,
-      createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
-      updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
+      createdAt: map.date('createdAt'),
+      updatedAt: map.date('updatedAt'),
     );
   }
 

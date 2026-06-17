@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/enums/approval_status.dart';
@@ -65,14 +65,18 @@ class UserModel {
       );
 
   factory UserModel.fromMap(Map<String, dynamic> map) => UserModel(
-        uid: map['uid'] as String,
-        email: map['email'] as String,
+        // Defensive: a malformed / partial user doc (e.g. a phone-auth account
+        // with no email, or a doc seeded out-of-band in the console) must never
+        // crash a whole user-list load (schedule team, assignee picker, admin
+        // lists). Degrade to empty strings like every other model does.
+        uid: map['uid'] as String? ?? '',
+        email: map['email'] as String? ?? '',
         displayName: map['displayName'] as String?,
         photoUrl: map['photoUrl'] as String?,
         phoneNumber: map['phoneNumber'] as String?,
         authProvider: map['authProvider'] as String? ?? 'unknown',
         isEmailVerified: map['isEmailVerified'] as bool? ?? false,
-        createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
+        createdAt: map.date('createdAt'),
         role: UserRole.fromString(map['role'] as String?),
         branchId: map['branchId'] as String?,
         isActive: map['isActive'] as bool? ?? true,

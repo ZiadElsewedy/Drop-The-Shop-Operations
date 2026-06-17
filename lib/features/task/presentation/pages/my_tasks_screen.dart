@@ -12,7 +12,7 @@ import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/core/widgets/list_skeleton.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
@@ -39,10 +39,7 @@ class _MyTasksScreenState extends State<MyTasksScreen> {
   }
 
   void _load() {
-    final user = context.read<AuthCubit>().state.maybeWhen(
-          authenticated: (u) => u,
-          orElse: () => null,
-        );
+    final user = context.currentUser;
     if (user != null) context.read<TaskCubit>().load(user);
   }
 

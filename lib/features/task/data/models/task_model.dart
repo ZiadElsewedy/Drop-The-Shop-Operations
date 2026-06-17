@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:fbro/core/enums/task_type.dart';
 import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/enums/task_priority.dart';
@@ -72,16 +73,16 @@ class TaskModel {
         checklist: _checklistFromList(map['checklist']),
         createdBy: map['createdBy'] as String?,
         assignedShiftId: map['assignedShiftId'] as String?,
-        deadline: (map['deadline'] as Timestamp?)?.toDate(),
+        deadline: map.date('deadline'),
         notes: map['notes'] as String?,
         proofImageUrl: map['proofImageUrl'] as String?,
         approvedBy: map['approvedBy'] as String?,
-        approvedAt: (map['approvedAt'] as Timestamp?)?.toDate(),
+        approvedAt: map.date('approvedAt'),
         rejectedBy: map['rejectedBy'] as String?,
-        rejectedAt: (map['rejectedAt'] as Timestamp?)?.toDate(),
+        rejectedAt: map.date('rejectedAt'),
         reviewNotes: map['reviewNotes'] as String?,
-        createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
-        updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
+        createdAt: map.date('createdAt'),
+        updatedAt: map.date('updatedAt'),
       );
 
   factory TaskModel.fromEntity(TaskEntity e) => TaskModel(

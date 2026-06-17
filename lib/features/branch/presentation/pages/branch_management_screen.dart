@@ -5,6 +5,7 @@ import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_dialog.dart';
 import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/app_search_field.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
@@ -86,32 +87,15 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
   }
 
   Future<void> _confirmDelete(BranchEntity branch) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.darkSurface,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(20))),
-        title: Text('Delete branch?', style: AppTypography.h3),
-        content: Text(
-          '"${branch.name}" will be archived (soft delete). Existing shifts, '
-          'tasks and user assignments are kept.',
-          style: AppTypography.bodySmall,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete branch?',
+      message: '"${branch.name}" will be archived (soft delete). Existing '
+          'shifts, tasks and user assignments are kept.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
-    if (confirmed == true && mounted) {
+    if (confirmed && mounted) {
       context.read<BranchCubit>().deleteBranch(branch);
     }
   }

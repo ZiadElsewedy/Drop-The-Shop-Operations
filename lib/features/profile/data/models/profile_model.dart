@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:fbro/features/profile/domain/entities/profile_entity.dart';
 
 /// Firestore serialization for [ProfileEntity], stored in `users/{uid}`.
@@ -12,11 +13,11 @@ class ProfileModel {
   const ProfileModel(this.entity);
 
   factory ProfileModel.fromMap(Map<String, dynamic> map) {
-    DateTime? ts(dynamic v) => v is Timestamp ? v.toDate() : null;
     String? str(dynamic v) => (v is String && v.isNotEmpty) ? v : null;
 
     return ProfileModel(ProfileEntity(
-      uid: map['uid'] as String,
+      // Defensive: never crash the profile screen on a partial doc.
+      uid: map['uid'] as String? ?? '',
       email: (map['email'] as String?) ?? '',
       phoneNumber: str(map['phoneNumber']),
       authProvider: (map['authProvider'] as String?) ?? 'unknown',
@@ -27,20 +28,20 @@ class ProfileModel {
       coverImage: str(map['coverImage']),
       bio: str(map['bio']),
       gender: str(map['gender']),
-      birthDate: ts(map['birthDate']),
+      birthDate: map.date('birthDate'),
       country: str(map['country']),
       city: str(map['city']),
       website: str(map['website']),
       isVerified: (map['isVerified'] as bool?) ?? false,
       accountStatus: (map['accountStatus'] as String?) ?? 'active',
-      createdAt: ts(map['createdAt']),
-      updatedAt: ts(map['updatedAt']),
+      createdAt: map.date('createdAt'),
+      updatedAt: map.date('updatedAt'),
       followersCount: (map['followersCount'] as num?)?.toInt() ?? 0,
       followingCount: (map['followingCount'] as num?)?.toInt() ?? 0,
       postsCount: (map['postsCount'] as num?)?.toInt() ?? 0,
       likesCount: (map['likesCount'] as num?)?.toInt() ?? 0,
       isOnline: (map['isOnline'] as bool?) ?? false,
-      lastSeen: ts(map['lastSeen']),
+      lastSeen: map.date('lastSeen'),
       isProfilePublic: (map['isProfilePublic'] as bool?) ?? true,
       allowMessages: (map['allowMessages'] as bool?) ?? true,
       allowNotifications: (map['allowNotifications'] as bool?) ?? true,

@@ -8,6 +8,7 @@ import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/skeleton.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/features/profile/domain/entities/profile_entity.dart';
 import 'package:fbro/features/profile/presentation/cubit/profile_cubit.dart';
 import 'package:fbro/features/profile/presentation/cubit/profile_state.dart';
@@ -28,10 +29,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   void _load() {
-    final uid = context.read<AuthCubit>().state.maybeWhen(
-          authenticated: (u) => u.uid,
-          orElse: () => null,
-        );
+    final uid = context.currentUser?.uid;
     if (uid != null) context.read<ProfileCubit>().loadProfile(uid);
   }
 

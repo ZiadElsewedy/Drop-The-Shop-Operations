@@ -5,6 +5,7 @@ import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/features/auth/presentation/widgets/app_dropdown_field.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
@@ -336,68 +337,32 @@ class _BranchDropdown extends StatelessWidget {
       builder: (context, snap) {
         final loading = snap.connectionState != ConnectionState.done;
         final branches = snap.data ?? const <BranchEntity>[];
-        return Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg, vertical: 2),
-          decoration: BoxDecoration(
-            color: AppColors.darkSurface,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.darkBorder),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.store_mall_directory_outlined,
-                  size: 20, color: AppColors.textTertiary),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: loading
-                    ? _placeholder('Loading branches…')
-                    : branches.isEmpty
-                        ? _placeholder('No branches — create one first')
-                        : DropdownButtonHideUnderline(
-                            child: DropdownButton<String>(
-                              value: branches.any((b) => b.id == value)
-                                  ? value
-                                  : null,
-                              isExpanded: true,
-                              hint: Text('Select a branch',
-                                  style: AppTypography.body
-                                      .copyWith(color: AppColors.textTertiary)),
-                              dropdownColor: AppColors.darkSurfaceElevated,
-                              borderRadius: AppRadius.cardAll,
-                              icon: const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  color: AppColors.textTertiary),
-                              style: AppTypography.body
-                                  .copyWith(color: AppColors.textPrimary),
-                              items: [
-                                for (final b in branches)
-                                  DropdownMenuItem<String>(
-                                    value: b.id,
-                                    child: Text(
-                                      b.location == null || b.location!.isEmpty
-                                          ? b.name
-                                          : '${b.name} · ${b.location}',
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                              ],
-                              onChanged: onChanged,
-                            ),
-                          ),
+        return AppDropdownField<String>(
+          value: branches.any((b) => b.id == value) ? value : null,
+          prefixIcon: Icons.store_mall_directory_outlined,
+          hint: 'Select a branch',
+          placeholder: loading
+              ? 'Loading branches…'
+              : branches.isEmpty
+                  ? 'No branches — create one first'
+                  : null,
+          items: [
+            for (final b in branches)
+              DropdownMenuItem<String>(
+                value: b.id,
+                child: Text(
+                  b.location == null || b.location!.isEmpty
+                      ? b.name
+                      : '${b.name} · ${b.location}',
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ],
-          ),
+          ],
+          onChanged: onChanged,
         );
       },
     );
   }
-
-  Widget _placeholder(String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-        child: Text(text,
-            style: AppTypography.body.copyWith(color: AppColors.textTertiary)),
-      );
 }
 
 /// Read-only preview of a template's checklist, shown in the New Task form so

@@ -4,11 +4,12 @@ import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_dialog.dart';
 import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/core/widgets/list_skeleton.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 import 'package:fbro/features/task/presentation/cubit/task_state.dart';
@@ -40,10 +41,7 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
   }
 
   void _load() {
-    final user = context.read<AuthCubit>().state.maybeWhen(
-          authenticated: (u) => u,
-          orElse: () => null,
-        );
+    final user = context.currentUser;
     _user = user;
     if (user != null) context.read<TaskCubit>().load(user);
   }
@@ -102,29 +100,14 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
   }
 
   Future<void> _confirmDelete(TaskEntity task) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.darkSurface,
-        shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(20))),
-        title: Text('Delete task?', style: AppTypography.h3),
-        content: Text('"${task.title}" will be permanently removed.',
-            style: AppTypography.bodySmall),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete task?',
+      message: '"${task.title}" will be permanently removed.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
-    if (confirmed == true && mounted) {
+    if (confirmed && mounted) {
       context.read<TaskCubit>().deleteTask(task.id);
     }
   }

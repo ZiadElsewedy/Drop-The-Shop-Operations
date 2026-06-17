@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_state.dart';
@@ -28,10 +28,7 @@ class _BranchScheduleScreenState extends State<BranchScheduleScreen> {
   }
 
   void _load() {
-    final user = context.read<AuthCubit>().state.maybeWhen(
-          authenticated: (u) => u,
-          orElse: () => null,
-        );
+    final user = context.currentUser;
     if (user == null) return;
     _uid = user.uid;
     context.read<ShiftSwapCubit>().loadBranch(user.branchId ?? '');

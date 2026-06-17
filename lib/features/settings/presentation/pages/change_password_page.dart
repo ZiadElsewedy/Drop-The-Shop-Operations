@@ -4,11 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/auth/presentation/animations/fade_slide_transition.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_state.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:fbro/features/auth/presentation/widgets/app_password_field.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -51,26 +52,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         listener: (context, state) {
           state.whenOrNull(
             passwordChanged: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Password changed successfully'),
-                  backgroundColor: AppColors.success,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-              );
+              AppSnackbar.success(context, 'Password changed successfully');
               context.pop();
             },
-            error: (msg) => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(msg),
-                backgroundColor: AppColors.error,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
+            error: (msg) => AppSnackbar.error(context, msg),
           );
         },
         child: SingleChildScrollView(
@@ -104,11 +89,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 180),
-                  child: AppTextField(
+                  child: AppPasswordField(
                     controller: _currentPasswordController,
                     label: 'Current Password',
-                    prefixIcon: Icons.lock_outline_rounded,
-                    obscureText: true,
+                    textInputAction: TextInputAction.next,
                     validator: (v) =>
                         v == null || v.isEmpty ? 'Enter your current password' : null,
                   ),
@@ -117,11 +101,10 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 230),
-                  child: AppTextField(
+                  child: AppPasswordField(
                     controller: _newPasswordController,
                     label: 'New Password',
-                    prefixIcon: Icons.lock_outline_rounded,
-                    obscureText: true,
+                    textInputAction: TextInputAction.next,
                     validator: (v) {
                       if (v == null || v.length < 6) {
                         return 'Password must be at least 6 characters';
@@ -137,12 +120,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 280),
-                  child: AppTextField(
+                  child: AppPasswordField(
                     controller: _confirmPasswordController,
                     label: 'Confirm New Password',
-                    prefixIcon: Icons.lock_outline_rounded,
-                    obscureText: true,
-                    textInputAction: TextInputAction.done,
                     validator: (v) {
                       if (v != _newPasswordController.text) {
                         return 'Passwords do not match';

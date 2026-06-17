@@ -9,7 +9,7 @@ import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:fbro/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:fbro/features/schedule/presentation/cubit/schedule_state.dart';
@@ -38,10 +38,7 @@ class _MyScheduleScreenState extends State<MyScheduleScreen> {
   }
 
   void _load() {
-    final user = context.read<AuthCubit>().state.maybeWhen(
-          authenticated: (u) => u,
-          orElse: () => null,
-        );
+    final user = context.currentUser;
     if (user == null) return;
     _user = user;
     context.read<ScheduleCubit>().load(branchId: user.branchId ?? '');
@@ -109,10 +106,7 @@ class _MyWeekTab extends StatelessWidget {
     WeeklyScheduleEntity? schedule,
     List<UserEntity> members,
   ) {
-    final user = context.read<AuthCubit>().state.maybeWhen(
-          authenticated: (u) => u,
-          orElse: () => null,
-        );
+    final user = context.currentUser;
     final uid = user?.uid ?? '';
     return RefreshIndicator(
       onRefresh: () => context.read<ScheduleCubit>().refresh(),

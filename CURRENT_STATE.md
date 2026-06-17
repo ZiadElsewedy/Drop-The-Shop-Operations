@@ -9,8 +9,32 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-16
-**Version:** 1.0.0+1 · **Branch:** `claude/upbeat-knuth-7ch3wu` (Phase 9)
+**Last updated:** 2026-06-17
+**Version:** 1.0.0+1 · **Branch:** `main` (Stability + De-duplication)
+
+> **Stability & UX Audit (2026-06-17):** hardened `UserModel`/`ProfileModel`
+> `fromMap` against malformed docs (no more crash on a partial `users/{uid}`),
+> simplified the role chrome to an overflow menu + **confirmed sign-out**, and
+> standardized all auth/settings snackbars on `AppSnackbar`. Role separation,
+> list states, and button flows audited clean.
+>
+> **De-duplication pass (2026-06-17):** extracted three shared utilities with no
+> behaviour change — `context.currentUser`/`currentRole`
+> ([context_extensions.dart](lib/core/extensions/context_extensions.dart), 13
+> sites), `showConfirmDialog` ([app_dialog.dart](lib/core/widgets/app_dialog.dart),
+> 3 dialogs), and `map.date()` for Firestore Timestamps
+> ([firestore_extensions.dart](lib/core/extensions/firestore_extensions.dart), 21
+> sites) — and removed dead code (`RolePlaceholder`) + 14 unused imports.
+>
+> **Shared component system (2026-06-17):** added `AppPasswordField` (login /
+> register / change-password — 5 sites), `AppDropdownField<T>` (branch picker),
+> `AppEmptyState` (`TaskEmptyState` now delegates), `AppCard` (surface·radius
+> 24·press·hover — ready for adoption), and **`StatusBadge`** (`task_card`
+> migrated; `.task`/`.approval`/`.swap`/`.active` factories); enhanced
+> `AppTextField` (`readOnly`/`onTap`/`suffixIcon`, radius 20) and `context`
+> (`isAdmin`/`isManager`/`isEmployee`, `showSuccess`/`showError`). **Next per the
+> owner: a full Task Flow audit** (assignment · branch selection · admin task
+> screen · employee task visibility). See [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

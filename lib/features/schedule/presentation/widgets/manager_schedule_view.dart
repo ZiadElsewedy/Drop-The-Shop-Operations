@@ -9,7 +9,7 @@ import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
 import 'package:fbro/features/branch/presentation/cubit/branch_cubit.dart';
 import 'package:fbro/features/branch/presentation/cubit/branch_state.dart';
@@ -43,10 +43,7 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
   }
 
   void _init() {
-    _user = context.read<AuthCubit>().state.maybeWhen(
-          authenticated: (u) => u,
-          orElse: () => null,
-        );
+    _user = context.currentUser;
     if (widget.isAdmin) {
       // Load the branch list for the selector; wait for a branch pick to load.
       context.read<BranchCubit>().load();

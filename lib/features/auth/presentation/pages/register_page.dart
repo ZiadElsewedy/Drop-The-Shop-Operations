@@ -3,12 +3,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/core/widgets/drop_logo.dart';
 import 'package:fbro/features/auth/presentation/animations/fade_slide_transition.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_state.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:fbro/features/auth/presentation/widgets/app_password_field.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -43,15 +45,7 @@ class _RegisterPageState extends State<RegisterPage> {
       body: BlocListener<AuthCubit, AuthState>(
         listener: (context, state) {
           state.whenOrNull(
-            error: (msg) => ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(msg),
-                backgroundColor: AppColors.error,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-            ),
+            error: (msg) => AppSnackbar.error(context, msg),
           );
         },
         child: SingleChildScrollView(
@@ -119,12 +113,8 @@ class _RegisterPageState extends State<RegisterPage> {
 
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 280),
-                  child: AppTextField(
+                  child: AppPasswordField(
                     controller: _passwordController,
-                    label: 'Password',
-                    prefixIcon: Icons.lock_outline_rounded,
-                    obscureText: true,
-                    textInputAction: TextInputAction.done,
                     validator: (v) =>
                         v == null || v.length < 6 ? 'Min 6 characters' : null,
                   ),

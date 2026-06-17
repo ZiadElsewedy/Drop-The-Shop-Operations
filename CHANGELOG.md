@@ -28,6 +28,179 @@ and [Semantic Versioning](https://semver.org).
 
 ---
 
+## 2026-06-17 — StatusBadge, AppCard & context helpers
+
+Second component-system increment. **No behaviour change.**
+
+### Added
+- **`StatusBadge`** ([status_badge.dart](lib/core/widgets/status_badge.dart)) — one
+  tinted status pill for every Pending / Approved / Rejected / Completed / Active …
+  indicator, with typed factories (`StatusBadge.task`, `.approval`, `.swap`,
+  `.active`) that hold the colour+label mapping in a single place. **`task_card`'s
+  private `_StatusBadge` + `_statusColor` + `_statusLabel` were removed** and
+  replaced with `StatusBadge.task(...)` — identical render, real de-dup.
+- **`AppCard` hover** ([app_card.dart](lib/core/widgets/app_card.dart)) — the
+  reusable surface card now brightens its border on hover (`MouseRegion`, no-op on
+  touch) in addition to the press-scale. Ready for the task/employee/branch cards
+  to adopt.
+- **Context helpers** ([context_extensions.dart](lib/core/extensions/context_extensions.dart))
+  — `context.isAdmin` / `isManager` / `isEmployee` (literal role), and
+  `context.showSuccess(...)` / `showError(...)` (thin pass-throughs to `AppSnackbar`).
+
+### Verified
+- `flutter analyze` clean (2 pre-existing infos); **10 tests pass**.
+
+### Deferred (needs an on-device visual pass — flagged by the user as lower
+priority than the Task Flow audit)
+- Adopting `AppCard` across the 4 bespoke cards (they currently use a gradient +
+  radius 20; `AppCard` is flat + radius 24) and converging the admin info-chips
+  onto `StatusBadge`.
+
+---
+
+## 2026-06-17 — Shared form & layout component system
+
+Consolidated the form/layout primitives into reusable, design-system-consistent
+widgets so screens stop re-implementing fields by hand. **No behaviour change**
+(text/keyboard actions preserved exactly); the only visual deltas are the
+explicitly-requested token bumps (input radius → 20).
+
+### Added (reusable widgets)
+- **`AppPasswordField`** ([app_password_field.dart](lib/features/auth/presentation/widgets/app_password_field.dart))
+  — built on `AppTextField` (built-in show/hide, lock prefix, unified focus/error
+  style). Replaced the hand-wired `obscureText` fields on **login, register, and
+  all 3 change-password** inputs (5 sites).
+- **`AppDropdownField<T>`** ([app_dropdown_field.dart](lib/features/auth/presentation/widgets/app_dropdown_field.dart))
+  — a styled dropdown matching `AppTextField` (surface · radius 20 · border · icon)
+  with a `placeholder` for loading/empty states. The admin task **branch picker**
+  (`_BranchDropdown`) now uses it (its bespoke container + `_placeholder` helper
+  removed).
+- **`AppEmptyState`** ([app_empty_state.dart](lib/core/widgets/app_empty_state.dart))
+  — generic scroll-aware empty placeholder (icon · optional title · message ·
+  optional action). `TaskEmptyState` now **delegates** to it (same render, same API).
+- **`AppCard`** ([app_card.dart](lib/core/widgets/app_card.dart)) — reusable surface
+  shell (dark surface · radius 24 · border · press-scale on tap). Provided as the
+  shell for task/employee/branch cards to adopt.
+
+### Changed
+- **`AppTextField`** gained `readOnly`, `onTap`, and an `IconData suffixIcon`
+  convenience (enables read-only / picker-style fields), and its corner radius now
+  uses the `AppRadius.xl` (20) token instead of a hardcoded 16 — per the requested
+  input spec. Fully backward-compatible (new params are optional).
+
+### Notes / deferred (need an on-device visual pass)
+- The existing **task / employee / manager / branch cards** keep their bespoke
+  gradients + radius (20) for now; adopting `AppCard` (radius 24) is a visual change
+  best verified on device, so it's left as a follow-up rather than migrated blind.
+- The **settings delete-account** dialog keeps its raw Material `TextField`
+  (outlined style inside a tight dialog) — not migrated to `AppPasswordField` to
+  avoid a layout change that can't be verified here.
+
+### Verified
+- `flutter analyze` clean (2 pre-existing infos); **10 tests pass**. Existing
+  `AppTextField`/`AppButton`/`AppSearchField`/`Skeleton` already covered the rest
+  of the requested components and were reused as-is.
+
+---
+
+## 2026-06-17 — Architecture: de-duplication & shared utilities
+
+A maintainability pass — **no new features, no UI redesign, no behaviour
+change, no Firebase/routing changes**. Extracted the highest-reuse duplicated
+patterns into shared utilities; every render and result is identical to before.
+
+### Added (shared utilities)
+- **`context_extensions.dart`** — `context.currentUser` / `context.currentRole`
+  ([core/extensions/context_extensions.dart](lib/core/extensions/context_extensions.dart)).
+  Collapses the `context.read<AuthCubit>().state.maybeWhen(authenticated: …,
+  orElse: () => null)` boilerplate that was copy-pasted across **13 call sites in
+  11 screens** into a single getter (same `read` semantics — no rebuild change).
+- **`showConfirmDialog(...)`** ([core/widgets/app_dialog.dart](lib/core/widgets/app_dialog.dart))
+  — one canonical confirmation/delete dialog, replacing **3 near-identical
+  `AlertDialog` blocks** (sign-out · delete branch · delete task). Returns
+  `Future<bool>` (dismiss = false); destructive actions get the red confirm.
+- **`firestore_extensions.dart`** — `map.date('field')`
+  ([core/extensions/firestore_extensions.dart](lib/core/extensions/firestore_extensions.dart)).
+  Centralises the `(map['x'] as Timestamp?)?.toDate()` mapping repeated **21×**
+  across 7 models, and removes the duplicated per-file `ts()` helper in
+  `ProfileModel`.
+
+### Removed (dead code / cleanup)
+- **`role_placeholder.dart`** (`RolePlaceholder`, 78 lines) — never referenced
+  anywhere in the app.
+- **14 unused imports** — 8 `auth_cubit` imports (now reached via the context
+  extension), 3 `cloud_firestore` imports (models that no longer touch
+  `Timestamp` directly), plus the verbose inline blocks the helpers replaced.
+
+### Verified
+- `flutter analyze` clean (2 pre-existing infos); **10 tests pass**. Behaviour is
+  byte-for-byte preserved: the extensions reproduce the exact `read`/`Timestamp`
+  semantics, and `showConfirmDialog` renders the established delete-dialog chrome.
+
+### Deferred (documented, not done — would risk a blind UI/behaviour change)
+- **App-bar consolidation** (~14 screens share `AppBar(darkBg, elevation:0, h3)`)
+  — too much per-screen variation (TabBar bottoms, custom leadings, transparent
+  auth bars) to migrate safely without an on-device visual pass.
+- **Bottom-sheet chrome** — `showSheet`/`SheetHandle` could move to `core`, but
+  other sheets use slightly different radius/shade; unifying changes pixels.
+- **Form validators** — messages and trim rules vary per field, so extraction
+  would be a partial dedup with behaviour-change risk.
+
+---
+
+## 2026-06-17 — Stability & UX Audit
+
+A focused reliability/usability pass — **no new features, no architecture
+change**. Goal: make the app feel reliable, simple, and hard to crash. Audited
+crashes, broken flows, role separation, navigation friction, and UI consistency.
+
+### Fixed — crashes
+- **A malformed/partial `users/{uid}` document could crash every user-list
+  load.** `UserModel.fromMap` cast `uid`/`email` to **non-null** `String`
+  ([user_model.dart](lib/features/auth/data/models/user_model.dart)), so a single
+  doc missing `email` (e.g. a phone-auth account) or seeded out-of-band threw a
+  `TypeError` that took down the whole load — the schedule "team", the task
+  **assignee picker**, and the admin user lists. Root cause: these two fields
+  used hard casts while **every other model** already uses `as String? ?? ''`.
+  Now they degrade to empty strings (the UI's initials/avatar fallback handles
+  it). Same hardening applied to `ProfileModel.fromMap` (`uid`).
+  Locked in with [user_model_test.dart](test/user_model_test.dart) (3 cases:
+  no-email doc, empty doc, well-formed doc).
+
+### Changed — navigation & friction
+- **Sign out was a single, unconfirmed app-bar tap.** The role chrome
+  ([role_scaffold.dart](lib/core/widgets/role_scaffold.dart)) exposed **five**
+  app-bar icons (Tasks · Schedule · Profile · Settings · **Sign out**); a stray
+  tap signed the user out instantly, losing in-progress work. Consolidated the
+  three occasional actions (Profile / Settings / Sign out) into a single overflow
+  (`PopupMenuButton`) menu — decluttering the app bar to **Tasks · Schedule · ⋮**
+  — and **Sign out now requires a confirmation dialog**. No routes changed.
+
+### Changed — UI consistency
+- **Standardized all ad-hoc snackbars on `AppSnackbar`.** Six raw
+  `ScaffoldMessenger…showSnackBar` blocks across the auth/settings screens
+  (login, register, phone OTP, email verification, forgot password, change
+  password) were replaced with `AppSnackbar.success/error`, giving every screen
+  the same icon + radius and the **hide-then-show** behaviour that prevents
+  snackbars from stacking on rapid retries.
+
+### Verified (audit — no change required)
+- **No crashes** from force-unwraps in UI paths: avatar/initials helpers filter
+  empty parts; upload-progress division is guarded (`totalBytes > 0`); checklist
+  progress is guarded against an empty list; image-picker results are
+  null-checked. Firestore models other than the two above already use null-safe
+  casts with defaults.
+- **No broken/dead buttons or reachable placeholder screens.**
+- **Role separation is correct** — the router enforces admin-only `/admin/*`,
+  manager+admin `/manager/*`, employee-only `/`, and self-scoped `/my-*`
+  (admin ⊇ manager); manual URL access is bounced to the role home.
+- **Loading / empty / error states are already covered** on every list screen
+  (skeletons, `TaskEmptyState`, `AppSnackbar` errors, pull-to-refresh).
+- `flutter analyze` clean (2 pre-existing infos); **10 tests pass** (7 existing +
+  3 new crash-regression tests).
+
+---
+
 ## 2026-06-16 — Phase 10: Production Hardening & QA
 
 A verification, stabilization and UI-modernization pass for a production beta —

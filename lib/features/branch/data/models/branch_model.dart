@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
 
 /// Firestore (de)serialization for [BranchEntity] — collection `branches/{id}`.
@@ -27,9 +27,9 @@ class BranchModel {
         name: map['name'] as String? ?? '',
         location: map['location'] as String?,
         isActive: map['isActive'] as bool? ?? true,
-        createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
-        updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
-        deletedAt: (map['deletedAt'] as Timestamp?)?.toDate(),
+        createdAt: map.date('createdAt'),
+        updatedAt: map.date('updatedAt'),
+        deletedAt: map.date('deletedAt'),
       );
 
   factory BranchModel.fromEntity(BranchEntity e) => BranchModel(

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fbro/core/enums/task_priority.dart';
-import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/status_badge.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/task/domain/entities/checklist_item.dart';
@@ -92,7 +92,7 @@ class TaskCard extends StatelessWidget {
                                 .copyWith(fontWeight: FontWeight.w600)),
                       ),
                       const SizedBox(width: AppSpacing.sm),
-                      _StatusBadge(status: task.status),
+                      StatusBadge.task(task.status),
                     ],
                   ),
                   if (description.isNotEmpty) ...[
@@ -434,28 +434,6 @@ class _ChecklistRow extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
-  final TaskStatus status;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _statusColor(status);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withAlpha(38),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withAlpha(120)),
-      ),
-      child: Text(
-        _statusLabel(status),
-        style: AppTypography.caption.copyWith(color: color),
-      ),
-    );
-  }
-}
-
 class _PriorityChip extends StatelessWidget {
   const _PriorityChip({required this.priority});
   final TaskPriority priority;
@@ -543,35 +521,3 @@ Color _priorityColor(TaskPriority p) {
   }
 }
 
-Color _statusColor(TaskStatus s) {
-  switch (s) {
-    case TaskStatus.pending:
-      return AppColors.textTertiary;
-    case TaskStatus.started:
-    case TaskStatus.waitingReview:
-      return AppColors.warning;
-    case TaskStatus.completed:
-      return AppColors.primary;
-    case TaskStatus.approved:
-      return AppColors.success;
-    case TaskStatus.rejected:
-      return AppColors.error;
-  }
-}
-
-String _statusLabel(TaskStatus s) {
-  switch (s) {
-    case TaskStatus.pending:
-      return 'Pending';
-    case TaskStatus.started:
-      return 'Started';
-    case TaskStatus.completed:
-      return 'Completed';
-    case TaskStatus.waitingReview:
-      return 'Waiting Review';
-    case TaskStatus.approved:
-      return 'Approved';
-    case TaskStatus.rejected:
-      return 'Rejected';
-  }
-}

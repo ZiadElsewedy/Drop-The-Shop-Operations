@@ -5,6 +5,8 @@ import 'package:fbro/core/routes/route_names.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
+import 'package:fbro/core/widgets/app_dialog.dart';
 
 /// Shared chrome for every role shell (admin / manager / employee).
 ///
@@ -33,10 +35,7 @@ class RoleScaffold extends StatelessWidget {
             onPressed: () {
               // Dispatch to the caller's role-appropriate task screen (admin:
               // all branches · manager: own branch · employee: own tasks).
-              final role = context.read<AuthCubit>().state.maybeWhen(
-                    authenticated: (u) => u.role,
-                    orElse: () => null,
-                  );
+              final role = context.currentRole;
               if (role != null) context.push(RouteNames.tasksForRole(role));
             },
             tooltip: 'Tasks',
@@ -47,35 +46,71 @@ class RoleScaffold extends StatelessWidget {
             onPressed: () {
               // Dispatch to the caller's role-appropriate weekly-schedule screen
               // (admin: any branch · manager: own branch · employee: own branch).
-              final role = context.read<AuthCubit>().state.maybeWhen(
-                    authenticated: (u) => u.role,
-                    orElse: () => null,
-                  );
+              final role = context.currentRole;
               if (role != null) context.push(RouteNames.scheduleForRole(role));
             },
             tooltip: 'Schedule',
           ),
-          IconButton(
-            icon: const Icon(Icons.person_outline_rounded,
+          // Occasional actions live in a single overflow menu so the app bar
+          // stays uncluttered and Sign out can't be triggered by an accidental
+          // tap (it now requires opening the menu + confirming).
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded,
                 color: AppColors.textSecondary),
-            onPressed: () => context.push(RouteNames.profile),
-            tooltip: 'Profile',
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined,
-                color: AppColors.textSecondary),
-            onPressed: () => context.push(RouteNames.settings),
-            tooltip: 'Settings',
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout_rounded,
-                color: AppColors.textSecondary),
-            onPressed: () => context.read<AuthCubit>().signOut(),
-            tooltip: 'Sign out',
+            color: AppColors.darkSurfaceElevated,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            tooltip: 'More',
+            onSelected: (value) {
+              switch (value) {
+                case 'profile':
+                  context.push(RouteNames.profile);
+                case 'settings':
+                  context.push(RouteNames.settings);
+                case 'signout':
+                  _confirmSignOut(context);
+              }
+            },
+            itemBuilder: (context) => [
+              _menuItem('profile', Icons.person_outline_rounded, 'Profile'),
+              _menuItem('settings', Icons.settings_outlined, 'Settings'),
+              const PopupMenuDivider(),
+              _menuItem('signout', Icons.logout_rounded, 'Sign out',
+                  danger: true),
+            ],
           ),
         ],
       ),
       body: child,
     );
+  }
+
+  PopupMenuItem<String> _menuItem(String value, IconData icon, String label,
+      {bool danger = false}) {
+    final color = danger ? AppColors.error : AppColors.textPrimary;
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 12),
+          Text(label, style: AppTypography.label.copyWith(color: color)),
+        ],
+      ),
+    );
+  }
+
+  /// Confirms before clearing the session — signing out is destructive of any
+  /// in-progress work and forces a re-login, so it should never be one tap.
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final auth = context.read<AuthCubit>(); // capture before the async gap
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Sign out?',
+      message: "You'll need to sign in again to access your account.",
+      confirmLabel: 'Sign out',
+      destructive: true,
+    );
+    if (confirmed) auth.signOut();
   }
 }

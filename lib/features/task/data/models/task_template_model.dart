@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:fbro/core/enums/task_type.dart';
 import 'package:fbro/core/enums/task_priority.dart';
 import 'package:fbro/features/task/domain/entities/checklist_item.dart';
@@ -42,8 +42,8 @@ class TaskTemplateModel {
         checklistItems: checklistTemplatesFromList(map['checklistItems']),
         branchId: map['branchId'] as String?,
         createdBy: map['createdBy'] as String?,
-        createdAt: (map['createdAt'] as Timestamp?)?.toDate(),
-        updatedAt: (map['updatedAt'] as Timestamp?)?.toDate(),
+        createdAt: map.date('createdAt'),
+        updatedAt: map.date('updatedAt'),
       );
 
   factory TaskTemplateModel.fromEntity(TaskTemplateEntity e) =>

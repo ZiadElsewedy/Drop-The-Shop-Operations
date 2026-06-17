@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fbro/core/theme/app_colors.dart';
+import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 
 class AppTextField extends StatefulWidget {
@@ -8,6 +9,7 @@ class AppTextField extends StatefulWidget {
   final String? hint;
   final IconData? prefixIcon;
   final Widget? suffix;
+  final IconData? suffixIcon;
   final bool obscureText;
   final TextInputType keyboardType;
   final String? Function(String?)? validator;
@@ -16,6 +18,8 @@ class AppTextField extends StatefulWidget {
   final void Function(String)? onSubmitted;
   final bool autofocus;
   final int? maxLength;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   const AppTextField({
     super.key,
@@ -24,6 +28,7 @@ class AppTextField extends StatefulWidget {
     this.hint,
     this.prefixIcon,
     this.suffix,
+    this.suffixIcon,
     this.obscureText = false,
     this.keyboardType = TextInputType.text,
     this.validator,
@@ -32,6 +37,8 @@ class AppTextField extends StatefulWidget {
     this.onSubmitted,
     this.autofocus = false,
     this.maxLength,
+    this.readOnly = false,
+    this.onTap,
   });
 
   @override
@@ -85,7 +92,7 @@ class _AppTextFieldState extends State<AppTextField>
       builder: (_, child) => Container(
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: AppRadius.xlAll,
           border: Border.all(
             color: _isFocused ? AppColors.primary : defaultBorder,
             width: _isFocused ? 1.5 : 1,
@@ -114,6 +121,8 @@ class _AppTextFieldState extends State<AppTextField>
           onFieldSubmitted: widget.onSubmitted,
           autofocus: widget.autofocus,
           maxLength: widget.maxLength,
+          readOnly: widget.readOnly,
+          onTap: widget.onTap,
           style: AppTypography.body.copyWith(
             color: isDark ? AppColors.textPrimary : AppColors.textDark,
             fontSize: 15,
@@ -146,7 +155,14 @@ class _AppTextFieldState extends State<AppTextField>
                       color: AppColors.textTertiary,
                     ),
                   )
-                : widget.suffix,
+                : widget.suffix ??
+                    (widget.suffixIcon != null
+                        ? Icon(widget.suffixIcon,
+                            size: 20,
+                            color: _isFocused
+                                ? AppColors.primary
+                                : AppColors.textTertiary)
+                        : null),
             filled: false,
             border: InputBorder.none,
             enabledBorder: InputBorder.none,

@@ -94,11 +94,12 @@ lib/
 │   ├── constants/            # app_constants.dart (appName, collection names)
 │   ├── di/                   # injection.dart — AppDependencies service locator
 │   ├── enums/                # user_role · approval_status · task_* · notification_type · schedule_day · schedule_shift · swap_status
+│   ├── extensions/           # context_extensions (currentUser/currentRole) · firestore_extensions (Map.date — Timestamp→DateTime)
 │   ├── services/             # notification_service.dart (FCM foundation, Phase 6)
 │   ├── errors/               # exceptions.dart (data layer) / failures.dart (domain)
 │   ├── routes/               # app_router.dart (role dispatch + guards), route_names.dart
 │   ├── theme/                # app_colors / typography / spacing / radius / app_theme
-│   └── widgets/              # app_snackbar, drop_logo, skeleton, role_scaffold, role_placeholder, user_avatar (+AvatarStack), app_motion (EntranceFade), app_search_field
+│   └── widgets/              # app_snackbar, app_dialog (showConfirmDialog), app_card, app_empty_state, status_badge, drop_logo, skeleton, list_skeleton, role_scaffold, user_avatar (+AvatarStack), app_motion (EntranceFade), app_search_field
 └── features/
     ├── auth/                 # Sign-in/up, phone OTP, Google, email verify, password, role, approval
     ├── profile/              # View + edit profile, image uploads, username checks
@@ -484,7 +485,15 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Schedule UI polish (badges/avatars/coverage)** | `lib/features/schedule/presentation/widgets/manager_schedule_view.dart` + `schedule_helpers.dart` (`userForUid`) + `pages/my_schedule_screen.dart` (no logic change) |
 | **Admin/branch DI wiring**                | `lib/core/di/injection.dart` (`branchCubit`/`adminUsersCubit`/`adminStatsCubit`) + `main.dart` providers |
 | **A role's home/dashboard screen**        | `lib/features/{employee,manager,admin}/presentation/pages/`              |
-| **Shared role chrome / placeholder**      | `lib/core/widgets/role_scaffold.dart` · `role_placeholder.dart`         |
+| **Shared role chrome**                    | `lib/core/widgets/role_scaffold.dart`                                    |
+| **Signed-in user/role off a context**     | `lib/core/extensions/context_extensions.dart` (`context.currentUser` / `context.currentRole`) |
+| **Confirmation / delete dialogs**         | `lib/core/widgets/app_dialog.dart` (`showConfirmDialog(...)`)            |
+| **Form fields (text / password / dropdown)** | `lib/features/auth/presentation/widgets/` — `app_text_field.dart` (`AppTextField`: label·hint·prefix·suffix·readOnly·onTap·built-in show/hide), `app_password_field.dart` (`AppPasswordField`), `app_dropdown_field.dart` (`AppDropdownField<T>` — branch/role/status/priority) |
+| **Primary / secondary / ghost buttons**   | `lib/features/auth/presentation/widgets/app_button.dart` (`AppButton` · `AppButton.secondary` · `AppButton.ghost`) |
+| **Reusable card shell / empty state**     | `lib/core/widgets/app_card.dart` (`AppCard` — surface·radius 24·press·hover) · `app_empty_state.dart` (`AppEmptyState`; `TaskEmptyState` delegates to it) |
+| **Status pills (task/approval/swap/active)** | `lib/core/widgets/status_badge.dart` (`StatusBadge` + `.task`/`.approval`/`.swap`/`.active` factories — colour+label in one place) |
+| **Role checks / feedback off a context**  | `lib/core/extensions/context_extensions.dart` (`context.isAdmin`/`isManager`/`isEmployee`, `context.showSuccess`/`showError`) |
+| **Firestore Timestamp→DateTime mapping**  | `lib/core/extensions/firestore_extensions.dart` (`map.date('field')` in every `*Model.fromMap`) |
 | **Roles enum / role values**              | `lib/core/enums/user_role.dart`                                         |
 | **Approval status enum / values**         | `lib/core/enums/approval_status.dart` (pending/approved/rejected)        |
 | **Role + approval on the user model / seeding** | `lib/features/auth/data/models/user_model.dart` + `data/datasources/user_remote_datasource.dart` (seed-once block: pending + inactive employee) |
@@ -662,8 +671,7 @@ Patterns below are established across the codebase and **must be reused**.
   with an `_isXArea` helper + a guard line, and extend `RouteNames.homeForRole`.
   Never gate role access in the UI only.
 - New role-facing screens are presentation-only features
-  (`features/<role>/presentation/pages/`) wrapped in a `RoleScaffold`; reuse
-  `RolePlaceholder` for not-yet-built screens.
+  (`features/<role>/presentation/pages/`) wrapped in a `RoleScaffold`.
 
 ### Codegen
 After editing any `freezed` file (`*_entity.dart`, `*_state.dart`):
