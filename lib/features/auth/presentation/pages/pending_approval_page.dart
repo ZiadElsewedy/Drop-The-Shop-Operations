@@ -9,7 +9,7 @@ import 'package:fbro/features/auth/presentation/animations/fade_slide_transition
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 
 /// Holding screen shown to an authenticated account that has not yet been
-/// approved (or has been deactivated). FBRO is an internal ops system: a new
+/// approved (or has been deactivated). DROP is an internal ops system: a new
 /// account cannot use the app until a manager/admin approves it.
 ///
 /// The screen live-watches the user's document via [AuthCubit.watchCurrentUser]

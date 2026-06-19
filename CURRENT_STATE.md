@@ -1,5 +1,7 @@
-# FBRO — Current State
+# DROP — Current State
 
+> Product: **DROP — Operations Management System** (Dart package id stays `fbro`).
+>
 > **Live status snapshot of the project.** Read this after
 > [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) to know what's done, what's pending,
 > and what needs configuring. This file answers "where are we right now?" —
@@ -9,8 +11,33 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-18 (employee home redesign v2)
-**Version:** 1.0.0+1 · **Branch:** `redesign` (DROP — monochrome enterprise UX)
+**Last updated:** 2026-06-19 (admin tasks setState fix + lint cleanup)
+**Version:** 1.0.0+1 · **Branch:** `feature/tasks-improvements` (DROP — monochrome enterprise UX)
+
+> **Admin tasks setState fix (2026-06-19):** `AdminTaskOverviewScreen._load()` was
+> calling `setState(() => _branchesFuture = context.read<TaskCubit>().branches())`
+> — the `=>` arrow made the lambda return the Future, triggering Flutter's
+> `setState() callback returned a Future` error at runtime. Fixed: the Future is
+> now captured before `setState`, and the state update uses a block body (`{}`).
+> Also resolved the 2 pre-existing `prefer_initializing_formals` linter infos
+> (`AuthCubit._signInWithEmail`, `ProfileCubit._updateProfile`). `flutter analyze`
+> clean — **0 issues**.
+
+> **Employee schedule premium redesign (2026-06-19):** `my_schedule_screen.dart`
+> rebuilt from scratch. `_MyWeekTab` is now a `StatefulWidget` with a single
+> `AnimationController` (900 ms) and per-section staggered `FadeTransition` +
+> `SlideTransition` (greeting 0–35%, hero card 15–55%, week header 30–60%, week
+> rows staggered 40–90%). Greeting section shows time-based salutation ("Good
+> morning/afternoon/evening, [FirstName] 👋") + formatted date. **Today hero card**
+> redesigned: rounded-square shift icon, "TODAY" pill badge, shift name headline,
+> time-range + "In Xm" countdown pill (appears when shift starts within 2 h),
+> two-column Manager + Working-with section (avatar + name + role label; named
+> avatar stack with first-name summary), "View Shift Details" tappable divider row
+> → `_ShiftDetailsSheet` modal with full team list. **Week rows** (all 7 days,
+> Sun → Sat): `_DayChip` (3-letter abbrev + date number; today gets white filled
+> box + dark text); shift icon circle; shift name + time; Swap / Today pill /
+> "—" action. Notification bell added to app bar (cosmetic). `flutter analyze`
+> clean (2 pre-existing infos).
 
 > **Employee home redesign v2 (2026-06-18):** `employee_home_screen.dart` rebuilt
 > into a live command center — an animated **circular progress ring** hero
@@ -28,6 +55,8 @@
 > **App branding (2026-06-18):** App icon replaced with DROP branding image on Android + iOS (all sizes auto-generated). App display name changed to **DROP** (AndroidManifest + Info.plist). Dart package name stays `fbro` internally.
 
 > **Task workflow architecture (2026-06-18 — two passes):** Eliminated the double-write race condition and completed the single-write architecture. Every status transition is now one atomic `_updateTask` call that writes `status` + `activityLog` entry + per-transition audit timestamp in a single Firestore document write. **New fields:** `startedAt` (set by `startTask`) and `submittedAt` (set by `submitForReview` and `completeAndSubmit`), joining the existing `approvedAt`/`rejectedAt`. `ChangeTaskStatus` and `ReviewTask` use cases removed from `TaskCubit` (dormant on disk). `_canTransition` updated to include `started → waitingReview`. Freezed codegen re-run. `flutter analyze` clean (2 pre-existing infos only).
+>
+> **Task system pass (2026-06-19):** (1) **Proof-upload bug fixed** — `completeAndSubmit` now uploads proof **before** the status write, so a failed upload aborts the transition (task stays `started`, photo retained for retry) instead of silently submitting evidence-less work; the datasource maps Storage error codes to honest messages (unauthorized/object-not-found → "rules not deployed / Storage not enabled" instead of blaming the network) and adds a 60s upload timeout. (2) **Admin task experience redesigned** — `TaskManagementScreen` is now `AdminTaskOverviewScreen`: a branch overview (Active / Pending Review / Overdue / Completion Rate per branch, attention-sorted) with per-branch drill-down. (3) **Dead code removed** — `ChangeTaskStatus`/`ReviewTask` use-case files + the `updateStatus`/`reviewTask` repo+datasource chains + the unused `completeTask` cubit method; shared `ManagerTaskCard` + `startNewTaskFlow` de-duplicate manager/admin task UI. **Infra still required:** deploy `storage.rules` + ensure Firebase Storage is enabled, or proof uploads keep failing.
 
 > **Inline checklist editor + form simplification (2026-06-18):** ① The Create/Edit Task form now has a fully **inline editable checklist** section (`_InlineChecklistEditor`). Managers tap "Add step" to add items, tap the star to toggle required/optional, tap × to remove. On create → items become `ChecklistItem`s; on edit → existing items preserve `completed`/`completedAt`, new items start uncompleted. Template-based tasks pre-populate the checklist editably (was read-only before). ② **"Type: daily/special" dropdown removed** from the form — it was visually redundant with "Repeats"; type is now auto-inferred (recurring → daily, one-off → special). `flutter analyze` clean.
 
@@ -141,9 +170,10 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 - **Phase 4 — Task workflow (activated)** — `TaskCubit` + `TaskState` + 10 use
   cases; the three screens are now **functional**: employee My Tasks
   (start → complete with notes + optional proof image → submit for review,
-  restart if rejected); manager Branch Tasks / admin Task Management (create,
-  edit, assign employee from a branch picker, delete, review → approve/reject
-  with notes). Added review **audit fields** (`approvedBy`/`approvedAt`/
+  restart if rejected); manager Branch Tasks (flat list) / admin Task Management
+  (now a **branch overview** with per-branch vitals + drill-down — see the
+  2026-06-19 pass above) — both create, edit, assign employee from a branch
+  picker, delete, review → approve/reject with notes. Added review **audit fields** (`approvedBy`/`approvedAt`/
   `rejectedBy`/`rejectedAt`/`reviewNotes`), **proof image upload** to Storage,
   **client-side status-transition validation** (`TaskCubit._canTransition`), and
   `AuthRepository.getUsersByBranch` (assignee picker). `TaskCubit` is provided

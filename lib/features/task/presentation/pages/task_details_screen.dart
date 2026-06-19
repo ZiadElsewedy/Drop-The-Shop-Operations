@@ -140,7 +140,10 @@ class _DetailsView extends StatelessWidget {
         ),
         children: [
           // ── Status + meta header ────────────────────────────────
-          _StatusHeader(task: task),
+          _StatusHeader(
+            task: task,
+            branchName: cubit.branchNames[task.branchId ?? ''],
+          ),
           const SizedBox(height: AppSpacing.xl),
 
           // ── Assignment ─────────────────────────────────────────
@@ -262,8 +265,9 @@ class _DetailsView extends StatelessWidget {
 // ─── Status header ─────────────────────────────────────────────────
 
 class _StatusHeader extends StatelessWidget {
-  const _StatusHeader({required this.task});
+  const _StatusHeader({required this.task, this.branchName});
   final TaskEntity task;
+  final String? branchName;
 
   @override
   Widget build(BuildContext context) {
@@ -285,6 +289,11 @@ class _StatusHeader extends StatelessWidget {
             spacing: AppSpacing.xl,
             runSpacing: AppSpacing.sm,
             children: [
+              if ((branchName ?? '').isNotEmpty)
+                _MetaPill(
+                  icon: Icons.store_mall_directory_outlined,
+                  label: branchName!,
+                ),
               _MetaPill(
                 icon: Icons.flag_outlined,
                 label: _priorityLabel(task.priority),
@@ -376,8 +385,8 @@ class _StatusPill extends StatelessWidget {
         TaskStatus.rejected => (
             AppColors.error,
             AppColors.errorSurface,
-            'REJECTED',
-            Icons.cancel_outlined,
+            'NEEDS REWORK',
+            Icons.replay_rounded,
           ),
       };
 }
@@ -862,7 +871,7 @@ class _TimelineRow extends StatelessWidget {
         'completed' => 'Completed',
         'waitingReview' => 'Submitted for review',
         'approved' => 'Approved',
-        'rejected' => 'Rejected',
+        'rejected' => 'Rework requested',
         _ => s,
       };
 
@@ -909,7 +918,7 @@ class _EmployeeActions extends StatelessWidget {
           },
         ),
       TaskStatus.rejected => AppButton(
-          label: 'Restart Task',
+          label: 'Start Rework',
           icon: const Icon(Icons.replay_rounded,
               size: 18, color: AppColors.textDark),
           onPressed: () => cubit.startTask(task),
@@ -954,14 +963,15 @@ class _CompleteButtonState extends State<_CompleteButton> {
 
   Future<void> _submit() async {
     final notes = _notes.text.trim();
-    await widget.cubit.completeAndSubmit(
+    final ok = await widget.cubit.completeAndSubmit(
       widget.task,
       notes: notes.isEmpty ? null : notes,
       proof: _proof,
     );
-    // Pop after the upload completes so any upload-failure snackbar fires
-    // while this screen's BlocConsumer is still mounted and visible.
-    if (mounted) Navigator.of(context).pop();
+    // Only leave the screen on success. On failure the cubit already surfaced
+    // the real error and the selected photo is still attached here, so the
+    // employee can retry (or remove the photo) without losing their work.
+    if (ok && mounted) Navigator.of(context).pop();
   }
 
   @override
@@ -1022,6 +1032,16 @@ class _CompleteButtonState extends State<_CompleteButton> {
                       style: AppTypography.body,
                     ),
                   ),
+                  if (_proof != null)
+                    GestureDetector(
+                      onTap: () => setState(() => _proof = null),
+                      behavior: HitTestBehavior.opaque,
+                      child: const Padding(
+                        padding: EdgeInsets.only(left: AppSpacing.sm),
+                        child: Icon(Icons.close_rounded,
+                            size: 18, color: AppColors.textTertiary),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1078,7 +1098,7 @@ class _ReviewBlockState extends State<_ReviewBlock> {
         const SizedBox(height: AppSpacing.lg),
         AppTextField(
           controller: _notes,
-          label: 'Review note (optional)',
+          label: 'What needs fixing? (optional)',
           prefixIcon: Icons.rate_review_outlined,
         ),
         const SizedBox(height: AppSpacing.md),
@@ -1092,15 +1112,17 @@ class _ReviewBlockState extends State<_ReviewBlock> {
           },
         ),
         const SizedBox(height: AppSpacing.sm),
+        // "Request rework" sends the task back for the employee to fix (the
+        // existing rejected → restart path) — a normal workflow step, not a
+        // destructive action, so no red confirm.
         AppButton.secondary(
-          label: 'Reject',
+          label: 'Request Rework',
           onPressed: () async {
             final confirmed = await showConfirmDialog(
               context,
-              title: 'Reject task?',
-              message: 'The employee will be asked to redo it.',
-              confirmLabel: 'Reject',
-              destructive: true,
+              title: 'Request rework?',
+              message: 'The employee will be asked to fix and resubmit it.',
+              confirmLabel: 'Request rework',
             );
             if (confirmed && context.mounted) {
               widget.cubit.rejectTask(widget.task, reviewNotes: _note);

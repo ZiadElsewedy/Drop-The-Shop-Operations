@@ -43,7 +43,7 @@ class AuthCubit extends Cubit<AuthState> {
 
   AuthCubit({
     required this._repository,
-    required SignInWithEmail signInWithEmail,
+    required this._signInWithEmail,
     required this._registerWithEmail,
     required this._verifyPhoneNumber,
     required this._signInWithOtp,
@@ -56,8 +56,7 @@ class AuthCubit extends Cubit<AuthState> {
     required this._checkEmailVerified,
     required this._changePassword,
     required this._deleteAccount,
-  })  : _signInWithEmail = signInWithEmail,
-        super(const AuthState.initial());
+  }) : super(const AuthState.initial());
 
   /// Called once from SplashPage on cold start.
   Future<void> restoreSession() async {

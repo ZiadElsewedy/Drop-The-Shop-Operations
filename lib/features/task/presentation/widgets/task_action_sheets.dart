@@ -862,7 +862,7 @@ class _ReviewSheetState extends State<_ReviewSheet> {
           const SizedBox(height: AppSpacing.lg),
           AppTextField(
             controller: _notes,
-            label: 'Review note (optional)',
+            label: 'What needs fixing? (optional)',
             prefixIcon: Icons.rate_review_outlined,
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -876,8 +876,9 @@ class _ReviewSheetState extends State<_ReviewSheet> {
             },
           ),
           const SizedBox(height: AppSpacing.md),
+          // Sends the task back for the employee to fix and resubmit.
           AppButton.secondary(
-            label: 'Reject',
+            label: 'Request Rework',
             onPressed: () {
               widget.cubit.rejectTask(widget.task, reviewNotes: _note);
               Navigator.of(context).pop();

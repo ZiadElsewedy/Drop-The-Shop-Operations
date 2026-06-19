@@ -16,6 +16,50 @@ import 'package:fbro/features/task/presentation/widgets/task_action_sheets.dart'
 /// How the manager/admin wants to start a new task.
 enum NewTaskChoice { blank, fromTemplate }
 
+/// Drives the full "New Task" entry flow shared by the manager view and the
+/// admin branch overview / drill-down: pick blank vs. from-template, then open
+/// the (optionally prefilled) task form. [templateBranchFilter] scopes which
+/// templates are offered (null = all, for admins); [defaultBranchId] seeds the
+/// branch for managers (admins pick it in the form).
+Future<void> startNewTaskFlow({
+  required BuildContext context,
+  required TaskCubit cubit,
+  required bool isAdmin,
+  required String defaultBranchId,
+  String? templateBranchFilter,
+}) async {
+  final templates = await cubit.templates(branchId: templateBranchFilter);
+  if (!context.mounted) return;
+
+  final choice =
+      await showNewTaskChooserSheet(context, hasTemplates: templates.isNotEmpty);
+  if (!context.mounted || choice == null) return;
+
+  if (choice == NewTaskChoice.blank) {
+    await showTaskFormSheet(
+      context: context,
+      cubit: cubit,
+      isAdmin: isAdmin,
+      defaultBranchId: defaultBranchId,
+    );
+    return;
+  }
+
+  final template = await showTemplatePickerSheet(
+    context: context,
+    cubit: cubit,
+    branchId: templateBranchFilter,
+  );
+  if (!context.mounted || template == null) return;
+  await showTaskFormSheet(
+    context: context,
+    cubit: cubit,
+    prefill: template,
+    isAdmin: isAdmin,
+    defaultBranchId: defaultBranchId,
+  );
+}
+
 /// Step 1 of New Task: a blank task or one started from a saved template (e.g.
 /// "Open Shop", "Night Checklist"). Returns the chosen path (or null if
 /// dismissed). [hasTemplates] hides the template path when none exist.

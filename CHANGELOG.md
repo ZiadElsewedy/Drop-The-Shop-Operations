@@ -1,8 +1,9 @@
 # Changelog
 
-All notable changes to **FBRO** are recorded here. After every completed
-feature, append a short summary of what was **added / removed / fixed /
-refactored**. See [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for architecture.
+All notable changes to **DROP — Operations Management System** (Dart package id
+`fbro`) are recorded here. After every completed feature, append a short summary
+of what was **added / removed / fixed / refactored**. See
+[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for architecture.
 
 The project adheres loosely to [Keep a Changelog](https://keepachangelog.com)
 and [Semantic Versioning](https://semver.org).
@@ -10,6 +11,69 @@ and [Semantic Versioning](https://semver.org).
 ---
 
 ## [Unreleased]
+
+### Changed (2026-06-19 — Employee schedule premium redesign)
+
+**`my_schedule_screen.dart` fully rebuilt** to a premium, animated schedule view:
+
+- **Staggered entrance animations:** `_MyWeekTab` is now a `StatefulWidget` with a
+  900 ms `AnimationController`; each section fades in + slides up with its own
+  `Interval`-based `CurvedAnimation` (greeting → today card → week header → week
+  rows). Animation replays on every refresh so the user always feels the update.
+- **Greeting header:** time-aware salutation ("Good morning/afternoon/evening,
+  [FirstName] 👋") + formatted date (e.g. "Friday, 20 Jun").
+- **Today hero card:** prominent card with a rounded-square shift icon box, "TODAY"
+  pill badge, large shift-name headline, time range line with a `_CountdownRow`
+  ("In Xm" pill visible when shift starts within the next 2 hours), two-column
+  **Manager / Working with** layout (avatar + name + role label, `_TeamAvatars`
+  avatar stack with first-name summary text), and a tappable "View Shift Details"
+  divider row that opens `_ShiftDetailsSheet` — a bottom sheet listing the full
+  team for that shift.
+- **Week rows (all 7 days):** every day of the week is now shown (no more
+  skipping off-days). Each row has `_DayChip` (3-letter day + date number; today
+  gets white filled square + dark text), a circular shift icon, shift name + time
+  range, and a Swap button / "Today" filled pill / "—" for off days.
+- **App bar:** notification bell icon added alongside the refresh icon.
+- No data-layer changes — uses existing `ScheduleCubit` + `ShiftSwapCubit`.
+  `flutter analyze` clean (2 pre-existing infos).
+
+### Fixed (2026-06-19 — Task proof upload + admin task experience)
+
+**Rebrand:** the product is now **DROP — Operations Management System**. All
+user-facing names (app label/display name, web manifest + title, `appName`,
+README) and in-code product references say **DROP**; the Dart package identifier
+stays `fbro` for build stability (documented).
+
+**P1 — Proof photo upload (critical fix).** Employee proof images weren't
+reaching reviewers. Root cause was twofold: (a) `completeAndSubmit` caught any
+upload error and submitted the task **anyway**, permanently dropping the photo,
+while (b) the catch-all message always blamed "internet connection," masking the
+real cause (Storage rules not deployed / Storage not enabled). Now proof is
+uploaded **before** the status write — a failure aborts the transition (task
+stays `started`, photo retained for retry), the cubit returns success so the UI
+only leaves on success, the employee can clear/replace the photo, and the
+datasource maps Storage error codes to honest, actionable messages (+60s upload
+timeout). **Infra still required:** deploy `storage.rules` and ensure Firebase
+Storage is enabled, or every upload will keep failing regardless of app code.
+
+**P2 — Admin task experience.** `TaskManagementScreen` is now
+`AdminTaskOverviewScreen`: a **branch-based overview** (Active / Pending Review /
+Overdue / Completion Rate per branch, sorted so branches needing attention come
+first, plus a company summary strip) with a per-branch drill-down to the full
+task list. Replaces the flat all-branches list that didn't scale. **Fixed
+`setState() callback returned a Future`** — `_load()` was using `setState(() =>`
+with an async method, making the lambda return a `Future`; fixed by extracting the
+Future first then updating state synchronously in a block body.
+
+**P4 — Architecture cleanup.** Removed dead code: `ChangeTaskStatus` /
+`ReviewTask` use-case files, the `updateStatus` / `reviewTask` repository +
+datasource chains, and the unused `completeTask` cubit method. Extracted a shared
+`ManagerTaskCard` widget and `startNewTaskFlow` helper so the manager view and
+admin overview/drill-down render task cards and the New-Task flow from one source
+of truth. `flutter analyze` clean (0 issues — **fixed the 2 pre-existing infos**:
+`prefer_initializing_formals` in `AuthCubit` and `ProfileCubit` constructor
+parameters now use initializing formals (`this._signInWithEmail`,
+`this._updateProfile`) instead of the intermediate named-parameter pattern).
 
 ### Changed (2026-06-18 — Employee Home Screen Redesign v2)
 

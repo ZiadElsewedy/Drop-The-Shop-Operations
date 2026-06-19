@@ -62,7 +62,7 @@ GoRouter createRouter(AuthCubit authCubit) {
       }
 
       if (isAuthenticated) {
-        // Approval gate (checked before role dispatch). FBRO is an internal ops
+        // Approval gate (checked before role dispatch). DROP is an internal ops
         // system: an authenticated account that hasn't been approved — or has
         // been deactivated — is confined to the Pending Approval screen until a
         // manager/admin approves it. Sign-out is the only way off the screen.

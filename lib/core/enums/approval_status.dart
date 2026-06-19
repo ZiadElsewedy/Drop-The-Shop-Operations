@@ -1,4 +1,4 @@
-/// Approval lifecycle for a user account. FBRO is an internal operations system,
+/// Approval lifecycle for a user account. DROP is an internal operations system,
 /// so a brand-new self-registration is **not** allowed straight in: it starts
 /// [pending] (and inactive) and is confined to the Pending Approval screen until
 /// a manager/admin approves it (sets it [approved] + active, assigns role/branch).

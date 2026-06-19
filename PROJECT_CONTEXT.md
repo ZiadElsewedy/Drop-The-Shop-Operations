@@ -1,6 +1,8 @@
-# FBRO — Project Context
+# DROP — Project Context
 
-> **Source of truth for the FBRO codebase.** Read this first, before opening any
+> **Source of truth for the DROP codebase** (product name **DROP — Operations
+> Management System**; the Dart package identifier stays `fbro` for build
+> stability — only the brand is DROP). Read this first, before opening any
 > source file. It documents the architecture, dependency chains, where to make
 > changes, and the conventions every contributor (human or AI) must follow.
 >
@@ -255,14 +257,14 @@ fields remain as nullable strings (harmless, unused).
 ```
 TaskDetailsScreen  (all roles — full-screen: status, assignees, checklist, timeline, actions)
 MyTasksScreen (employee — tabbed/sectioned: Active→5 sections / Done)
-ManagerTasksView  ← BranchTasksScreen (manager) / TaskManagementScreen (admin)
+ManagerTasksView (manager, flat list) · AdminTaskOverviewScreen (admin, branch
+overview + drill-down) — both render the shared ManagerTaskCard
 task_card · task_action_sheets (create·assign·review) · task_template_sheets
         ↓  context.read<TaskCubit>()      (provided app-wide in main.dart)
 TaskCubit  + TaskState                                        (presentation/cubit)
         ↓  one use case per WRITE action (reads/streams/templates/activity: repo-direct or inline)
 CreateTask · UpdateTask · DeleteTask · AssignTask
 UploadTaskProof                                    (domain/usecases)
-[ChangeTaskStatus · ReviewTask — dormant; no longer used by TaskCubit]
 GetUsersByBranch (auth use case — assignee picker)
 TaskRepository.watch{AllTasks,TasksByBranch,EmployeeTasks}  (realtime lists)
 TaskRepository.{get,create,delete}Template                 (task templates)
@@ -286,7 +288,7 @@ Cloud Firestore  tasks/{taskId}   task_templates/{id}   Storage tasks/{id}/proof
   Task branch dropdown) — the documented convention for stream/non-action repo
   access. Datasource throws `ServerException`; repo → `ServerFailure`; maps
   `TaskModel → TaskEntity`.
-- **Core workflow:** a manager/admin creates + assigns a task (optionally with a checklist + recurrence); the employee drives it via **`TaskCubit.completeAndSubmit`** — a single action that uploads proof + notes and advances the task directly to `waitingReview` (recording both `completed` and `waitingReview` activity entries in one write); a manager/admin reviews → `approved` | `rejected`; approval auto-spawns the next recurrence when `frequency != none`. Every transition appends an `ActivityEntry` to `task.activityLog`. The legacy two-step `completeTask` → `submitForReview` path is kept for tasks already in `completed` state. `TaskType` (daily/special), `TaskStatus`, `TaskPriority`, and `RecurrenceFrequency` are enums in `core/enums`.
+- **Core workflow:** a manager/admin creates + assigns a task (optionally with a checklist + recurrence); the employee drives it via **`TaskCubit.completeAndSubmit`** — a single action that uploads proof + notes and advances the task directly to `waitingReview` (recording both `completed` and `waitingReview` activity entries in one write); a manager/admin reviews → `approved` | `rejected`; approval auto-spawns the next recurrence when `frequency != none`. Every transition appends an `ActivityEntry` to `task.activityLog`. Proof is uploaded **before** the status write inside `completeAndSubmit`, so a failed upload aborts the transition (task stays `started`, photo retained for retry) rather than silently submitting evidence-less work. The standalone `completeTask` use case was removed (dead since the two-step UX was eliminated); `submitForReview` + the `completed → waitingReview` transition remain only so any pre-existing `completed`-state task can still be advanced. `TaskType` (daily/special), `TaskStatus`, `TaskPriority`, and `RecurrenceFrequency` are enums in `core/enums`.
 - **Branch is never free text.** A manager's task takes their own `branchId`; an **admin picks an existing branch from a Firestore-backed dropdown** (`TaskCubit.branches()` → `BranchRepository`). This guarantees the task's `branchId` matches the employees' `users/{uid}.branchId`, so the Assign picker is always populated.
 - **Realtime lists.** `TaskCubit.load` subscribes to a **live Firestore snapshot stream** by role (admin: `watchAllTasks` · manager: `watchTasksByBranch` · employee: `watchEmployeeTasks`), so a newly assigned task or any status change appears **immediately** (backed by the offline cache). Mutations keep the list visible (`loaded(tasks, busy)`) and the stream reflects the result; on error the previous list is restored. Pull-to-refresh re-subscribes. The subscription is cancelled in `close()`.
 - **Every status transition is a single atomic `_updateTask` write** that sets the new `status`, its per-transition audit timestamp (`startedAt`/`submittedAt`/`approvedAt`/`rejectedAt`), and appends the `ActivityEntry` in one Firestore document write — there is no two-write pattern. The `_mutating` flag prevents concurrent writes. **Status transitions are validated in `TaskCubit._canTransition`** (invalid moves are blocked client-side); WHO may write is enforced in `firestore.rules` (`tasks/{taskId}`): admin all branches, manager own branch, employee own assigned tasks with **limited writes** (may advance status / add notes / proof but may not reassign, change branch, or approve/reject). Proof images upload to Storage `tasks/{taskId}/proof.jpg`.
@@ -427,7 +429,7 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Task screens (admin/manager/employee)** | `lib/features/task/presentation/pages/` (`my_tasks_screen` employee · `branch_tasks_screen`/`task_management_screen` → shared `widgets/manager_tasks_view.dart`) |
 | **Task UI actions (create/assign/review/complete) + card** | `lib/features/task/presentation/widgets/` (`task_action_sheets.dart`, `task_card.dart`, `task_empty_state.dart`) |
 | **Multi-assignee (assigneeIds[]) — schema/logic** | `task_entity.dart` (`assigneeIds`, `isAssigned`) + `task_model.dart` (writes `assigneeIds` + primary `assignedEmployeeId` mirror; reads with legacy fallback) → `assign_task.dart` use case → `TaskCubit.assignEmployees` → multi-select `_AssignSheet` in `task_action_sheets.dart`; rules `tasks/{id}` (`assigneeIds arrayContains`); stats `employeeStats` |
-| **Checklist (template + task) schema/logic** | `lib/features/task/domain/entities/checklist_item.dart` (`ChecklistItem` + `ChecklistItemTemplate`) + `task_template_entity.dart` (`checklistItems`, `buildTaskChecklist`) + `task_entity.dart` (`checklist`, `requiredChecklistComplete`/progress getters); serialization in `task_template_model.dart` / `task_model.dart`; completion gate + toggling in `TaskCubit` (`completeTask`/`toggleChecklistItem`); checklist editor in `task_template_sheets.dart` |
+| **Checklist (template + task) schema/logic** | `lib/features/task/domain/entities/checklist_item.dart` (`ChecklistItem` + `ChecklistItemTemplate`) + `task_template_entity.dart` (`checklistItems`, `buildTaskChecklist`) + `task_entity.dart` (`checklist`, `requiredChecklistComplete`/progress getters); serialization in `task_template_model.dart` / `task_model.dart`; completion gate + toggling in `TaskCubit` (`completeAndSubmit`/`toggleChecklistItem`); checklist editor in `task_template_sheets.dart` |
 | **Assignee identity on cards (uid → user)** | `TaskCubit` directory (`_ensureDirectory` via `GetUsersByBranch`) → `TaskState.loaded.directory` → `task_card.dart` (`resolveAssignees`, `_AssigneesRow`) |
 | **Reliable avatars (image + initials fallback)** | `lib/core/widgets/user_avatar.dart` (`UserAvatar`, `UserAvatar.fromUser`, `AvatarStack`, `avatarInitials`) — used by task cards, admin user cards, schedule chips/pickers |
 | **Card / list entrance motion** | `lib/core/widgets/app_motion.dart` (`EntranceFade`, `staggerDelay`) |

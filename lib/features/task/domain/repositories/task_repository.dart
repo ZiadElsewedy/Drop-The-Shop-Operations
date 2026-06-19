@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 
@@ -43,24 +42,11 @@ abstract class TaskRepository {
     String? assignedShiftId,
   });
 
-  /// Moves the task to [status] (employee start/complete/submit). Approve/reject
-  /// go through [reviewTask] so the audit fields are written together.
-  Future<void> updateStatus({
-    required String taskId,
-    required TaskStatus status,
-  });
-
-  /// Reviews the task: sets the terminal status (approved/rejected) together with
-  /// the audit fields (approvedBy/approvedAt or rejectedBy/rejectedAt) and an
-  /// optional [reviewNotes]. Manager (own branch) / admin only.
-  Future<void> reviewTask({
-    required String taskId,
-    required bool approved,
-    required String reviewerId,
-    String? reviewNotes,
-  });
-
   /// Uploads a proof image to Storage for the task and returns its download URL.
+  ///
+  /// Status transitions (start / complete+submit / approve / reject) all flow
+  /// through [updateTask] as a single write that also appends the activity-log
+  /// entry, so there is intentionally no separate status/review method here.
   Future<String> uploadProof(String taskId, File file);
 
   // ─── Task templates (reusable blueprints) ──────────────────────

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_dialog.dart';
 import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/core/widgets/list_skeleton.dart';
@@ -13,9 +11,7 @@ import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 import 'package:fbro/features/task/presentation/cubit/task_state.dart';
-import 'package:fbro/features/task/presentation/pages/task_details_screen.dart';
-import 'package:fbro/features/task/presentation/widgets/task_action_sheets.dart';
-import 'package:fbro/features/task/presentation/widgets/task_card.dart';
+import 'package:fbro/features/task/presentation/widgets/manager_task_card.dart';
 import 'package:fbro/features/task/presentation/widgets/task_empty_state.dart';
 import 'package:fbro/features/task/presentation/widgets/task_template_sheets.dart';
 
@@ -51,42 +47,16 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
 
   /// New Task is a two-step flow: choose blank vs. from-a-template, then open
   /// the prefilled task form. Templates cut the daily retyping of "Open Shop",
-  /// "Night Checklist", etc.
+  /// "Night Checklist", etc. Admin sees all templates (branch picked in the
+  /// form); a manager sees global + their own branch templates.
   Future<void> _create() async {
     if (_user == null) return;
-    final cubit = context.read<TaskCubit>();
-    // Admin sees all templates (branch picked in the form); a manager sees
-    // global + their own branch templates.
-    final branchFilter = widget.isAdmin ? null : _branchId;
-    final templates = await cubit.templates(branchId: branchFilter);
-    if (!mounted) return;
-
-    final choice =
-        await showNewTaskChooserSheet(context, hasTemplates: templates.isNotEmpty);
-    if (!mounted || choice == null) return;
-
-    if (choice == NewTaskChoice.blank) {
-      showTaskFormSheet(
-        context: context,
-        cubit: cubit,
-        isAdmin: widget.isAdmin,
-        defaultBranchId: _branchId,
-      );
-      return;
-    }
-
-    final template = await showTemplatePickerSheet(
+    await startNewTaskFlow(
       context: context,
-      cubit: cubit,
-      branchId: branchFilter,
-    );
-    if (!mounted || template == null) return;
-    showTaskFormSheet(
-      context: context,
-      cubit: cubit,
-      prefill: template,
+      cubit: context.read<TaskCubit>(),
       isAdmin: widget.isAdmin,
       defaultBranchId: _branchId,
+      templateBranchFilter: widget.isAdmin ? null : _branchId,
     );
   }
 
@@ -98,19 +68,6 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
       isAdmin: widget.isAdmin,
       defaultBranchId: _branchId,
     );
-  }
-
-  Future<void> _confirmDelete(TaskEntity task) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: 'Delete task?',
-      message: '"${task.title}" will be permanently removed.',
-      confirmLabel: 'Delete',
-      destructive: true,
-    );
-    if (confirmed && mounted) {
-      context.read<TaskCubit>().deleteTask(task.id);
-    }
   }
 
   @override
@@ -180,72 +137,18 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
                       for (var i = 0; i < tasks.length; i++)
                         EntranceFade(
                           delay: staggerDelay(i),
-                          child: _card(tasks[i], directory),
+                          child: ManagerTaskCard(
+                            task: tasks[i],
+                            directory: directory,
+                            isAdmin: widget.isAdmin,
+                            defaultBranchId: _branchId,
+                          ),
                         ),
                     ],
                   ),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _card(TaskEntity task, Map<String, UserEntity> directory) {
-    final cubit = context.read<TaskCubit>();
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(PageRouteBuilder(
-        pageBuilder: (ctx, anim, secAnim) =>
-            TaskDetailsScreen(task: task, directory: directory),
-        transitionsBuilder: (ctx, anim, secAnim, child) => SlideTransition(
-          position: Tween<Offset>(
-                  begin: const Offset(1, 0), end: Offset.zero)
-              .animate(CurvedAnimation(
-                  parent: anim, curve: Curves.easeOutCubic)),
-          child: FadeTransition(
-              opacity: CurvedAnimation(
-                  parent: anim, curve: const Interval(0, 0.6)),
-              child: child),
-        ),
-        transitionDuration: const Duration(milliseconds: 320),
-      )),
-      child: TaskCard(
-        task: task,
-        directory: directory,
-        onAssigneesTap: () =>
-            showAssignSheet(context: context, cubit: cubit, task: task),
-        actions: [
-          if (task.status == TaskStatus.waitingReview)
-            TaskActionButton(
-              label: 'Review',
-              icon: Icons.rate_review_outlined,
-              onPressed: () =>
-                  showReviewSheet(context: context, cubit: cubit, task: task),
-            ),
-          TaskActionButton(
-            label: 'Assign',
-            icon: Icons.person_add_alt_1_outlined,
-            onPressed: () =>
-                showAssignSheet(context: context, cubit: cubit, task: task),
-          ),
-          TaskActionButton(
-            label: 'Edit',
-            icon: Icons.edit_outlined,
-            onPressed: () => showTaskFormSheet(
-              context: context,
-              cubit: cubit,
-              existing: task,
-              isAdmin: widget.isAdmin,
-              defaultBranchId: _branchId,
-            ),
-          ),
-          TaskActionButton(
-            label: 'Delete',
-            icon: Icons.delete_outline_rounded,
-            color: AppColors.error,
-            onPressed: () => _confirmDelete(task),
-          ),
-        ],
-      ),
     );
   }
 }

@@ -1,9 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fbro/core/constants/app_constants.dart';
-import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/errors/exceptions.dart';
 import 'package:fbro/features/task/data/models/task_model.dart';
 import 'package:fbro/features/task/data/models/task_template_model.dart';
@@ -27,16 +27,6 @@ abstract class TaskRemoteDataSource {
     required String taskId,
     required List<String> employeeIds,
     String? assignedShiftId,
-  });
-  Future<void> updateStatus({
-    required String taskId,
-    required TaskStatus status,
-  });
-  Future<void> reviewTask({
-    required String taskId,
-    required bool approved,
-    required String reviewerId,
-    String? reviewNotes,
   });
   Future<String> uploadProof(String taskId, File file);
 
@@ -182,60 +172,61 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     }
   }
 
-  @override
-  Future<void> updateStatus({
-    required String taskId,
-    required TaskStatus status,
-  }) async {
-    try {
-      await _tasks.doc(taskId).set({
-        'status': status.value,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } on FirebaseException catch (e) {
-      throw ServerException(e.message ?? 'Failed to update task status.');
-    }
-  }
-
-  @override
-  Future<void> reviewTask({
-    required String taskId,
-    required bool approved,
-    required String reviewerId,
-    String? reviewNotes,
-  }) async {
-    try {
-      await _tasks.doc(taskId).set({
-        'status':
-            (approved ? TaskStatus.approved : TaskStatus.rejected).value,
-        if (approved) ...{
-          'approvedBy': reviewerId,
-          'approvedAt': FieldValue.serverTimestamp(),
-        } else ...{
-          'rejectedBy': reviewerId,
-          'rejectedAt': FieldValue.serverTimestamp(),
-        },
-        'reviewNotes': ?reviewNotes,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } on FirebaseException catch (e) {
-      throw ServerException(e.message ?? 'Failed to review task.');
-    }
-  }
+  /// Hard ceiling so a misconfigured/disabled Storage bucket or a dropped
+  /// connection fails cleanly instead of hanging the submit flow indefinitely.
+  static const _uploadTimeout = Duration(seconds: 60);
 
   @override
   Future<String> uploadProof(String taskId, File file) async {
     try {
       // Fixed path → re-uploading overwrites the previous proof. Firebase issues
       // a fresh download token on overwrite, so the saved URL changes.
-      final ref = _storage.ref('${AppConstants.tasksCollection}/$taskId/proof.jpg');
-      final snapshot = await ref.putFile(
-        file,
-        SettableMetadata(contentType: 'image/jpeg'),
+      final ref =
+          _storage.ref('${AppConstants.tasksCollection}/$taskId/proof.jpg');
+      final upload =
+          ref.putFile(file, SettableMetadata(contentType: 'image/jpeg'));
+      final snapshot = await upload.timeout(
+        _uploadTimeout,
+        onTimeout: () {
+          upload.cancel();
+          throw const ServerException(
+              'Photo upload timed out. Check your connection and try again.');
+        },
       );
-      return await snapshot.ref.getDownloadURL();
+      return await snapshot.ref
+          .getDownloadURL()
+          .timeout(const Duration(seconds: 20));
+    } on TimeoutException {
+      throw const ServerException(
+          'Photo upload timed out. Check your connection and try again.');
     } on FirebaseException catch (e) {
-      throw ServerException(e.message ?? 'Proof upload failed. Please try again.');
+      throw ServerException(_storageError(e));
+    }
+  }
+
+  /// Translates a Storage [FirebaseException] into an actionable message.
+  ///
+  /// The previous implementation blamed *every* failure on the network, which
+  /// masked the real cause: an `unauthorized` / `object-not-found` error almost
+  /// always means the Storage rules aren't deployed or the bucket isn't enabled
+  /// — not a bad connection. Surfacing the real code is what makes the proof
+  /// pipeline diagnosable in the field.
+  static String _storageError(FirebaseException e) {
+    switch (e.code) {
+      case 'unauthorized':
+      case 'unauthenticated':
+        return 'Photo upload was blocked by Storage permissions (${e.code}). '
+            'Firebase Storage rules likely need to be deployed.';
+      case 'object-not-found':
+      case 'bucket-not-found':
+      case 'project-not-found':
+        return 'Firebase Storage isn\'t set up for this project (${e.code}). '
+            'Enable Storage in the Firebase console, then retry.';
+      case 'retry-limit-exceeded':
+      case 'canceled':
+        return 'Photo upload failed — check your connection and try again.';
+      default:
+        return e.message ?? 'Photo upload failed (${e.code}).';
     }
   }
 

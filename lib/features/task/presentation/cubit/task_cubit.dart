@@ -46,8 +46,13 @@ class TaskCubit extends Cubit<TaskState> {
   bool _mutating = false;
   final Map<String, UserEntity> _directory = {};
   final Set<String> _fetchedBranches = {};
+  final Map<String, String> _branchNames = {};
 
   Map<String, UserEntity> get directory => Map.unmodifiable(_directory);
+
+  /// branchId → branch name, so screens (e.g. the review header) can show which
+  /// branch a task belongs to. Populated once per session in [load].
+  Map<String, String> get branchNames => Map.unmodifiable(_branchNames);
 
   TaskCubit({
     required this._repository,
@@ -67,8 +72,10 @@ class TaskCubit extends Cubit<TaskState> {
     if (_user?.uid != user.uid) {
       _directory.clear();
       _fetchedBranches.clear();
+      _branchNames.clear();
     }
     _user = user;
+    _loadBranchNames();
     emit(const TaskState.loading());
     await _sub?.cancel();
     _sub = _streamFor(user).listen(
@@ -92,6 +99,23 @@ class TaskCubit extends Cubit<TaskState> {
       return _repository.watchTasksByBranch(user.branchId ?? '');
     }
     return _repository.watchEmployeeTasks(user.uid);
+  }
+
+  /// Loads branchId → name once so the UI can label a task's branch. Re-emits a
+  /// fresh loaded state (new directory map reference) so listeners rebuild when
+  /// the names arrive. Best-effort — failure leaves names empty (no branch label).
+  Future<void> _loadBranchNames() async {
+    try {
+      final list = await _branchRepository.getBranches();
+      for (final b in list) {
+        _branchNames[b.id] = b.name;
+      }
+      if (!isClosed) {
+        state.mapOrNull(
+          loaded: (s) => emit(s.copyWith(directory: Map.of(_directory))),
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _ensureDirectory(List<TaskEntity> tasks) async {
@@ -243,53 +267,6 @@ class TaskCubit extends Cubit<TaskState> {
         },
       );
 
-  Future<void> completeTask(
-    TaskEntity task, {
-    String? notes,
-    File? proof,
-  }) async {
-    if (!task.requiredChecklistComplete) {
-      final prev = _tasks;
-      emit(const TaskState.error(
-          'Complete all required checklist items before marking this task done.'));
-      emit(TaskState.loaded(prev, directory: _directory));
-      return;
-    }
-    String? uploadWarning;
-    await _transitionMutate(task, TaskStatus.completed, () async {
-      String? proofUrl;
-      if (proof != null) {
-        try {
-          proofUrl = await _uploadTaskProof(task.id, proof);
-        } catch (_) {
-          uploadWarning =
-              'Task marked complete. Photo upload failed — '
-              'check your internet connection and try again.';
-        }
-      }
-      final updated = task.copyWith(
-        status: TaskStatus.completed,
-        notes: notes ?? task.notes,
-        proofImageUrl: proofUrl ?? task.proofImageUrl,
-        activityLog: [
-          ...task.activityLog,
-          ActivityEntry(
-            status: TaskStatus.completed.value,
-            actorId: _user?.uid ?? '',
-            actorName: _user?.displayName,
-            at: DateTime.now(),
-            note: notes,
-          ),
-        ],
-      );
-      await _updateTask(updated);
-    });
-    if (uploadWarning != null && !isClosed) {
-      emit(TaskState.error(uploadWarning!));
-      emit(TaskState.loaded(_tasks, directory: _directory));
-    }
-  }
-
   Future<void> toggleChecklistItem(TaskEntity task, String itemId) {
     final updated = [
       for (final i in task.checklist)
@@ -328,44 +305,36 @@ class TaskCubit extends Cubit<TaskState> {
         },
       );
 
-  /// Combines completion + submit-for-review into a single action so the
-  /// employee doesn't have to re-open the task to hit "Submit for Review".
-  /// Uploads proof, sets status to [TaskStatus.waitingReview] in one write, and
-  /// appends both activity entries. Proof upload failures are surfaced as a
-  /// warning but never block the status transition.
-  Future<void> completeAndSubmit(
+  /// Completes + submits a task for review in a single action (so the employee
+  /// doesn't re-open the task to hit "Submit for Review").
+  ///
+  /// Proof is uploaded **before** the status write: if the upload fails the
+  /// whole transition is aborted — the task stays `started`, the real Storage
+  /// error is surfaced, and the employee keeps their selected photo to retry.
+  /// Proof is the evidence the review depends on, so a failed upload must never
+  /// silently submit evidence-less work. Returns true only when the submission
+  /// (and the proof, if one was attached) actually persisted.
+  Future<bool> completeAndSubmit(
     TaskEntity task, {
     String? notes,
     File? proof,
   }) async {
     if (task.status != TaskStatus.started) {
-      final prev = _tasks;
-      emit(const TaskState.error(
-          "That action isn't allowed for this task's current status."));
-      emit(TaskState.loaded(prev, directory: _directory));
-      return;
+      _emitTransientError(
+          "That action isn't allowed for this task's current status.");
+      return false;
     }
     if (!task.requiredChecklistComplete) {
-      final prev = _tasks;
-      emit(const TaskState.error(
-          'Complete all required checklist items before submitting.'));
-      emit(TaskState.loaded(prev, directory: _directory));
-      return;
+      _emitTransientError(
+          'Complete all required checklist items before submitting.');
+      return false;
     }
-    String? uploadWarning;
-    await _mutate(() async {
-      String? proofUrl;
-      if (proof != null) {
-        try {
-          proofUrl = await _uploadTaskProof(task.id, proof);
-        } catch (_) {
-          uploadWarning =
-              'Task submitted. Photo upload failed — '
-              'check your internet connection and try again.';
-        }
-      }
+    return _mutate(() async {
+      // Throws on failure → _mutate aborts the write and emits the real error.
+      final proofUrl =
+          proof == null ? null : await _uploadTaskProof(task.id, proof);
       final now = DateTime.now();
-      final updated = task.copyWith(
+      await _updateTask(task.copyWith(
         status: TaskStatus.waitingReview,
         submittedAt: now,
         notes: notes ?? task.notes,
@@ -386,13 +355,8 @@ class TaskCubit extends Cubit<TaskState> {
             at: now.add(const Duration(milliseconds: 1)),
           ),
         ],
-      );
-      await _updateTask(updated);
+      ));
     });
-    if (uploadWarning != null && !isClosed) {
-      emit(TaskState.error(uploadWarning!));
-      emit(TaskState.loaded(_tasks, directory: _directory));
-    }
   }
 
   // ─── Picker support ────────────────────────────────────────────
@@ -496,8 +460,10 @@ class TaskCubit extends Cubit<TaskState> {
     }
   }
 
-  Future<void> _mutate(Future<void> Function() action) async {
-    if (_user == null || _mutating) return;
+  /// Runs a write [action] with optimistic busy state. Returns true on success;
+  /// on failure it surfaces the error and rolls the list back to [prev].
+  Future<bool> _mutate(Future<void> Function() action) async {
+    if (_user == null || _mutating) return false;
     final prev = _tasks;
     _mutating = true;
     emit(TaskState.loaded(prev, busy: true, directory: _directory));
@@ -505,30 +471,39 @@ class TaskCubit extends Cubit<TaskState> {
       await action();
       _mutating = false;
       emit(TaskState.loaded(_tasks, busy: false, directory: _directory));
+      return true;
     } on Failure catch (e) {
       _mutating = false;
       emit(TaskState.error(e.message));
       emit(TaskState.loaded(prev, directory: _directory));
+      return false;
     } catch (_) {
       _mutating = false;
       emit(const TaskState.error('Something went wrong. Please try again.'));
       emit(TaskState.loaded(prev, directory: _directory));
+      return false;
     }
   }
 
-  Future<void> _transitionMutate(
+  Future<bool> _transitionMutate(
     TaskEntity task,
     TaskStatus to,
     Future<void> Function() action,
   ) {
     if (!_canTransition(task.status, to)) {
-      final prev = _tasks;
-      emit(const TaskState.error(
-          "That action isn't allowed for this task's current status."));
-      emit(TaskState.loaded(prev, directory: _directory));
-      return Future.value();
+      _emitTransientError(
+          "That action isn't allowed for this task's current status.");
+      return Future.value(false);
     }
     return _mutate(action);
+  }
+
+  /// Emits a one-shot error (for the UI's snackbar listener) then immediately
+  /// restores the loaded list so the screen isn't left stuck on an error state.
+  void _emitTransientError(String message) {
+    final prev = _tasks;
+    emit(TaskState.error(message));
+    emit(TaskState.loaded(prev, directory: _directory));
   }
 
   static bool _canTransition(TaskStatus from, TaskStatus to) {

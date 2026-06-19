@@ -235,7 +235,7 @@ class _StatusChip extends StatelessWidget {
         TaskStatus.completed => (Icons.check_circle_outline_rounded, 'Completed', false),
         TaskStatus.waitingReview => (Icons.hourglass_empty_rounded, 'In review', true),
         TaskStatus.approved => (Icons.check_circle_rounded, 'Approved', false),
-        TaskStatus.rejected => (Icons.replay_rounded, 'Rejected', true),
+        TaskStatus.rejected => (Icons.replay_rounded, 'Needs rework', true),
       };
 }
 
