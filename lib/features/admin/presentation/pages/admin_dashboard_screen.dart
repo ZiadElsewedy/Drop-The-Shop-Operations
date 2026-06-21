@@ -57,7 +57,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // The all-branches task stream powers the Pending Actions + overdue counts.
     final taskCubit = context.read<TaskCubit>();
     final taskLoaded =
-        taskCubit.state.maybeWhen(loaded: (_, _, _) => true, orElse: () => false);
+        taskCubit.state.maybeWhen(loaded: (_, _, _, _, _) => true, orElse: () => false);
     if (!taskLoaded) taskCubit.load(user);
     // Capture cubits before awaiting so we don't touch context across the gap.
     final usersCubit = context.read<AdminUsersCubit>();
@@ -80,7 +80,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         .maybeWhen(loaded: (s) => s, orElse: () => null);
     final taskState = context.watch<TaskCubit>().state;
     final tasks = taskState.maybeWhen(
-        loaded: (t, _, _) => t, orElse: () => const <TaskEntity>[]);
+        loaded: (t, _, _, _, _) => t, orElse: () => const <TaskEntity>[]);
     final overdue = _overdueCount(tasks);
     final reviews = stats?.waitingReviews ?? 0;
     final openSwaps = _pendingSwaps.length;

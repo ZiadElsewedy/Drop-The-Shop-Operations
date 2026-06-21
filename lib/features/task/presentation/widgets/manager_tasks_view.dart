@@ -106,7 +106,7 @@ class _ManagerTasksViewState extends State<ManagerTasksView> {
             state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
         builder: (context, state) => state.maybeWhen(
           loading: () => const ListSkeleton(),
-          loaded: (tasks, busy, directory) => _list(tasks, busy, directory),
+          loaded: (tasks, busy, directory, _, _) => _list(tasks, busy, directory),
           orElse: () => const SizedBox.shrink(),
         ),
       ),

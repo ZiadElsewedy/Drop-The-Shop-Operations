@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:video_player/video_player.dart';
 import 'package:fbro/core/enums/attachment_type.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
@@ -10,6 +11,7 @@ import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/task/domain/entities/task_attachment.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
+import 'package:fbro/features/task/presentation/widgets/video_thumbnail_image.dart';
 
 /// Submission media picker (Phase 10) — lets an employee attach multiple images
 /// and videos (gallery or camera) before submitting / re-submitting a task.
@@ -160,7 +162,7 @@ class AttachmentPickerField extends StatelessWidget {
       if (picked.isEmpty) return;
       if (!context.mounted) return;
       await _commit(
-          context, [for (final x in picked) (x, AttachmentType.image)]);
+          context, [for (final x in picked) (x, AttachmentType.image, null)]);
     } catch (_) {
       if (context.mounted) AppSnackbar.error(context, 'Could not add photos.');
     }
@@ -174,7 +176,7 @@ class AttachmentPickerField extends StatelessWidget {
         maxWidth: AttachmentLimits.imageMaxWidth,
       );
       if (x == null || !context.mounted) return;
-      await _commit(context, [(x, AttachmentType.image)]);
+      await _commit(context, [(x, AttachmentType.image, null)]);
     } catch (_) {
       if (context.mounted) AppSnackbar.error(context, 'Could not take a photo.');
     }
@@ -184,26 +186,44 @@ class AttachmentPickerField extends StatelessWidget {
     try {
       final x = await ImagePicker().pickVideo(
           source: source, maxDuration: AttachmentLimits.maxVideoDuration);
-      if (x == null || !context.mounted) return;
-      await _commit(context, [(x, AttachmentType.video)]);
+      if (x == null) return;
+      final durationMs = await _videoDurationMs(x.path); // no context use
+      if (!context.mounted) return;
+      await _commit(context, [(x, AttachmentType.video, durationMs)]);
     } catch (_) {
       if (context.mounted) AppSnackbar.error(context, 'Could not add the video.');
     }
   }
 
+  /// Best-effort video length (ms) read locally via a throwaway controller. Null
+  /// on any failure — duration is a nice-to-have, never blocks the attachment.
+  Future<int?> _videoDurationMs(String path) async {
+    VideoPlayerController? controller;
+    try {
+      controller = VideoPlayerController.file(File(path));
+      await controller.initialize();
+      final ms = controller.value.duration.inMilliseconds;
+      return ms > 0 ? ms : null;
+    } catch (_) {
+      return null;
+    } finally {
+      await controller?.dispose();
+    }
+  }
+
   /// Validates each picked file against the count + size limits, appends the
   /// accepted ones, and surfaces the first rejection reason (once).
-  Future<void> _commit(
-      BuildContext context, List<(XFile, AttachmentType)> incoming) async {
+  Future<void> _commit(BuildContext context,
+      List<(XFile, AttachmentType, int?)> incoming) async {
     final next = [...attachments];
     String? reason;
-    for (final (file, type) in incoming) {
+    for (final (file, type, durationMs) in incoming) {
       final r = await _rejectReason(next, file, type);
       if (r != null) {
         reason ??= r;
         continue;
       }
-      next.add(PickedAttachment(File(file.path), type));
+      next.add(PickedAttachment(File(file.path), type, durationMs: durationMs));
     }
     onChanged(next);
     if (reason != null && context.mounted) AppSnackbar.error(context, reason);
@@ -251,13 +271,7 @@ class _SelectedTile extends StatelessWidget {
               height: size,
               child: attachment.type.isImage
                   ? Image.file(attachment.file, fit: BoxFit.cover)
-                  : Container(
-                      color: AppColors.darkSurfaceElevated,
-                      child: const Center(
-                        child: Icon(Icons.movie_outlined,
-                            size: 22, color: AppColors.textSecondary),
-                      ),
-                    ),
+                  : VideoThumbnailImage(source: attachment.file.path),
             ),
           ),
           if (attachment.type.isVideo)

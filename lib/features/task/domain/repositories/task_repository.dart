@@ -58,6 +58,8 @@ abstract class TaskRepository {
     required AttachmentType type,
     required String uploadedBy,
     String? uploadedByName,
+    int? durationMs,
+    void Function(int transferred, int total)? onProgress,
   });
 
   // ─── Task templates (reusable blueprints) ──────────────────────

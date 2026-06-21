@@ -333,6 +333,7 @@ class TaskModel {
               (a['uploadedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
           uploadedBy: a['uploadedBy'] as String? ?? '',
           uploadedByName: a['uploadedByName'] as String?,
+          durationMs: (a['durationMs'] as num?)?.toInt(),
         ));
       }
     }
@@ -350,6 +351,7 @@ class TaskModel {
             'uploadedAt': Timestamp.fromDate(a.uploadedAt),
             'uploadedBy': a.uploadedBy,
             'uploadedByName': a.uploadedByName,
+            'durationMs': a.durationMs,
           },
       ];
 }

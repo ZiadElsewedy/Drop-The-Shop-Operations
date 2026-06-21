@@ -12,6 +12,93 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed + Added (2026-06-21 — submission loading UX + premium status animations)
+
+`flutter analyze` clean (0 issues); 59 tests pass.
+
+- **Fixed: video submit looked frozen.** Root cause (traced, not guessed): the
+  submit pipeline (`completeAndSubmit` → parallel `putFile` → `_updateTask`) is
+  fully async / non-blocking, but **no loading state was surfaced** — the submit
+  button stayed enabled and the screen rendered nothing for the `busy` flag, so a
+  multi-second video upload appeared frozen. (Not a main-isolate block; thumbnail
+  generation is display-time, not in the submit path.)
+- **Submission state moved to the cubit.** `TaskState.loaded` now carries
+  `isSubmitting` + `submissionProgress` (`SubmissionProgress` in
+  `presentation/submission_progress.dart`), preserved on every emit (incl. the
+  Firestore stream) so the **whole Task Details screen** reacts and progress
+  survives rebuilds / disposal. Progress emits are throttled to whole-percent
+  changes.
+- **Single, state-driven submission overlay** (`submission_loading_overlay.dart`)
+  rendered by the screen in a Stack when `isSubmitting`: stages **Preparing media
+  → Uploading attachments → Finalizing**, a **real progress bar + percentage +
+  transferred/total MB** (aggregated from each upload's Storage `snapshotEvents`).
+  `PopScope` blocks back during submit. Only `completeAndSubmit` sets
+  `isSubmitting` (approve/reject/start use `busy`) → exactly one overlay ever
+  exists (audited across submit / rework / review-approval flows).
+- **Reverted server-side video posters.** Persistent poster uploads
+  (`TaskAttachment.thumbnailUrl`, submit-time generation) were removed — not
+  justified for low video volume. Videos use **local generation + in-memory LRU
+  caching** (`VideoThumbnailImage`) at view time. `durationMs` is still captured
+  at pick. (No `firestore`/storage change.)
+- **Premium status animations** (monochrome-preserving) on the task detail status
+  header — a soft status glow with an **amber pulse for In Review** and static
+  **green** (Approved) / **red** (Rework) glow + faint tint; the status badge
+  **cross-fades + scales** on change; timeline event cards **stagger-fade in**
+  (reused `EntranceFade` / `staggerDelay`).
+
+### Changed (2026-06-21 — Submission Details surface: lightweight timeline + deep review sheet)
+
+Split the overloaded task timeline into a scan layer and a deep review layer.
+`flutter analyze` clean (0 issues); 54 tests pass (+`submission_resolution_test.dart`).
+
+- **Timeline = summary only.** `_EventCard` now shows status · actor · timestamp ·
+  attachment summary ("2 photos · 1 video") · a 2-line truncated note preview —
+  no inline media. Submission-related cards (`completed` / `waitingReview`) are
+  tappable (chevron affordance).
+- **New `SubmissionDetailsSheet`** (`widgets/submission_details_sheet.dart`) — a
+  large iOS-style modal bottom sheet (~90% height, no full-screen route) that is
+  the full review surface: header (task + "Completed by X · date"), **Employee
+  Response** (full note), **Attachments** (2-col gallery), **Manager Feedback**
+  (per-cycle decision + note), and a sticky **Approve / Request Rework** bar when
+  the submission is pending (read-only otherwise).
+- **Submission resolution** — pure `resolveSubmission(task, index)` (in
+  `attachment_format.dart`) maps a tapped event to its cycle's content event and
+  the decision that followed it; correctly handles rework loops (each cycle →
+  its own media + feedback). Tested in `submission_resolution_test.dart`.
+- **`AttachmentGallery` gains a grid mode** (`columns`, `showDuration`) reused by
+  the sheet — 2-column cells, video tiles show a duration pill. Compact wrap mode
+  unchanged for other call sites. Media rendering (`AttachmentGallery` +
+  `AttachmentViewer` + `VideoThumbnailImage`) is reused, not duplicated.
+- **Video duration** — captured best-effort at pick time (`video_player` reads
+  the local file), threaded through the upload chain, stored on
+  `TaskAttachment.durationMs`, and rendered as `mm:ss` (`formatVideoDuration`).
+  Legacy videos without a stored duration simply omit the pill.
+
+### Fixed (2026-06-21 — task-load regression) + Added (real video thumbnails)
+
+- **Fixed: "Failed to load tasks" for employees & managers.** Root cause: the
+  newest-first follow-up added `orderBy('createdAt', descending: true)` to the
+  **filtered** task queries — `where('assigneeIds', arrayContains: uid)` (employee)
+  and `where('branchId', …)` (manager). A filter + `orderBy` on a different field
+  needs a **composite index**, which wasn't deployed, so Firestore threw
+  `failed-precondition` on the snapshot stream; `TaskCubit`'s `onError` swallowed
+  the exception and showed the generic message. **Fix:** removed server-side
+  `orderBy` from those two queries (back to the automatic single-field
+  array/equality index) and rely on the existing client-side
+  `sortTasksNewestFirst`; the admin query keeps its index-free `orderBy`. Emptied
+  `firestore.indexes.json` (no composite index needed) — **the
+  `firebase deploy --only firestore:indexes` step is no longer required.**
+- **Fixed: swallowed stream errors.** `TaskCubit` now logs the real error + stack
+  trace (`dart:developer`) on stream failure, so the exact exception is visible
+  instead of only a generic UI message.
+- **Added: real video thumbnails.** New `VideoThumbnailImage` (backed by
+  `video_thumbnail`) extracts an actual poster frame from each video (network URL
+  or local file), shown in the attachment gallery and the submission picker with
+  the play overlay on top. Frames are generated at 256px/JPEG-q60 and memoised in
+  a bounded LRU cache (≈60 entries) keyed by source; concurrent requests share
+  one future; failures drop from the cache (retryable) and fall back to a
+  film-glyph tile. New dependency: `video_thumbnail`.
+
 ### Added (2026-06-20 — Task submission media upgrade: multiple images & videos)
 
 Replaced the single proof image with multiple images + videos, attached to **task
@@ -41,11 +128,29 @@ pass (+9 new). New dependency: `video_player`.
   (`InteractiveViewer`), inline `video_player`, each captioned "Uploaded by X ·
   20 Jun 2026 • 4:32 PM". Helpers in `attachment_format.dart` resolve per-event
   media with legacy-proof back-compat (no double-render).
-- **Tests** — `task_attachment_test.dart`: model round-trip + `attachmentsForEvent`
-  / `latestAttachments` / `attachmentSummary` / `attachmentTimestamp`.
+- **Uploads parallelized** — `completeAndSubmit` uploads attachments with
+  `Future.wait` (order preserved) instead of sequentially, so multiple photos no
+  longer queue behind each other.
+- **Pre-upload optimization** — photos are resized + recompressed by image_picker
+  (`maxWidth 1600`, `quality 70`, in `AttachmentLimits`) before upload, cutting
+  upload time + Storage cost. Video transcoding is deferred (bounded by the
+  3-min duration cap + size limit rather than a heavy native codec dependency).
+- **Separate size limits** — images ≤15 MB, videos ≤200 MB (was a shared 50 MB);
+  `AttachmentLimits.maxBytesFor(type)` / `maxMbFor(type)`, enforced per type in
+  the picker.
+- **Newest-first task lists** — admin query uses Firestore
+  `orderBy('createdAt', descending: true)` (index-free); the filtered branch +
+  employee queries are ordered by a pure `sortTasksNewestFirst`
+  (`domain/task_ordering.dart`) in the repository, which also keeps a just-created
+  task (pending server timestamp → locally null) pinned to the top. *(Note: an
+  earlier revision added server-side `orderBy` to the filtered queries too; that
+  required an undeployed composite index and broke loading — reverted in the
+  2026-06-21 fix above.)*
+- **Tests** — `task_attachment_test.dart` (model round-trip + format helpers) and
+  `task_ordering_test.dart` (newest-first incl. pending-timestamp on top).
 
-⚠️ Deploy `storage.rules` (`firebase deploy --only storage`); video playback
-needs an on-device check.
+⚠️ Deploy `storage.rules` (`firebase deploy --only storage`). Video playback needs
+an on-device check.
 
 ### Changed (2026-06-20 — Schedule assignment-grid redesign, no staffing quotas)
 

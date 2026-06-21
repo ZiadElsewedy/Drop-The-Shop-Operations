@@ -104,7 +104,7 @@ class _AdminTaskOverviewScreenState extends State<AdminTaskOverviewScreen> {
             state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
         builder: (context, state) => state.maybeWhen(
           loading: () => const ListSkeleton(),
-          loaded: (tasks, busy, directory) => _overview(tasks, busy),
+          loaded: (tasks, busy, directory, _, _) => _overview(tasks, busy),
           orElse: () => const SizedBox.shrink(),
         ),
       ),
@@ -589,7 +589,7 @@ class _BranchTasksScreen extends StatelessWidget {
       body: BlocBuilder<TaskCubit, TaskState>(
         builder: (context, state) => state.maybeWhen(
           loading: () => const ListSkeleton(),
-          loaded: (tasks, busy, directory) =>
+          loaded: (tasks, busy, directory, _, _) =>
               _list(context, tasks, busy, directory),
           orElse: () => const SizedBox.shrink(),
         ),

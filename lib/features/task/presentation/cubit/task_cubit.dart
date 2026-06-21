@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -23,15 +24,18 @@ import 'package:fbro/features/task/domain/usecases/create_task.dart';
 import 'package:fbro/features/task/domain/usecases/delete_task.dart';
 import 'package:fbro/features/task/domain/usecases/update_task.dart';
 import 'package:fbro/features/task/domain/usecases/upload_task_attachment.dart';
+import 'package:fbro/features/task/presentation/submission_progress.dart';
 import 'task_state.dart';
 
 /// A media file the employee has picked but not yet uploaded — the input to
 /// [TaskCubit.completeAndSubmit]. The cubit uploads each and turns it into a
-/// [TaskAttachment] on the submission event.
+/// [TaskAttachment] on the submission event. [durationMs] is the captured video
+/// length (best-effort; null for images).
 class PickedAttachment {
-  const PickedAttachment(this.file, this.type);
+  const PickedAttachment(this.file, this.type, {this.durationMs});
   final File file;
   final AttachmentType type;
+  final int? durationMs;
 }
 
 /// Drives the task workflow for all three roles. The list loaded depends on the
@@ -55,6 +59,10 @@ class TaskCubit extends Cubit<TaskState> {
   UserEntity? _user;
   StreamSubscription<List<TaskEntity>>? _sub;
   bool _mutating = false;
+  // Submission lives on the cubit (not a widget) so the whole screen reacts and
+  // it survives rebuilds; carried on every `loaded` emit (incl. the stream).
+  bool _submitting = false;
+  SubmissionProgress? _submissionProgress;
   final Map<String, UserEntity> _directory = {};
   final Set<String> _fetchedBranches = {};
   final Map<String, String> _branchNames = {};
@@ -77,7 +85,7 @@ class TaskCubit extends Cubit<TaskState> {
   }) : super(const TaskState.initial());
 
   List<TaskEntity> get _tasks =>
-      state.maybeWhen(loaded: (t, _, _) => t, orElse: () => const []);
+      state.maybeWhen(loaded: (t, _, _, _, _) => t, orElse: () => const []);
 
   Future<void> load(UserEntity user) async {
     if (_user?.uid != user.uid) {
@@ -91,11 +99,23 @@ class TaskCubit extends Cubit<TaskState> {
     await _sub?.cancel();
     _sub = _streamFor(user).listen(
       (tasks) {
-        emit(TaskState.loaded(tasks, busy: _mutating, directory: _directory));
+        // Preserve in-flight submission state — a Firestore write during submit
+        // fires this stream, and we must not drop the overlay mid-finalize.
+        emit(TaskState.loaded(tasks,
+            busy: _mutating,
+            directory: _directory,
+            isSubmitting: _submitting,
+            submissionProgress: _submissionProgress));
         _ensureDirectory(tasks);
       },
-      onError: (_) =>
-          emit(const TaskState.error('Failed to load tasks. Please try again.')),
+      // Capture the real error/stack (a swallowed exception is why this only ever
+      // showed a generic UI message — e.g. a missing Firestore composite index
+      // surfaces here as `failed-precondition`). The UI message stays friendly.
+      onError: (Object error, StackTrace stackTrace) {
+        developer.log('Task stream failed for role ${user.role.value}',
+            name: 'TaskCubit', error: error, stackTrace: stackTrace);
+        emit(const TaskState.error('Failed to load tasks. Please try again.'));
+      },
     );
   }
 
@@ -341,20 +361,65 @@ class TaskCubit extends Cubit<TaskState> {
           'Complete all required checklist items before submitting.');
       return false;
     }
-    return _mutate(() async {
-      // Upload in parallel (order preserved by Future.wait) — several photos no
-      // longer queue behind each other. Any failure throws → _mutate aborts the
-      // write and surfaces the real error, keeping the employee's selection.
-      final uploaded = await Future.wait([
-        for (final a in attachments)
-          _uploadTaskAttachment(
-            taskId: task.id,
-            file: a.file,
-            type: a.type,
-            uploadedBy: _user?.uid ?? '',
-            uploadedByName: _user?.displayName,
-          ),
-      ]);
+    if (_user == null || _mutating) return false;
+
+    final prev = _tasks;
+    _mutating = true;
+    _submitting = true;
+
+    // Throttled progress → state: emit only on a stage change or a whole-percent
+    // change, so the screen never rebuilds faster than it needs to.
+    SubmissionStage? lastStage;
+    int? lastPercent;
+    void setProgress(SubmissionProgress p) {
+      if (isClosed) return;
+      if (p.stage == lastStage && p.percent == lastPercent) return;
+      lastStage = p.stage;
+      lastPercent = p.percent;
+      _submissionProgress = p;
+      emit(TaskState.loaded(_tasks,
+          busy: true,
+          directory: _directory,
+          isSubmitting: true,
+          submissionProgress: p));
+    }
+
+    try {
+      setProgress(const SubmissionProgress(SubmissionStage.preparing));
+
+      // Upload in parallel (order preserved by Future.wait), reporting aggregate
+      // byte progress. Any failure throws → the write is aborted and the real
+      // error surfaced, keeping the employee's selection.
+      setProgress(const SubmissionProgress(SubmissionStage.uploading));
+      final transferred = List<int>.filled(attachments.length, 0);
+      final totals = List<int>.filled(attachments.length, 0);
+      void report() => setProgress(SubmissionProgress(
+            SubmissionStage.uploading,
+            transferredBytes: transferred.fold(0, (a, b) => a + b),
+            totalBytes: totals.fold(0, (a, b) => a + b),
+          ));
+
+      final futures = <Future<TaskAttachment>>[];
+      for (var i = 0; i < attachments.length; i++) {
+        final idx = i; // capture per-iteration for the progress closure
+        final a = attachments[idx];
+        futures.add(_uploadTaskAttachment(
+          taskId: task.id,
+          file: a.file,
+          type: a.type,
+          uploadedBy: _user?.uid ?? '',
+          uploadedByName: _user?.displayName,
+          durationMs: a.durationMs,
+          onProgress: (sent, total) {
+            transferred[idx] = sent;
+            totals[idx] = total;
+            report();
+          },
+        ));
+      }
+      final uploaded = await Future.wait(futures);
+
+      setProgress(const SubmissionProgress(SubmissionStage.finalizing));
       String? firstImage;
       for (final a in uploaded) {
         if (a.type == AttachmentType.image) {
@@ -387,7 +452,31 @@ class TaskCubit extends Cubit<TaskState> {
           ),
         ],
       ));
-    });
+
+      _mutating = false;
+      _submitting = false;
+      _submissionProgress = null;
+      // The Firestore write already pushed the new state through the stream;
+      // emit once more to clear the submission flags immediately.
+      if (!isClosed) {
+        emit(TaskState.loaded(_tasks, busy: false, directory: _directory));
+      }
+      return true;
+    } on Failure catch (e) {
+      _mutating = false;
+      _submitting = false;
+      _submissionProgress = null;
+      emit(TaskState.error(e.message));
+      emit(TaskState.loaded(prev, directory: _directory));
+      return false;
+    } catch (_) {
+      _mutating = false;
+      _submitting = false;
+      _submissionProgress = null;
+      emit(const TaskState.error('Something went wrong. Please try again.'));
+      emit(TaskState.loaded(prev, directory: _directory));
+      return false;
+    }
   }
 
   // ─── Picker support ────────────────────────────────────────────

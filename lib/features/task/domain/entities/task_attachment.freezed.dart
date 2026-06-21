@@ -21,8 +21,8 @@ mixin _$TaskAttachment {
   String get id => throw _privateConstructorUsedError;
 
   /// Storage download URL.
-  String get url => throw _privateConstructorUsedError;
   AttachmentType get type => throw _privateConstructorUsedError;
+  String get url => throw _privateConstructorUsedError;
   DateTime get uploadedAt => throw _privateConstructorUsedError;
 
   /// uid of the uploader.
@@ -30,6 +30,10 @@ mixin _$TaskAttachment {
 
   /// Denormalised uploader display name (best-effort).
   String? get uploadedByName => throw _privateConstructorUsedError;
+
+  /// Video length in milliseconds (best-effort, captured at pick). Null for
+  /// images and for videos uploaded before duration capture existed.
+  int? get durationMs => throw _privateConstructorUsedError;
 
   /// Create a copy of TaskAttachment
   /// with the given fields replaced by the non-null parameter values.
@@ -47,11 +51,12 @@ abstract class $TaskAttachmentCopyWith<$Res> {
   @useResult
   $Res call({
     String id,
-    String url,
     AttachmentType type,
+    String url,
     DateTime uploadedAt,
     String uploadedBy,
     String? uploadedByName,
+    int? durationMs,
   });
 }
 
@@ -71,11 +76,12 @@ class _$TaskAttachmentCopyWithImpl<$Res, $Val extends TaskAttachment>
   @override
   $Res call({
     Object? id = null,
-    Object? url = null,
     Object? type = null,
+    Object? url = null,
     Object? uploadedAt = null,
     Object? uploadedBy = null,
     Object? uploadedByName = freezed,
+    Object? durationMs = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -83,14 +89,14 @@ class _$TaskAttachmentCopyWithImpl<$Res, $Val extends TaskAttachment>
                 ? _value.id
                 : id // ignore: cast_nullable_to_non_nullable
                       as String,
-            url: null == url
-                ? _value.url
-                : url // ignore: cast_nullable_to_non_nullable
-                      as String,
             type: null == type
                 ? _value.type
                 : type // ignore: cast_nullable_to_non_nullable
                       as AttachmentType,
+            url: null == url
+                ? _value.url
+                : url // ignore: cast_nullable_to_non_nullable
+                      as String,
             uploadedAt: null == uploadedAt
                 ? _value.uploadedAt
                 : uploadedAt // ignore: cast_nullable_to_non_nullable
@@ -103,6 +109,10 @@ class _$TaskAttachmentCopyWithImpl<$Res, $Val extends TaskAttachment>
                 ? _value.uploadedByName
                 : uploadedByName // ignore: cast_nullable_to_non_nullable
                       as String?,
+            durationMs: freezed == durationMs
+                ? _value.durationMs
+                : durationMs // ignore: cast_nullable_to_non_nullable
+                      as int?,
           )
           as $Val,
     );
@@ -120,11 +130,12 @@ abstract class _$$TaskAttachmentImplCopyWith<$Res>
   @useResult
   $Res call({
     String id,
-    String url,
     AttachmentType type,
+    String url,
     DateTime uploadedAt,
     String uploadedBy,
     String? uploadedByName,
+    int? durationMs,
   });
 }
 
@@ -143,11 +154,12 @@ class __$$TaskAttachmentImplCopyWithImpl<$Res>
   @override
   $Res call({
     Object? id = null,
-    Object? url = null,
     Object? type = null,
+    Object? url = null,
     Object? uploadedAt = null,
     Object? uploadedBy = null,
     Object? uploadedByName = freezed,
+    Object? durationMs = freezed,
   }) {
     return _then(
       _$TaskAttachmentImpl(
@@ -155,14 +167,14 @@ class __$$TaskAttachmentImplCopyWithImpl<$Res>
             ? _value.id
             : id // ignore: cast_nullable_to_non_nullable
                   as String,
-        url: null == url
-            ? _value.url
-            : url // ignore: cast_nullable_to_non_nullable
-                  as String,
         type: null == type
             ? _value.type
             : type // ignore: cast_nullable_to_non_nullable
                   as AttachmentType,
+        url: null == url
+            ? _value.url
+            : url // ignore: cast_nullable_to_non_nullable
+                  as String,
         uploadedAt: null == uploadedAt
             ? _value.uploadedAt
             : uploadedAt // ignore: cast_nullable_to_non_nullable
@@ -175,6 +187,10 @@ class __$$TaskAttachmentImplCopyWithImpl<$Res>
             ? _value.uploadedByName
             : uploadedByName // ignore: cast_nullable_to_non_nullable
                   as String?,
+        durationMs: freezed == durationMs
+            ? _value.durationMs
+            : durationMs // ignore: cast_nullable_to_non_nullable
+                  as int?,
       ),
     );
   }
@@ -182,15 +198,16 @@ class __$$TaskAttachmentImplCopyWithImpl<$Res>
 
 /// @nodoc
 
-class _$TaskAttachmentImpl implements _TaskAttachment {
+class _$TaskAttachmentImpl extends _TaskAttachment {
   const _$TaskAttachmentImpl({
     required this.id,
-    required this.url,
     required this.type,
+    required this.url,
     required this.uploadedAt,
     required this.uploadedBy,
     this.uploadedByName,
-  });
+    this.durationMs,
+  }) : super._();
 
   /// Unique attachment id (also the Storage filename stem).
   @override
@@ -198,9 +215,9 @@ class _$TaskAttachmentImpl implements _TaskAttachment {
 
   /// Storage download URL.
   @override
-  final String url;
-  @override
   final AttachmentType type;
+  @override
+  final String url;
   @override
   final DateTime uploadedAt;
 
@@ -212,9 +229,14 @@ class _$TaskAttachmentImpl implements _TaskAttachment {
   @override
   final String? uploadedByName;
 
+  /// Video length in milliseconds (best-effort, captured at pick). Null for
+  /// images and for videos uploaded before duration capture existed.
+  @override
+  final int? durationMs;
+
   @override
   String toString() {
-    return 'TaskAttachment(id: $id, url: $url, type: $type, uploadedAt: $uploadedAt, uploadedBy: $uploadedBy, uploadedByName: $uploadedByName)';
+    return 'TaskAttachment(id: $id, type: $type, url: $url, uploadedAt: $uploadedAt, uploadedBy: $uploadedBy, uploadedByName: $uploadedByName, durationMs: $durationMs)';
   }
 
   @override
@@ -223,25 +245,28 @@ class _$TaskAttachmentImpl implements _TaskAttachment {
         (other.runtimeType == runtimeType &&
             other is _$TaskAttachmentImpl &&
             (identical(other.id, id) || other.id == id) &&
-            (identical(other.url, url) || other.url == url) &&
             (identical(other.type, type) || other.type == type) &&
+            (identical(other.url, url) || other.url == url) &&
             (identical(other.uploadedAt, uploadedAt) ||
                 other.uploadedAt == uploadedAt) &&
             (identical(other.uploadedBy, uploadedBy) ||
                 other.uploadedBy == uploadedBy) &&
             (identical(other.uploadedByName, uploadedByName) ||
-                other.uploadedByName == uploadedByName));
+                other.uploadedByName == uploadedByName) &&
+            (identical(other.durationMs, durationMs) ||
+                other.durationMs == durationMs));
   }
 
   @override
   int get hashCode => Object.hash(
     runtimeType,
     id,
-    url,
     type,
+    url,
     uploadedAt,
     uploadedBy,
     uploadedByName,
+    durationMs,
   );
 
   /// Create a copy of TaskAttachment
@@ -256,15 +281,17 @@ class _$TaskAttachmentImpl implements _TaskAttachment {
       );
 }
 
-abstract class _TaskAttachment implements TaskAttachment {
+abstract class _TaskAttachment extends TaskAttachment {
   const factory _TaskAttachment({
     required final String id,
-    required final String url,
     required final AttachmentType type,
+    required final String url,
     required final DateTime uploadedAt,
     required final String uploadedBy,
     final String? uploadedByName,
+    final int? durationMs,
   }) = _$TaskAttachmentImpl;
+  const _TaskAttachment._() : super._();
 
   /// Unique attachment id (also the Storage filename stem).
   @override
@@ -272,9 +299,9 @@ abstract class _TaskAttachment implements TaskAttachment {
 
   /// Storage download URL.
   @override
-  String get url;
-  @override
   AttachmentType get type;
+  @override
+  String get url;
   @override
   DateTime get uploadedAt;
 
@@ -285,6 +312,11 @@ abstract class _TaskAttachment implements TaskAttachment {
   /// Denormalised uploader display name (best-effort).
   @override
   String? get uploadedByName;
+
+  /// Video length in milliseconds (best-effort, captured at pick). Null for
+  /// images and for videos uploaded before duration capture existed.
+  @override
+  int? get durationMs;
 
   /// Create a copy of TaskAttachment
   /// with the given fields replaced by the non-null parameter values.

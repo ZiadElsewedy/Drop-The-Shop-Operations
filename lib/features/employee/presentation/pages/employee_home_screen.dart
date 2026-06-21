@@ -88,7 +88,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
               child: BlocBuilder<TaskCubit, TaskState>(
                 builder: (context, state) {
                   final snap = state.maybeWhen(
-                    loaded: (tasks, busy, directory) {
+                    loaded: (tasks, busy, directory, _, _) {
                       _cachedTasks = tasks;
                       _cachedDir = directory;
                       return (tasks: tasks, busy: busy, directory: directory);

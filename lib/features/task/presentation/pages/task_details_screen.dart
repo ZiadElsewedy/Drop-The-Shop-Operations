@@ -9,6 +9,7 @@ import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_dialog.dart';
+import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
@@ -16,14 +17,16 @@ import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:fbro/features/task/domain/entities/activity_entry.dart';
 import 'package:fbro/features/task/domain/entities/checklist_item.dart';
-import 'package:fbro/features/task/domain/entities/task_attachment.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/presentation/activity_format.dart';
 import 'package:fbro/features/task/presentation/attachment_format.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 import 'package:fbro/features/task/presentation/cubit/task_state.dart';
+import 'package:fbro/features/task/presentation/submission_progress.dart';
 import 'package:fbro/features/task/presentation/widgets/attachment_gallery.dart';
 import 'package:fbro/features/task/presentation/widgets/attachment_picker.dart';
+import 'package:fbro/features/task/presentation/widgets/submission_details_sheet.dart';
+import 'package:fbro/features/task/presentation/widgets/submission_loading_overlay.dart';
 import 'package:fbro/features/task/presentation/widgets/task_action_sheets.dart';
 import 'package:fbro/features/task/presentation/widgets/task_card.dart';
 
@@ -54,21 +57,45 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
       listener: (context, state) =>
           state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
       builder: (context, state) {
-        // Always show the freshest snapshot from the stream.
+        // Always show the freshest snapshot from the stream, plus the shared
+        // submission state (drives the single loading overlay).
         final live = state.maybeWhen(
-          loaded: (tasks, _, directory) {
+          loaded: (tasks, busy, directory, isSubmitting, submissionProgress) {
             final found = tasks.where((t) => t.id == widget.task.id).toList();
-            return found.isNotEmpty
-                ? (task: found.first, directory: directory)
-                : (task: widget.task, directory: widget.directory);
+            return (
+              task: found.isNotEmpty ? found.first : widget.task,
+              directory: directory,
+              submitting: isSubmitting,
+              progress: submissionProgress,
+            );
           },
-          orElse: () => (task: widget.task, directory: widget.directory),
+          orElse: () => (
+            task: widget.task,
+            directory: widget.directory,
+            submitting: false,
+            progress: null,
+          ),
         );
 
-        return _DetailsView(
-          task: live.task,
-          directory: live.directory,
-          cubit: context.read<TaskCubit>(),
+        return PopScope(
+          // Block back navigation while a submission is in flight.
+          canPop: !live.submitting,
+          child: Stack(
+            children: [
+              _DetailsView(
+                task: live.task,
+                directory: live.directory,
+                cubit: context.read<TaskCubit>(),
+              ),
+              if (live.submitting)
+                Positioned.fill(
+                  child: SubmissionLoadingOverlay(
+                    progress: live.progress ??
+                        const SubmissionProgress(SubmissionStage.preparing),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -229,7 +256,12 @@ class _DetailsView extends StatelessWidget {
             _Section(
               icon: Icons.timeline_rounded,
               title: 'Activity',
-              child: _ActivityTimeline(task: task, directory: directory),
+              child: _ActivityTimeline(
+                task: task,
+                directory: directory,
+                cubit: cubit,
+                canReview: isManagerOrAdmin,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
           ],
@@ -267,56 +299,139 @@ class _DetailsView extends StatelessWidget {
 
 // ─── Status header ─────────────────────────────────────────────────
 
-class _StatusHeader extends StatelessWidget {
+class _StatusHeader extends StatefulWidget {
   const _StatusHeader({required this.task, this.branchName});
   final TaskEntity task;
   final String? branchName;
 
   @override
+  State<_StatusHeader> createState() => _StatusHeaderState();
+}
+
+class _StatusHeaderState extends State<_StatusHeader>
+    with SingleTickerProviderStateMixin {
+  // A slow breathing controller — only In Review pulses; others use a static
+  // soft glow (read at t=0).
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1900),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    if (_pulsing) _pulse.repeat(reverse: true);
+  }
+
+  @override
+  void didUpdateWidget(_StatusHeader old) {
+    super.didUpdateWidget(old);
+    // Start/stop the pulse as the task moves in/out of "In Review".
+    if (_pulsing && !_pulse.isAnimating) {
+      _pulse.repeat(reverse: true);
+    } else if (!_pulsing && _pulse.isAnimating) {
+      _pulse.stop();
+      _pulse.value = 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  bool get _pulsing => widget.task.status == TaskStatus.waitingReview;
+
+  /// The status accent (null = no glow, plain surface). Monochrome base is kept;
+  /// the colour appears only as a soft glow + faint tint.
+  Color? get _aura => switch (widget.task.status) {
+        TaskStatus.waitingReview => AppColors.warning,
+        TaskStatus.approved => AppColors.success,
+        TaskStatus.rejected => AppColors.error,
+        _ => null,
+      };
+
+  double _lerp(double a, double b, double t) => a + (b - a) * t;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurface,
-        borderRadius: AppRadius.cardAll,
-        border: Border.all(color: AppColors.darkBorder),
-      ),
+    final aura = _aura;
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, child) {
+        final t = _pulsing ? _pulse.value : 0.0;
+        BoxDecoration decoration;
+        if (aura == null) {
+          decoration = BoxDecoration(
+            color: AppColors.darkSurface,
+            borderRadius: AppRadius.cardAll,
+            border: Border.all(color: AppColors.darkBorder),
+          );
+        } else {
+          final glow = _pulsing ? _lerp(28, 64, t) : 46;
+          final blur = _pulsing ? _lerp(16, 30, t) : 24.0;
+          final tint = _pulsing ? _lerp(8, 16, t) : 12;
+          final borderA = _pulsing ? _lerp(55, 120, t) : 85;
+          decoration = BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [AppColors.darkSurface, aura.withAlpha(tint.round())],
+            ),
+            borderRadius: AppRadius.cardAll,
+            border: Border.all(color: aura.withAlpha(borderA.round())),
+            boxShadow: [
+              BoxShadow(
+                color: aura.withAlpha(glow.round()),
+                blurRadius: blur,
+                spreadRadius: 0,
+              ),
+            ],
+          );
+        }
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: decoration,
+          child: child,
+        );
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Status pill
-          _StatusPill(task.status),
+          _StatusPill(widget.task.status),
           const SizedBox(height: AppSpacing.md),
           // Meta row
           Wrap(
             spacing: AppSpacing.xl,
             runSpacing: AppSpacing.sm,
             children: [
-              if ((branchName ?? '').isNotEmpty)
+              if ((widget.branchName ?? '').isNotEmpty)
                 _MetaPill(
                   icon: Icons.store_mall_directory_outlined,
-                  label: branchName!,
+                  label: widget.branchName!,
                 ),
               _MetaPill(
                 icon: Icons.flag_outlined,
-                label: _priorityLabel(task.priority),
+                label: _priorityLabel(widget.task.priority),
               ),
               _MetaPill(
                 icon: Icons.label_outline_rounded,
-                label: task.type.value,
+                label: widget.task.type.value,
               ),
-              if (task.deadline != null) ...[
+              if (widget.task.deadline != null) ...[
                 _MetaPill(
                   icon: Icons.schedule_outlined,
-                  label: _dateLabel(task.deadline!),
-                  highlight: _isOverdue(task),
+                  label: _dateLabel(widget.task.deadline!),
+                  highlight: _isOverdue(widget.task),
                 ),
               ],
-              if (task.recurrence != null &&
-                  task.recurrence!.frequency.value != 'none')
+              if (widget.task.recurrence != null &&
+                  widget.task.recurrence!.frequency.value != 'none')
                 _MetaPill(
                   icon: Icons.repeat_rounded,
-                  label: task.recurrence!.frequency.label,
+                  label: widget.task.recurrence!.frequency.label,
                 ),
             ],
           ),
@@ -332,8 +447,27 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Cross-fade + scale the badge whenever the status changes (the screen
+    // rebuilds from the live stream), giving a subtle icon scale/fade.
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 360),
+      switchInCurve: Curves.easeOutBack,
+      switchOutCurve: Curves.easeIn,
+      transitionBuilder: (child, anim) => FadeTransition(
+        opacity: anim,
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.9, end: 1).animate(anim),
+          child: child,
+        ),
+      ),
+      child: _pill(),
+    );
+  }
+
+  Widget _pill() {
     final (color, bg, label, icon) = _info(status);
     return Container(
+      key: ValueKey(status),
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md, vertical: AppSpacing.xs + 2),
       decoration: BoxDecoration(
@@ -727,44 +861,73 @@ class _SubmittedBlock extends StatelessWidget {
 // ─── Activity timeline ──────────────────────────────────────────────
 
 class _ActivityTimeline extends StatelessWidget {
-  const _ActivityTimeline({required this.task, required this.directory});
+  const _ActivityTimeline({
+    required this.task,
+    required this.directory,
+    required this.cubit,
+    required this.canReview,
+  });
   final TaskEntity task;
   final Map<String, UserEntity> directory;
+  final TaskCubit cubit;
+  final bool canReview;
+
+  /// Submission-related events open the deep review surface on tap.
+  static bool _isSubmission(String status) =>
+      status == 'completed' || status == 'waitingReview';
 
   @override
   Widget build(BuildContext context) {
     // Newest first — rendered purely from the event list (no hardcoded
     // sequence), so missing/optional steps and rework loops just work.
-    final entries = task.activityLog.reversed.toList();
-    return Column(
-      children: [
-        for (var i = 0; i < entries.length; i++)
-          _EventCard(
-            entry: entries[i],
-            actor: directory[entries[i].actorId],
-            // Media belongs to the event (with legacy proof back-compat).
-            attachments: attachmentsForEvent(entries[i], task),
-            isLast: i == entries.length - 1,
-          ),
-      ],
-    );
+    final log = task.activityLog;
+    final rows = <Widget>[];
+    var pos = 0; // render order (newest first) — drives the entrance stagger
+    for (var i = log.length - 1; i >= 0; i--) {
+      final entry = log[i];
+      final media = attachmentsForEvent(entry, task);
+      rows.add(EntranceFade(
+        delay: staggerDelay(pos++),
+        offset: 10,
+        child: _EventCard(
+          entry: entry,
+          actor: directory[entry.actorId],
+          attachmentSummary: media.isEmpty ? null : attachmentSummary(media),
+          isLast: i == 0,
+          onTap: _isSubmission(entry.status)
+              ? () => showSubmissionDetailsSheet(
+                    context: context,
+                    task: task,
+                    submissionIndex: i,
+                    cubit: cubit,
+                    canReview: canReview,
+                  )
+              : null,
+        ),
+      ));
+    }
+    return Column(children: rows);
   }
 }
 
-/// A rich timeline event card — status badge, actor (avatar + role), timestamp,
-/// optional note and attachment thumbnail — strung on a vertical spine.
+/// A **summary** timeline event card — status, actor, timestamp, an attachment
+/// summary ("2 photos · 1 video") and a truncated note preview. Submission-
+/// related cards are tappable and open the [SubmissionDetailsSheet] (the deep
+/// review surface) — the timeline itself stays lightweight for scanning.
 class _EventCard extends StatelessWidget {
   const _EventCard({
     required this.entry,
     required this.actor,
-    required this.attachments,
+    required this.attachmentSummary,
     required this.isLast,
+    required this.onTap,
   });
 
   final ActivityEntry entry;
   final UserEntity? actor;
-  final List<TaskAttachment> attachments;
+  final String? attachmentSummary;
   final bool isLast;
+  final VoidCallback? onTap;
 
   String get _actorName =>
       entry.actorName ??
@@ -781,7 +944,81 @@ class _EventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = activityColor(entry.status);
     final note = entry.note ?? '';
-    final hasAttachment = attachments.isNotEmpty;
+
+    final card = Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Title + timestamp (+ chevron when the card opens a detail surface)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  activityTitle(entry.status),
+                  style: AppTypography.label.copyWith(color: color, fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(relativeTime(entry.at), style: AppTypography.caption),
+              if (onTap != null) ...[
+                const SizedBox(width: 2),
+                const Icon(Icons.chevron_right_rounded,
+                    size: 16, color: AppColors.textTertiary),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // Actor
+          Row(
+            children: [
+              if (actor != null)
+                UserAvatar.fromUser(actor!, size: 20)
+              else
+                UserAvatar(name: _actorName, size: 20),
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(
+                child: Text(
+                  _roleLabel != null ? '$_actorName · $_roleLabel' : _actorName,
+                  style: AppTypography.caption
+                      .copyWith(color: AppColors.textSecondary),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          // Attachment summary (not the media itself — that's in the sheet)
+          if (attachmentSummary != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Row(
+              children: [
+                const Icon(Icons.perm_media_outlined,
+                    size: 13, color: AppColors.textTertiary),
+                const SizedBox(width: 5),
+                Text(attachmentSummary!, style: AppTypography.caption),
+              ],
+            ),
+          ],
+          // Truncated note preview
+          if (note.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '“$note”',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption
+                  .copyWith(color: AppColors.textSecondary, height: 1.4),
+            ),
+          ],
+        ],
+      ),
+    );
 
     return IntrinsicHeight(
       child: Row(
@@ -811,86 +1048,17 @@ class _EventCard extends StatelessWidget {
             ],
           ),
           const SizedBox(width: AppSpacing.md),
-          // ── Event card ─────────────────────────────────────────
+          // ── Summary card ───────────────────────────────────────
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(bottom: isLast ? 0 : AppSpacing.md),
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.darkSurfaceElevated,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.darkBorder),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title + timestamp
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            activityTitle(entry.status),
-                            style: AppTypography.label
-                                .copyWith(color: color, fontSize: 13),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Text(relativeTime(entry.at),
-                            style: AppTypography.caption),
-                      ],
+              child: onTap == null
+                  ? card
+                  : InkWell(
+                      onTap: onTap,
+                      borderRadius: BorderRadius.circular(14),
+                      child: card,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    // Actor
-                    Row(
-                      children: [
-                        if (actor != null)
-                          UserAvatar.fromUser(actor!, size: 20)
-                        else
-                          UserAvatar(name: _actorName, size: 20),
-                        const SizedBox(width: AppSpacing.sm),
-                        Flexible(
-                          child: Text(
-                            _roleLabel != null
-                                ? '$_actorName · $_roleLabel'
-                                : _actorName,
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.textSecondary),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    // Note
-                    if (note.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                        decoration: BoxDecoration(
-                          color: AppColors.darkBg,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border(
-                            left: BorderSide(color: color.withAlpha(120), width: 2),
-                          ),
-                        ),
-                        child: Text(
-                          note,
-                          style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary, height: 1.45),
-                        ),
-                      ),
-                    ],
-                    // Media attachments (images / videos) — belong to the event.
-                    if (hasAttachment) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      AttachmentGallery(attachments: attachments, tileSize: 64),
-                    ],
-                  ],
-                ),
-              ),
             ),
           ),
         ],
@@ -958,14 +1126,15 @@ class _CompleteButtonState extends State<_CompleteButton> {
 
   Future<void> _submit() async {
     final notes = _notes.text.trim();
+    // The submission overlay is driven by TaskCubit/TaskState (rendered by the
+    // screen), so the button just kicks off the work and leaves on success.
     final ok = await widget.cubit.completeAndSubmit(
       widget.task,
       notes: notes.isEmpty ? null : notes,
       attachments: _attachments,
     );
-    // Only leave the screen on success. On failure the cubit already surfaced
-    // the real error and the selected media is still attached here, so the
-    // employee can retry (or remove a file) without losing their work.
+    // On failure the cubit already surfaced the real error and the selected
+    // media is still attached here, so the employee can retry without losing it.
     if (ok && mounted) Navigator.of(context).pop();
   }
 

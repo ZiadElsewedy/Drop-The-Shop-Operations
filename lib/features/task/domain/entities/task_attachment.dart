@@ -14,13 +14,15 @@ part 'task_attachment.freezed.dart';
 /// without a user lookup.
 @freezed
 class TaskAttachment with _$TaskAttachment {
+  const TaskAttachment._();
+
   const factory TaskAttachment({
     /// Unique attachment id (also the Storage filename stem).
     required String id,
 
     /// Storage download URL.
-    required String url,
     required AttachmentType type,
+    required String url,
     required DateTime uploadedAt,
 
     /// uid of the uploader.
@@ -28,7 +30,15 @@ class TaskAttachment with _$TaskAttachment {
 
     /// Denormalised uploader display name (best-effort).
     String? uploadedByName,
+
+    /// Video length in milliseconds (best-effort, captured at pick). Null for
+    /// images and for videos uploaded before duration capture existed.
+    int? durationMs,
   }) = _TaskAttachment;
+
+  /// Video length, or null when unknown.
+  Duration? get duration =>
+      durationMs == null ? null : Duration(milliseconds: durationMs!);
 }
 
 /// Submission media limits + pre-upload optimization knobs (Phase 10). Enforced

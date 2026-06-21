@@ -32,13 +32,16 @@ abstract class TaskRemoteDataSource {
   });
 
   /// Uploads one media file to `tasks/{taskId}/attachments/{id}.<ext>` (unique
-  /// id, never overwrites) and returns the resolved [TaskAttachment].
+  /// id, never overwrites) and returns the resolved [TaskAttachment]. Reports
+  /// byte progress via [onProgress] (transferred, total) for the loading overlay.
   Future<TaskAttachment> uploadAttachment({
     required String taskId,
     required File file,
     required AttachmentType type,
     required String uploadedBy,
     String? uploadedByName,
+    int? durationMs,
+    void Function(int transferred, int total)? onProgress,
   });
 
   // ─── Task templates (reusable blueprints) ──────────────────────
@@ -59,10 +62,13 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   CollectionReference<Map<String, dynamic>> get _templates =>
       _firestore.collection(AppConstants.taskTemplatesCollection);
 
-  // Newest tasks first. The admin query orders on a single field (auto-indexed);
-  // the branch / employee queries combine a filter with the order, which needs
-  // the composite indexes in `firestore.indexes.json` (deploy them, or those
-  // lists error until the index builds).
+  // Newest-first ordering: the admin query orders on a single field
+  // (auto-indexed by Firestore, no setup). The branch / employee queries
+  // **filter** (`where` / `arrayContains`); adding `orderBy` on a *different*
+  // field would require a composite index and break loading until it's deployed,
+  // so those are intentionally NOT ordered server-side — the repository applies
+  // `sortTasksNewestFirst` instead (a per-branch / per-employee task list is
+  // small, so the client sort is cheap and never needs an index).
   static const String _createdAt = 'createdAt';
 
   @override
@@ -78,10 +84,7 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   @override
   Future<List<TaskModel>> getTasksByBranch(String branchId) async {
     try {
-      final snap = await _tasks
-          .where('branchId', isEqualTo: branchId)
-          .orderBy(_createdAt, descending: true)
-          .get();
+      final snap = await _tasks.where('branchId', isEqualTo: branchId).get();
       return _mapSnap(snap);
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to load branch tasks.');
@@ -93,10 +96,8 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     try {
       // Multi-assignee (Phase 9): a task belongs to an employee if their uid is
       // in the `assigneeIds` array.
-      final snap = await _tasks
-          .where('assigneeIds', arrayContains: employeeId)
-          .orderBy(_createdAt, descending: true)
-          .get();
+      final snap =
+          await _tasks.where('assigneeIds', arrayContains: employeeId).get();
       return _mapSnap(snap);
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to load your tasks.');
@@ -113,14 +114,12 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   @override
   Stream<List<TaskModel>> watchTasksByBranch(String branchId) => _tasks
       .where('branchId', isEqualTo: branchId)
-      .orderBy(_createdAt, descending: true)
       .snapshots()
       .map(_mapSnap);
 
   @override
   Stream<List<TaskModel>> watchEmployeeTasks(String employeeId) => _tasks
       .where('assigneeIds', arrayContains: employeeId)
-      .orderBy(_createdAt, descending: true)
       .snapshots()
       .map(_mapSnap);
 
@@ -204,16 +203,20 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     required AttachmentType type,
     required String uploadedBy,
     String? uploadedByName,
+    int? durationMs,
+    void Function(int transferred, int total)? onProgress,
   }) async {
+    // Unique id per upload → files are never overwritten (each attachment is
+    // preserved). A fresh Firestore push id is a guaranteed-unique 20-char id.
+    final id = _tasks.doc().id;
+    final ext = _extensionFor(file.path, type);
+    final upload = _storage
+        .ref('${AppConstants.tasksCollection}/$taskId/attachments/$id.$ext')
+        .putFile(file, SettableMetadata(contentType: _contentType(ext, type)));
+    // Live byte progress for the shared loading overlay.
+    final sub = upload.snapshotEvents
+        .listen((s) => onProgress?.call(s.bytesTransferred, s.totalBytes));
     try {
-      // Unique id per upload → files are never overwritten (each attachment is
-      // preserved). A fresh Firestore push id is a guaranteed-unique 20-char id.
-      final id = _tasks.doc().id;
-      final ext = _extensionFor(file.path, type);
-      final ref = _storage.ref(
-          '${AppConstants.tasksCollection}/$taskId/attachments/$id.$ext');
-      final upload = ref.putFile(
-          file, SettableMetadata(contentType: _contentType(ext, type)));
       final snapshot = await upload.timeout(
         _uploadTimeout,
         onTimeout: () {
@@ -231,12 +234,15 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
         uploadedAt: DateTime.now(),
         uploadedBy: uploadedBy,
         uploadedByName: uploadedByName,
+        durationMs: durationMs,
       );
     } on TimeoutException {
       throw const ServerException(
           'Upload timed out. Check your connection and try again.');
     } on FirebaseException catch (e) {
       throw ServerException(_storageError(e));
+    } finally {
+      await sub.cancel();
     }
   }
 

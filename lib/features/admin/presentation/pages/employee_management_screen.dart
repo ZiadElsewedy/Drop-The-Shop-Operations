@@ -51,7 +51,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       // only if it isn't already streaming (it usually is, from Admin Home).
       final taskCubit = context.read<TaskCubit>();
       final loaded = taskCubit.state
-          .maybeWhen(loaded: (_, _, _) => true, orElse: () => false);
+          .maybeWhen(loaded: (_, _, _, _, _) => true, orElse: () => false);
       final user = context.currentUser;
       if (!loaded && user != null) taskCubit.load(user);
     });
@@ -130,7 +130,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     final filtered = _filter(users);
     // Per-employee performance, derived from the live admin task stream.
     final tasks = context.watch<TaskCubit>().state.maybeWhen(
-        loaded: (t, _, _) => t, orElse: () => const <TaskEntity>[]);
+        loaded: (t, _, _, _, _) => t, orElse: () => const <TaskEntity>[]);
     final metrics = computeEmployeeMetrics(tasks);
     return Column(
       children: [

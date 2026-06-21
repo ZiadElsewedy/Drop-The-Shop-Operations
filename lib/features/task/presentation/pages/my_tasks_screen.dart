@@ -71,7 +71,7 @@ class _MyTasksScreenState extends State<MyTasksScreen>
             state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
         builder: (context, state) => state.maybeWhen(
           loading: () => const ListSkeleton(),
-          loaded: (tasks, busy, directory) =>
+          loaded: (tasks, busy, directory, _, _) =>
               _body(tasks, busy, directory),
           orElse: () => const SizedBox.shrink(),
         ),

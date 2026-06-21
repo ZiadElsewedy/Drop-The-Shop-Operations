@@ -1,6 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:fbro/features/task/presentation/submission_progress.dart';
 
 part 'task_state.freezed.dart';
 
@@ -15,10 +16,16 @@ class TaskState with _$TaskState {
   /// while the list stays visible (no flicker). [directory] resolves assignee
   /// uids → users so cards can show real names/avatars (Phase 9); it fills in
   /// asynchronously after the tasks arrive.
+  ///
+  /// [isSubmitting] + [submissionProgress] drive the **shared** submission
+  /// loading overlay — lifting it out of any single widget so the whole Task
+  /// Details screen reacts and progress survives rebuilds / disposal.
   const factory TaskState.loaded(
     List<TaskEntity> tasks, {
     @Default(false) bool busy,
     @Default(<String, UserEntity>{}) Map<String, UserEntity> directory,
+    @Default(false) bool isSubmitting,
+    SubmissionProgress? submissionProgress,
   }) = _Loaded;
 
   /// Transient — surfaced as a snackbar; the cubit immediately re-emits the

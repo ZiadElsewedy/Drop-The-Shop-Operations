@@ -10,28 +10,17 @@ import 'package:fbro/features/task/domain/entities/task_attachment.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 import 'package:fbro/features/task/domain/repositories/task_repository.dart';
+import 'package:fbro/features/task/domain/task_ordering.dart';
 
 class TaskRepositoryImpl implements TaskRepository {
   final TaskRemoteDataSource _remote;
 
   TaskRepositoryImpl(this._remote);
 
-  /// Newest first. Firestore already orders by `createdAt` desc, but a task just
-  /// created locally has a *pending* server timestamp (null until the server
-  /// confirms), which Firestore would sort to the bottom — so we re-sort with
-  /// pending (null) treated as newest, keeping the new task on top instantly.
-  List<TaskEntity> _newestFirst(List<TaskModel> models) {
-    final tasks = models.map((m) => m.toEntity()).toList();
-    tasks.sort((a, b) {
-      final ad = a.createdAt;
-      final bd = b.createdAt;
-      if (ad == null && bd == null) return 0;
-      if (ad == null) return -1;
-      if (bd == null) return 1;
-      return bd.compareTo(ad);
-    });
-    return tasks;
-  }
+  /// Maps models → entities, then orders newest-first (pending timestamps on top
+  /// — see [sortTasksNewestFirst]).
+  List<TaskEntity> _newestFirst(List<TaskModel> models) =>
+      sortTasksNewestFirst(models.map((m) => m.toEntity()).toList());
 
   @override
   Future<List<TaskEntity>> getAllTasks() async {
@@ -134,6 +123,8 @@ class TaskRepositoryImpl implements TaskRepository {
     required AttachmentType type,
     required String uploadedBy,
     String? uploadedByName,
+    int? durationMs,
+    void Function(int transferred, int total)? onProgress,
   }) async {
     try {
       return await _remote.uploadAttachment(
@@ -142,6 +133,8 @@ class TaskRepositoryImpl implements TaskRepository {
         type: type,
         uploadedBy: uploadedBy,
         uploadedByName: uploadedByName,
+        durationMs: durationMs,
+        onProgress: onProgress,
       );
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
