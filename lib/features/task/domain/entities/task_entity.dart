@@ -66,6 +66,18 @@ class TaskEntity with _$TaskEntity {
     DateTime? rejectedAt,
     /// Reviewer's note left on approve/reject.
     String? reviewNotes,
+    // ─── Rework distinction (Notification System Phase 1) ─────────
+    /// How many times this task has been sent back for rework. 0 = a new task,
+    /// 1 = first rework, 2 = second, … Incremented only by "Request Rework"
+    /// (not by a terminal "Reject"). Drives the `REWORK #n` badge + payload.
+    @Default(0) int revisionNumber,
+    /// True while the task is awaiting a redo after a rework request; cleared
+    /// when the employee resubmits. Distinguishes a rework loop from a plain
+    /// rejection / new task.
+    @Default(false) bool requiresRework,
+    /// The reviewer's reason captured on the last rework / reject decision
+    /// (shown to the employee + carried in the notification body).
+    String? rejectionReason,
     /// Recurrence rule — null means "one-off" (does not repeat). When set, the
     /// [TaskCubit] auto-creates the next instance after this task is approved.
     RecurrenceConfig? recurrence,
@@ -77,6 +89,11 @@ class TaskEntity with _$TaskEntity {
 
   /// Whether anyone is assigned.
   bool get isAssigned => assigneeIds.isNotEmpty;
+
+  /// A brand-new task: never reworked and still pending its first start. Drives
+  /// the monochrome `NEW` badge (Notification System Phase 1).
+  bool get isNew =>
+      status == TaskStatus.pending && revisionNumber == 0 && !requiresRework;
 
   // ─── Checklist progress (Phase 9) ──────────────────────────────
   bool get hasChecklist => checklist.isNotEmpty;

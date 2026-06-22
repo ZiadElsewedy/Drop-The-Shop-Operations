@@ -3,10 +3,12 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fbro/core/enums/notification_type.dart';
 import 'package:fbro/core/enums/task_priority.dart';
 import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/enums/task_type.dart';
 import 'package:fbro/core/errors/failures.dart';
+import 'package:fbro/features/notifications/domain/usecases/notify_task_event.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
@@ -55,6 +57,7 @@ class TaskCubit extends Cubit<TaskState> {
   final AssignTask _assignTask;
   final UploadTaskAttachment _uploadTaskAttachment;
   final GetUsersByBranch _getUsersByBranch;
+  final NotifyTaskEvent _notifyTaskEvent;
 
   UserEntity? _user;
   StreamSubscription<List<TaskEntity>>? _sub;
@@ -82,10 +85,19 @@ class TaskCubit extends Cubit<TaskState> {
     required this._assignTask,
     required this._uploadTaskAttachment,
     required this._getUsersByBranch,
+    required this._notifyTaskEvent,
   }) : super(const TaskState.initial());
 
   List<TaskEntity> get _tasks =>
       state.maybeWhen(loaded: (t, _, _, _, _) => t, orElse: () => const []);
+
+  /// The currently-loaded task with [id], or null if not in the live list.
+  TaskEntity? _taskById(String id) {
+    for (final t in _tasks) {
+      if (t.id == id) return t;
+    }
+    return null;
+  }
 
   Future<void> load(UserEntity user) async {
     if (_user?.uid != user.uid) {
@@ -185,30 +197,57 @@ class TaskCubit extends Cubit<TaskState> {
     List<String> assigneeIds = const [],
     List<ChecklistItem> checklist = const [],
     RecurrenceConfig? recurrence,
-  }) =>
-      _mutate(() => _createTask(TaskEntity(
-            id: '',
-            title: title,
-            description: description,
-            type: type,
-            priority: priority,
-            branchId: branchId,
-            assigneeIds: assigneeIds,
-            checklist: checklist,
-            recurrence: recurrence,
-            createdBy: _user?.uid,
-            deadline: deadline,
-            activityLog: [
-              ActivityEntry(
-                status: TaskStatus.pending.value,
-                actorId: _user?.uid ?? '',
-                actorName: _user?.displayName,
-                at: DateTime.now(),
-              ),
-            ],
-          )));
+  }) async {
+    TaskEntity? created;
+    final ok = await _mutate(() async {
+      created = await _createTask(TaskEntity(
+        id: '',
+        title: title,
+        description: description,
+        type: type,
+        priority: priority,
+        branchId: branchId,
+        assigneeIds: assigneeIds,
+        checklist: checklist,
+        recurrence: recurrence,
+        createdBy: _user?.uid,
+        deadline: deadline,
+        activityLog: [
+          ActivityEntry(
+            status: TaskStatus.pending.value,
+            actorId: _user?.uid ?? '',
+            actorName: _user?.displayName,
+            at: DateTime.now(),
+          ),
+        ],
+      ));
+    });
+    // Notify the assignees of the brand-new task (best-effort).
+    if (ok && created != null && _user != null && assigneeIds.isNotEmpty) {
+      await _notifyTaskEvent(
+        task: created!,
+        type: NotificationType.taskAssigned,
+        actor: _user!,
+        recipientOverride: assigneeIds,
+      );
+    }
+  }
 
-  Future<void> editTask(TaskEntity task) => _mutate(() => _updateTask(task));
+  Future<void> editTask(TaskEntity task) async {
+    // Notify only employees newly added by this edit (not the existing ones).
+    final before = _taskById(task.id)?.assigneeIds.toSet() ?? const {};
+    final added =
+        task.assigneeIds.where((id) => !before.contains(id)).toList();
+    final ok = await _mutate(() => _updateTask(task));
+    if (ok && added.isNotEmpty && _user != null) {
+      await _notifyTaskEvent(
+        task: task,
+        type: NotificationType.taskAssigned,
+        actor: _user!,
+        recipientOverride: added,
+      );
+    }
+  }
 
   Future<void> deleteTask(String taskId) =>
       _mutate(() => _deleteTask(taskId));
@@ -217,66 +256,150 @@ class TaskCubit extends Cubit<TaskState> {
     required String taskId,
     required List<String> employeeIds,
     String? shiftId,
-  }) =>
-      _mutate(() => _assignTask(
-            taskId: taskId,
-            employeeIds: employeeIds,
-            assignedShiftId: shiftId,
-          ));
-
-  Future<void> approveTask(TaskEntity task, {String? reviewNotes}) =>
-      _transitionMutate(
-        task,
-        TaskStatus.approved,
-        () async {
-          final now = DateTime.now();
-          await _updateTask(task.copyWith(
-            status: TaskStatus.approved,
-            approvedBy: _user?.uid,
-            approvedAt: now,
-            reviewNotes: reviewNotes,
-            activityLog: [
-              ...task.activityLog,
-              ActivityEntry(
-                status: TaskStatus.approved.value,
-                actorId: _user?.uid ?? '',
-                actorName: _user?.displayName,
-                at: now,
-                note: reviewNotes,
-              ),
-            ],
-          ));
-          if (task.recurrence != null &&
-              task.recurrence!.frequency.value != 'none') {
-            await _spawnNextRecurrence(task);
-          }
-        },
+  }) async {
+    final existing = _taskById(taskId);
+    final before = existing?.assigneeIds.toSet() ?? const {};
+    final added = employeeIds.where((id) => !before.contains(id)).toList();
+    final ok = await _mutate(() => _assignTask(
+          taskId: taskId,
+          employeeIds: employeeIds,
+          assignedShiftId: shiftId,
+        ));
+    // Notify the newly-assigned employees (best-effort).
+    if (ok && added.isNotEmpty && existing != null && _user != null) {
+      await _notifyTaskEvent(
+        task: existing.copyWith(assigneeIds: employeeIds),
+        type: NotificationType.taskAssigned,
+        actor: _user!,
+        recipientOverride: added,
       );
+    }
+  }
 
-  Future<void> rejectTask(TaskEntity task, {String? reviewNotes}) =>
-      _transitionMutate(
-        task,
-        TaskStatus.rejected,
-        () async {
-          final now = DateTime.now();
-          await _updateTask(task.copyWith(
-            status: TaskStatus.rejected,
-            rejectedBy: _user?.uid,
-            rejectedAt: now,
-            reviewNotes: reviewNotes,
-            activityLog: [
-              ...task.activityLog,
-              ActivityEntry(
-                status: TaskStatus.rejected.value,
-                actorId: _user?.uid ?? '',
-                actorName: _user?.displayName,
-                at: now,
-                note: reviewNotes,
-              ),
-            ],
-          ));
-        },
+  Future<void> approveTask(TaskEntity task, {String? reviewNotes}) async {
+    final ok = await _transitionMutate(
+      task,
+      TaskStatus.approved,
+      () async {
+        final now = DateTime.now();
+        await _updateTask(task.copyWith(
+          status: TaskStatus.approved,
+          approvedBy: _user?.uid,
+          approvedAt: now,
+          reviewNotes: reviewNotes,
+          requiresRework: false,
+          activityLog: [
+            ...task.activityLog,
+            ActivityEntry(
+              status: TaskStatus.approved.value,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: now,
+              note: reviewNotes,
+            ),
+          ],
+        ));
+        if (task.recurrence != null &&
+            task.recurrence!.frequency.value != 'none') {
+          await _spawnNextRecurrence(task);
+        }
+      },
+    );
+    if (ok && _user != null) {
+      await _notifyTaskEvent(
+        task: task,
+        type: NotificationType.taskApproved,
+        actor: _user!,
       );
+    }
+  }
+
+  /// Sends a task back to be redone (the "Request Rework" review action). Bumps
+  /// [TaskEntity.revisionNumber], flags [TaskEntity.requiresRework], stores the
+  /// [reviewNotes] as the rejection reason, and notifies the assignees
+  /// ([NotificationType.taskRework] → `REWORK #n` badge). Distinct from a
+  /// terminal [rejectTask].
+  Future<void> reworkTask(TaskEntity task, {String? reviewNotes}) async {
+    final nextRevision = task.revisionNumber + 1;
+    final ok = await _transitionMutate(
+      task,
+      TaskStatus.rejected,
+      () async {
+        final now = DateTime.now();
+        await _updateTask(task.copyWith(
+          status: TaskStatus.rejected,
+          requiresRework: true,
+          revisionNumber: nextRevision,
+          rejectionReason: reviewNotes,
+          rejectedBy: _user?.uid,
+          rejectedAt: now,
+          reviewNotes: reviewNotes,
+          activityLog: [
+            ...task.activityLog,
+            ActivityEntry(
+              // Stored as `rejected` so the existing timeline rendering is
+              // unchanged; the rework distinction lives in requiresRework /
+              // revisionNumber + the notification type.
+              status: TaskStatus.rejected.value,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: now,
+              note: reviewNotes,
+            ),
+          ],
+        ));
+      },
+    );
+    if (ok && _user != null) {
+      await _notifyTaskEvent(
+        task: task.copyWith(
+          revisionNumber: nextRevision,
+          requiresRework: true,
+          rejectionReason: reviewNotes,
+        ),
+        type: NotificationType.taskRework,
+        actor: _user!,
+      );
+    }
+  }
+
+  /// Terminal rejection (the distinct "Reject" review action). Does **not** bump
+  /// the revision count or flag rework; notifies the assignees
+  /// ([NotificationType.taskRejected] → red `Rejected` badge).
+  Future<void> rejectTask(TaskEntity task, {String? reviewNotes}) async {
+    final ok = await _transitionMutate(
+      task,
+      TaskStatus.rejected,
+      () async {
+        final now = DateTime.now();
+        await _updateTask(task.copyWith(
+          status: TaskStatus.rejected,
+          requiresRework: false,
+          rejectionReason: reviewNotes,
+          rejectedBy: _user?.uid,
+          rejectedAt: now,
+          reviewNotes: reviewNotes,
+          activityLog: [
+            ...task.activityLog,
+            ActivityEntry(
+              status: TaskStatus.rejected.value,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: now,
+              note: reviewNotes,
+            ),
+          ],
+        ));
+      },
+    );
+    if (ok && _user != null) {
+      await _notifyTaskEvent(
+        task: task.copyWith(rejectionReason: reviewNotes),
+        type: NotificationType.taskRejected,
+        actor: _user!,
+      );
+    }
+  }
 
   // ─── Employee actions ──────────────────────────────────────────
   Future<void> startTask(TaskEntity task) => _transitionMutate(
@@ -317,26 +440,37 @@ class TaskCubit extends Cubit<TaskState> {
     return _mutate(() => _updateTask(task.copyWith(checklist: updated)));
   }
 
-  Future<void> submitForReview(TaskEntity task) => _transitionMutate(
-        task,
-        TaskStatus.waitingReview,
-        () async {
-          final now = DateTime.now();
-          await _updateTask(task.copyWith(
-            status: TaskStatus.waitingReview,
-            submittedAt: now,
-            activityLog: [
-              ...task.activityLog,
-              ActivityEntry(
-                status: TaskStatus.waitingReview.value,
-                actorId: _user?.uid ?? '',
-                actorName: _user?.displayName,
-                at: now,
-              ),
-            ],
-          ));
-        },
+  Future<void> submitForReview(TaskEntity task) async {
+    final ok = await _transitionMutate(
+      task,
+      TaskStatus.waitingReview,
+      () async {
+        final now = DateTime.now();
+        await _updateTask(task.copyWith(
+          status: TaskStatus.waitingReview,
+          submittedAt: now,
+          // Resubmitting clears the rework flag (the redo is in for review).
+          requiresRework: false,
+          activityLog: [
+            ...task.activityLog,
+            ActivityEntry(
+              status: TaskStatus.waitingReview.value,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: now,
+            ),
+          ],
+        ));
+      },
+    );
+    if (ok && _user != null) {
+      await _notifyTaskEvent(
+        task: task,
+        type: NotificationType.taskSubmitted,
+        actor: _user!,
       );
+    }
+  }
 
   /// Completes + submits a task for review in a single action (so the employee
   /// doesn't re-open the task to hit "Submit for Review").
@@ -434,6 +568,8 @@ class TaskCubit extends Cubit<TaskState> {
         status: TaskStatus.waitingReview,
         submittedAt: now,
         notes: notes ?? task.notes,
+        // Resubmitting clears the rework flag (the redo is in for review).
+        requiresRework: false,
         // Mirror the first image to the legacy field for back-compat.
         proofImageUrl: firstImage ?? task.proofImageUrl,
         activityLog: [
@@ -462,6 +598,14 @@ class TaskCubit extends Cubit<TaskState> {
       // emit once more to clear the submission flags immediately.
       if (!isClosed) {
         emit(TaskState.loaded(_tasks, busy: false, directory: _directory));
+      }
+      // Notify the reviewer who created the task (best-effort).
+      if (_user != null) {
+        await _notifyTaskEvent(
+          task: task,
+          type: NotificationType.taskSubmitted,
+          actor: _user!,
+        );
       }
       return true;
     } on Failure catch (e) {

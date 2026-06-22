@@ -27,6 +27,7 @@
  */
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
 
@@ -37,6 +38,7 @@ const messaging = admin.messaging();
 
 const USERS = "users";
 const BROADCASTS = "broadcasts";
+const NOTIFICATIONS = "notifications";
 
 // `branchId` marker for a direct message — never a real branch id and never ''
 // (mirrors BroadcastModel.directBranchMarker), so a DM never appears in a
@@ -45,6 +47,34 @@ const DIRECT_BRANCH_MARKER = "__direct__";
 
 // FCM multicast hard limit per request.
 const MULTICAST_CHUNK = 500;
+
+// Firestore batched-write limit.
+const BATCH_LIMIT = 500;
+
+// Maps a broadcast category to its notification `type` (mirrors
+// NotificationType.fromBroadcastCategory on the client).
+function categoryToType(category) {
+  switch (category) {
+    case "alert":
+      return "broadcastAlert";
+    case "reminder":
+      return "broadcastReminder";
+    case "emergency":
+      return "broadcastEmergency";
+    case "announcement":
+    default:
+      return "broadcastAnnouncement";
+  }
+}
+
+// FCM error codes that mean a token is permanently dead and should be pruned.
+function isDeadTokenError(code) {
+  return (
+    code === "messaging/registration-token-not-registered" ||
+    code === "messaging/invalid-registration-token" ||
+    code === "messaging/invalid-argument"
+  );
+}
 
 exports.sendBroadcast = onCall(async (request) => {
   const auth = request.auth;
@@ -157,16 +187,58 @@ exports.sendBroadcast = onCall(async (request) => {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
+  // ── Persist one in-app notification doc per recipient (Notification System
+  // Phase 1 — Part 4). Flagged `pushedByFunction:true` so the onNotificationCreated
+  // trigger doesn't double-push (this function pushes the broadcast directly
+  // below). Best-effort — a write failure never fails the send. ──
+  const notifType = categoryToType(category);
+  const isEmergency = category === "emergency";
+  const notifPayload = {
+    broadcastId: broadcastRef.id,
+    category,
+    route: "broadcast_detail",
+    priority: isEmergency ? "high" : "normal",
+  };
+  try {
+    for (let i = 0; i < recipientDocs.length; i += BATCH_LIMIT) {
+      const slice = recipientDocs.slice(i, i + BATCH_LIMIT);
+      const batch = db.batch();
+      for (const doc of slice) {
+        const ref = db.collection(NOTIFICATIONS).doc();
+        batch.set(ref, {
+          id: ref.id,
+          recipientUid: doc.id,
+          senderUid: auth.uid,
+          type: notifType,
+          title,
+          body,
+          readAt: null,
+          payload: notifPayload,
+          pushedByFunction: true,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+    }
+  } catch (err) {
+    logger.warn("failed to persist broadcast notifications", { error: String(err) });
+  }
+
   // ── Push the notification (chunked; prune dead tokens) ──
   let deliveredCount = 0;
   const message = {
     notification: { title, body },
+    // Emergency broadcasts ride at high priority on both platforms.
+    android: { priority: isEmergency ? "high" : "normal" },
+    apns: { headers: { "apns-priority": isEmergency ? "10" : "5" } },
     // Data values must be strings — they ride along to the tap handler.
     data: {
-      type: "broadcast",
+      type: notifType,
       category,
       senderId: auth.uid,
       broadcastId: broadcastRef.id,
+      route: "broadcast_detail",
+      priority: isEmergency ? "high" : "normal",
       title,
       body,
     },
@@ -182,11 +254,7 @@ exports.sendBroadcast = onCall(async (request) => {
     response.responses.forEach((r, idx) => {
       if (r.success) return;
       const code = r.error && r.error.code;
-      if (
-        code === "messaging/registration-token-not-registered" ||
-        code === "messaging/invalid-registration-token" ||
-        code === "messaging/invalid-argument"
-      ) {
+      if (isDeadTokenError(code)) {
         const badToken = batch[idx];
         const owner = tokenOwner.get(badToken);
         if (owner) {
@@ -225,3 +293,83 @@ exports.sendBroadcast = onCall(async (request) => {
     deliveredCount,
   };
 });
+
+/**
+ * Firestore trigger: deliver the FCM push for a newly-created in-app
+ * notification (Notification System Phase 1 — the task-event push path).
+ *
+ * Task notifications are written by the client (`NotifyTaskEvent`); this trigger
+ * reads the recipient's `fcmTokens` and pushes. Broadcast notifications carry
+ * `pushedByFunction:true` (already pushed by `sendBroadcast`), so they are
+ * skipped here to avoid a double push.
+ */
+exports.onNotificationCreated = onDocumentCreated(
+  `${NOTIFICATIONS}/{id}`,
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const n = snap.data() || {};
+
+    // Already pushed by the broadcast engine — don't double-send.
+    if (n.pushedByFunction === true) return;
+
+    const recipientUid = String(n.recipientUid || "").trim();
+    if (!recipientUid) return;
+
+    const title = String(n.title || "").trim();
+    const body = String(n.body || "").trim();
+    if (!title && !body) return;
+
+    // Gather the recipient's device tokens (array + legacy single field).
+    const userSnap = await db.collection(USERS).doc(recipientUid).get();
+    if (!userSnap.exists) return;
+    const user = userSnap.data() || {};
+    const tokenSet = new Set();
+    if (Array.isArray(user.fcmTokens)) {
+      for (const t of user.fcmTokens) if (t) tokenSet.add(t);
+    }
+    if (user.fcmToken) tokenSet.add(user.fcmToken);
+    const tokens = Array.from(tokenSet);
+    if (tokens.length === 0) return;
+
+    const payload = n.payload || {};
+    // Data values must be strings — they ride along to the tap handler.
+    const message = {
+      notification: { title, body },
+      data: {
+        type: String(n.type || ""),
+        taskId: String(payload.taskId || ""),
+        broadcastId: String(payload.broadcastId || ""),
+        category: String(payload.category || ""),
+        revisionNumber:
+          payload.revisionNumber == null ? "" : String(payload.revisionNumber),
+        route: String(payload.route || ""),
+      },
+    };
+
+    // Push (chunked) + prune dead tokens.
+    const removals = [];
+    for (let i = 0; i < tokens.length; i += MULTICAST_CHUNK) {
+      const batch = tokens.slice(i, i + MULTICAST_CHUNK);
+      const response = await messaging.sendEachForMulticast({ ...message, tokens: batch });
+      response.responses.forEach((r, idx) => {
+        if (r.success) return;
+        const code = r.error && r.error.code;
+        if (isDeadTokenError(code)) removals.push(batch[idx]);
+      });
+    }
+    if (removals.length > 0) {
+      await db
+        .collection(USERS)
+        .doc(recipientUid)
+        .update({ fcmTokens: admin.firestore.FieldValue.arrayRemove(...removals) })
+        .catch(() => {});
+    }
+
+    logger.info("notification pushed", {
+      type: n.type,
+      recipientUid,
+      tokenCount: tokens.length,
+    });
+  },
+);

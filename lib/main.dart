@@ -56,16 +56,16 @@ void main() async {
       }
     }
     ..onMessageTap = (data) {
-      // Notification tapped (from background or cold start). The broadcast
-      // detail screen lands in a later phase; for now open the app at the
-      // signed-in user's home (the router redirects to the right role shell)
-      // and log the payload so the future deep-link has what it needs.
+      // Notification tapped (from background or cold start). Open the in-app
+      // inbox (a shared route for every role); the router redirects to the
+      // right place if the session isn't ready, and each tile deep-links from
+      // there. Log the payload for diagnostics.
       developer.log(
-        'Notification tapped — broadcast=${data['broadcastId']} '
-        'category=${data['category']} sender=${data['senderId']}',
+        'Notification tapped — type=${data['type']} task=${data['taskId']} '
+        'broadcast=${data['broadcastId']} route=${data['route']}',
         name: 'fcm',
       );
-      _router.go(RouteNames.home);
+      _router.go(RouteNames.notifications);
     }
     ..init();
 
@@ -89,6 +89,7 @@ class App extends StatelessWidget {
         BlocProvider.value(value: AppDependencies.shiftSwapCubit),
         BlocProvider.value(value: AppDependencies.branchOperationsCubit),
         BlocProvider.value(value: AppDependencies.broadcastCubit),
+        BlocProvider.value(value: AppDependencies.notificationCubit),
       ],
       // Register / clear the FCM token as the auth session changes.
       child: BlocListener<AuthCubit, AuthState>(
@@ -96,9 +97,11 @@ class App extends StatelessWidget {
           state.maybeWhen(
             authenticated: (u) {
               AppDependencies.notificationService.registerToken(u.uid);
+              AppDependencies.notificationCubit.load(u.uid);
             },
             unauthenticated: () {
               AppDependencies.notificationService.forgetUser();
+              AppDependencies.notificationCubit.clear();
             },
             orElse: () {},
           );

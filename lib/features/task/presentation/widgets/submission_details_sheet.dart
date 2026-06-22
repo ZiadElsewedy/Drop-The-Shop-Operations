@@ -304,6 +304,13 @@ class _SubmissionDetailsSheetState extends State<SubmissionDetailsSheet> {
               ),
             ],
           ),
+          const SizedBox(height: AppSpacing.xs),
+          // Terminal "Reject" — distinct from rework (no resubmit expected).
+          TextButton(
+            onPressed: _reject,
+            child: Text('Reject',
+                style: AppTypography.label.copyWith(color: AppColors.error)),
+          ),
         ],
       ),
     );
@@ -322,6 +329,21 @@ class _SubmissionDetailsSheetState extends State<SubmissionDetailsSheet> {
       title: 'Request rework?',
       message: 'The employee will be asked to fix and resubmit it.',
       confirmLabel: 'Request rework',
+    );
+    if (confirmed && mounted) {
+      widget.cubit.reworkTask(widget.task, reviewNotes: _note);
+      if (mounted) Navigator.of(context).pop();
+    }
+  }
+
+  Future<void> _reject() async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Reject task?',
+      message: 'This rejects the submission. Use Request Rework instead if the '
+          'employee should fix and resubmit it.',
+      confirmLabel: 'Reject',
+      destructive: true,
     );
     if (confirmed && mounted) {
       widget.cubit.rejectTask(widget.task, reviewNotes: _note);

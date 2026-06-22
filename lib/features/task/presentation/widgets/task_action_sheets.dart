@@ -1089,13 +1089,24 @@ class _ReviewSheetState extends State<_ReviewSheet> {
             },
           ),
           const SizedBox(height: AppSpacing.md),
-          // Sends the task back for the employee to fix and resubmit.
+          // Sends the task back for the employee to fix and resubmit (bumps the
+          // revision → REWORK #n).
           AppButton.secondary(
             label: 'Request Rework',
+            onPressed: () {
+              widget.cubit.reworkTask(widget.task, reviewNotes: _note);
+              Navigator.of(context).pop();
+            },
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          // Terminal "Reject" — distinct from rework (no resubmit expected).
+          TextButton(
             onPressed: () {
               widget.cubit.rejectTask(widget.task, reviewNotes: _note);
               Navigator.of(context).pop();
             },
+            child: Text('Reject',
+                style: AppTypography.label.copyWith(color: AppColors.error)),
           ),
         ],
       ),

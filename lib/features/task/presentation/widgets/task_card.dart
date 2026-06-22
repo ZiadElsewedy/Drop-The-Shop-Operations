@@ -10,6 +10,7 @@ import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/task/domain/entities/checklist_item.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:fbro/features/task/presentation/widgets/task_badge.dart';
 
 /// A clean, enterprise task card — monochrome (black / white / grey), built for
 /// scanning, not decoration. Hierarchy:
@@ -67,6 +68,11 @@ class TaskCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Lifecycle badge (NEW / REWORK #n / Rejected / Approved) ──
+          if (taskBadgeFor(task) != null) ...[
+            TaskBadge(task: task),
+            const SizedBox(height: AppSpacing.sm),
+          ],
           // ── Title + status ──────────────────────────────────────
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,

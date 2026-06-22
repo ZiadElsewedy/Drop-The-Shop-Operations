@@ -1236,9 +1236,8 @@ class _ReviewBlockState extends State<_ReviewBlock> {
           },
         ),
         const SizedBox(height: AppSpacing.sm),
-        // "Request rework" sends the task back for the employee to fix (the
-        // existing rejected → restart path) — a normal workflow step, not a
-        // destructive action, so no red confirm.
+        // "Request rework" sends the task back for the employee to fix (bumps
+        // the revision → REWORK #n) — a normal workflow step, not destructive.
         AppButton.secondary(
           label: 'Request Rework',
           onPressed: () async {
@@ -1249,10 +1248,32 @@ class _ReviewBlockState extends State<_ReviewBlock> {
               confirmLabel: 'Request rework',
             );
             if (confirmed && context.mounted) {
+              widget.cubit.reworkTask(widget.task, reviewNotes: _note);
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        // Terminal "Reject" — distinct from rework (no resubmit expected); red,
+        // destructive confirm.
+        TextButton(
+          onPressed: () async {
+            final confirmed = await showConfirmDialog(
+              context,
+              title: 'Reject task?',
+              message:
+                  'This rejects the submission. Use Request Rework instead if '
+                  'the employee should fix and resubmit it.',
+              confirmLabel: 'Reject',
+              destructive: true,
+            );
+            if (confirmed && context.mounted) {
               widget.cubit.rejectTask(widget.task, reviewNotes: _note);
               Navigator.of(context).pop();
             }
           },
+          child: Text('Reject',
+              style: AppTypography.label.copyWith(color: AppColors.error)),
         ),
       ],
     );

@@ -238,5 +238,24 @@ service cloud.firestore {
 
       allow create, update, delete: if false;
     }
+
+    // ── Notifications (Notification System Phase 1) ────────────────
+    // One in-app notification doc per recipient (`notifications/{id}`). Task
+    // events are written by the client (`NotifyTaskEvent`); broadcast
+    // notifications are written by the `sendBroadcast` Cloud Function (Admin SDK,
+    // which bypasses these rules).
+    //   read   — the recipient, or an admin.
+    //   create — any signed-in user, who must stamp themselves as `senderUid`
+    //            (internal-tool trust model, consistent with task-doc writes).
+    //   update — the recipient only (mark read flips `readAt`); content is not
+    //            re-validated, but only the owner can touch their own docs.
+    //   delete — the recipient, or an admin (dismiss / cleanup).
+    match /notifications/{id} {
+      allow read: if isOwner(resource.data.get('recipientUid', '')) || isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.get('senderUid', '') == request.auth.uid;
+      allow update: if isOwner(resource.data.get('recipientUid', ''));
+      allow delete: if isOwner(resource.data.get('recipientUid', '')) || isAdmin();
+    }
   }
 }

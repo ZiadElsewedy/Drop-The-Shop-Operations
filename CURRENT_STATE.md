@@ -11,8 +11,41 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-21 (Communications Center — Phase 3: Center UI)
-**Version:** 1.0.0+1 · **Branch:** `feature/tasks-improvements` (DROP — monochrome enterprise UX)
+**Last updated:** 2026-06-22 (Notification System — Phase 1)
+**Version:** 1.0.0+1 · **Branch:** `feature/notification` (DROP — monochrome enterprise UX)
+
+> **Notification System · Phase 1 (2026-06-22):** Task notifications + a rework
+> distinction + broadcast persistence, on a real **in-app notification slice**.
+> **① New `notifications` feature** (full vertical slice mirroring
+> `communications`): freezed `NotificationEntity` (id · recipientUid · senderUid ·
+> `NotificationType` · title · body · createdAt · readAt · payload) +
+> hand-written `NotificationModel` over the new **`notifications/{id}`**
+> collection, `NotificationRepository(+Impl)`/`NotificationRemoteDataSource`, the
+> `NotifyTaskEvent` + `MarkNotificationRead` use cases, and an app-wide
+> **`NotificationCubit`** (live feed + unread count + mark-read). New in-app
+> **inbox** (`NotificationsScreen` + `NotificationTile`) at `/notifications`
+> (every role), entered from the `RoleScaffold` **bell** (now with an unread
+> dot). **② Task rework distinction** — `TaskEntity`/`TaskModel` gain
+> `revisionNumber` / `requiresRework` / `rejectionReason` (back-compat defaults
+> 0/false/null). A new **`TaskCubit.reworkTask`** ("Request Rework": bumps the
+> revision, flags rework, → `taskRework`) sits beside a now-distinct terminal
+> **`rejectTask`** (→ `taskRejected`); resubmit clears `requiresRework`. **③
+> Automatic triggers** — `TaskCubit` fires the 5 task events (assign / rework /
+> submit / approve / reject) best-effort after each write (newly-assigned
+> employees only on assign). **④ Broadcast persistence** — `sendBroadcast` Cloud
+> Function now also writes one `notifications/{id}` per recipient
+> (category→`broadcast*` type; **emergency → `payload.priority=high`** + high FCM
+> priority), flagged `pushedByFunction:true`. **⑤ Task push** — a new
+> **`onNotificationCreated`** Firestore-trigger Cloud Function pushes FCM for
+> client-written task notifications (skips broadcast docs to avoid a double
+> push). **⑥ UI badges** — `task_badge.dart`: **NEW** (monochrome) · **REWORK
+> #n** (amber) · **Rejected** (red) · **Approved** (green) on task cards; a
+> distinct red **Reject** button added beside **Request Rework** in all three
+> review surfaces. `NotificationType` extended additively. `flutter analyze`
+> clean (0 issues); **117 tests pass** (+16: `notification_model` ·
+> `task_model_rework` · `task_badge`); `node --check functions/index.js` valid.
+> ⚠️ **Deploy required:** `firebase deploy --only functions,firestore:rules`
+> (Blaze plan); until then in-app notifications work but **task push** is inert.
 
 > **Communications Center · Phase 3 — Center UI (2026-06-21):** The role-gated
 > UI on the Phase 1 + 2 backend (no backend-architecture change beyond what the
@@ -441,7 +474,7 @@
 | Branches (Phase 5, +Phase 9) | ✅ Complete   | `BranchEntity`/`Model`/`Repository`/`RemoteDataSource` + `BranchCubit`; admin CRUD + activate/deactivate + soft delete; `branches/{id}` rules. **Phase 9:** premium cards (manager + employee count + status) + search |
 | Admin module (Phase 5, +Phase 9 UX) | ✅ Complete | Branch / manager / employee management + **admin-only** pending-user approval + branch assignment. `AdminUsersCubit`, `UserAdminRepository` over `users/{uid}`. **Phase 9:** Admin Home restructured to **4 KPIs** + module nav; new **Analytics** page (`/admin/analytics`); avatar-led user cards; search + active/inactive/branch filters |
 | Dashboards / Statistics (Phase 6, +Phase 7) | ✅ Complete | `statistics` feature (`StatisticsCubit`) drives **live** admin / manager / employee dashboards. **Phase 7:** shift/coverage figures read the weekly schedule. **Phase 9:** the full metric wall moved to the Analytics page; the Admin Home shows only 4 headline KPIs |
-| Notifications (Phase 6, +Phase 7, +Phase 2 push) | 🟡 Foundation + send | FCM client: permission + **multi-device token array** (`fcmTokens`) + foreground/background/tap handling. **Sending now exists** for broadcasts via the `sendBroadcast` Cloud Function (`functions/index.js`) — the first server-side push engine. Other `NotificationType` events still have no server trigger |
+| Notifications (Phase 6 + Notification System Phase 1) | ✅ In-app + task push | FCM client (permission + `fcmTokens` array + fg/bg/tap). **Notification System Phase 1:** real **in-app inbox** — `notifications` slice (`NotificationEntity`/`Model`/`Repository`/`NotificationCubit`) + `notifications/{id}` collection + `/notifications` screen (bell + unread dot). **Automatic task triggers** (`TaskCubit` → `NotifyTaskEvent`): assign/rework/submit/approve/reject. **Push:** broadcasts via `sendBroadcast`; task events via the new **`onNotificationCreated`** Firestore trigger. Broadcasts now also persist per-recipient inbox docs (emergency → `payload.priority=high`). Schedule/swap/admin `NotificationType` events still have no trigger (later phases) |
 | Communications Center (Phase 1 + 2 engine + 3 UI) | ✅ End-to-end | `communications` slice + callable `sendBroadcast` Cloud Function + **full UI**. **Phase 2:** recipient-resolution matrix (`BroadcastPermissions`), audiences allBranches/branch/**user (DM)**, function validates/resolves/persists/pushes, returns `{success, recipientCount}`; `broadcasts/{id}` client writes **denied**. **Phase 3 UI:** `/communications` (admin + manager, employees blocked) — feed (`CommunicationsScreen` + `BroadcastCard`) · compose (`ComposeBroadcastScreen`, role-gated audience/branch/recipient/category) · detail (`/communications/:broadcastId`); entry via the `RoleScaffold` campaign icon. `BroadcastCategory` enum; `deliveredCount` persisted. Push/Function still need deploy (Blaze) + iOS APNs |
 | Profile          | ✅ Complete    | View/edit (Full Name · Bio · avatar+cover). **Username removed (2026-06-18)** from editing/validation — no operational value (legacy social field); dormant model field + `CheckUsername` use case remain as harmless legacy |
 | Settings         | ✅ Complete    | Settings page + change password + delete account              |
@@ -651,6 +684,7 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 | communications      | `/communications`            | `CommunicationsScreen`  | **admin + manager** |
 | communicationsCompose | `/communications/compose`  | `ComposeBroadcastScreen`| **admin + manager** |
 | communicationsDetail | `/communications/:broadcastId` | `BroadcastDetailScreen` | **admin + manager** |
+| notifications       | `/notifications`             | `NotificationsScreen`   | all roles     |
 | login               | `/login`                     | `LoginPage`             | unauth (landing) |
 | register            | `/register`                  | `RegisterPage`          | unauth        |
 | phone               | `/phone`                     | `PhoneOtpPage`          | unauth        |

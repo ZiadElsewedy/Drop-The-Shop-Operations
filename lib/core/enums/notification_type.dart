@@ -1,17 +1,27 @@
-/// The operational push-notification events DROP THE SHOP sends (Phase 6).
-/// These are the agreed `type` values for the FCM **data** payload — the
-/// contract a server-side sender (e.g. a Cloud Function) would use.
+/// The operational push-notification events DROP THE SHOP sends.
+/// These are the agreed `type` values for the FCM **data** payload and the
+/// `notifications/{id}.type` field — the contract shared by the client triggers
+/// (`NotifyTaskEvent`), the `sendBroadcast` Cloud Function, and the in-app inbox.
 ///
-/// The client side (see `NotificationService`) only **registers the device
-/// token** and **handles received messages** — there is no in-app history,
-/// inbox, or chat. Actually emitting these on the listed triggers requires a
-/// server trigger, which is intentionally out of scope (no Node.js / Cloud
-/// Functions in this phase).
+/// **Notification System Phase 1** activated the task + broadcast events:
+/// [taskAssigned] · [taskRework] · [taskSubmitted] · [taskApproved] ·
+/// [taskRejected], and the broadcast group ([broadcastAnnouncement] /
+/// [broadcastAlert] / [broadcastReminder] / [broadcastEmergency]). The remaining
+/// values stay as the contract for later phases (schedule / swaps / admin) — they
+/// have no server trigger yet.
 enum NotificationType {
-  // ── Employee ──
+  // ── Task events (Notification System Phase 1) ──
   taskAssigned,
+  taskRework,
+  taskSubmitted,
   taskApproved,
   taskRejected,
+  // ── Broadcast events (Communications Center → Notification System Phase 1) ──
+  broadcastAnnouncement,
+  broadcastAlert,
+  broadcastReminder,
+  broadcastEmergency,
+  // ── Employee (contract — later phases) ──
   shiftChanged,
   managerNote,
   // ── Employee · weekly schedule + swaps (Phase 7) ──
@@ -41,5 +51,23 @@ enum NotificationType {
       if (t.name == raw) return t;
     }
     return null;
+  }
+
+  /// Maps a broadcast [BroadcastCategory] string (announcement / alert /
+  /// reminder / emergency) to its notification type. Unknown / missing →
+  /// [broadcastAnnouncement] (the neutral default). Mirrored by the
+  /// `sendBroadcast` Cloud Function's `categoryToType`.
+  static NotificationType fromBroadcastCategory(String? category) {
+    switch (category) {
+      case 'alert':
+        return broadcastAlert;
+      case 'reminder':
+        return broadcastReminder;
+      case 'emergency':
+        return broadcastEmergency;
+      case 'announcement':
+      default:
+        return broadcastAnnouncement;
+    }
   }
 }

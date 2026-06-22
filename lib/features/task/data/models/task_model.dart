@@ -43,6 +43,9 @@ class TaskModel {
   final String? rejectedBy;
   final DateTime? rejectedAt;
   final String? reviewNotes;
+  final int revisionNumber;
+  final bool requiresRework;
+  final String? rejectionReason;
   final RecurrenceConfig? recurrence;
   final List<ActivityEntry> activityLog;
   final DateTime? createdAt;
@@ -71,6 +74,9 @@ class TaskModel {
     this.rejectedBy,
     this.rejectedAt,
     this.reviewNotes,
+    this.revisionNumber = 0,
+    this.requiresRework = false,
+    this.rejectionReason,
     this.recurrence,
     this.activityLog = const [],
     this.createdAt,
@@ -100,6 +106,9 @@ class TaskModel {
         rejectedBy: map['rejectedBy'] as String?,
         rejectedAt: map.date('rejectedAt'),
         reviewNotes: map['reviewNotes'] as String?,
+        revisionNumber: (map['revisionNumber'] as num?)?.toInt() ?? 0,
+        requiresRework: map['requiresRework'] as bool? ?? false,
+        rejectionReason: map['rejectionReason'] as String?,
         recurrence: _recurrenceFromMap(map['recurrence']),
         activityLog: _activityLogFromList(map['activityLog']),
         createdAt: map.date('createdAt'),
@@ -129,6 +138,9 @@ class TaskModel {
         rejectedBy: e.rejectedBy,
         rejectedAt: e.rejectedAt,
         reviewNotes: e.reviewNotes,
+        revisionNumber: e.revisionNumber,
+        requiresRework: e.requiresRework,
+        rejectionReason: e.rejectionReason,
         recurrence: e.recurrence,
         activityLog: e.activityLog,
         createdAt: e.createdAt,
@@ -163,6 +175,9 @@ class TaskModel {
         'rejectedBy': rejectedBy,
         'rejectedAt': rejectedAt == null ? null : Timestamp.fromDate(rejectedAt!),
         'reviewNotes': reviewNotes,
+        'revisionNumber': revisionNumber,
+        'requiresRework': requiresRework,
+        'rejectionReason': rejectionReason,
         'recurrence': _recurrenceToMap(recurrence),
         'activityLog': _activityLogToList(activityLog),
       };
@@ -191,6 +206,9 @@ class TaskModel {
         rejectedBy: rejectedBy,
         rejectedAt: rejectedAt,
         reviewNotes: reviewNotes,
+        revisionNumber: revisionNumber,
+        requiresRework: requiresRework,
+        rejectionReason: rejectionReason,
         recurrence: recurrence,
         activityLog: activityLog,
         createdAt: createdAt,
@@ -220,6 +238,9 @@ class TaskModel {
         rejectedBy: rejectedBy,
         rejectedAt: rejectedAt,
         reviewNotes: reviewNotes,
+        revisionNumber: revisionNumber,
+        requiresRework: requiresRework,
+        rejectionReason: rejectionReason,
         recurrence: recurrence,
         activityLog: activityLog,
         createdAt: createdAt,

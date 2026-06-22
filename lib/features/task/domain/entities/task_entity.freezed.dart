@@ -68,7 +68,21 @@ mixin _$TaskEntity {
   DateTime? get rejectedAt => throw _privateConstructorUsedError;
 
   /// Reviewer's note left on approve/reject.
-  String? get reviewNotes => throw _privateConstructorUsedError;
+  String? get reviewNotes =>
+      throw _privateConstructorUsedError; // ─── Rework distinction (Notification System Phase 1) ─────────
+  /// How many times this task has been sent back for rework. 0 = a new task,
+  /// 1 = first rework, 2 = second, … Incremented only by "Request Rework"
+  /// (not by a terminal "Reject"). Drives the `REWORK #n` badge + payload.
+  int get revisionNumber => throw _privateConstructorUsedError;
+
+  /// True while the task is awaiting a redo after a rework request; cleared
+  /// when the employee resubmits. Distinguishes a rework loop from a plain
+  /// rejection / new task.
+  bool get requiresRework => throw _privateConstructorUsedError;
+
+  /// The reviewer's reason captured on the last rework / reject decision
+  /// (shown to the employee + carried in the notification body).
+  String? get rejectionReason => throw _privateConstructorUsedError;
 
   /// Recurrence rule — null means "one-off" (does not repeat). When set, the
   /// [TaskCubit] auto-creates the next instance after this task is approved.
@@ -116,6 +130,9 @@ abstract class $TaskEntityCopyWith<$Res> {
     String? rejectedBy,
     DateTime? rejectedAt,
     String? reviewNotes,
+    int revisionNumber,
+    bool requiresRework,
+    String? rejectionReason,
     RecurrenceConfig? recurrence,
     List<ActivityEntry> activityLog,
     DateTime? createdAt,
@@ -162,6 +179,9 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? rejectedBy = freezed,
     Object? rejectedAt = freezed,
     Object? reviewNotes = freezed,
+    Object? revisionNumber = null,
+    Object? requiresRework = null,
+    Object? rejectionReason = freezed,
     Object? recurrence = freezed,
     Object? activityLog = null,
     Object? createdAt = freezed,
@@ -257,6 +277,18 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.reviewNotes
                 : reviewNotes // ignore: cast_nullable_to_non_nullable
                       as String?,
+            revisionNumber: null == revisionNumber
+                ? _value.revisionNumber
+                : revisionNumber // ignore: cast_nullable_to_non_nullable
+                      as int,
+            requiresRework: null == requiresRework
+                ? _value.requiresRework
+                : requiresRework // ignore: cast_nullable_to_non_nullable
+                      as bool,
+            rejectionReason: freezed == rejectionReason
+                ? _value.rejectionReason
+                : rejectionReason // ignore: cast_nullable_to_non_nullable
+                      as String?,
             recurrence: freezed == recurrence
                 ? _value.recurrence
                 : recurrence // ignore: cast_nullable_to_non_nullable
@@ -325,6 +357,9 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     String? rejectedBy,
     DateTime? rejectedAt,
     String? reviewNotes,
+    int revisionNumber,
+    bool requiresRework,
+    String? rejectionReason,
     RecurrenceConfig? recurrence,
     List<ActivityEntry> activityLog,
     DateTime? createdAt,
@@ -371,6 +406,9 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? rejectedBy = freezed,
     Object? rejectedAt = freezed,
     Object? reviewNotes = freezed,
+    Object? revisionNumber = null,
+    Object? requiresRework = null,
+    Object? rejectionReason = freezed,
     Object? recurrence = freezed,
     Object? activityLog = null,
     Object? createdAt = freezed,
@@ -466,6 +504,18 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.reviewNotes
             : reviewNotes // ignore: cast_nullable_to_non_nullable
                   as String?,
+        revisionNumber: null == revisionNumber
+            ? _value.revisionNumber
+            : revisionNumber // ignore: cast_nullable_to_non_nullable
+                  as int,
+        requiresRework: null == requiresRework
+            ? _value.requiresRework
+            : requiresRework // ignore: cast_nullable_to_non_nullable
+                  as bool,
+        rejectionReason: freezed == rejectionReason
+            ? _value.rejectionReason
+            : rejectionReason // ignore: cast_nullable_to_non_nullable
+                  as String?,
         recurrence: freezed == recurrence
             ? _value.recurrence
             : recurrence // ignore: cast_nullable_to_non_nullable
@@ -513,6 +563,9 @@ class _$TaskEntityImpl extends _TaskEntity {
     this.rejectedBy,
     this.rejectedAt,
     this.reviewNotes,
+    this.revisionNumber = 0,
+    this.requiresRework = false,
+    this.rejectionReason,
     this.recurrence,
     final List<ActivityEntry> activityLog = const <ActivityEntry>[],
     this.createdAt,
@@ -616,6 +669,25 @@ class _$TaskEntityImpl extends _TaskEntity {
   /// Reviewer's note left on approve/reject.
   @override
   final String? reviewNotes;
+  // ─── Rework distinction (Notification System Phase 1) ─────────
+  /// How many times this task has been sent back for rework. 0 = a new task,
+  /// 1 = first rework, 2 = second, … Incremented only by "Request Rework"
+  /// (not by a terminal "Reject"). Drives the `REWORK #n` badge + payload.
+  @override
+  @JsonKey()
+  final int revisionNumber;
+
+  /// True while the task is awaiting a redo after a rework request; cleared
+  /// when the employee resubmits. Distinguishes a rework loop from a plain
+  /// rejection / new task.
+  @override
+  @JsonKey()
+  final bool requiresRework;
+
+  /// The reviewer's reason captured on the last rework / reject decision
+  /// (shown to the employee + carried in the notification body).
+  @override
+  final String? rejectionReason;
 
   /// Recurrence rule — null means "one-off" (does not repeat). When set, the
   /// [TaskCubit] auto-creates the next instance after this task is approved.
@@ -641,7 +713,7 @@ class _$TaskEntityImpl extends _TaskEntity {
 
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -691,6 +763,12 @@ class _$TaskEntityImpl extends _TaskEntity {
                 other.rejectedAt == rejectedAt) &&
             (identical(other.reviewNotes, reviewNotes) ||
                 other.reviewNotes == reviewNotes) &&
+            (identical(other.revisionNumber, revisionNumber) ||
+                other.revisionNumber == revisionNumber) &&
+            (identical(other.requiresRework, requiresRework) ||
+                other.requiresRework == requiresRework) &&
+            (identical(other.rejectionReason, rejectionReason) ||
+                other.rejectionReason == rejectionReason) &&
             (identical(other.recurrence, recurrence) ||
                 other.recurrence == recurrence) &&
             const DeepCollectionEquality().equals(
@@ -728,6 +806,9 @@ class _$TaskEntityImpl extends _TaskEntity {
     rejectedBy,
     rejectedAt,
     reviewNotes,
+    revisionNumber,
+    requiresRework,
+    rejectionReason,
     recurrence,
     const DeepCollectionEquality().hash(_activityLog),
     createdAt,
@@ -767,6 +848,9 @@ abstract class _TaskEntity extends TaskEntity {
     final String? rejectedBy,
     final DateTime? rejectedAt,
     final String? reviewNotes,
+    final int revisionNumber,
+    final bool requiresRework,
+    final String? rejectionReason,
     final RecurrenceConfig? recurrence,
     final List<ActivityEntry> activityLog,
     final DateTime? createdAt,
@@ -845,7 +929,23 @@ abstract class _TaskEntity extends TaskEntity {
 
   /// Reviewer's note left on approve/reject.
   @override
-  String? get reviewNotes;
+  String? get reviewNotes; // ─── Rework distinction (Notification System Phase 1) ─────────
+  /// How many times this task has been sent back for rework. 0 = a new task,
+  /// 1 = first rework, 2 = second, … Incremented only by "Request Rework"
+  /// (not by a terminal "Reject"). Drives the `REWORK #n` badge + payload.
+  @override
+  int get revisionNumber;
+
+  /// True while the task is awaiting a redo after a rework request; cleared
+  /// when the employee resubmits. Distinguishes a rework loop from a plain
+  /// rejection / new task.
+  @override
+  bool get requiresRework;
+
+  /// The reviewer's reason captured on the last rework / reject decision
+  /// (shown to the employee + carried in the notification body).
+  @override
+  String? get rejectionReason;
 
   /// Recurrence rule — null means "one-off" (does not repeat). When set, the
   /// [TaskCubit] auto-creates the next instance after this task is approved.

@@ -30,6 +30,7 @@ import 'package:fbro/features/communications/domain/entities/broadcast_entity.da
 import 'package:fbro/features/communications/presentation/pages/communications_screen.dart';
 import 'package:fbro/features/communications/presentation/pages/compose_broadcast_screen.dart';
 import 'package:fbro/features/communications/presentation/pages/broadcast_detail_screen.dart';
+import 'package:fbro/features/notifications/presentation/pages/notifications_screen.dart';
 import 'route_names.dart';
 
 GoRouter createRouter(AuthCubit authCubit) {
@@ -300,6 +301,15 @@ GoRouter createRouter(AuthCubit authCubit) {
         pageBuilder: (context, state) => _fadeTransition(
           state,
           const EmailVerificationPage(),
+        ),
+      ),
+      // In-app notification inbox — shared by every role (not under /admin or
+      // /manager, so no role guard blocks it).
+      GoRoute(
+        path: RouteNames.notifications,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const NotificationsScreen(),
         ),
       ),
       GoRoute(
