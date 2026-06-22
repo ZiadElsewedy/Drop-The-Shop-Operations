@@ -236,7 +236,31 @@ service cloud.firestore {
             && (resource.data.get('branchId', '') == ''
                 || resource.data.get('branchId', '') == selfBranch()));
 
-      allow create, update, delete: if false;
+      // Content + delivery stats are owned by the `sendBroadcast` Cloud Function
+      // (Admin SDK, bypasses rules). Clients may flip ONLY the lifecycle metadata
+      // (Phase 2 archive / soft-delete) — and only an admin, the owning-branch
+      // manager, or the original sender. The field-diff freezes every other
+      // field, so delivery stats / recipients can never be forged client-side.
+      allow update: if request.resource.data
+              .diff(resource.data).affectedKeys()
+              .hasOnly(['archivedAt', 'deletedAt'])
+        && (isAdmin()
+            || resource.data.get('senderId', '') == request.auth.uid
+            || canReachBranch(resource.data.get('branchId', '')));
+
+      allow create, delete: if false;
+    }
+
+    // ── Broadcast opens (Communications Center — Phase 2 analytics) ──
+    // A tiny per-recipient guard doc (`{broadcastId}_{uid}`) that makes
+    // open-tracking idempotent (one open counted per recipient). The recipient
+    // creates their own; nobody updates/deletes it.
+    match /broadcastOpens/{openId} {
+      allow read: if isAdmin()
+        || resource.data.get('uid', '') == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.get('uid', '') == request.auth.uid;
+      allow update, delete: if false;
     }
 
     // ── Notifications (Notification System Phase 1) ────────────────

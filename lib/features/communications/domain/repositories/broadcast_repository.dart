@@ -15,4 +15,10 @@ abstract class BroadcastRepository {
   /// - [branchId] set → a branch member's feed: that branch's broadcasts plus
   ///   all-branches broadcasts.
   Stream<List<BroadcastEntity>> watchBroadcasts({String? branchId});
+
+  /// Archives ([archived] true) / unarchives a broadcast.
+  Future<void> setArchived(String id, bool archived);
+
+  /// Soft-deletes ([deleted] true) / restores a broadcast (analytics preserved).
+  Future<void> setDeleted(String id, bool deleted);
 }

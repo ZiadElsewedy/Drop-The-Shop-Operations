@@ -76,6 +76,216 @@ function isDeadTokenError(code) {
   );
 }
 
+// Whether a broadcast should ride at high FCM priority (Phase 2). High-delivery
+// priorities (`high` / `emergency`) and the legacy emergency category qualify.
+// Mirrors BroadcastPriority.isHighDelivery on the client.
+function isHighDelivery(priority, category) {
+  return priority === "high" || priority === "emergency" || category === "emergency";
+}
+
+// Channel gating (Phase 2). Missing channel → "both" (the widest default),
+// mirroring BroadcastChannel.fromString.
+function channelSendsPush(channel) {
+  return channel !== "inbox"; // push | both | (unknown→both)
+}
+function channelWritesInbox(channel) {
+  return channel !== "push"; // inbox | both | (unknown→both)
+}
+
+/**
+ * The authoritative broadcast write + push pipeline, shared by the callable
+ * `sendBroadcast` and (Phase 2 Commit 4) the scheduled-broadcast poller. The
+ * caller is responsible for permission validation (role → audience, branch
+ * ownership); this resolves recipients, persists the doc, writes the per-recipient
+ * inbox notifications (when the channel includes inbox), pushes FCM (when the
+ * channel includes push), prunes dead tokens, and returns the delivery summary.
+ *
+ * @returns {Promise<{broadcastId: string, recipientCount: number, deliveredCount: number}>}
+ */
+async function dispatchBroadcast(params) {
+  const title = String(params.title || "").trim();
+  const body = String(params.body || params.message || "").trim();
+  const category = String(params.category || "general").trim() || "general";
+  const priority = String(params.priority || "normal").trim() || "normal";
+  const channel = String(params.channel || "both").trim() || "both";
+  const audience = String(params.audience || "").trim();
+  const senderId = String(params.senderId || "").trim();
+  const senderRole = String(params.senderRole || "manager").trim() || "manager";
+  const senderName = String(params.senderName || "DROP").trim() || "DROP";
+  const targetUserId = String(params.targetUserId || "").trim();
+  let branchId = String(params.branchId || "").trim();
+
+  // ── Resolve recipients per audience (caller has validated permissions) ──
+  let recipientDocs = [];
+  if (audience === "allBranches") {
+    const snap = await db.collection(USERS).where("isActive", "==", true).get();
+    recipientDocs = snap.docs;
+    branchId = "";
+  } else if (audience === "branch") {
+    const snap = await db
+      .collection(USERS)
+      .where("branchId", "==", branchId)
+      .where("isActive", "==", true)
+      .get();
+    recipientDocs = snap.docs;
+  } else if (audience === "user") {
+    const targetSnap = await db.collection(USERS).doc(targetUserId).get();
+    if (!targetSnap.exists) {
+      throw new HttpsError("not-found", "That recipient no longer exists.");
+    }
+    recipientDocs = [targetSnap];
+    branchId = DIRECT_BRANCH_MARKER;
+  } else {
+    throw new HttpsError("invalid-argument", "Unknown broadcast audience.");
+  }
+
+  const recipientCount = recipientDocs.length;
+  const isHigh = isHighDelivery(priority, category);
+  const notifType = categoryToType(category);
+
+  // ── Persist the broadcast doc (authoritative — schema matches BroadcastModel) ──
+  const broadcastRef = db.collection(BROADCASTS).doc();
+  await broadcastRef.set({
+    id: broadcastRef.id,
+    title,
+    message: body,
+    category,
+    priority,
+    channel,
+    senderId,
+    senderName,
+    senderRole,
+    audience,
+    branchId,
+    targetUserId: audience === "user" ? targetUserId : "",
+    recipientCount,
+    openedCount: 0,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  // ── Persist one in-app notification doc per recipient (inbox channel only).
+  // Flagged `pushedByFunction:true` so the onNotificationCreated trigger doesn't
+  // double-push. Best-effort — a write failure never fails the send. ──
+  if (channelWritesInbox(channel)) {
+    const notifPayload = {
+      broadcastId: broadcastRef.id,
+      category,
+      route: "broadcast_detail",
+      priority: isHigh ? "high" : "normal",
+    };
+    try {
+      for (let i = 0; i < recipientDocs.length; i += BATCH_LIMIT) {
+        const slice = recipientDocs.slice(i, i + BATCH_LIMIT);
+        const batch = db.batch();
+        for (const doc of slice) {
+          const ref = db.collection(NOTIFICATIONS).doc();
+          batch.set(ref, {
+            id: ref.id,
+            recipientUid: doc.id,
+            senderUid: senderId,
+            type: notifType,
+            title,
+            body,
+            readAt: null,
+            payload: notifPayload,
+            pushedByFunction: true,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        await batch.commit();
+      }
+    } catch (err) {
+      logger.warn("failed to persist broadcast notifications", { error: String(err) });
+    }
+  }
+
+  // ── Push the notification (chunked; prune dead tokens) — push channels only ──
+  let deliveredCount = 0;
+  if (channelSendsPush(channel)) {
+    // Gather FCM tokens (de-duplicated; remember each token's owner).
+    const tokens = [];
+    const tokenOwner = new Map();
+    for (const doc of recipientDocs) {
+      const u = doc.data() || {};
+      const arr = Array.isArray(u.fcmTokens) ? u.fcmTokens : [];
+      for (const t of arr) {
+        if (t && !tokenOwner.has(t)) {
+          tokenOwner.set(t, doc.id);
+          tokens.push(t);
+        }
+      }
+      // Legacy single-token field (pre-Phase-2 docs).
+      if (u.fcmToken && !tokenOwner.has(u.fcmToken)) {
+        tokenOwner.set(u.fcmToken, doc.id);
+        tokens.push(u.fcmToken);
+      }
+    }
+
+    const message = {
+      notification: { title, body },
+      // High-priority broadcasts ride at high priority on both platforms.
+      android: { priority: isHigh ? "high" : "normal" },
+      apns: { headers: { "apns-priority": isHigh ? "10" : "5" } },
+      // Data values must be strings — they ride along to the tap handler.
+      data: {
+        type: notifType,
+        category,
+        priority: isHigh ? "high" : "normal",
+        senderId,
+        broadcastId: broadcastRef.id,
+        route: "broadcast_detail",
+        title,
+        body,
+      },
+    };
+
+    for (let i = 0; i < tokens.length; i += MULTICAST_CHUNK) {
+      const batch = tokens.slice(i, i + MULTICAST_CHUNK);
+      const response = await messaging.sendEachForMulticast({ ...message, tokens: batch });
+      deliveredCount += response.successCount;
+
+      // Remove tokens FCM reports as permanently invalid, per owner.
+      const removals = new Map(); // uid -> [badToken]
+      response.responses.forEach((r, idx) => {
+        if (r.success) return;
+        const code = r.error && r.error.code;
+        if (isDeadTokenError(code)) {
+          const badToken = batch[idx];
+          const owner = tokenOwner.get(badToken);
+          if (owner) {
+            if (!removals.has(owner)) removals.set(owner, []);
+            removals.get(owner).push(badToken);
+          }
+        }
+      });
+      await Promise.all(
+        Array.from(removals.entries()).map(([uid, bad]) =>
+          db
+            .collection(USERS)
+            .doc(uid)
+            .update({ fcmTokens: admin.firestore.FieldValue.arrayRemove(...bad) })
+            .catch(() => {}),
+        ),
+      );
+    }
+  }
+
+  // Persist the delivery result on the doc so the Communications Center feed /
+  // detail can show "delivered N / M" (best-effort; never fails the send).
+  await broadcastRef.update({ deliveredCount }).catch(() => {});
+
+  logger.info("broadcast dispatched", {
+    broadcastId: broadcastRef.id,
+    audience,
+    channel,
+    priority,
+    recipientCount,
+    deliveredCount,
+  });
+
+  return { broadcastId: broadcastRef.id, recipientCount, deliveredCount };
+}
+
 exports.sendBroadcast = onCall(async (request) => {
   const auth = request.auth;
   if (!auth) {
@@ -86,8 +296,10 @@ exports.sendBroadcast = onCall(async (request) => {
   const title = String(payload.title || "").trim();
   const body = String(payload.body || payload.message || "").trim();
   const category = String(payload.category || "general").trim() || "general";
+  const priority = String(payload.priority || "normal").trim() || "normal";
+  const channel = String(payload.channel || "both").trim() || "both";
   const audience = String(payload.audience || "").trim();
-  let branchId = String(payload.branchId || "").trim();
+  const branchId = String(payload.branchId || "").trim();
   const targetUserId = String(payload.targetUserId || "").trim();
 
   if (!title || !body) {
@@ -107,16 +319,11 @@ exports.sendBroadcast = onCall(async (request) => {
     throw new HttpsError("permission-denied", "Only managers and admins can send broadcasts.");
   }
 
-  // ── Resolve recipients + validate permissions per audience ──
-  let recipientDocs = [];
-
+  // ── Validate permissions per audience (recipient resolution is in dispatch) ──
   if (audience === "allBranches") {
     if (senderRole !== "admin") {
       throw new HttpsError("permission-denied", "Only admins can broadcast to all branches.");
     }
-    const snap = await db.collection(USERS).where("isActive", "==", true).get();
-    recipientDocs = snap.docs;
-    branchId = "";
   } else if (audience === "branch") {
     if (!branchId) {
       throw new HttpsError("invalid-argument", "Pick a branch to broadcast to.");
@@ -124,174 +331,41 @@ exports.sendBroadcast = onCall(async (request) => {
     if (senderRole === "manager" && branchId !== senderBranch) {
       throw new HttpsError("permission-denied", "Managers can only broadcast to their own branch.");
     }
-    const snap = await db
-      .collection(USERS)
-      .where("branchId", "==", branchId)
-      .where("isActive", "==", true)
-      .get();
-    recipientDocs = snap.docs;
   } else if (audience === "user") {
     if (!targetUserId) {
       throw new HttpsError("invalid-argument", "Pick a recipient.");
     }
-    const targetSnap = await db.collection(USERS).doc(targetUserId).get();
-    if (!targetSnap.exists) {
-      throw new HttpsError("not-found", "That recipient no longer exists.");
+    if (senderRole === "manager") {
+      const targetSnap = await db.collection(USERS).doc(targetUserId).get();
+      const target = targetSnap.exists ? targetSnap.data() || {} : {};
+      if (!targetSnap.exists) {
+        throw new HttpsError("not-found", "That recipient no longer exists.");
+      }
+      if ((target.branchId || "") !== senderBranch) {
+        throw new HttpsError("permission-denied", "Managers can only message users inside their own branch.");
+      }
     }
-    const target = targetSnap.data() || {};
-    if (senderRole === "manager" && (target.branchId || "") !== senderBranch) {
-      throw new HttpsError("permission-denied", "Managers can only message users inside their own branch.");
-    }
-    recipientDocs = [targetSnap];
-    branchId = DIRECT_BRANCH_MARKER;
   } else {
     throw new HttpsError("invalid-argument", "Unknown broadcast audience.");
   }
 
-  // ── Gather FCM tokens (de-duplicated; remember each token's owner) ──
-  const tokens = [];
-  const tokenOwner = new Map();
-  for (const doc of recipientDocs) {
-    const u = doc.data() || {};
-    const arr = Array.isArray(u.fcmTokens) ? u.fcmTokens : [];
-    for (const t of arr) {
-      if (t && !tokenOwner.has(t)) {
-        tokenOwner.set(t, doc.id);
-        tokens.push(t);
-      }
-    }
-    // Legacy single-token field (pre-Phase-2 docs).
-    if (u.fcmToken && !tokenOwner.has(u.fcmToken)) {
-      tokenOwner.set(u.fcmToken, doc.id);
-      tokens.push(u.fcmToken);
-    }
-  }
-
-  const recipientCount = recipientDocs.length;
   const senderName = sender.fullName || sender.displayName || sender.email || "DROP";
 
-  // ── Persist the broadcast doc (authoritative — schema matches BroadcastModel) ──
-  const broadcastRef = db.collection(BROADCASTS).doc();
-  await broadcastRef.set({
-    id: broadcastRef.id,
-    title,
-    message: body,
-    category,
+  const result = await dispatchBroadcast({
     senderId: auth.uid,
-    senderName,
     senderRole,
+    senderName,
+    title,
+    body,
+    category,
+    priority,
+    channel,
     audience,
     branchId,
-    targetUserId: audience === "user" ? targetUserId : "",
-    recipientCount,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    targetUserId,
   });
 
-  // ── Persist one in-app notification doc per recipient (Notification System
-  // Phase 1 — Part 4). Flagged `pushedByFunction:true` so the onNotificationCreated
-  // trigger doesn't double-push (this function pushes the broadcast directly
-  // below). Best-effort — a write failure never fails the send. ──
-  const notifType = categoryToType(category);
-  const isEmergency = category === "emergency";
-  const notifPayload = {
-    broadcastId: broadcastRef.id,
-    category,
-    route: "broadcast_detail",
-    priority: isEmergency ? "high" : "normal",
-  };
-  try {
-    for (let i = 0; i < recipientDocs.length; i += BATCH_LIMIT) {
-      const slice = recipientDocs.slice(i, i + BATCH_LIMIT);
-      const batch = db.batch();
-      for (const doc of slice) {
-        const ref = db.collection(NOTIFICATIONS).doc();
-        batch.set(ref, {
-          id: ref.id,
-          recipientUid: doc.id,
-          senderUid: auth.uid,
-          type: notifType,
-          title,
-          body,
-          readAt: null,
-          payload: notifPayload,
-          pushedByFunction: true,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-      await batch.commit();
-    }
-  } catch (err) {
-    logger.warn("failed to persist broadcast notifications", { error: String(err) });
-  }
-
-  // ── Push the notification (chunked; prune dead tokens) ──
-  let deliveredCount = 0;
-  const message = {
-    notification: { title, body },
-    // Emergency broadcasts ride at high priority on both platforms.
-    android: { priority: isEmergency ? "high" : "normal" },
-    apns: { headers: { "apns-priority": isEmergency ? "10" : "5" } },
-    // Data values must be strings — they ride along to the tap handler.
-    data: {
-      type: notifType,
-      category,
-      senderId: auth.uid,
-      broadcastId: broadcastRef.id,
-      route: "broadcast_detail",
-      priority: isEmergency ? "high" : "normal",
-      title,
-      body,
-    },
-  };
-
-  for (let i = 0; i < tokens.length; i += MULTICAST_CHUNK) {
-    const batch = tokens.slice(i, i + MULTICAST_CHUNK);
-    const response = await messaging.sendEachForMulticast({ ...message, tokens: batch });
-    deliveredCount += response.successCount;
-
-    // Remove tokens FCM reports as permanently invalid, per owner.
-    const removals = new Map(); // uid -> [badToken]
-    response.responses.forEach((r, idx) => {
-      if (r.success) return;
-      const code = r.error && r.error.code;
-      if (isDeadTokenError(code)) {
-        const badToken = batch[idx];
-        const owner = tokenOwner.get(badToken);
-        if (owner) {
-          if (!removals.has(owner)) removals.set(owner, []);
-          removals.get(owner).push(badToken);
-        }
-      }
-    });
-    await Promise.all(
-      Array.from(removals.entries()).map(([uid, bad]) =>
-        db
-          .collection(USERS)
-          .doc(uid)
-          .update({ fcmTokens: admin.firestore.FieldValue.arrayRemove(...bad) })
-          .catch(() => {}),
-      ),
-    );
-  }
-
-  // Persist the delivery result on the doc so the Communications Center feed /
-  // detail can show "delivered N / M" (best-effort; never fails the send).
-  await broadcastRef.update({ deliveredCount }).catch(() => {});
-
-  logger.info("broadcast sent", {
-    broadcastId: broadcastRef.id,
-    audience,
-    recipientCount,
-    deliveredCount,
-    tokenCount: tokens.length,
-  });
-
-  return {
-    success: true,
-    broadcastId: broadcastRef.id,
-    recipientCount,
-    deliveredCount,
-  };
+  return { success: true, ...result };
 });
 
 /**

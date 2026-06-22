@@ -17,6 +17,17 @@ abstract class BroadcastRemoteDataSource {
   /// plus all-branches ones (the `''` sentinel). Direct messages never appear
   /// here (they use the [BroadcastModel.directBranchMarker]).
   Stream<List<BroadcastModel>> watchBroadcasts({String? branchId});
+
+  /// Archives / unarchives a broadcast (sets / clears `archivedAt`). A
+  /// field-restricted client write — the `broadcasts` rule permits an admin /
+  /// owning-branch manager to touch **only** the lifecycle fields, never content
+  /// or delivery stats.
+  Future<void> setArchived(String id, bool archived);
+
+  /// Soft-deletes / restores a broadcast (sets / clears `deletedAt`). History +
+  /// analytics are preserved; the doc is hidden from the default feed and can be
+  /// restored. Same field-restricted client write as [setArchived].
+  Future<void> setDeleted(String id, bool deleted);
 }
 
 class BroadcastRemoteDataSourceImpl implements BroadcastRemoteDataSource {
@@ -76,6 +87,30 @@ class BroadcastRemoteDataSourceImpl implements BroadcastRemoteDataSource {
             'later.';
       default:
         return 'Couldn’t send the broadcast right now. Please try again.';
+    }
+  }
+
+  @override
+  Future<void> setArchived(String id, bool archived) async {
+    try {
+      await _broadcasts.doc(id).set(
+        {'archivedAt': archived ? FieldValue.serverTimestamp() : null},
+        SetOptions(merge: true),
+      );
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to update the broadcast.');
+    }
+  }
+
+  @override
+  Future<void> setDeleted(String id, bool deleted) async {
+    try {
+      await _broadcasts.doc(id).set(
+        {'deletedAt': deleted ? FieldValue.serverTimestamp() : null},
+        SetOptions(merge: true),
+      );
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to update the broadcast.');
     }
   }
 

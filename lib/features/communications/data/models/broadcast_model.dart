@@ -1,4 +1,6 @@
 import 'package:fbro/core/enums/broadcast_audience.dart';
+import 'package:fbro/core/enums/broadcast_channel.dart';
+import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
@@ -38,8 +40,13 @@ class BroadcastModel {
   /// otherwise.
   final String targetUserId;
   final String category;
+  final BroadcastPriority priority;
+  final BroadcastChannel channel;
   final int? recipientCount;
   final int? deliveredCount;
+  final int? openedCount;
+  final DateTime? archivedAt;
+  final DateTime? deletedAt;
   final DateTime? createdAt;
 
   const BroadcastModel({
@@ -53,8 +60,13 @@ class BroadcastModel {
     this.branchId = '',
     this.targetUserId = '',
     this.category = 'general',
+    this.priority = BroadcastPriority.normal,
+    this.channel = BroadcastChannel.both,
     this.recipientCount,
     this.deliveredCount,
+    this.openedCount,
+    this.archivedAt,
+    this.deletedAt,
     this.createdAt,
   });
 
@@ -70,8 +82,13 @@ class BroadcastModel {
         branchId: map['branchId'] as String? ?? '',
         targetUserId: map['targetUserId'] as String? ?? '',
         category: map['category'] as String? ?? 'general',
+        priority: BroadcastPriority.fromString(map['priority'] as String?),
+        channel: BroadcastChannel.fromString(map['channel'] as String?),
         recipientCount: (map['recipientCount'] as num?)?.toInt(),
         deliveredCount: (map['deliveredCount'] as num?)?.toInt(),
+        openedCount: (map['openedCount'] as num?)?.toInt(),
+        archivedAt: map.date('archivedAt'),
+        deletedAt: map.date('deletedAt'),
         createdAt: map.date('createdAt'),
       );
 
@@ -86,8 +103,13 @@ class BroadcastModel {
         branchId: _branchIdFor(e),
         targetUserId: e.isDirect ? (e.targetUserId ?? '') : '',
         category: e.category,
+        priority: e.priority,
+        channel: e.channel,
         recipientCount: e.recipientCount,
         deliveredCount: e.deliveredCount,
+        openedCount: e.openedCount,
+        archivedAt: e.archivedAt,
+        deletedAt: e.deletedAt,
         createdAt: e.createdAt,
       );
 
@@ -117,6 +139,8 @@ class BroadcastModel {
         'branchId': branchId,
         'targetUserId': targetUserId,
         'category': category,
+        'priority': priority.value,
+        'channel': channel.value,
       };
 
   /// The payload sent to the callable `sendBroadcast` Cloud Function. The
@@ -126,6 +150,8 @@ class BroadcastModel {
         'title': title,
         'body': message,
         'category': category,
+        'priority': priority.value,
+        'channel': channel.value,
         'audience': audience.value,
         'branchId': audience == BroadcastAudience.branch ? branchId : '',
         'targetUserId': targetUserId,
@@ -135,6 +161,7 @@ class BroadcastModel {
     String? id,
     int? recipientCount,
     int? deliveredCount,
+    int? openedCount,
   }) =>
       BroadcastModel(
         id: id ?? this.id,
@@ -147,8 +174,13 @@ class BroadcastModel {
         branchId: branchId,
         targetUserId: targetUserId,
         category: category,
+        priority: priority,
+        channel: channel,
         recipientCount: recipientCount ?? this.recipientCount,
         deliveredCount: deliveredCount ?? this.deliveredCount,
+        openedCount: openedCount ?? this.openedCount,
+        archivedAt: archivedAt,
+        deletedAt: deletedAt,
         createdAt: createdAt,
       );
 
@@ -167,8 +199,13 @@ class BroadcastModel {
             : branchId,
         targetUserId: targetUserId.isEmpty ? null : targetUserId,
         category: category,
+        priority: priority,
+        channel: channel,
         recipientCount: recipientCount,
         deliveredCount: deliveredCount,
+        openedCount: openedCount,
+        archivedAt: archivedAt,
+        deletedAt: deletedAt,
         createdAt: createdAt,
       );
 }

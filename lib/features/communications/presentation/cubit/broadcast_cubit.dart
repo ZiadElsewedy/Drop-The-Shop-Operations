@@ -3,6 +3,8 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
+import 'package:fbro/core/enums/broadcast_channel.dart';
+import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/errors/failures.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
@@ -93,6 +95,8 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     String? targetUserId,
     String? targetUserBranchId,
     String category = 'general',
+    BroadcastPriority priority = BroadcastPriority.normal,
+    BroadcastChannel channel = BroadcastChannel.both,
   }) async {
     if (_sending) return null;
 
@@ -140,6 +144,8 @@ class BroadcastCubit extends Cubit<BroadcastState> {
       branchId: audience == BroadcastAudience.branch ? targetBranch : null,
       targetUserId: audience == BroadcastAudience.user ? target : null,
       category: category.trim().isEmpty ? 'general' : category.trim(),
+      priority: priority,
+      channel: channel,
     );
 
     final prev = _broadcasts;
@@ -155,6 +161,51 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     } catch (_) {
       _emitError('Could not send the broadcast. Please try again.');
       return null;
+    }
+  }
+
+  /// Re-sends an existing broadcast as a fresh one (Repeat Now), reusing its
+  /// audience / category / priority / channel. Returns the new recipient count,
+  /// or null on failure. A manager repeating a direct message targets the same
+  /// in-branch recipient, so [targetUserBranchId] defaults to the sender's branch.
+  Future<int?> repeatNow({
+    required UserEntity sender,
+    required BroadcastEntity source,
+  }) =>
+      send(
+        sender: sender,
+        title: source.title,
+        message: source.message,
+        audience: source.audience,
+        branchId: source.branchId,
+        targetUserId: source.targetUserId,
+        targetUserBranchId:
+            sender.role.isManager ? sender.branchId : null,
+        category: source.category,
+        priority: source.priority,
+        channel: source.channel,
+      );
+
+  /// Archives ([archived] true) / unarchives a broadcast. The feed stream
+  /// re-emits with the updated flag; an error keeps the current feed visible.
+  Future<void> setArchived(String id, bool archived) async {
+    try {
+      await _repository.setArchived(id, archived);
+    } on Failure catch (e) {
+      _emitError(e.message);
+    } catch (_) {
+      _emitError('Could not update the broadcast. Please try again.');
+    }
+  }
+
+  /// Soft-deletes ([deleted] true) / restores a broadcast (analytics preserved).
+  Future<void> setDeleted(String id, bool deleted) async {
+    try {
+      await _repository.setDeleted(id, deleted);
+    } on Failure catch (e) {
+      _emitError(e.message);
+    } catch (_) {
+      _emitError('Could not update the broadcast. Please try again.');
     }
   }
 

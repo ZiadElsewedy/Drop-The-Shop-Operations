@@ -6,9 +6,22 @@ import 'package:fbro/features/notifications/data/models/notification_model.dart'
 abstract class NotificationRemoteDataSource {
   Future<void> create(NotificationModel notification);
   Future<void> createMany(List<NotificationModel> notifications);
-  Stream<List<NotificationModel>> watch(String uid);
+
+  /// Realtime feed of the most recent [limit] notifications for [uid], newest
+  /// first (server-ordered — uses the `recipientUid + createdAt` composite
+  /// index). A growing [limit] gives offline-resilient infinite pagination.
+  Stream<List<NotificationModel>> watch(String uid, {int limit = 30});
   Future<void> markRead(String id);
   Future<void> markAllRead(String uid);
+
+  /// Permanently deletes one notification (the recipient dismissing it).
+  Future<void> delete(String id);
+
+  /// Archives / unarchives one notification (sets / clears `archivedAt`).
+  Future<void> setArchived(String id, bool archived);
+
+  /// Pins / unpins one notification (sets / clears `pinnedAt`).
+  Future<void> setPinned(String id, bool pinned);
 }
 
 class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
@@ -53,12 +66,14 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
   }
 
   @override
-  Stream<List<NotificationModel>> watch(String uid) {
-    // Single-field equality query (automatic index). Ordering is applied
-    // client-side in the repository to avoid a composite index (the project's
-    // documented approach for filtered streams).
+  Stream<List<NotificationModel>> watch(String uid, {int limit = 30}) {
+    // recipientUid equality + createdAt order → the `recipientUid + createdAt`
+    // composite index (firestore.indexes.json). A growing [limit] window keeps
+    // reads bounded while supporting infinite pagination + realtime updates.
     return _notifications
         .where('recipientUid', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .limit(limit)
         .snapshots()
         .map((snap) =>
             snap.docs.map((d) => NotificationModel.fromMap(d.data(), id: d.id)).toList());
@@ -70,6 +85,39 @@ class NotificationRemoteDataSourceImpl implements NotificationRemoteDataSource {
       await _notifications
           .doc(id)
           .set({'readAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to update notification.');
+    }
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    try {
+      await _notifications.doc(id).delete();
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to delete notification.');
+    }
+  }
+
+  @override
+  Future<void> setArchived(String id, bool archived) async {
+    try {
+      await _notifications.doc(id).set(
+        {'archivedAt': archived ? FieldValue.serverTimestamp() : null},
+        SetOptions(merge: true),
+      );
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to update notification.');
+    }
+  }
+
+  @override
+  Future<void> setPinned(String id, bool pinned) async {
+    try {
+      await _notifications.doc(id).set(
+        {'pinnedAt': pinned ? FieldValue.serverTimestamp() : null},
+        SetOptions(merge: true),
+      );
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to update notification.');
     }

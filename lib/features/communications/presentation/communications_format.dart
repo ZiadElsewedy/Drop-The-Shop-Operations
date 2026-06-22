@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
+import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
 
@@ -55,6 +56,28 @@ Color categoryColor(BroadcastCategory c) => switch (c) {
       BroadcastCategory.emergency => AppColors.error,
       _ => AppColors.textSecondary,
     };
+
+IconData priorityIcon(BroadcastPriority p) => switch (p) {
+      BroadcastPriority.low => Icons.south_rounded,
+      BroadcastPriority.normal => Icons.remove_rounded,
+      BroadcastPriority.high => Icons.priority_high_rounded,
+      BroadcastPriority.emergency => Icons.crisis_alert_rounded,
+    };
+
+/// Priority colour — monochrome for low/normal; semantic for high/emergency
+/// (the only urgencies that warrant attention colour, per the design language).
+Color priorityColor(BroadcastPriority p) => switch (p) {
+      BroadcastPriority.high => AppColors.warning,
+      BroadcastPriority.emergency => AppColors.error,
+      _ => AppColors.textSecondary,
+    };
+
+/// Status label for a broadcast in the history feed.
+String broadcastStatusLabel(BroadcastEntity b) {
+  if (b.isDeleted) return 'Deleted';
+  if (b.isArchived) return 'Archived';
+  return 'Sent';
+}
 
 String _month(int m) => const [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',

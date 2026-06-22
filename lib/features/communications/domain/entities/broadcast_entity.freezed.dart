@@ -37,6 +37,13 @@ mixin _$BroadcastEntity {
   /// Notification category (drives client-side routing/grouping of the push).
   String get category => throw _privateConstructorUsedError;
 
+  /// Delivery urgency (Phase 2) — drives FCM priority + UI emphasis. Orthogonal
+  /// to [category].
+  BroadcastPriority get priority => throw _privateConstructorUsedError;
+
+  /// Delivery channel (Phase 2) — push only / inbox only / both.
+  BroadcastChannel get channel => throw _privateConstructorUsedError;
+
   /// How many users the send engine resolved as recipients (set by the
   /// function on send; null on an unsent/legacy doc).
   int? get recipientCount => throw _privateConstructorUsedError;
@@ -44,6 +51,18 @@ mixin _$BroadcastEntity {
   /// How many devices the push was actually delivered to (set by the function
   /// after the FCM multicast completes; null until then / legacy).
   int? get deliveredCount => throw _privateConstructorUsedError;
+
+  /// How many recipients have opened this broadcast (Phase 2 analytics; set by
+  /// the open-tracking path, null/0 until then).
+  int? get openedCount => throw _privateConstructorUsedError;
+
+  /// When this broadcast was archived (hidden from the default feed but kept
+  /// for history). Null = active.
+  DateTime? get archivedAt => throw _privateConstructorUsedError;
+
+  /// When this broadcast was soft-deleted (hidden from the default feed,
+  /// analytics preserved, restorable). Null = not deleted.
+  DateTime? get deletedAt => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
   /// Create a copy of BroadcastEntity
@@ -71,8 +90,13 @@ abstract class $BroadcastEntityCopyWith<$Res> {
     String? branchId,
     String? targetUserId,
     String category,
+    BroadcastPriority priority,
+    BroadcastChannel channel,
     int? recipientCount,
     int? deliveredCount,
+    int? openedCount,
+    DateTime? archivedAt,
+    DateTime? deletedAt,
     DateTime? createdAt,
   });
 }
@@ -102,8 +126,13 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
     Object? branchId = freezed,
     Object? targetUserId = freezed,
     Object? category = null,
+    Object? priority = null,
+    Object? channel = null,
     Object? recipientCount = freezed,
     Object? deliveredCount = freezed,
+    Object? openedCount = freezed,
+    Object? archivedAt = freezed,
+    Object? deletedAt = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(
@@ -148,6 +177,14 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
                 ? _value.category
                 : category // ignore: cast_nullable_to_non_nullable
                       as String,
+            priority: null == priority
+                ? _value.priority
+                : priority // ignore: cast_nullable_to_non_nullable
+                      as BroadcastPriority,
+            channel: null == channel
+                ? _value.channel
+                : channel // ignore: cast_nullable_to_non_nullable
+                      as BroadcastChannel,
             recipientCount: freezed == recipientCount
                 ? _value.recipientCount
                 : recipientCount // ignore: cast_nullable_to_non_nullable
@@ -156,6 +193,18 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
                 ? _value.deliveredCount
                 : deliveredCount // ignore: cast_nullable_to_non_nullable
                       as int?,
+            openedCount: freezed == openedCount
+                ? _value.openedCount
+                : openedCount // ignore: cast_nullable_to_non_nullable
+                      as int?,
+            archivedAt: freezed == archivedAt
+                ? _value.archivedAt
+                : archivedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            deletedAt: freezed == deletedAt
+                ? _value.deletedAt
+                : deletedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
             createdAt: freezed == createdAt
                 ? _value.createdAt
                 : createdAt // ignore: cast_nullable_to_non_nullable
@@ -186,8 +235,13 @@ abstract class _$$BroadcastEntityImplCopyWith<$Res>
     String? branchId,
     String? targetUserId,
     String category,
+    BroadcastPriority priority,
+    BroadcastChannel channel,
     int? recipientCount,
     int? deliveredCount,
+    int? openedCount,
+    DateTime? archivedAt,
+    DateTime? deletedAt,
     DateTime? createdAt,
   });
 }
@@ -216,8 +270,13 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
     Object? branchId = freezed,
     Object? targetUserId = freezed,
     Object? category = null,
+    Object? priority = null,
+    Object? channel = null,
     Object? recipientCount = freezed,
     Object? deliveredCount = freezed,
+    Object? openedCount = freezed,
+    Object? archivedAt = freezed,
+    Object? deletedAt = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(
@@ -262,6 +321,14 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
             ? _value.category
             : category // ignore: cast_nullable_to_non_nullable
                   as String,
+        priority: null == priority
+            ? _value.priority
+            : priority // ignore: cast_nullable_to_non_nullable
+                  as BroadcastPriority,
+        channel: null == channel
+            ? _value.channel
+            : channel // ignore: cast_nullable_to_non_nullable
+                  as BroadcastChannel,
         recipientCount: freezed == recipientCount
             ? _value.recipientCount
             : recipientCount // ignore: cast_nullable_to_non_nullable
@@ -270,6 +337,18 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
             ? _value.deliveredCount
             : deliveredCount // ignore: cast_nullable_to_non_nullable
                   as int?,
+        openedCount: freezed == openedCount
+            ? _value.openedCount
+            : openedCount // ignore: cast_nullable_to_non_nullable
+                  as int?,
+        archivedAt: freezed == archivedAt
+            ? _value.archivedAt
+            : archivedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
+        deletedAt: freezed == deletedAt
+            ? _value.deletedAt
+            : deletedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
         createdAt: freezed == createdAt
             ? _value.createdAt
             : createdAt // ignore: cast_nullable_to_non_nullable
@@ -293,8 +372,13 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
     this.branchId,
     this.targetUserId,
     this.category = 'general',
+    this.priority = BroadcastPriority.normal,
+    this.channel = BroadcastChannel.both,
     this.recipientCount,
     this.deliveredCount,
+    this.openedCount,
+    this.archivedAt,
+    this.deletedAt,
     this.createdAt,
   }) : super._();
 
@@ -331,6 +415,17 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
   @JsonKey()
   final String category;
 
+  /// Delivery urgency (Phase 2) — drives FCM priority + UI emphasis. Orthogonal
+  /// to [category].
+  @override
+  @JsonKey()
+  final BroadcastPriority priority;
+
+  /// Delivery channel (Phase 2) — push only / inbox only / both.
+  @override
+  @JsonKey()
+  final BroadcastChannel channel;
+
   /// How many users the send engine resolved as recipients (set by the
   /// function on send; null on an unsent/legacy doc).
   @override
@@ -340,12 +435,27 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
   /// after the FCM multicast completes; null until then / legacy).
   @override
   final int? deliveredCount;
+
+  /// How many recipients have opened this broadcast (Phase 2 analytics; set by
+  /// the open-tracking path, null/0 until then).
+  @override
+  final int? openedCount;
+
+  /// When this broadcast was archived (hidden from the default feed but kept
+  /// for history). Null = active.
+  @override
+  final DateTime? archivedAt;
+
+  /// When this broadcast was soft-deleted (hidden from the default feed,
+  /// analytics preserved, restorable). Null = not deleted.
+  @override
+  final DateTime? deletedAt;
   @override
   final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'BroadcastEntity(id: $id, title: $title, message: $message, senderId: $senderId, senderName: $senderName, senderRole: $senderRole, audience: $audience, branchId: $branchId, targetUserId: $targetUserId, category: $category, recipientCount: $recipientCount, deliveredCount: $deliveredCount, createdAt: $createdAt)';
+    return 'BroadcastEntity(id: $id, title: $title, message: $message, senderId: $senderId, senderName: $senderName, senderRole: $senderRole, audience: $audience, branchId: $branchId, targetUserId: $targetUserId, category: $category, priority: $priority, channel: $channel, recipientCount: $recipientCount, deliveredCount: $deliveredCount, openedCount: $openedCount, archivedAt: $archivedAt, deletedAt: $deletedAt, createdAt: $createdAt)';
   }
 
   @override
@@ -370,10 +480,19 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
                 other.targetUserId == targetUserId) &&
             (identical(other.category, category) ||
                 other.category == category) &&
+            (identical(other.priority, priority) ||
+                other.priority == priority) &&
+            (identical(other.channel, channel) || other.channel == channel) &&
             (identical(other.recipientCount, recipientCount) ||
                 other.recipientCount == recipientCount) &&
             (identical(other.deliveredCount, deliveredCount) ||
                 other.deliveredCount == deliveredCount) &&
+            (identical(other.openedCount, openedCount) ||
+                other.openedCount == openedCount) &&
+            (identical(other.archivedAt, archivedAt) ||
+                other.archivedAt == archivedAt) &&
+            (identical(other.deletedAt, deletedAt) ||
+                other.deletedAt == deletedAt) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
   }
@@ -391,8 +510,13 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
     branchId,
     targetUserId,
     category,
+    priority,
+    channel,
     recipientCount,
     deliveredCount,
+    openedCount,
+    archivedAt,
+    deletedAt,
     createdAt,
   );
 
@@ -420,8 +544,13 @@ abstract class _BroadcastEntity extends BroadcastEntity {
     final String? branchId,
     final String? targetUserId,
     final String category,
+    final BroadcastPriority priority,
+    final BroadcastChannel channel,
     final int? recipientCount,
     final int? deliveredCount,
+    final int? openedCount,
+    final DateTime? archivedAt,
+    final DateTime? deletedAt,
     final DateTime? createdAt,
   }) = _$BroadcastEntityImpl;
   const _BroadcastEntity._() : super._();
@@ -456,6 +585,15 @@ abstract class _BroadcastEntity extends BroadcastEntity {
   @override
   String get category;
 
+  /// Delivery urgency (Phase 2) — drives FCM priority + UI emphasis. Orthogonal
+  /// to [category].
+  @override
+  BroadcastPriority get priority;
+
+  /// Delivery channel (Phase 2) — push only / inbox only / both.
+  @override
+  BroadcastChannel get channel;
+
   /// How many users the send engine resolved as recipients (set by the
   /// function on send; null on an unsent/legacy doc).
   @override
@@ -465,6 +603,21 @@ abstract class _BroadcastEntity extends BroadcastEntity {
   /// after the FCM multicast completes; null until then / legacy).
   @override
   int? get deliveredCount;
+
+  /// How many recipients have opened this broadcast (Phase 2 analytics; set by
+  /// the open-tracking path, null/0 until then).
+  @override
+  int? get openedCount;
+
+  /// When this broadcast was archived (hidden from the default feed but kept
+  /// for history). Null = active.
+  @override
+  DateTime? get archivedAt;
+
+  /// When this broadcast was soft-deleted (hidden from the default feed,
+  /// analytics preserved, restorable). Null = not deleted.
+  @override
+  DateTime? get deletedAt;
   @override
   DateTime? get createdAt;
 

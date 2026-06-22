@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
+import 'package:fbro/core/enums/broadcast_channel.dart';
+import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
@@ -15,6 +17,7 @@ import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_dropdown_field.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
+import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
 import 'package:fbro/features/communications/domain/broadcast_permissions.dart';
 import 'package:fbro/features/communications/presentation/communications_format.dart';
 import 'package:fbro/features/communications/presentation/cubit/broadcast_cubit.dart';
@@ -26,7 +29,11 @@ import 'package:fbro/features/communications/presentation/cubit/broadcast_state.
 /// "Send Broadcast" CTA. Sending routes through `BroadcastCubit.send` (→ the
 /// callable Cloud Function); the success snackbar reports the recipient count.
 class ComposeBroadcastScreen extends StatefulWidget {
-  const ComposeBroadcastScreen({super.key});
+  const ComposeBroadcastScreen({super.key, this.prefill});
+
+  /// When set (e.g. "Duplicate as editable draft"), seeds the form's text,
+  /// category, audience, priority and channel from an existing broadcast.
+  final BroadcastEntity? prefill;
 
   @override
   State<ComposeBroadcastScreen> createState() => _ComposeBroadcastScreenState();
@@ -40,6 +47,8 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
   late final List<BroadcastAudience> _allowed;
   late BroadcastAudience _audience;
   BroadcastCategory _category = BroadcastCategory.announcement;
+  BroadcastPriority _priority = BroadcastPriority.normal;
+  BroadcastChannel _channel = BroadcastChannel.both;
 
   List<BranchEntity> _branches = const [];
   BranchEntity? _selectedBranch; // admin's chosen branch (branch / individual)
@@ -58,6 +67,16 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
     _sender = context.currentUser!;
     _allowed = BroadcastPermissions.allowedAudiences(_sender.role);
     _audience = _allowed.first;
+    // Seed from a duplicated broadcast when provided.
+    final p = widget.prefill;
+    if (p != null) {
+      _titleCtrl.text = p.title;
+      _bodyCtrl.text = p.message;
+      _category = BroadcastCategory.fromString(p.category);
+      _priority = p.priority;
+      _channel = p.channel;
+      if (_allowed.contains(p.audience)) _audience = p.audience;
+    }
     _titleCtrl.addListener(_onFormChanged);
     _bodyCtrl.addListener(_onFormChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
@@ -155,6 +174,8 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
               _audience == BroadcastAudience.user ? _selectedUser?.uid : null,
           targetUserBranchId: _selectedUser?.branchId,
           category: _category.value,
+          priority: _priority,
+          channel: _channel,
         );
     if (!mounted) return;
     setState(() => _submitting = false);

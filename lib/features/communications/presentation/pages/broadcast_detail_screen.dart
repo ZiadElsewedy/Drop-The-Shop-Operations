@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
+import 'package:fbro/core/routes/route_names.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/app_dialog.dart';
 import 'package:fbro/core/widgets/app_empty_state.dart';
+import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/core/widgets/glass_container.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
 import 'package:fbro/features/communications/presentation/communications_format.dart';
 import 'package:fbro/features/communications/presentation/cubit/broadcast_cubit.dart';
 import 'package:fbro/features/communications/presentation/cubit/broadcast_state.dart';
+import 'package:fbro/features/communications/presentation/widgets/broadcast_card.dart';
 
-/// Broadcast detail (Phase 3) — opened at `/communications/:broadcastId`. Shows
-/// the full message, sender, category, audience, time, and the delivery summary
-/// (recipient + delivered counts). Resolves the broadcast from the `extra`
-/// passed by the feed, falling back to the live feed list by id.
+/// Broadcast detail (Phase 2) — opened at `/communications/:broadcastId`. Shows
+/// the full message, sender, category, audience, priority, channel, time, and
+/// the **delivery analytics** (recipients · delivered · failed · open rate),
+/// plus a per-item actions menu (repeat · duplicate · archive · delete).
 class BroadcastDetailScreen extends StatelessWidget {
   const BroadcastDetailScreen({
     super.key,
@@ -27,26 +33,29 @@ class BroadcastDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.darkBg,
-      appBar: AppBar(
-        backgroundColor: AppColors.darkBg,
-        elevation: 0,
-        title: Text('Broadcast', style: AppTypography.h3),
-      ),
-      body: BlocBuilder<BroadcastCubit, BroadcastState>(
-        builder: (context, state) {
-          // Prefer the live feed copy (freshest delivery counts); fall back to
-          // the entity passed in via `extra`.
-          final fromFeed = state.maybeWhen(
-            loaded: (list, _) => _byId(list, broadcastId),
-            orElse: () => null,
-          );
-          final b = fromFeed ?? broadcast;
-          if (b == null) return _missing();
-          return _detail(context, b);
-        },
-      ),
+    return BlocBuilder<BroadcastCubit, BroadcastState>(
+      builder: (context, state) {
+        // Prefer the live feed copy (freshest delivery counts); fall back to
+        // the entity passed in via `extra`.
+        final fromFeed = state.maybeWhen(
+          loaded: (list, _) => _byId(list, broadcastId),
+          orElse: () => null,
+        );
+        final b = fromFeed ?? broadcast;
+        return Scaffold(
+          backgroundColor: AppColors.darkBg,
+          appBar: AppBar(
+            backgroundColor: AppColors.darkBg,
+            elevation: 0,
+            title: Text('Broadcast', style: AppTypography.h3),
+            actions: [
+              if (b != null)
+                _ActionsMenu(broadcast: b),
+            ],
+          ),
+          body: b == null ? _missing() : _detail(context, b),
+        );
+      },
     );
   }
 
@@ -66,6 +75,7 @@ class BroadcastDetailScreen extends StatelessWidget {
   Widget _detail(BuildContext context, BroadcastEntity b) {
     final category = BroadcastCategory.fromString(b.category);
     final catColor = categoryColor(category);
+    final openRate = _openRate(b);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, AppSpacing.lg,
@@ -111,6 +121,15 @@ class BroadcastDetailScreen extends StatelessWidget {
                       size: 14, color: AppColors.textTertiary),
                   const SizedBox(width: 6),
                   Text(audienceLabel(b), style: AppTypography.caption),
+                  if (b.priority.isHighDelivery) ...[
+                    const SizedBox(width: 10),
+                    Icon(priorityIcon(b.priority),
+                        size: 14, color: priorityColor(b.priority)),
+                    const SizedBox(width: 4),
+                    Text(b.priority.label,
+                        style: AppTypography.caption
+                            .copyWith(color: priorityColor(b.priority))),
+                  ],
                   const Spacer(),
                   Text(broadcastTimeAgo(b.createdAt),
                       style: AppTypography.caption),
@@ -130,31 +149,54 @@ class BroadcastDetailScreen extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
 
-        // Delivery summary
-        const _SectionLabel('Delivery'),
+        // Delivery analytics
+        const _SectionLabel('Delivery analytics'),
         GlassContainer(
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
-                child: _Stat(
-                  icon: Icons.group_outlined,
-                  label: 'Recipients',
-                  value: b.recipientCount?.toString() ?? '—',
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _Stat(
+                      icon: Icons.group_outlined,
+                      label: 'Recipients',
+                      value: b.recipientCount?.toString() ?? '—',
+                    ),
+                  ),
+                  _vDivider(),
+                  Expanded(
+                    child: _Stat(
+                      icon: Icons.mark_email_read_outlined,
+                      label: 'Delivered',
+                      value: b.deliveredCount?.toString() ??
+                          (b.recipientCount == null ? '—' : 'Pending'),
+                    ),
+                  ),
+                ],
               ),
-              Container(
-                width: 1,
-                height: 40,
-                color: AppColors.darkBorder,
-                margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Divider(height: 1, color: AppColors.darkBorder),
               ),
-              Expanded(
-                child: _Stat(
-                  icon: Icons.mark_email_read_outlined,
-                  label: 'Delivered',
-                  value: b.deliveredCount?.toString() ??
-                      (b.recipientCount == null ? '—' : 'Pending'),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: _Stat(
+                      icon: Icons.error_outline_rounded,
+                      label: 'Failed',
+                      value: b.failedCount?.toString() ?? '—',
+                      color: (b.failedCount ?? 0) > 0 ? AppColors.error : null,
+                    ),
+                  ),
+                  _vDivider(),
+                  Expanded(
+                    child: _Stat(
+                      icon: Icons.drafts_outlined,
+                      label: 'Open rate',
+                      value: openRate,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -179,6 +221,14 @@ class BroadcastDetailScreen extends StatelessWidget {
                   label: 'Category',
                   value: category.label),
               _MetaRow(
+                  icon: priorityIcon(b.priority),
+                  label: 'Priority',
+                  value: b.priority.label),
+              _MetaRow(
+                  icon: Icons.send_outlined,
+                  label: 'Channel',
+                  value: b.channel.label),
+              _MetaRow(
                   icon: Icons.schedule_rounded,
                   label: 'Sent',
                   value: broadcastFullDate(b.createdAt),
@@ -187,6 +237,122 @@ class BroadcastDetailScreen extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  /// "42%" once opens + recipients are known; "—" otherwise.
+  String _openRate(BroadcastEntity b) {
+    final r = b.recipientCount ?? 0;
+    final o = b.openedCount;
+    if (o == null || r == 0) return '—';
+    return '${((o / r) * 100).round()}%';
+  }
+
+  Widget _vDivider() => Container(
+        width: 1,
+        height: 40,
+        color: AppColors.darkBorder,
+        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      );
+}
+
+/// The detail app-bar overflow menu, reusing the feed's action handling.
+class _ActionsMenu extends StatelessWidget {
+  const _ActionsMenu({required this.broadcast});
+  final BroadcastEntity broadcast;
+
+  Future<void> _onAction(
+      BuildContext context, BroadcastCardAction action) async {
+    final cubit = context.read<BroadcastCubit>();
+    switch (action) {
+      case BroadcastCardAction.open:
+        break;
+      case BroadcastCardAction.duplicate:
+        context.push(RouteNames.communicationsCompose, extra: broadcast);
+      case BroadcastCardAction.scheduleAgain:
+        break;
+      case BroadcastCardAction.repeatNow:
+        final user = context.currentUser;
+        if (user == null) return;
+        final ok = await showConfirmDialog(
+          context,
+          title: 'Repeat broadcast?',
+          message: 'Send "${broadcast.title}" again now to the same audience.',
+          confirmLabel: 'Repeat',
+        );
+        if (!ok || !context.mounted) return;
+        final count = await cubit.repeatNow(sender: user, source: broadcast);
+        if (count != null && context.mounted) {
+          AppSnackbar.success(context,
+              'Broadcast sent to $count ${count == 1 ? 'recipient' : 'recipients'}');
+        }
+      case BroadcastCardAction.archive:
+        await cubit.setArchived(broadcast.id, true);
+      case BroadcastCardAction.unarchive:
+        await cubit.setArchived(broadcast.id, false);
+      case BroadcastCardAction.delete:
+        final ok = await showConfirmDialog(
+          context,
+          title: 'Delete broadcast?',
+          message:
+              'It will be hidden from the feed but kept in history. You can '
+              'restore it later.',
+          confirmLabel: 'Delete',
+          destructive: true,
+        );
+        if (ok && context.mounted) await cubit.setDeleted(broadcast.id, true);
+      case BroadcastCardAction.restore:
+        await cubit.setDeleted(broadcast.id, false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final archived = broadcast.isArchived;
+    final deleted = broadcast.isDeleted;
+    return PopupMenuButton<BroadcastCardAction>(
+      tooltip: 'Actions',
+      icon: const Icon(Icons.more_vert_rounded, color: AppColors.textSecondary),
+      color: AppColors.darkSurfaceElevated,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      onSelected: (a) => _onAction(context, a),
+      itemBuilder: (context) => [
+        if (!deleted) ...[
+          _item(BroadcastCardAction.repeatNow, Icons.replay_rounded,
+              'Repeat now'),
+          _item(BroadcastCardAction.duplicate, Icons.copy_rounded, 'Duplicate'),
+          if (archived)
+            _item(BroadcastCardAction.unarchive, Icons.unarchive_rounded,
+                'Unarchive')
+          else
+            _item(BroadcastCardAction.archive, Icons.archive_outlined,
+                'Archive'),
+          _item(BroadcastCardAction.delete, Icons.delete_outline_rounded,
+              'Delete',
+              destructive: true),
+        ] else
+          _item(BroadcastCardAction.restore, Icons.restore_rounded, 'Restore'),
+      ],
+    );
+  }
+
+  PopupMenuItem<BroadcastCardAction> _item(
+    BroadcastCardAction value,
+    IconData icon,
+    String label, {
+    bool destructive = false,
+  }) {
+    final color = destructive ? AppColors.error : AppColors.textPrimary;
+    return PopupMenuItem<BroadcastCardAction>(
+      value: value,
+      height: 44,
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: AppSpacing.md),
+          Text(label, style: AppTypography.body.copyWith(color: color)),
+        ],
+      ),
     );
   }
 }
@@ -204,10 +370,12 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.icon, required this.label, required this.value});
+  const _Stat(
+      {required this.icon, required this.label, required this.value, this.color});
   final IconData icon;
   final String label;
   final String value;
+  final Color? color;
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -215,13 +383,14 @@ class _Stat extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 16, color: AppColors.textTertiary),
+            Icon(icon, size: 16, color: color ?? AppColors.textTertiary),
             const SizedBox(width: 6),
             Text(label, style: AppTypography.caption),
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
-        Text(value, style: AppTypography.h2),
+        Text(value,
+            style: AppTypography.h2.copyWith(color: color ?? AppColors.textPrimary)),
       ],
     );
   }

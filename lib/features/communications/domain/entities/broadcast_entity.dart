@@ -1,5 +1,7 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
+import 'package:fbro/core/enums/broadcast_channel.dart';
+import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/enums/user_role.dart';
 
 part 'broadcast_entity.freezed.dart';
@@ -36,12 +38,26 @@ class BroadcastEntity with _$BroadcastEntity {
     String? targetUserId,
     /// Notification category (drives client-side routing/grouping of the push).
     @Default('general') String category,
+    /// Delivery urgency (Phase 2) — drives FCM priority + UI emphasis. Orthogonal
+    /// to [category].
+    @Default(BroadcastPriority.normal) BroadcastPriority priority,
+    /// Delivery channel (Phase 2) — push only / inbox only / both.
+    @Default(BroadcastChannel.both) BroadcastChannel channel,
     /// How many users the send engine resolved as recipients (set by the
     /// function on send; null on an unsent/legacy doc).
     int? recipientCount,
     /// How many devices the push was actually delivered to (set by the function
     /// after the FCM multicast completes; null until then / legacy).
     int? deliveredCount,
+    /// How many recipients have opened this broadcast (Phase 2 analytics; set by
+    /// the open-tracking path, null/0 until then).
+    int? openedCount,
+    /// When this broadcast was archived (hidden from the default feed but kept
+    /// for history). Null = active.
+    DateTime? archivedAt,
+    /// When this broadcast was soft-deleted (hidden from the default feed,
+    /// analytics preserved, restorable). Null = not deleted.
+    DateTime? deletedAt,
     DateTime? createdAt,
   }) = _BroadcastEntity;
 
@@ -50,4 +66,19 @@ class BroadcastEntity with _$BroadcastEntity {
 
   /// Whether this is a direct message to one individual.
   bool get isDirect => audience == BroadcastAudience.user;
+
+  /// Whether this broadcast is archived (kept for history, off the default feed).
+  bool get isArchived => archivedAt != null;
+
+  /// Whether this broadcast is soft-deleted (restorable, analytics preserved).
+  bool get isDeleted => deletedAt != null;
+
+  /// Whether this is live in the default feed (neither archived nor deleted).
+  bool get isActive => archivedAt == null && deletedAt == null;
+
+  /// Recipients the push could not be delivered to (recipients − delivered);
+  /// null until both counts are known.
+  int? get failedCount => (recipientCount != null && deliveredCount != null)
+      ? (recipientCount! - deliveredCount!).clamp(0, recipientCount!)
+      : null;
 }

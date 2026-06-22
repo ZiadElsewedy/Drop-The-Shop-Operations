@@ -26,4 +26,22 @@ class BroadcastRepositoryImpl implements BroadcastRepository {
       _remote
           .watchBroadcasts(branchId: branchId)
           .map((models) => models.map((m) => m.toEntity()).toList());
+
+  @override
+  Future<void> setArchived(String id, bool archived) async {
+    try {
+      await _remote.setArchived(id, archived);
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> setDeleted(String id, bool deleted) async {
+    try {
+      await _remote.setDeleted(id, deleted);
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
 }

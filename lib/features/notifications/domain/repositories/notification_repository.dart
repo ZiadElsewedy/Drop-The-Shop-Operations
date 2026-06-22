@@ -12,13 +12,23 @@ abstract class NotificationRepository {
   /// task events — one doc per assignee).
   Future<void> createMany(List<NotificationEntity> notifications);
 
-  /// Realtime feed of [uid]'s notifications, newest first (client-sorted — no
-  /// composite index, matching the project's task-query approach).
-  Stream<List<NotificationEntity>> watch(String uid);
+  /// Realtime feed of [uid]'s most recent [limit] notifications, newest first
+  /// (server-ordered via the `recipientUid + createdAt` index). Grow [limit] to
+  /// paginate.
+  Stream<List<NotificationEntity>> watch(String uid, {int limit = 30});
 
   /// Marks one notification read (sets `readAt`).
   Future<void> markRead(String id);
 
   /// Marks every unread notification for [uid] read.
   Future<void> markAllRead(String uid);
+
+  /// Permanently deletes one notification.
+  Future<void> delete(String id);
+
+  /// Archives / unarchives one notification.
+  Future<void> setArchived(String id, bool archived);
+
+  /// Pins / unpins one notification.
+  Future<void> setPinned(String id, bool pinned);
 }

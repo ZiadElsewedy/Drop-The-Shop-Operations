@@ -253,7 +253,10 @@ GoRouter createRouter(AuthCubit authCubit) {
         path: RouteNames.communicationsCompose,
         pageBuilder: (context, state) => _slideTransition(
           state,
-          const ComposeBroadcastScreen(),
+          ComposeBroadcastScreen(
+            prefill:
+                state.extra is BroadcastEntity ? state.extra as BroadcastEntity : null,
+          ),
         ),
       ),
       GoRoute(

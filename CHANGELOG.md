@@ -12,6 +12,62 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-06-22 — Communications Center · Phase 2 Commit 1: schema foundation + Broadcast History + Notification Center management)
+
+First commit of the **Communications Center Premium Upgrade** (Phase 2). Adds the
+data backbone, the full broadcast **history lifecycle**, and **Notification
+Center** management — all additive + back-compatible. ⚠️ The local Flutter SDK is
+too old to build here, so freezed `.freezed.dart` files were **hand-edited** to
+match the entity changes; run `dart run build_runner build
+--delete-conflicting-outputs` to regenerate, then `flutter analyze` + `flutter
+test`. `node --check functions/index.js` valid.
+
+- **New enums** — `BroadcastPriority` (low/normal/high/emergency, `isHighDelivery`)
+  and `BroadcastChannel` (push/inbox/both, `sendsPush`/`writesInbox`). Orthogonal
+  to `BroadcastCategory` (priority = delivery urgency; category = semantic kind).
+- **Broadcast schema (`broadcasts/{id}`)** — `BroadcastEntity`/`BroadcastModel`
+  gain `priority`, `channel`, `openedCount`, `archivedAt`, `deletedAt` + derived
+  getters (`isActive`/`isArchived`/`isDeleted`/`failedCount`). All default safely
+  for legacy docs.
+- **Broadcast lifecycle (history)** — `BroadcastRemoteDataSource`/`Repository`/
+  `BroadcastCubit` gain `setArchived` / `setDeleted` (**field-restricted client
+  writes** — see rules) + `repeatNow(sender, source)`. The feed
+  (`CommunicationsScreen`) is now a **history** with an **Active / Archived /
+  Deleted** filter and per-item actions (Open · Repeat Now · Duplicate · Schedule
+  Again *(disabled until the Scheduler phase)* · Archive/Unarchive · Delete/
+  Restore) via an overflow menu, with confirmation dialogs for destructive
+  actions. `BroadcastCard` shows priority, failed count, and an archived/deleted
+  status chip; `BroadcastDetailScreen` shows the full **delivery analytics**
+  (recipients · delivered · failed · open rate) + priority/channel + an actions
+  menu. **Duplicate** prefills the composer (`ComposeBroadcastScreen(prefill:)`).
+- **`sendBroadcast` Cloud Function** — refactored into a reusable
+  **`dispatchBroadcast()`** helper (the Scheduler phase reuses it). Reads
+  `priority` (high/emergency → high FCM priority) + `channel` (inbox → no push,
+  push → no inbox docs, both → both); persists `priority`/`channel`/`openedCount`
+  on the doc.
+- **Notification Center management** — `NotificationEntity`/`Model` gain
+  `archivedAt`/`pinnedAt`. Datasource/repository/cubit gain `delete`,
+  `setArchived`, `setPinned`, and **paginated** reads: the feed is now an
+  ordered, **growing-window** stream (`watch(uid, {limit})` +
+  `NotificationCubit.loadMore()`/`hasMore`) using the new composite index.
+  `NotificationsScreen` adds **search**, **type filter chips**
+  (All/Unread/Tasks/Broadcasts/System), an **archived view**, **date grouping**
+  (Pinned · Today · Yesterday · This week · Earlier), **swipe** (archive / delete)
+  + a per-tile actions menu, and **infinite scroll**. Pure helpers in
+  `notification_format.dart` (`NotificationFilter`, `notificationMatchesQuery`,
+  `groupNotifications`).
+- **Rules + index** — `broadcasts` update now permits an admin / owning-branch
+  manager / original sender to change **only** `archivedAt`/`deletedAt` (a
+  `diff().affectedKeys().hasOnly(...)` field-freeze; content + delivery stats stay
+  function-owned). New `broadcastOpens/{id}` guard rules (Phase 2 analytics). New
+  composite index `notifications(recipientUid ASC, createdAt DESC)`. New
+  collection-name constants. ⚠️ **Deploy** `firebase deploy --only
+  firestore:rules,firestore:indexes,functions`.
+- **Tests** — `broadcast_lifecycle_test.dart` (priority/channel enums + new-field
+  round-trip + `failedCount`/`isActive`), `notification_grouping_test.dart`
+  (filter/search/grouping), and extended `notification_model_test.dart`
+  (archive/pin round-trip).
+
 ### Fixed (2026-06-21 — Communications Center: "UNAUTHENTICATED" on Send)
 
 Sending a broadcast failed with a raw **UNAUTHENTICATED** snackbar — because the
