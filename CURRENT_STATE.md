@@ -11,8 +11,22 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-22 (Communications Center — Phase 2 · Commit 4)
+**Last updated:** 2026-06-22 (Communications Center — Phase 2 · Commit 5)
 **Version:** 1.0.0+1 · **Branch:** `feature/notification` (DROP — monochrome enterprise UX)
+
+> **Communications Center · Phase 2 — Commit 5 (2026-06-22):** Automated **task
+> reminders**. `NotificationType` + `taskReminder`/`taskOverdue`. Pure
+> **`ReminderRules`** (`lib/features/task/domain/reminder_rules.dart`): escalates
+> due24h → due1h → overdue (each once, forward-only) with quiet hours + a
+> maxReminders cap. Cloud Function **`runTaskReminders`** (every 30 min: scan
+> `deadline <= now+24h`, skip terminal/deadline-less, read the per-task
+> **`taskReminders/{taskId}`** ledger, write a reminder per assignee + advance the
+> ledger; pushed by `onNotificationCreated`). Config in **`reminderConfig/global`**
+> (defaults when absent; quiet hours in UTC). Rules: `taskReminders` (function-only,
+> admin read) + `reminderConfig` (admin write · admin/manager read). **Deferred:**
+> a reminder-config editor UI (config is a Firestore doc today). ⚠️ Deploy
+> `firestore:rules,functions` (Blaze + Cloud Scheduler). **Pending:** analytics
+> dashboard (final commit).
 
 > **Communications Center · Phase 2 — Commit 4 (2026-06-22):** The **scheduler** —
 > recurring / one-time broadcasts. Architecture = a **single `onSchedule` poller**

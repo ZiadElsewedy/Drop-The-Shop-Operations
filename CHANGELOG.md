@@ -12,6 +12,36 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-06-22 — Communications Center · Phase 2 Commit 5: task reminder engine)
+
+Fifth commit of the **Premium Upgrade** — automated **task reminders** (server-
+driven, anti-spam). `node --check functions/index.js` valid.
+
+- **Notification types** — `NotificationType` gains `taskReminder` + `taskOverdue`
+  (additive); the inbox tile renders them (alarm / overdue icons + warning/error
+  accents).
+- **Reminder engine** — pure
+  [`reminder_rules.dart`](lib/features/task/domain/reminder_rules.dart)
+  (`ReminderRules.dueKind` / `inQuietHours` / `typeFor`): escalates **due24h →
+  due1h → overdue**, each kind sent at most once, never backwards; honours
+  **quiet hours**, a **maxReminders** cap, and an **enabled** flag.
+- **Cloud Function** — `runTaskReminders` (`onSchedule('every 30 minutes')`):
+  scans tasks with `deadline <= now+24h` (single-field inequality — no composite
+  index), skips terminal (approved/rejected) + deadline-less tasks, reads the
+  per-task ledger **`taskReminders/{taskId}`**, and on a due kind writes a
+  reminder `notifications/{id}` per assignee (pushed by `onNotificationCreated`)
+  + advances the ledger. Config from **`reminderConfig/global`** (enabled · quiet
+  hours · maxReminders; defaults applied when absent; quiet hours evaluated in
+  UTC). The JS mirrors `ReminderRules` exactly.
+- **Rules** — `taskReminders` (function-only writes, admin read) +
+  `reminderConfig` (admin write, admin/manager read).
+- **Tests** — `reminder_rules_test.dart` (kind selection · forward-only
+  escalation · maxReminders · disabled · quiet-hours wrap-midnight · typeFor).
+- **Deferred:** a reminder-config **editor UI** (today the config is a Firestore
+  doc with safe defaults; editable in the console or a later admin screen);
+  review-pending / feedback-pending reminders (the engine is structured to extend
+  to them). ⚠️ Deploy `firestore:rules,functions` (Blaze + Cloud Scheduler).
+
 ### Added (2026-06-22 — Communications Center · Phase 2 Commit 4: scheduled + recurring broadcasts)
 
 Fourth commit of the **Premium Upgrade** — the **scheduler**. Architecture: a

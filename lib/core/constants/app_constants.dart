@@ -18,4 +18,5 @@ class AppConstants {
   static const String analyticsCollection = 'analytics';
   static const String reminderConfigCollection = 'reminderConfig';
   static const String savedAudiencesCollection = 'savedAudiences';
+  static const String taskRemindersCollection = 'taskReminders';
 }

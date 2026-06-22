@@ -42,6 +42,9 @@ const BROADCASTS = "broadcasts";
 const NOTIFICATIONS = "notifications";
 const BROADCAST_SCHEDULES = "broadcastSchedules";
 const BROADCAST_OPENS = "broadcastOpens";
+const TASKS = "tasks";
+const TASK_REMINDERS = "taskReminders";
+const REMINDER_CONFIG = "reminderConfig";
 
 // `branchId` marker for a direct message — never a real branch id and never ''
 // (mirrors BroadcastModel.directBranchMarker), so a DM never appears in a
@@ -643,4 +646,137 @@ exports.broadcastHousekeeping = onSchedule("every 24 hours", async () => {
   } catch (err) {
     logger.warn("housekeeping failed", { error: String(err) });
   }
+});
+
+// ── Task reminder rules (mirrors lib/features/task/domain/reminder_rules.dart) ──
+const REMINDER_ORDER = ["due24h", "due1h", "overdue"];
+
+function reminderInQuietHours(hour, startHour, endHour) {
+  if (startHour === endHour) return false;
+  if (startHour < endHour) return hour >= startHour && hour < endHour;
+  return hour >= startHour || hour < endHour; // wraps midnight
+}
+
+function reminderDueKind(deadline, now, lastKind, count, cfg) {
+  if (!cfg.enabled) return null;
+  if (count >= cfg.maxReminders) return null;
+  if (reminderInQuietHours(now.getUTCHours(), cfg.quietStartHour, cfg.quietEndHour)) {
+    return null;
+  }
+  const diffMs = deadline.getTime() - now.getTime();
+  let kind;
+  if (diffMs < 0) kind = "overdue";
+  else if (diffMs <= 60 * 60 * 1000) kind = "due1h";
+  else if (diffMs <= 24 * 60 * 60 * 1000) kind = "due24h";
+  else return null;
+  // Only escalate forward.
+  if (lastKind && REMINDER_ORDER.indexOf(kind) <= REMINDER_ORDER.indexOf(lastKind)) {
+    return null;
+  }
+  return kind;
+}
+
+/**
+ * Automated task reminders (Phase 2 Commit 5). Every 30 minutes it scans tasks
+ * due within 24h (or overdue) and sends an in-app + push reminder to the
+ * assignees, escalating due24h → due1h → overdue with a per-task ledger
+ * (`taskReminders/{taskId}`) + quiet hours + a max-reminders cap to avoid spam.
+ * Config lives in `reminderConfig/global` (defaults applied when absent). Quiet
+ * hours are evaluated in UTC (the function's timezone).
+ */
+exports.runTaskReminders = onSchedule("every 30 minutes", async () => {
+  const now = new Date();
+
+  // Config (defaults when the doc is absent).
+  let cfg = { enabled: true, quietStartHour: 22, quietEndHour: 7, maxReminders: 3 };
+  try {
+    const cSnap = await db.collection(REMINDER_CONFIG).doc("global").get();
+    if (cSnap.exists) {
+      const c = cSnap.data() || {};
+      cfg = {
+        enabled: c.enabled !== false,
+        quietStartHour: Number.isFinite(c.quietStartHour) ? c.quietStartHour : 22,
+        quietEndHour: Number.isFinite(c.quietEndHour) ? c.quietEndHour : 7,
+        maxReminders: Number.isFinite(c.maxReminders) ? c.maxReminders : 3,
+      };
+    }
+  } catch (_) {
+    // best-effort; use defaults
+  }
+  if (!cfg.enabled) {
+    logger.info("task reminders disabled");
+    return;
+  }
+
+  // Tasks due within 24h or already overdue (single-field inequality).
+  const soon = admin.firestore.Timestamp.fromMillis(now.getTime() + 24 * 60 * 60 * 1000);
+  const snap = await db.collection(TASKS).where("deadline", "<=", soon).get();
+
+  const TERMINAL = new Set(["approved", "rejected"]);
+  let sent = 0;
+  for (const doc of snap.docs) {
+    const t = doc.data() || {};
+    if (TERMINAL.has(t.status || "pending")) continue;
+    const deadline = t.deadline && t.deadline.toDate ? t.deadline.toDate() : null;
+    if (!deadline) continue;
+    const assignees = Array.isArray(t.assigneeIds) ? t.assigneeIds.filter(Boolean) : [];
+    if (assignees.length === 0) continue;
+
+    // Per-task reminder ledger.
+    const ledgerRef = db.collection(TASK_REMINDERS).doc(doc.id);
+    let lastKind = null;
+    let count = 0;
+    try {
+      const lSnap = await ledgerRef.get();
+      if (lSnap.exists) {
+        const l = lSnap.data() || {};
+        lastKind = l.lastKind || null;
+        count = Number(l.count) || 0;
+      }
+    } catch (_) {
+      // best-effort
+    }
+
+    const kind = reminderDueKind(deadline, now, lastKind, count, cfg);
+    if (!kind) continue;
+
+    const type = kind === "overdue" ? "taskOverdue" : "taskReminder";
+    const title = kind === "overdue" ? "Task Overdue" : "Task Reminder";
+    const dueLabel = kind === "overdue" ? "is overdue" : "is due soon";
+    const body = `${t.title || "A task"} ${dueLabel}`;
+    const payload = { taskId: doc.id, route: "task_details", kind };
+
+    try {
+      const batch = db.batch();
+      for (const uid of assignees) {
+        const ref = db.collection(NOTIFICATIONS).doc();
+        batch.set(ref, {
+          id: ref.id,
+          recipientUid: uid,
+          senderUid: "system",
+          type,
+          title,
+          body,
+          readAt: null,
+          payload,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      await ledgerRef.set(
+        {
+          taskId: doc.id,
+          lastKind: kind,
+          count: count + 1,
+          lastSentAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      sent += 1;
+    } catch (err) {
+      logger.warn("task reminder failed", { taskId: doc.id, error: String(err) });
+    }
+  }
+
+  logger.info("task reminders run", { scanned: snap.size, sent });
 });

@@ -169,6 +169,10 @@ class NotificationTile extends StatelessWidget {
         return Icons.check_circle_outline_rounded;
       case NotificationType.taskRejected:
         return Icons.cancel_outlined;
+      case NotificationType.taskReminder:
+        return Icons.alarm_rounded;
+      case NotificationType.taskOverdue:
+        return Icons.running_with_errors_rounded;
       case NotificationType.broadcastEmergency:
         return Icons.warning_amber_rounded;
       case NotificationType.broadcastAlert:
@@ -187,9 +191,11 @@ class NotificationTile extends StatelessWidget {
       case NotificationType.taskApproved:
         return AppColors.success;
       case NotificationType.taskRejected:
+      case NotificationType.taskOverdue:
       case NotificationType.broadcastEmergency:
         return AppColors.error;
       case NotificationType.taskRework:
+      case NotificationType.taskReminder:
       case NotificationType.broadcastAlert:
         return AppColors.warning;
       default:

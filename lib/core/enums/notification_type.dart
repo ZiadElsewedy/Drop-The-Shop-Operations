@@ -16,6 +16,9 @@ enum NotificationType {
   taskSubmitted,
   taskApproved,
   taskRejected,
+  // ── Task reminders (Communications Center Phase 2 Commit 5) ──
+  taskReminder,
+  taskOverdue,
   // ── Broadcast events (Communications Center → Notification System Phase 1) ──
   broadcastAnnouncement,
   broadcastAlert,

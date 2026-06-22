@@ -301,6 +301,23 @@ service cloud.firestore {
         || resource.data.get('senderId', '') == request.auth.uid;
     }
 
+    // ── Task reminders ledger (Communications Center — Phase 2 Commit 5) ──
+    // Per-task anti-spam bookkeeping written ONLY by the `runTaskReminders` Cloud
+    // Function (Admin SDK, bypasses rules). Clients never write it; an admin may
+    // read it for diagnostics.
+    match /taskReminders/{taskId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    // ── Reminder config (Communications Center — Phase 2 Commit 5) ──
+    // Org-wide reminder rules (enabled · quiet hours · max reminders), read by the
+    // scheduler. Admin-managed; any admin/manager may read.
+    match /reminderConfig/{id} {
+      allow read: if isAdmin() || isManager();
+      allow write: if isAdmin();
+    }
+
     // ── Notifications (Notification System Phase 1) ────────────────
     // One in-app notification doc per recipient (`notifications/{id}`). Task
     // events are written by the client (`NotifyTaskEvent`); broadcast
