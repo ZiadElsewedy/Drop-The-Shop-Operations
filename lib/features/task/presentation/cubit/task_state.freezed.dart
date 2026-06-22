@@ -25,6 +25,8 @@ mixin _$TaskState {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )
     loaded,
     required TResult Function(String message) error,
@@ -37,6 +39,8 @@ mixin _$TaskState {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult? Function(String message)? error,
@@ -49,6 +53,8 @@ mixin _$TaskState {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult Function(String message)? error,
@@ -147,6 +153,8 @@ class _$InitialImpl implements _Initial {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )
     loaded,
     required TResult Function(String message) error,
@@ -163,6 +171,8 @@ class _$InitialImpl implements _Initial {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult? Function(String message)? error,
@@ -179,6 +189,8 @@ class _$InitialImpl implements _Initial {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult Function(String message)? error,
@@ -281,6 +293,8 @@ class _$LoadingImpl implements _Loading {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )
     loaded,
     required TResult Function(String message) error,
@@ -297,6 +311,8 @@ class _$LoadingImpl implements _Loading {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult? Function(String message)? error,
@@ -313,6 +329,8 @@ class _$LoadingImpl implements _Loading {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult Function(String message)? error,
@@ -377,6 +395,8 @@ abstract class _$$LoadedImplCopyWith<$Res> {
     List<TaskEntity> tasks,
     bool busy,
     Map<String, UserEntity> directory,
+    bool isSubmitting,
+    SubmissionProgress? submissionProgress,
   });
 }
 
@@ -397,6 +417,8 @@ class __$$LoadedImplCopyWithImpl<$Res>
     Object? tasks = null,
     Object? busy = null,
     Object? directory = null,
+    Object? isSubmitting = null,
+    Object? submissionProgress = freezed,
   }) {
     return _then(
       _$LoadedImpl(
@@ -412,6 +434,14 @@ class __$$LoadedImplCopyWithImpl<$Res>
             ? _value._directory
             : directory // ignore: cast_nullable_to_non_nullable
                   as Map<String, UserEntity>,
+        isSubmitting: null == isSubmitting
+            ? _value.isSubmitting
+            : isSubmitting // ignore: cast_nullable_to_non_nullable
+                  as bool,
+        submissionProgress: freezed == submissionProgress
+            ? _value.submissionProgress
+            : submissionProgress // ignore: cast_nullable_to_non_nullable
+                  as SubmissionProgress?,
       ),
     );
   }
@@ -424,6 +454,8 @@ class _$LoadedImpl implements _Loaded {
     final List<TaskEntity> tasks, {
     this.busy = false,
     final Map<String, UserEntity> directory = const <String, UserEntity>{},
+    this.isSubmitting = false,
+    this.submissionProgress,
   }) : _tasks = tasks,
        _directory = directory;
 
@@ -448,8 +480,14 @@ class _$LoadedImpl implements _Loaded {
   }
 
   @override
+  @JsonKey()
+  final bool isSubmitting;
+  @override
+  final SubmissionProgress? submissionProgress;
+
+  @override
   String toString() {
-    return 'TaskState.loaded(tasks: $tasks, busy: $busy, directory: $directory)';
+    return 'TaskState.loaded(tasks: $tasks, busy: $busy, directory: $directory, isSubmitting: $isSubmitting, submissionProgress: $submissionProgress)';
   }
 
   @override
@@ -462,7 +500,11 @@ class _$LoadedImpl implements _Loaded {
             const DeepCollectionEquality().equals(
               other._directory,
               _directory,
-            ));
+            ) &&
+            (identical(other.isSubmitting, isSubmitting) ||
+                other.isSubmitting == isSubmitting) &&
+            (identical(other.submissionProgress, submissionProgress) ||
+                other.submissionProgress == submissionProgress));
   }
 
   @override
@@ -471,6 +513,8 @@ class _$LoadedImpl implements _Loaded {
     const DeepCollectionEquality().hash(_tasks),
     busy,
     const DeepCollectionEquality().hash(_directory),
+    isSubmitting,
+    submissionProgress,
   );
 
   /// Create a copy of TaskState
@@ -490,11 +534,13 @@ class _$LoadedImpl implements _Loaded {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )
     loaded,
     required TResult Function(String message) error,
   }) {
-    return loaded(tasks, busy, directory);
+    return loaded(tasks, busy, directory, isSubmitting, submissionProgress);
   }
 
   @override
@@ -506,11 +552,19 @@ class _$LoadedImpl implements _Loaded {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult? Function(String message)? error,
   }) {
-    return loaded?.call(tasks, busy, directory);
+    return loaded?.call(
+      tasks,
+      busy,
+      directory,
+      isSubmitting,
+      submissionProgress,
+    );
   }
 
   @override
@@ -522,13 +576,15 @@ class _$LoadedImpl implements _Loaded {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
     if (loaded != null) {
-      return loaded(tasks, busy, directory);
+      return loaded(tasks, busy, directory, isSubmitting, submissionProgress);
     }
     return orElse();
   }
@@ -576,11 +632,15 @@ abstract class _Loaded implements TaskState {
     final List<TaskEntity> tasks, {
     final bool busy,
     final Map<String, UserEntity> directory,
+    final bool isSubmitting,
+    final SubmissionProgress? submissionProgress,
   }) = _$LoadedImpl;
 
   List<TaskEntity> get tasks;
   bool get busy;
   Map<String, UserEntity> get directory;
+  bool get isSubmitting;
+  SubmissionProgress? get submissionProgress;
 
   /// Create a copy of TaskState
   /// with the given fields replaced by the non-null parameter values.
@@ -665,6 +725,8 @@ class _$ErrorImpl implements _Error {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )
     loaded,
     required TResult Function(String message) error,
@@ -681,6 +743,8 @@ class _$ErrorImpl implements _Error {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult? Function(String message)? error,
@@ -697,6 +761,8 @@ class _$ErrorImpl implements _Error {
       List<TaskEntity> tasks,
       bool busy,
       Map<String, UserEntity> directory,
+      bool isSubmitting,
+      SubmissionProgress? submissionProgress,
     )?
     loaded,
     TResult Function(String message)? error,

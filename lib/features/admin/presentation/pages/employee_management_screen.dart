@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
@@ -10,9 +11,13 @@ import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
 import 'package:fbro/features/admin/presentation/cubit/admin_users_state.dart';
+import 'package:fbro/features/admin/presentation/employee_metrics.dart';
 import 'package:fbro/features/admin/presentation/widgets/admin_user_card.dart';
 import 'package:fbro/features/admin/presentation/widgets/admin_user_sheets.dart';
+import 'package:fbro/features/admin/presentation/widgets/employee_card.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
+import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 
 const _kAll = '__all__';
 const _kNone = '__none__';
@@ -42,6 +47,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AdminUsersCubit>().load(AdminUserFilter.employees);
       _loadBranches();
+      // The admin task stream feeds each card's performance metrics. Load it
+      // only if it isn't already streaming (it usually is, from Admin Home).
+      final taskCubit = context.read<TaskCubit>();
+      final loaded = taskCubit.state
+          .maybeWhen(loaded: (_, _, _, _, _) => true, orElse: () => false);
+      final user = context.currentUser;
+      if (!loaded && user != null) taskCubit.load(user);
     });
   }
 
@@ -116,6 +128,10 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
   Widget _body(List<UserEntity> users, bool busy) {
     final filtered = _filter(users);
+    // Per-employee performance, derived from the live admin task stream.
+    final tasks = context.watch<TaskCubit>().state.maybeWhen(
+        loaded: (t, _, _, _, _) => t, orElse: () => const <TaskEntity>[]);
+    final metrics = computeEmployeeMetrics(tasks);
     return Column(
       children: [
         if (busy) const LinearProgressIndicator(minHeight: 2),
@@ -132,11 +148,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                       for (var i = 0; i < filtered.length; i++)
                         EntranceFade(
                           delay: staggerDelay(i),
-                          child: AdminUserCard(
+                          child: EmployeeCard(
                             user: filtered[i],
+                            metrics: metrics[filtered[i].uid] ??
+                                const EmployeeMetrics(),
                             branchLabel: filtered[i].branchId == null
                                 ? null
                                 : _branchNames[filtered[i].branchId],
+                            onTap: () => _showDetails(filtered[i]),
                             actions: _actions(filtered[i]),
                           ),
                         ),

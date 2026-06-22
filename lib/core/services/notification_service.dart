@@ -2,20 +2,33 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:fbro/core/constants/app_constants.dart';
 
-/// Firebase Cloud Messaging foundation (Phase 6). Requests notification
-/// permission, persists the device's FCM token on the user's document, and
-/// surfaces foreground messages via [onForeground]. No history / inbox / chat —
-/// just simple push. Sending the [NotificationType] events on their triggers
-/// needs a server (out of scope: no Cloud Functions); this is the client side.
+/// Firebase Cloud Messaging engine (Phase 6 foundation + Phase 2 receive
+/// handling). Requests notification permission, keeps the device's FCM token in
+/// the user's `fcmTokens` **array** (multi-device, refresh-aware, cleaned up on
+/// sign-out), and routes incoming messages:
+/// - **foreground** → [onForeground] (e.g. an in-app snackbar);
+/// - **tap** (background-opened or cold-start) → [onMessageTap] with the push
+///   `data` payload (category · senderId · broadcastId), for navigation.
+///
+/// Sending is done server-side by the `sendBroadcast` Cloud Function; this is
+/// the client device + delivery side.
 class NotificationService {
   final FirebaseMessaging _messaging;
   final FirebaseFirestore _firestore;
 
-  /// The signed-in uid whose token we keep current (for token refreshes).
+  /// The signed-in uid whose tokens we maintain.
   String? _uid;
+
+  /// This device's current token (tracked so we can rotate it on refresh and
+  /// remove it on sign-out — the array must not accumulate stale tokens).
+  String? _currentToken;
 
   /// Set by the app to show foreground notifications in-app (e.g. a snackbar).
   void Function(String? title, String? body)? onForeground;
+
+  /// Set by the app to handle a notification **tap** (background-opened or
+  /// cold-start launch). Receives the message `data` payload.
+  void Function(Map<String, dynamic> data)? onMessageTap;
 
   NotificationService(this._messaging, this._firestore);
 
@@ -24,42 +37,87 @@ class NotificationService {
   Future<void> init() async {
     try {
       await _messaging.requestPermission(alert: true, badge: true, sound: true);
+
+      // Foreground messages.
       FirebaseMessaging.onMessage.listen((message) {
         final n = message.notification;
         if (n != null) onForeground?.call(n.title, n.body);
       });
+
+      // Tap handling — app opened from background by tapping the notification.
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleTap);
+
+      // Tap handling — app launched from terminated state by a notification.
+      final initial = await _messaging.getInitialMessage();
+      if (initial != null) _handleTap(initial);
+
+      // Token rotation: replace this device's stale token with the fresh one.
       _messaging.onTokenRefresh.listen((token) {
         final uid = _uid;
-        if (uid != null) _saveToken(uid, token);
+        if (uid != null) _rotateToken(uid, token);
       });
     } catch (_) {
       // FCM not available on this platform/build — ignore.
     }
   }
 
-  /// Persist the device token for [uid] (call after the user is authenticated).
+  /// Persist this device's token for [uid] (call after the user is
+  /// authenticated, on login / app start).
   Future<void> registerToken(String uid) async {
     _uid = uid;
     try {
       final token = await _messaging.getToken();
-      if (token != null) await _saveToken(uid, token);
+      if (token != null) await _rotateToken(uid, token);
     } catch (_) {
       // Best-effort; push is non-critical to app function.
     }
   }
 
-  /// Stop tracking the token (call on sign-out).
-  void forgetUser() => _uid = null;
+  /// Remove this device's token (call on sign-out) so the signed-out account no
+  /// longer receives this device's pushes, then stop tracking.
+  Future<void> forgetUser() async {
+    final uid = _uid;
+    final token = _currentToken;
+    if (uid != null && token != null) {
+      try {
+        await _firestore
+            .collection(AppConstants.usersCollection)
+            .doc(uid)
+            .set({
+          'fcmTokens': FieldValue.arrayRemove([token]),
+        }, SetOptions(merge: true));
+      } catch (_) {
+        // Non-fatal.
+      }
+    }
+    _uid = null;
+    _currentToken = null;
+  }
 
-  Future<void> _saveToken(String uid, String token) async {
+  void _handleTap(RemoteMessage message) {
+    if (message.data.isNotEmpty) onMessageTap?.call(message.data);
+  }
+
+  /// Adds [token] to the user's `fcmTokens` array and drops the previously
+  /// tracked token for this device (token refresh), in a single merge write.
+  Future<void> _rotateToken(String uid, String token) async {
+    if (_currentToken == token && _uid == uid) return;
     try {
-      await _firestore
-          .collection(AppConstants.usersCollection)
-          .doc(uid)
-          .set({
-        'fcmToken': token,
+      final doc =
+          _firestore.collection(AppConstants.usersCollection).doc(uid);
+      final previous = _currentToken;
+      await doc.set({
+        'fcmTokens': FieldValue.arrayUnion([token]),
         'fcmTokenUpdatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      // Drop the stale token from this device (best-effort, separate op so a
+      // failure never blocks adding the fresh one).
+      if (previous != null && previous != token) {
+        await doc.set({
+          'fcmTokens': FieldValue.arrayRemove([previous]),
+        }, SetOptions(merge: true));
+      }
+      _currentToken = token;
     } catch (_) {
       // Non-fatal.
     }

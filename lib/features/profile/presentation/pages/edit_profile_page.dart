@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
@@ -25,7 +24,6 @@ class EditProfilePage extends StatefulWidget {
 class _EditProfilePageState extends State<EditProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final _name = TextEditingController();
-  final _username = TextEditingController();
   final _bio = TextEditingController();
 
   File? _avatarFile;
@@ -38,7 +36,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     if (_seeded) return;
     _initial = p;
     _name.text = p.fullName ?? '';
-    _username.text = p.username ?? '';
     _bio.text = p.bio ?? '';
     _seeded = true;
   }
@@ -46,7 +43,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   void dispose() {
     _name.dispose();
-    _username.dispose();
     _bio.dispose();
     super.dispose();
   }
@@ -120,7 +116,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
     context.read<ProfileCubit>().save(
           uid: _initial.uid,
           fullName: _orNull(_name),
-          username: _orNull(_username),
           bio: _orNull(_bio),
           avatarFile: _avatarFile,
           coverFile: _coverFile,
@@ -174,7 +169,6 @@ class _EditProfilePageState extends State<EditProfilePage> {
             formKey: _formKey,
             initial: _initial,
             name: _name,
-            username: _username,
             bio: _bio,
             avatarFile: _avatarFile,
             coverFile: _coverFile,
@@ -198,7 +192,7 @@ extension on ProfileState {
 class _Form extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final ProfileEntity initial;
-  final TextEditingController name, username, bio;
+  final TextEditingController name, bio;
   final File? avatarFile;
   final File? coverFile;
   final bool isSaving;
@@ -211,7 +205,6 @@ class _Form extends StatelessWidget {
     required this.formKey,
     required this.initial,
     required this.name,
-    required this.username,
     required this.bio,
     required this.avatarFile,
     required this.coverFile,
@@ -253,21 +246,6 @@ class _Form extends StatelessWidget {
                     validator: (v) => (v == null || v.trim().isEmpty)
                         ? 'Full name is required'
                         : null,
-                  ),
-                  _Field(
-                    controller: username,
-                    hint: 'Username',
-                    icon: Icons.alternate_email_rounded,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
-                    ],
-                    validator: (v) {
-                      final t = v?.trim() ?? '';
-                      if (t.isEmpty) return 'Username is required';
-                      if (t.length < 3) return 'At least 3 characters';
-                      if (t.length > 20) return 'At most 20 characters';
-                      return null;
-                    },
                   ),
                   _Field(
                     controller: bio,
@@ -422,7 +400,6 @@ class _Field extends StatelessWidget {
   final String? Function(String?)? validator;
   final int? maxLength;
   final int maxLines;
-  final List<TextInputFormatter>? inputFormatters;
 
   const _Field({
     required this.controller,
@@ -431,7 +408,6 @@ class _Field extends StatelessWidget {
     this.validator,
     this.maxLength,
     this.maxLines = 1,
-    this.inputFormatters,
   });
 
   @override
@@ -443,7 +419,6 @@ class _Field extends StatelessWidget {
         validator: validator,
         maxLength: maxLength,
         maxLines: maxLines,
-        inputFormatters: inputFormatters,
         cursorColor: AppColors.primary,
         style: AppTypography.label.copyWith(
             color: AppColors.textPrimary, fontWeight: FontWeight.w400, fontSize: 15),

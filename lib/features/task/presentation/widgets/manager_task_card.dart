@@ -1,0 +1,105 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fbro/core/enums/task_status.dart';
+import 'package:fbro/core/theme/app_colors.dart';
+import 'package:fbro/core/widgets/app_dialog.dart';
+import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
+import 'package:fbro/features/task/presentation/pages/task_details_screen.dart';
+import 'package:fbro/features/task/presentation/widgets/task_action_sheets.dart';
+import 'package:fbro/features/task/presentation/widgets/task_card.dart';
+
+/// A [TaskCard] with the manager/admin action set (Review when awaiting review,
+/// Assign, Edit, Delete) wired to the [TaskCubit] in context; tapping the card
+/// opens the full task details.
+///
+/// Shared by the manager's flat branch list and the admin's per-branch
+/// drill-down so both render identical cards from one source of truth.
+class ManagerTaskCard extends StatelessWidget {
+  const ManagerTaskCard({
+    super.key,
+    required this.task,
+    required this.directory,
+    required this.isAdmin,
+    required this.defaultBranchId,
+  });
+
+  final TaskEntity task;
+  final Map<String, UserEntity> directory;
+  final bool isAdmin;
+  final String defaultBranchId;
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final cubit = context.read<TaskCubit>();
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete task?',
+      message: '"${task.title}" will be permanently removed.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    );
+    if (confirmed && context.mounted) cubit.deleteTask(task.id);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<TaskCubit>();
+    return GestureDetector(
+      onTap: () => Navigator.of(context).push(PageRouteBuilder(
+        pageBuilder: (ctx, anim, secAnim) =>
+            TaskDetailsScreen(task: task, directory: directory),
+        transitionsBuilder: (ctx, anim, secAnim, child) => SlideTransition(
+          position:
+              Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(
+            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+          ),
+          child: FadeTransition(
+            opacity:
+                CurvedAnimation(parent: anim, curve: const Interval(0, 0.6)),
+            child: child,
+          ),
+        ),
+        transitionDuration: const Duration(milliseconds: 320),
+      )),
+      child: TaskCard(
+        task: task,
+        directory: directory,
+        onAssigneesTap: () =>
+            showAssignSheet(context: context, cubit: cubit, task: task),
+        actions: [
+          if (task.status == TaskStatus.waitingReview)
+            TaskActionButton(
+              label: 'Review',
+              icon: Icons.rate_review_outlined,
+              onPressed: () =>
+                  showReviewSheet(context: context, cubit: cubit, task: task),
+            ),
+          TaskActionButton(
+            label: 'Assign',
+            icon: Icons.person_add_alt_1_outlined,
+            onPressed: () =>
+                showAssignSheet(context: context, cubit: cubit, task: task),
+          ),
+          TaskActionButton(
+            label: 'Edit',
+            icon: Icons.edit_outlined,
+            onPressed: () => showTaskFormSheet(
+              context: context,
+              cubit: cubit,
+              existing: task,
+              isAdmin: isAdmin,
+              defaultBranchId: defaultBranchId,
+            ),
+          ),
+          TaskActionButton(
+            label: 'Delete',
+            icon: Icons.delete_outline_rounded,
+            color: AppColors.error,
+            onPressed: () => _confirmDelete(context),
+          ),
+        ],
+      ),
+    );
+  }
+}

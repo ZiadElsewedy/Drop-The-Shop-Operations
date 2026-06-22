@@ -129,6 +129,16 @@ class ScheduleRepositoryImpl implements ScheduleRepository {
   }
 
   @override
+  Future<List<ShiftSwapEntity>> getAllSwaps() async {
+    try {
+      final models = await _remote.getAllSwaps();
+      return models.map((m) => m.toEntity()).toList();
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
   Future<ShiftSwapEntity> createSwap(ShiftSwapEntity swap) async {
     try {
       final created = await _remote.createSwap(ShiftSwapModel.fromEntity(swap));

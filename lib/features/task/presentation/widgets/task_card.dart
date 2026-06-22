@@ -1,20 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:fbro/core/enums/task_priority.dart';
+import 'package:fbro/core/enums/task_status.dart';
+import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/status_badge.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/task/domain/entities/checklist_item.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:fbro/features/task/presentation/widgets/task_badge.dart';
 
-/// Premium, glass-like card for a single task (Phase 9 redesign).
+/// A clean, enterprise task card — monochrome (black / white / grey), built for
+/// scanning, not decoration. Hierarchy:
 ///
-/// Hierarchy: a priority rail + title + status badge on top, then the resolved
-/// assignees (avatars · name · role), the checklist progress, meta chips, any
-/// employee/review notes + proof, and finally the role/status-aware [actions].
+///   Title ················· status (subtle dot + label)
+///   Description
+///   ─ assignee (avatar · name · role)
+///   Assigned by ·· Manager who created it     ← who sent the task
+///   Due ·········· date (· Overdue when late)
+///   Priority ····· low / medium / high (no colour)
+///   checklist progress (greyscale)
+///   actions
+///
+/// No priority rail, no coloured chips, no loud status badges — just a calm
+/// surface with clear typographic hierarchy.
 class TaskCard extends StatelessWidget {
   const TaskCard({
     super.key,
@@ -27,11 +38,11 @@ class TaskCard extends StatelessWidget {
 
   final TaskEntity task;
 
-  /// uid → user, used to render real assignee names/avatars.
+  /// uid → user, used to render real assignee + creator names/avatars.
   final Map<String, UserEntity> directory;
   final List<Widget> actions;
 
-  /// Opens the assignee sheet when the assignees row is tapped.
+  /// Opens the assignee sheet when the assignee row is tapped.
   final VoidCallback? onAssigneesTap;
 
   /// When provided, the checklist is rendered as interactive (tappable) rows —
@@ -44,140 +55,236 @@ class TaskCard extends StatelessWidget {
     final notes = task.notes ?? '';
     final reviewNotes = task.reviewNotes ?? '';
     final proof = task.proofImageUrl ?? '';
-    final priorityColor = _priorityColor(task.priority);
+    final assignedBy = _assignedBy(directory, task);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.darkSurfaceElevated, AppColors.darkSurface],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.darkSurface,
         borderRadius: AppRadius.cardAll,
         border: Border.all(color: AppColors.darkBorder),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.black.withAlpha(46),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Priority rail.
-          Container(
-            width: 4,
-            decoration: BoxDecoration(
-              color: priorityColor,
-              borderRadius: const BorderRadius.horizontal(
-                  left: Radius.circular(AppRadius.card)),
-            ),
+          // ── Lifecycle badge (NEW / REWORK #n / Rejected / Approved) ──
+          if (taskBadgeFor(task) != null) ...[
+            TaskBadge(task: task),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          // ── Title + status ──────────────────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  task.title,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              _StatusChip(task.status),
+            ],
           ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg,
-                  AppSpacing.lg, AppSpacing.md),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(task.title,
-                            style: AppTypography.labelLarge
-                                .copyWith(fontWeight: FontWeight.w600)),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      StatusBadge.task(task.status),
-                    ],
-                  ),
-                  if (description.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(description,
-                        style: AppTypography.bodySmall,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis),
-                  ],
-                  const SizedBox(height: AppSpacing.md),
-                  _AssigneesRow(
-                    task: task,
-                    directory: directory,
-                    onTap: onAssigneesTap,
-                  ),
-                  if (task.hasChecklist) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _ChecklistSection(
-                      task: task,
-                      onToggle: onChecklistToggle,
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.md),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      _PriorityChip(priority: task.priority),
-                      _MetaChip(
-                          icon: Icons.category_outlined, label: task.type.value),
-                      if (task.deadline != null)
-                        _MetaChip(
-                            icon: Icons.event_outlined,
-                            label: _date(task.deadline!)),
-                    ],
-                  ),
-                  if (notes.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _NoteLine(label: 'Notes', text: notes),
-                  ],
-                  if (reviewNotes.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    _NoteLine(label: 'Review', text: reviewNotes),
-                  ],
-                  if (proof.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        proof,
-                        height: 120,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        cacheWidth: 800,
-                        errorBuilder: (_, _, _) => Container(
-                          height: 56,
-                          alignment: Alignment.centerLeft,
-                          child: Text('Proof image attached',
-                              style: AppTypography.caption),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (actions.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.xs,
-                      children: actions,
-                    ),
-                  ],
-                ],
+          if (description.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              description,
+              style: AppTypography.bodySmall,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.lg),
+          _AssigneeLine(task: task, directory: directory, onTap: onAssigneesTap),
+
+          // ── Meta (who / when / priority) ────────────────────────
+          const SizedBox(height: AppSpacing.md),
+          if (assignedBy != null) _MetaRow(label: 'Assigned by', value: assignedBy),
+          if (task.deadline != null)
+            _MetaRow(
+              label: 'Due',
+              value: _dateLabel(task.deadline!),
+              trailing: _isOverdue(task) ? 'Overdue' : null,
+            ),
+          _MetaRow(label: 'Priority', value: _priorityLabel(task.priority)),
+
+          if (task.hasChecklist) ...[
+            const SizedBox(height: AppSpacing.md),
+            _ChecklistSection(task: task, onToggle: onChecklistToggle),
+          ],
+
+          if (notes.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            _NoteLine(label: 'Notes', text: notes),
+          ],
+          if (reviewNotes.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _NoteLine(label: 'Review', text: reviewNotes),
+          ],
+          if (proof.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.network(
+                proof,
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                cacheWidth: 800,
+                errorBuilder: (ctx, err, st) => Container(
+                  height: 56,
+                  alignment: Alignment.centerLeft,
+                  child: Text('Proof image attached',
+                      style: AppTypography.caption),
+                ),
               ),
             ),
-          ),
+          ],
+
+          if (actions.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            const Divider(height: 1, color: AppColors.darkBorder),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.xs,
+              children: actions,
+            ),
+          ],
         ],
       ),
     );
   }
-
-  static String _date(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 }
 
-/// Compact pill button for task card actions.
+// ─── Helpers ───────────────────────────────────────────────────────
+
+/// "Name · Role" for the task's creator, resolved from the directory. Creators
+/// not in the branch directory are global admins, so we label them "Admin".
+String? _assignedBy(Map<String, UserEntity> directory, TaskEntity task) {
+  final by = task.createdBy ?? '';
+  if (by.isEmpty) return null;
+  final u = directory[by];
+  if (u != null) return '${_bestName(u)} · ${_roleLabel(u.role)}';
+  return 'Admin';
+}
+
+String _roleLabel(UserRole r) => switch (r) {
+      UserRole.admin => 'Admin',
+      UserRole.manager => 'Manager',
+      UserRole.employee => 'Employee',
+    };
+
+String _priorityLabel(TaskPriority p) => switch (p) {
+      TaskPriority.high => 'High',
+      TaskPriority.normal => 'Medium',
+      TaskPriority.low => 'Low',
+    };
+
+bool _isOverdue(TaskEntity task) {
+  final d = task.deadline;
+  if (d == null) return false;
+  final terminal = task.status == TaskStatus.approved ||
+      task.status == TaskStatus.completed ||
+      task.status == TaskStatus.waitingReview;
+  return !terminal && d.isBefore(DateTime.now());
+}
+
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+String _dateLabel(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
+
+String _bestName(UserEntity u) =>
+    (u.displayName != null && u.displayName!.isNotEmpty)
+        ? u.displayName!
+        : u.email;
+
+/// Subtle monochrome status indicator — a small glyph + label. Active states
+/// (in progress / in review / rejected) read in white; resting states in grey.
+class _StatusChip extends StatelessWidget {
+  const _StatusChip(this.status);
+  final TaskStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, label, active) = _info(status);
+    final color = active ? AppColors.textPrimary : AppColors.textSecondary;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: AppTypography.caption
+              .copyWith(color: color, fontWeight: FontWeight.w600),
+        ),
+      ],
+    );
+  }
+
+  (IconData, String, bool) _info(TaskStatus s) => switch (s) {
+        TaskStatus.pending => (Icons.circle_outlined, 'Pending', false),
+        TaskStatus.started => (Icons.timelapse_rounded, 'In progress', true),
+        TaskStatus.completed => (Icons.check_circle_outline_rounded, 'Completed', false),
+        TaskStatus.waitingReview => (Icons.hourglass_empty_rounded, 'In review', true),
+        TaskStatus.approved => (Icons.check_circle_rounded, 'Approved', false),
+        TaskStatus.rejected => (Icons.replay_rounded, 'Needs rework', true),
+      };
+}
+
+/// A clean key→value meta row, e.g. "Assigned by   Ahmed Hassan · Manager".
+class _MetaRow extends StatelessWidget {
+  const _MetaRow({required this.label, required this.value, this.trailing});
+  final String label;
+  final String value;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(label, style: AppTypography.caption),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: AppTypography.bodySmall
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+          ),
+          if (trailing != null)
+            Text(
+              trailing!,
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact, monochrome text-button for task card actions.
 class TaskActionButton extends StatelessWidget {
   const TaskActionButton({
     super.key,
@@ -190,6 +297,9 @@ class TaskActionButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final IconData? icon;
+
+  /// Reserved for destructive affordances (e.g. Delete); defaults to the
+  /// monochrome foreground.
   final Color? color;
 
   @override
@@ -199,11 +309,11 @@ class TaskActionButton extends StatelessWidget {
       icon: Icon(icon ?? Icons.chevron_right_rounded, size: 16),
       label: Text(label),
       style: TextButton.styleFrom(
-        foregroundColor: color ?? AppColors.primary,
+        foregroundColor: color ?? AppColors.textPrimary,
         backgroundColor: AppColors.darkSurfaceElevated,
         padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-        textStyle: AppTypography.caption,
+        textStyle: AppTypography.caption.copyWith(fontWeight: FontWeight.w600),
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),
@@ -211,8 +321,7 @@ class TaskActionButton extends StatelessWidget {
   }
 }
 
-/// Resolves a task's assignee uids to users from [directory] (the ones not yet
-/// resolved are dropped here but counted in [TaskEntity.assigneeIds]).
+/// Resolves a task's assignee uids to users from [directory].
 List<UserEntity> resolveAssignees(
         TaskEntity task, Map<String, UserEntity> directory) =>
     [
@@ -220,17 +329,10 @@ List<UserEntity> resolveAssignees(
         if (directory[uid] != null) directory[uid]!,
     ];
 
-String _bestName(UserEntity u) =>
-    (u.displayName != null && u.displayName!.isNotEmpty)
-        ? u.displayName!
-        : u.email;
-
-class _AssigneesRow extends StatelessWidget {
-  const _AssigneesRow({
-    required this.task,
-    required this.directory,
-    this.onTap,
-  });
+/// The assignee line on the card: avatar · name · role (single), an avatar stack
+/// + count (many), or an "Unassigned" affordance.
+class _AssigneeLine extends StatelessWidget {
+  const _AssigneeLine({required this.task, required this.directory, this.onTap});
 
   final TaskEntity task;
   final Map<String, UserEntity> directory;
@@ -246,15 +348,15 @@ class _AssigneesRow extends StatelessWidget {
       content = Row(
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 34,
+            height: 34,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: AppColors.darkSurface,
+              color: AppColors.darkSurfaceElevated,
               border: Border.all(color: AppColors.darkBorder),
             ),
             child: const Icon(Icons.person_add_alt_1_outlined,
-                size: 18, color: AppColors.textTertiary),
+                size: 16, color: AppColors.textTertiary),
           ),
           const SizedBox(width: AppSpacing.md),
           Text('Unassigned', style: AppTypography.bodySmall),
@@ -264,7 +366,7 @@ class _AssigneesRow extends StatelessWidget {
       final u = resolved.first;
       content = Row(
         children: [
-          UserAvatar.fromUser(u, size: 36),
+          UserAvatar.fromUser(u, size: 34),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -274,8 +376,7 @@ class _AssigneesRow extends StatelessWidget {
                     style: AppTypography.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 1),
-                Text(u.role.value, style: AppTypography.caption),
+                Text(_roleLabel(u.role), style: AppTypography.caption),
               ],
             ),
           ),
@@ -285,17 +386,17 @@ class _AssigneesRow extends StatelessWidget {
       content = Row(
         children: [
           if (resolved.isNotEmpty)
-            AvatarStack(users: resolved, size: 32)
+            AvatarStack(users: resolved, size: 30)
           else
             Container(
-              width: 32,
-              height: 32,
+              width: 30,
+              height: 30,
               decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 color: AppColors.darkSurfaceElevated,
               ),
               child: const Icon(Icons.groups_outlined,
-                  size: 16, color: AppColors.textTertiary),
+                  size: 15, color: AppColors.textTertiary),
             ),
           const SizedBox(width: AppSpacing.md),
           Text('$total assigned', style: AppTypography.label),
@@ -321,7 +422,7 @@ class _AssigneesRow extends StatelessWidget {
   }
 }
 
-/// Checklist progress bar + (optionally interactive) item rows.
+/// Greyscale checklist progress bar + (optionally interactive) item rows.
 class _ChecklistSection extends StatelessWidget {
   const _ChecklistSection({required this.task, this.onToggle});
 
@@ -339,14 +440,14 @@ class _ChecklistSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.checklist_rounded,
-                size: 15,
-                color: complete ? AppColors.success : AppColors.textTertiary),
+            const Icon(Icons.checklist_rounded,
+                size: 14, color: AppColors.textTertiary),
             const SizedBox(width: AppSpacing.sm),
             Text(
-              complete ? '100% complete' : '$done / $total completed',
+              complete ? 'Checklist complete' : '$done of $total done',
               style: AppTypography.caption.copyWith(
-                color: complete ? AppColors.success : AppColors.textSecondary,
+                color:
+                    complete ? AppColors.textPrimary : AppColors.textSecondary,
               ),
             ),
           ],
@@ -361,9 +462,8 @@ class _ChecklistSection extends StatelessWidget {
             builder: (context, value, _) => LinearProgressIndicator(
               value: value,
               minHeight: 5,
-              backgroundColor: AppColors.darkSurface,
-              valueColor: AlwaysStoppedAnimation(
-                  complete ? AppColors.success : AppColors.primary),
+              backgroundColor: AppColors.darkSurfaceElevated,
+              valueColor: const AlwaysStoppedAnimation(AppColors.textPrimary),
             ),
           ),
         ),
@@ -396,13 +496,12 @@ class _ChecklistRow extends StatelessWidget {
               width: 20,
               height: 20,
               decoration: BoxDecoration(
-                color: item.completed
-                    ? AppColors.success
-                    : AppColors.transparent,
+                color:
+                    item.completed ? AppColors.white : AppColors.transparent,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
                   color: item.completed
-                      ? AppColors.success
+                      ? AppColors.white
                       : AppColors.textTertiary,
                   width: 1.5,
                 ),
@@ -434,60 +533,6 @@ class _ChecklistRow extends StatelessWidget {
   }
 }
 
-class _PriorityChip extends StatelessWidget {
-  const _PriorityChip({required this.priority});
-  final TaskPriority priority;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _priorityColor(priority);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurfaceElevated,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text('${priority.value} priority', style: AppTypography.caption),
-        ],
-      ),
-    );
-  }
-}
-
-class _MetaChip extends StatelessWidget {
-  const _MetaChip({required this.icon, required this.label});
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurfaceElevated,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 13, color: AppColors.textTertiary),
-          const SizedBox(width: 4),
-          Text(label, style: AppTypography.caption),
-        ],
-      ),
-    );
-  }
-}
-
 class _NoteLine extends StatelessWidget {
   const _NoteLine({required this.label, required this.text});
   final String label;
@@ -509,15 +554,3 @@ class _NoteLine extends StatelessWidget {
     );
   }
 }
-
-Color _priorityColor(TaskPriority p) {
-  switch (p) {
-    case TaskPriority.high:
-      return AppColors.error;
-    case TaskPriority.normal:
-      return AppColors.warning;
-    case TaskPriority.low:
-      return AppColors.textTertiary;
-  }
-}
-

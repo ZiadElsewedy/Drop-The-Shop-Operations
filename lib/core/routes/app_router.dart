@@ -12,8 +12,8 @@ import 'package:fbro/features/admin/presentation/pages/admin_shell.dart';
 import 'package:fbro/features/manager/presentation/pages/manager_shell.dart';
 import 'package:fbro/features/employee/presentation/pages/employee_shell.dart';
 import 'package:fbro/features/task/presentation/pages/task_management_screen.dart';
-import 'package:fbro/features/task/presentation/pages/branch_tasks_screen.dart';
 import 'package:fbro/features/task/presentation/pages/my_tasks_screen.dart';
+import 'package:fbro/features/operations/presentation/pages/manager_operations_screen.dart';
 import 'package:fbro/features/schedule/presentation/pages/schedule_management_screen.dart';
 import 'package:fbro/features/schedule/presentation/pages/branch_schedule_screen.dart';
 import 'package:fbro/features/schedule/presentation/pages/my_schedule_screen.dart';
@@ -26,6 +26,11 @@ import 'package:fbro/features/profile/presentation/pages/profile_page.dart';
 import 'package:fbro/features/profile/presentation/pages/edit_profile_page.dart';
 import 'package:fbro/features/settings/presentation/pages/settings_page.dart';
 import 'package:fbro/features/settings/presentation/pages/change_password_page.dart';
+import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
+import 'package:fbro/features/communications/presentation/pages/communications_screen.dart';
+import 'package:fbro/features/communications/presentation/pages/compose_broadcast_screen.dart';
+import 'package:fbro/features/communications/presentation/pages/broadcast_detail_screen.dart';
+import 'package:fbro/features/notifications/presentation/pages/notifications_screen.dart';
 import 'route_names.dart';
 
 GoRouter createRouter(AuthCubit authCubit) {
@@ -62,7 +67,7 @@ GoRouter createRouter(AuthCubit authCubit) {
       }
 
       if (isAuthenticated) {
-        // Approval gate (checked before role dispatch). FBRO is an internal ops
+        // Approval gate (checked before role dispatch). DROP is an internal ops
         // system: an authenticated account that hasn't been approved — or has
         // been deactivated — is confined to the Pending Approval screen until a
         // manager/admin approves it. Sign-out is the only way off the screen.
@@ -81,6 +86,10 @@ GoRouter createRouter(AuthCubit authCubit) {
         // Shared routes (/profile, /settings) stay open to all roles.
         if (_isAdminArea(loc) && !user.role.isAdmin) return roleHome;
         if (_isManagerArea(loc) && !(user.role.isManager || user.role.isAdmin)) {
+          return roleHome;
+        }
+        // Communications Center is admin + manager only; employees are bounced.
+        if (_isCommunicationsArea(loc) && user.role.isEmployee) {
           return roleHome;
         }
         if (loc == RouteNames.home && !user.role.isEmployee) {
@@ -151,11 +160,14 @@ GoRouter createRouter(AuthCubit authCubit) {
           const TaskManagementScreen(),
         ),
       ),
+      // Manager "Operations" tab → the Branch Operations cockpit for the
+      // manager's own branch (the task→operations redesign; the full per-branch
+      // task list is now reached via the cockpit's "All tasks" → BranchTaskListScreen).
       GoRoute(
         path: RouteNames.managerTasks,
         pageBuilder: (context, state) => _slideTransition(
           state,
-          const BranchTasksScreen(),
+          const ManagerOperationsScreen(),
         ),
       ),
       GoRoute(
@@ -226,6 +238,36 @@ GoRouter createRouter(AuthCubit authCubit) {
           const PendingApprovalsScreen(),
         ),
       ),
+      // ─── Communications Center (Phase 3) ───────────────────────
+      // admin + manager (employees blocked by `_isCommunicationsArea`). The
+      // static `/compose` route is declared BEFORE the `:broadcastId` detail
+      // route so it is never captured as an id.
+      GoRoute(
+        path: RouteNames.communications,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const CommunicationsScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.communicationsCompose,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const ComposeBroadcastScreen(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.communicationsDetailPattern,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          BroadcastDetailScreen(
+            broadcastId: state.pathParameters['broadcastId'] ?? '',
+            broadcast: state.extra is BroadcastEntity
+                ? state.extra as BroadcastEntity
+                : null,
+          ),
+        ),
+      ),
       GoRoute(
         path: RouteNames.login,
         pageBuilder: (context, state) => _slideTransition(
@@ -259,6 +301,15 @@ GoRouter createRouter(AuthCubit authCubit) {
         pageBuilder: (context, state) => _fadeTransition(
           state,
           const EmailVerificationPage(),
+        ),
+      ),
+      // In-app notification inbox — shared by every role (not under /admin or
+      // /manager, so no role guard blocks it).
+      GoRoute(
+        path: RouteNames.notifications,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const NotificationsScreen(),
         ),
       ),
       GoRoute(
@@ -344,6 +395,12 @@ bool _isAdminArea(String loc) =>
 bool _isManagerArea(String loc) =>
     loc == RouteNames.managerHome ||
     loc.startsWith('${RouteNames.managerHome}/');
+
+/// True when [loc] is anywhere inside the Communications Center
+/// (`/communications` or `/communications/...`) — admin + manager only.
+bool _isCommunicationsArea(String loc) =>
+    loc == RouteNames.communications ||
+    loc.startsWith('${RouteNames.communications}/');
 
 class _AuthStateNotifier extends ChangeNotifier {
   _AuthStateNotifier(AuthCubit cubit) {

@@ -7,7 +7,6 @@ import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
-import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
@@ -17,12 +16,21 @@ import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.da
 import 'package:fbro/features/schedule/domain/schedule_week.dart';
 import 'package:fbro/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:fbro/features/schedule/presentation/cubit/schedule_state.dart';
+import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
+import 'package:fbro/features/schedule/presentation/cubit/shift_swap_state.dart';
+import 'package:fbro/features/schedule/presentation/widgets/broken_assignment_banner.dart';
+import 'package:fbro/features/schedule/presentation/widgets/schedule_grid.dart';
 import 'package:fbro/features/schedule/presentation/widgets/schedule_helpers.dart';
+import 'package:fbro/features/schedule/presentation/widgets/shift_details_sheet.dart';
+import 'package:fbro/features/schedule/presentation/widgets/swap_alert_card.dart';
 
-/// The weekly-schedule editor body (Phase 7), shared by the manager (own branch)
-/// and admin (any branch) screens. Renders a week selector and the 7-day roster
-/// with Morning / Night slots; managers/admins assign and remove employees.
-/// Hosted inside a Scaffold provided by the page (so it can sit under a TabBar).
+/// The operations-control schedule surface (Phase 7 redesign), shared by the
+/// manager (own branch) and admin (any branch). A weekly **coverage heatmap**
+/// grid replaces the old vertical day cards: an admin sees every shift's
+/// staffing health at a glance, taps a cell to assign / remove / resolve, and
+/// reviews swap requests from a floating alert — answering "who's understaffed,
+/// what's broken, what needs approval" in seconds. Hosted in a Scaffold by the
+/// page.
 class ManagerScheduleView extends StatefulWidget {
   const ManagerScheduleView({super.key, required this.isAdmin});
 
@@ -36,6 +44,9 @@ class ManagerScheduleView extends StatefulWidget {
 class _ManagerScheduleViewState extends State<ManagerScheduleView> {
   UserEntity? _user;
 
+  /// Optional shift filter (the header "Shift filter"); null = both shifts.
+  ScheduleShift? _filter;
+
   @override
   void initState() {
     super.initState();
@@ -45,7 +56,6 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
   void _init() {
     _user = context.currentUser;
     if (widget.isAdmin) {
-      // Load the branch list for the selector; wait for a branch pick to load.
       context.read<BranchCubit>().load();
       context.read<ScheduleCubit>().load(branchId: '');
     } else {
@@ -55,14 +65,22 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocConsumer<ScheduleCubit, ScheduleState>(
-      listener: (context, state) =>
-          state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
-      builder: (context, state) => state.maybeWhen(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        loaded: (branchId, weekStart, schedule, members, busy) =>
-            _body(branchId, weekStart, schedule, members, busy),
-        orElse: () => const SizedBox.shrink(),
+    // An approved swap rewrites the roster — refresh the grid the moment a swap
+    // action settles (busy → idle), so coverage updates without a manual pull.
+    return BlocListener<ShiftSwapCubit, ShiftSwapState>(
+      listenWhen: (prev, curr) =>
+          prev.maybeWhen(loaded: (_, busy) => busy, orElse: () => false) &&
+          curr.maybeWhen(loaded: (_, busy) => !busy, orElse: () => false),
+      listener: (context, _) => context.read<ScheduleCubit>().refresh(),
+      child: BlocConsumer<ScheduleCubit, ScheduleState>(
+        listener: (context, state) =>
+            state.whenOrNull(error: (m) => AppSnackbar.error(context, m)),
+        builder: (context, state) => state.maybeWhen(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          loaded: (branchId, weekStart, schedule, members, busy) =>
+              _body(branchId, weekStart, schedule, members, busy),
+          orElse: () => const SizedBox.shrink(),
+        ),
       ),
     );
   }
@@ -78,89 +96,167 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     return Column(
       children: [
         if (busy) const LinearProgressIndicator(minHeight: 2),
-        if (widget.isAdmin) _branchSelector(branchId),
-        _weekSelector(weekStart, cubit),
+        _controls(branchId, weekStart, cubit),
         Expanded(
           child: RefreshIndicator(
             onRefresh: () => cubit.refresh(),
+            color: AppColors.primary,
+            backgroundColor: AppColors.darkSurface,
             child: _content(branchId, schedule, members),
           ),
         ),
+        _swapFooter(),
       ],
     );
   }
 
-  // ── Selectors ──────────────────────────────────────────────────
-  Widget _branchSelector(String branchId) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.pagePadding, AppSpacing.md, AppSpacing.pagePadding, 0),
-      child: BlocBuilder<BranchCubit, BranchState>(
-        builder: (context, state) {
-          final branches = state.maybeWhen(
-            loaded: (b, _) => b,
-            orElse: () => const <BranchEntity>[],
-          );
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: AppColors.darkSurface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.darkBorder),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: branchId.isEmpty ? null : branchId,
-                isExpanded: true,
-                hint: Text('Select a branch', style: AppTypography.body),
-                dropdownColor: AppColors.darkSurfaceElevated,
-                borderRadius: AppRadius.cardAll,
-                icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                    color: AppColors.textTertiary),
-                style: AppTypography.body.copyWith(color: AppColors.textPrimary),
-                items: [
-                  for (final b in branches)
-                    DropdownMenuItem(value: b.id, child: Text(b.name)),
-                ],
-                onChanged: (v) {
-                  if (v != null) context.read<ScheduleCubit>().selectBranch(v);
-                },
+  // ── Controls ───────────────────────────────────────────────────
+  Widget _controls(String branchId, DateTime weekStart, ScheduleCubit cubit) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, AppSpacing.sm,
+          AppSpacing.pagePadding, AppSpacing.md),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.darkBorder)),
+      ),
+      child: Column(
+        children: [
+          if (widget.isAdmin) ...[
+            _branchSelector(branchId),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          Row(
+            children: [
+              _weekStepper(Icons.chevron_left_rounded, cubit.previousWeek,
+                  'Previous week'),
+              Expanded(
+                child: Center(
+                  child: Column(
+                    children: [
+                      Text('Week of',
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.textTertiary)),
+                      Text(ScheduleWeek.rangeLabel(weekStart),
+                          style: AppTypography.label),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          );
-        },
+              _weekStepper(
+                  Icons.chevron_right_rounded, cubit.nextWeek, 'Next week'),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _shiftFilter(),
+        ],
       ),
     );
   }
 
-  Widget _weekSelector(DateTime weekStart, ScheduleCubit cubit) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.pagePadding, vertical: AppSpacing.md),
-      child: Row(
-        children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left_rounded,
-                color: AppColors.textSecondary),
-            onPressed: cubit.previousWeek,
-            tooltip: 'Previous week',
+  Widget _weekStepper(IconData icon, VoidCallback onTap, String tooltip) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(99),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppColors.darkBorder),
           ),
-          Expanded(
-            child: Column(
-              children: [
-                Text('Week of', style: AppTypography.caption),
-                Text(ScheduleWeek.rangeLabel(weekStart),
-                    style: AppTypography.label),
+          child: Icon(icon, size: 20, color: AppColors.textSecondary),
+        ),
+      ),
+    );
+  }
+
+  Widget _branchSelector(String branchId) {
+    return BlocBuilder<BranchCubit, BranchState>(
+      builder: (context, state) {
+        final branches = state.maybeWhen(
+          loaded: (b, _) => b,
+          orElse: () => const <BranchEntity>[],
+        );
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface,
+            borderRadius: AppRadius.lgAll,
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: branchId.isEmpty ? null : branchId,
+              isExpanded: true,
+              hint: Row(
+                children: [
+                  const Icon(Icons.store_mall_directory_outlined,
+                      size: 18, color: AppColors.textTertiary),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text('Select a branch', style: AppTypography.body),
+                ],
+              ),
+              dropdownColor: AppColors.darkSurfaceElevated,
+              borderRadius: AppRadius.cardAll,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                  color: AppColors.textTertiary),
+              style: AppTypography.label.copyWith(color: AppColors.textPrimary),
+              items: [
+                for (final b in branches)
+                  DropdownMenuItem(value: b.id, child: Text(b.name)),
               ],
+              onChanged: (v) {
+                if (v != null) context.read<ScheduleCubit>().selectBranch(v);
+              },
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right_rounded,
-                color: AppColors.textSecondary),
-            onPressed: cubit.nextWeek,
-            tooltip: 'Next week',
-          ),
+        );
+      },
+    );
+  }
+
+  Widget _shiftFilter() {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: AppRadius.fullAll,
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Row(
+        children: [
+          _filterChip('All', null),
+          _filterChip('Morning', ScheduleShift.morning),
+          _filterChip('Night', ScheduleShift.night),
         ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, ScheduleShift? value) {
+    final selected = _filter == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _filter = value),
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary : Colors.transparent,
+            borderRadius: AppRadius.fullAll,
+          ),
+          child: Text(
+            label,
+            style: AppTypography.labelSmall.copyWith(
+              color: selected ? AppColors.onPrimary : AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -172,22 +268,122 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     List<UserEntity> members,
   ) {
     if (branchId.isEmpty) {
-      return _centeredMessage(
-          Icons.store_mall_directory_outlined, 'Select a branch to view its schedule.');
+      return _centeredMessage(Icons.store_mall_directory_outlined,
+          'Select a branch to view its schedule.');
     }
-    if (schedule == null) {
-      return _emptySchedule();
-    }
+    if (schedule == null) return _emptySchedule();
+
+    final orphanCount = brokenSlots(schedule, members).length;
+    final grid = ScheduleGrid(
+      schedule: schedule,
+      members: members,
+      filter: _filter,
+      onCellTap: (day, shift) => showShiftDetailsSheet(
+        context: context,
+        day: day,
+        shift: shift,
+        canEdit: true,
+      ),
+    );
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, 0,
-          AppSpacing.pagePadding, AppSpacing.xxxl),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.pagePadding, AppSpacing.md, AppSpacing.pagePadding, AppSpacing.xl),
       children: [
-        for (final day in ScheduleDay.values)
-          _dayCard(day, schedule, members),
+        _coverageSummary(schedule, members),
+        const SizedBox(height: AppSpacing.md),
+        if (orphanCount > 0) ...[
+          BrokenAssignmentBanner(
+            count: orphanCount,
+            onReview: () => showResolveBrokenSheet(context),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        // The grid scrolls horizontally inside its own viewport.
+        SizedBox(height: grid.height, child: grid),
       ],
     );
   }
 
+  /// Neutral assignment snapshot — how many shifts have someone and how many are
+  /// still empty. No staffing target or quota is implied; an empty shift is a
+  /// fact for the admin's judgment, not a flagged fault.
+  Widget _coverageSummary(
+      WeeklyScheduleEntity schedule, List<UserEntity> members) {
+    var total = 0;
+    var filled = 0;
+    for (final day in ScheduleDay.values) {
+      for (final shift in ScheduleShift.values) {
+        if (_filter != null && shift != _filter) continue;
+        total++;
+        final valid =
+            validAssignments(schedule.employeesFor(day, shift), members).length;
+        if (valid > 0) filled++;
+      }
+    }
+    final empty = total - filled;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.calendar_month_rounded,
+              size: 20, color: AppColors.textSecondary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              empty == 0
+                  ? 'Every shift has someone assigned'
+                  : '$filled of $total shifts have someone',
+              style: AppTypography.label,
+            ),
+          ),
+          if (empty > 0) _summaryPill('$empty empty'),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryPill(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: AppRadius.fullAll,
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Text(text,
+          style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  // ── Swap footer ────────────────────────────────────────────────
+  Widget _swapFooter() {
+    return BlocBuilder<ShiftSwapCubit, ShiftSwapState>(
+      builder: (context, state) {
+        final count = state.maybeWhen(
+          loaded: (swaps, _) =>
+              swaps.where((s) => !s.status.isResolved).length,
+          orElse: () => 0,
+        );
+        return SwapAlertCard(
+          count: count,
+          onReview: () => showSwapQueueSheet(
+            context: context,
+            currentUid: _user?.uid ?? '',
+            showBranch: widget.isAdmin,
+          ),
+        );
+      },
+    );
+  }
+
+  // ── Empty / placeholder states ─────────────────────────────────
   Widget _emptySchedule() {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.pagePadding),
@@ -208,264 +404,14 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
                 .read<ScheduleCubit>()
                 .createSchedule(createdBy: _user?.uid),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.white,
-              foregroundColor: AppColors.textDark,
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.onPrimary,
             ),
             icon: const Icon(Icons.add_rounded),
             label: const Text('Create Schedule'),
           ),
         ),
       ],
-    );
-  }
-
-  Widget _dayCard(
-    ScheduleDay day,
-    WeeklyScheduleEntity schedule,
-    List<UserEntity> members,
-  ) {
-    final isToday = ScheduleDay.today() == day;
-    final covered = {
-      for (final shift in ScheduleShift.values)
-        ...schedule.employeesFor(day, shift),
-    }.length;
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.darkSurfaceElevated, AppColors.darkSurface],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: AppRadius.cardAll,
-        border: Border.all(
-            color: isToday ? AppColors.primary : AppColors.darkBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(day.label, style: AppTypography.label),
-              if (isToday) ...[
-                const SizedBox(width: AppSpacing.sm),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withAlpha(28),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text('Today',
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.primary)),
-                ),
-              ],
-              const Spacer(),
-              // Coverage indicator.
-              Icon(
-                covered == 0
-                    ? Icons.error_outline_rounded
-                    : Icons.people_alt_outlined,
-                size: 14,
-                color:
-                    covered == 0 ? AppColors.warning : AppColors.textTertiary,
-              ),
-              const SizedBox(width: 4),
-              Text('$covered',
-                  style: AppTypography.caption.copyWith(
-                    color: covered == 0
-                        ? AppColors.warning
-                        : AppColors.textSecondary,
-                  )),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          for (final shift in ScheduleShift.values) ...[
-            _shiftRow(day, shift, schedule, members),
-            if (shift != ScheduleShift.values.last)
-              const SizedBox(height: AppSpacing.md),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _shiftRow(
-    ScheduleDay day,
-    ScheduleShift shift,
-    WeeklyScheduleEntity schedule,
-    List<UserEntity> members,
-  ) {
-    final uids = schedule.employeesFor(day, shift);
-    final isMorning = shift == ScheduleShift.morning;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            // Shift badge.
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.darkSurface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.darkBorder),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    isMorning
-                        ? Icons.wb_sunny_outlined
-                        : Icons.nightlight_outlined,
-                    size: 14,
-                    color: isMorning ? AppColors.warning : AppColors.primary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(shift.label, style: AppTypography.labelSmall),
-                ],
-              ),
-            ),
-            const Spacer(),
-            TextButton.icon(
-              onPressed: () => _pickEmployee(day, shift, schedule, members),
-              icon: const Icon(Icons.person_add_alt_1_outlined, size: 16),
-              label: const Text('Add'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.primary,
-                textStyle: AppTypography.caption,
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        if (uids.isEmpty)
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 2),
-            child: Text('No one assigned', style: AppTypography.caption),
-          )
-        else
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
-            children: [
-              for (final uid in uids)
-                _employeeChip(
-                    uid,
-                    nameForUid(uid, members),
-                    userForUid(uid, members),
-                    () =>
-                        context.read<ScheduleCubit>().remove(day, shift, uid)),
-            ],
-          ),
-      ],
-    );
-  }
-
-  Widget _employeeChip(
-      String uid, String name, UserEntity? user, VoidCallback onRemove) {
-    return Container(
-      padding: const EdgeInsets.only(left: 5, right: 6, top: 5, bottom: 5),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurfaceElevated,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.darkBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (user != null)
-            UserAvatar.fromUser(user,
-                size: 22, ringColor: AppColors.darkSurfaceElevated)
-          else
-            UserAvatar(
-                name: name,
-                size: 22,
-                ringColor: AppColors.darkSurfaceElevated),
-          const SizedBox(width: 6),
-          Text(name, style: AppTypography.caption),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onRemove,
-            child: const Icon(Icons.close_rounded,
-                size: 14, color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _pickEmployee(
-    ScheduleDay day,
-    ScheduleShift shift,
-    WeeklyScheduleEntity schedule,
-    List<UserEntity> members,
-  ) {
-    final employees = members.where((u) => u.role.isEmployee).toList();
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.darkSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetCtx) => Padding(
-        padding: EdgeInsets.only(
-          left: AppSpacing.pagePadding,
-          right: AppSpacing.pagePadding,
-          top: AppSpacing.lg,
-          bottom: MediaQuery.of(sheetCtx).viewInsets.bottom + AppSpacing.xl,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${day.label} · ${shift.label}', style: AppTypography.h3),
-            const SizedBox(height: AppSpacing.lg),
-            if (employees.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                child: Text('No employees in this branch yet.',
-                    style: AppTypography.bodySmall),
-              )
-            else
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 360),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: employees.length,
-                  itemBuilder: (context, i) {
-                    final u = employees[i];
-                    final assigned =
-                        schedule.isAssigned(u.uid, day, shift);
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: UserAvatar.fromUser(u, size: 40),
-                      title: Text(userDisplayName(u), style: AppTypography.label),
-                      subtitle: Text(u.email, style: AppTypography.caption),
-                      trailing: assigned
-                          ? const Icon(Icons.check_rounded,
-                              color: AppColors.success, size: 18)
-                          : const Icon(Icons.add_rounded,
-                              color: AppColors.textTertiary, size: 18),
-                      onTap: () {
-                        if (!assigned) {
-                          context
-                              .read<ScheduleCubit>()
-                              .assign(day, shift, u.uid);
-                        }
-                        Navigator.of(sheetCtx).pop();
-                      },
-                    );
-                  },
-                ),
-              ),
-          ],
-        ),
-      ),
     );
   }
 

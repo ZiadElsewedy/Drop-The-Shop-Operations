@@ -1,25 +1,31 @@
 import 'dart:io';
 
-import 'package:fbro/core/enums/task_status.dart';
+import 'package:fbro/core/enums/attachment_type.dart';
 import 'package:fbro/core/errors/exceptions.dart';
 import 'package:fbro/core/errors/failures.dart';
 import 'package:fbro/features/task/data/datasources/task_remote_datasource.dart';
 import 'package:fbro/features/task/data/models/task_model.dart';
 import 'package:fbro/features/task/data/models/task_template_model.dart';
+import 'package:fbro/features/task/domain/entities/task_attachment.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 import 'package:fbro/features/task/domain/repositories/task_repository.dart';
+import 'package:fbro/features/task/domain/task_ordering.dart';
 
 class TaskRepositoryImpl implements TaskRepository {
   final TaskRemoteDataSource _remote;
 
   TaskRepositoryImpl(this._remote);
 
+  /// Maps models → entities, then orders newest-first (pending timestamps on top
+  /// — see [sortTasksNewestFirst]).
+  List<TaskEntity> _newestFirst(List<TaskModel> models) =>
+      sortTasksNewestFirst(models.map((m) => m.toEntity()).toList());
+
   @override
   Future<List<TaskEntity>> getAllTasks() async {
     try {
-      final models = await _remote.getAllTasks();
-      return models.map((m) => m.toEntity()).toList();
+      return _newestFirst(await _remote.getAllTasks());
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
@@ -28,8 +34,7 @@ class TaskRepositoryImpl implements TaskRepository {
   @override
   Future<List<TaskEntity>> getTasksByBranch(String branchId) async {
     try {
-      final models = await _remote.getTasksByBranch(branchId);
-      return models.map((m) => m.toEntity()).toList();
+      return _newestFirst(await _remote.getTasksByBranch(branchId));
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
@@ -38,8 +43,7 @@ class TaskRepositoryImpl implements TaskRepository {
   @override
   Future<List<TaskEntity>> getEmployeeTasks(String employeeId) async {
     try {
-      final models = await _remote.getEmployeeTasks(employeeId);
-      return models.map((m) => m.toEntity()).toList();
+      return _newestFirst(await _remote.getEmployeeTasks(employeeId));
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
@@ -47,17 +51,15 @@ class TaskRepositoryImpl implements TaskRepository {
 
   @override
   Stream<List<TaskEntity>> watchAllTasks() =>
-      _remote.watchAllTasks().map((l) => l.map((m) => m.toEntity()).toList());
+      _remote.watchAllTasks().map(_newestFirst);
 
   @override
-  Stream<List<TaskEntity>> watchTasksByBranch(String branchId) => _remote
-      .watchTasksByBranch(branchId)
-      .map((l) => l.map((m) => m.toEntity()).toList());
+  Stream<List<TaskEntity>> watchTasksByBranch(String branchId) =>
+      _remote.watchTasksByBranch(branchId).map(_newestFirst);
 
   @override
-  Stream<List<TaskEntity>> watchEmployeeTasks(String employeeId) => _remote
-      .watchEmployeeTasks(employeeId)
-      .map((l) => l.map((m) => m.toEntity()).toList());
+  Stream<List<TaskEntity>> watchEmployeeTasks(String employeeId) =>
+      _remote.watchEmployeeTasks(employeeId).map(_newestFirst);
 
   @override
   Future<TaskEntity?> getTask(String taskId) async {
@@ -115,40 +117,25 @@ class TaskRepositoryImpl implements TaskRepository {
   }
 
   @override
-  Future<void> updateStatus({
+  Future<TaskAttachment> uploadAttachment({
     required String taskId,
-    required TaskStatus status,
+    required File file,
+    required AttachmentType type,
+    required String uploadedBy,
+    String? uploadedByName,
+    int? durationMs,
+    void Function(int transferred, int total)? onProgress,
   }) async {
     try {
-      await _remote.updateStatus(taskId: taskId, status: status);
-    } on ServerException catch (e) {
-      throw ServerFailure(e.message);
-    }
-  }
-
-  @override
-  Future<void> reviewTask({
-    required String taskId,
-    required bool approved,
-    required String reviewerId,
-    String? reviewNotes,
-  }) async {
-    try {
-      await _remote.reviewTask(
+      return await _remote.uploadAttachment(
         taskId: taskId,
-        approved: approved,
-        reviewerId: reviewerId,
-        reviewNotes: reviewNotes,
+        file: file,
+        type: type,
+        uploadedBy: uploadedBy,
+        uploadedByName: uploadedByName,
+        durationMs: durationMs,
+        onProgress: onProgress,
       );
-    } on ServerException catch (e) {
-      throw ServerFailure(e.message);
-    }
-  }
-
-  @override
-  Future<String> uploadProof(String taskId, File file) async {
-    try {
-      return await _remote.uploadProof(taskId, file);
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

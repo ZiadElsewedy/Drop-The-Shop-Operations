@@ -85,33 +85,96 @@ class _SplashPageState extends State<SplashPage>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.darkBg,
-      body: Center(
-        child: AnimatedBuilder(
-          animation: _controller,
-          builder: (context, child) => Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Logo dot
-              FadeTransition(
-                opacity: _logoOpacity,
-                child: ScaleTransition(
-                  scale: _logoScale,
-                  child: const DropLogo(height: 96),
+      body: Stack(
+        children: [
+          // Soft indigo glow bloom behind the brand lockup.
+          Center(
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    AppColors.primary.withValues(alpha: 0.18),
+                    AppColors.transparent,
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              FadeTransition(
-                opacity: _textOpacity,
-                child: Text(
-                  'Loading...',
-                  style: AppTypography.bodySmall.copyWith(
-                    color: AppColors.textTertiary,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          Center(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, child) => Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FadeTransition(
+                    opacity: _logoOpacity,
+                    child: ScaleTransition(
+                      scale: _logoScale,
+                      child: const DropLogo(height: 92),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  FadeTransition(
+                    opacity: _textOpacity,
+                    child: Column(
+                      children: [
+                        Text(
+                          'THE SHOP',
+                          style: AppTypography.labelLarge.copyWith(
+                            letterSpacing: 6,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Operations Management System',
+                          style: AppTypography.bodySmall.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Loading bar + version pinned to the bottom.
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 56),
+              child: FadeTransition(
+                opacity: _textOpacity,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 150,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: const LinearProgressIndicator(
+                          minHeight: 4,
+                          color: AppColors.primary,
+                          backgroundColor: AppColors.darkSurfaceElevated,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      'Version 1.0.0',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textTertiary),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -117,6 +117,17 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
     }
   }
 
+  /// Read-only fetch of users awaiting approval (does not touch the list state)
+  /// — used by the Admin Home "Pending approvals" section, which must not
+  /// override whatever slice another screen has loaded into the shared cubit.
+  Future<List<UserEntity>> pendingUsers() async {
+    try {
+      return await _users.getPendingUsers();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   Future<void> _mutate(Future<void> Function() action) async {
     if (_busy) return;
     final prev = _current;

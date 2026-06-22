@@ -37,11 +37,11 @@
 | E4 | **Login** (after sign-out) with the same credentials | Lands directly on employee home (approved + active). | ✅ | ☐ |
 | E5 | **Open My Schedule** (calendar icon) | "My Week" tab loads. Shows today's shift / "Off today" + "My week" list. If the manager hasn't published this week → "No schedule published for this week yet." | ✅ (needs P1) | ☐ |
 | E6 | **See teammates** — on a day/shift you're assigned, check "Working with" + "Manager" on the Today card | Coworker names on the same shift + the branch manager's name render (not "Unknown"). | ✅ (needs P1) | ☐ |
-| E7 | **Receive assigned task** — (manager assigns you a task elsewhere) open My Tasks (✓ icon), pull to refresh | The new task appears with status **Pending**. *(Not pushed — appears on refresh/open.)* | ✅ (refresh) | ☐ |
-| E8 | **Start task** — tap **Start** | Status → **Started**; list updates immediately. | ✅ | ☐ |
-| E9 | **Complete task** — tap **Complete**, add notes | Sheet opens; status → **Completed** after submit. | ✅ | ☐ |
-| E10 | **Upload proof** — in the Complete sheet, attach an image, then Mark Completed | Image uploads; the card shows the proof thumbnail. | ✅ (needs P2) | ☐ |
-| E11 | **Wait for review** — tap **Submit for Review** | Status → **Waiting Review**; no further employee actions. | ✅ | ☐ |
+| E7 | **Receive assigned task** — (manager assigns you a task elsewhere) watch My Tasks (✓ icon) | The new task appears **automatically** — task lists are realtime Firestore streams; no pull-to-refresh needed. | ✅ real-time | ☐ |
+| E8 | **Start task** — open the task card → tap **Start Task** | Status → **In Progress**; task details screen stays open. | ✅ | ☐ |
+| E9 | **Tick checklist** (if present) — tap each required item | Items check off; progress bar advances; "Mark Complete" only activates when all required items are done. | ✅ | ☐ |
+| E10 | **Complete and submit** — tap **Mark Complete** → add optional notes → optional proof image → tap **Complete & Submit** | Status → **In Review** in one action; task disappears from Active, appears in the In Review section. | ✅ | ☐ |
+| E11 | **Upload proof** — in step E10, attach an image before tapping **Complete & Submit** | Image uploads; proof visible in task details (needs P2). If Storage disabled, task still submits with a warning snackbar. | ✅ (needs P2 for upload; resilient without) | ☐ |
 
 ---
 
@@ -81,13 +81,13 @@
 | # | Check | Expected | Code-verified | On-device |
 | - | ----- | -------- | ------------- | --------- |
 | R1 | **Approvals** — pending employee's app open; admin approves on another device | Redirects **instantly** (push via Firestore listener). | ✅ real-time | ☐ |
-| R2 | **Task assignment** — employee's My Tasks open; manager assigns | Appears **after pull-to-refresh / reopen** (not pushed). | ⚠️ refresh-based | ☐ |
+| R2 | **Task assignment** — employee's My Tasks open; manager assigns | Appears **automatically** — task lists are realtime Firestore snapshot streams (`TaskCubit`). No refresh needed. | ✅ real-time | ☐ |
 | R3 | **Schedules** — employee's My Schedule open; manager edits | Appears **after pull-to-refresh / reopen**. | ⚠️ refresh-based | ☐ |
 | R4 | **Shift swaps** — target/manager sees a new request | Appears **after pull-to-refresh / reopen**; the acting user's own list updates immediately. | ⚠️ refresh-based | ☐ |
 
-> Only the approval gate is push. All other lists are correct after a refresh — by
-> design (the data layer is Future-based, not streams). Note this so testers don't
-> log "stale list" as a bug.
+> **Realtime:** approval gate + task lists are push (live streams). Schedule /
+> branch / admin / swap lists are correct after a pull-to-refresh — by design
+> (Future-based data layer). Don't log "stale list" as a bug for those.
 
 ---
 
@@ -119,15 +119,15 @@
 ## Known limitations (expected — do NOT file as bugs)
 
 - **Managers cannot approve users** — approval is admin-only by design.
-- **Real-time** is approval-only; task/schedule/swap/dashboard lists update on
-  refresh, not push.
+- **Real-time scope:** task lists are live streams (appear immediately). Schedule /
+  admin / swap / branch lists update on pull-to-refresh — by design.
 - **Push notification delivery** is not implemented (no server trigger); only token
   registration + foreground snackbars exist.
 - **Rejected users** see the generic "Pending Approval" screen (access is correctly
   blocked; the copy just doesn't say "rejected").
-- **Admin task creation** uses a free-text branch field — type the exact branch id
-  or the task is orphaned (managers use their own branch and are unaffected).
 - **Account deletion** removes the Auth account but not the `users/{uid}` doc.
+- **Recurring tasks** auto-spawn the next instance on approve; the newly created task starts as **Pending** and must be separately assigned if the assignees need to change.
+- **Activity log** is embedded in the task document (no separate subcollection). Query-based analytics on individual timeline entries are not supported; roll-up counts by status/branchId are available via the statistics feature.
 
 ## Sign-off
 

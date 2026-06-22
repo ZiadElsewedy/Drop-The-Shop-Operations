@@ -1,12 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fbro/core/constants/app_constants.dart';
-import 'package:fbro/core/enums/task_status.dart';
+import 'package:fbro/core/enums/attachment_type.dart';
 import 'package:fbro/core/errors/exceptions.dart';
 import 'package:fbro/features/task/data/models/task_model.dart';
 import 'package:fbro/features/task/data/models/task_template_model.dart';
+import 'package:fbro/features/task/domain/entities/task_attachment.dart';
 
 abstract class TaskRemoteDataSource {
   Future<List<TaskModel>> getAllTasks();
@@ -28,17 +30,19 @@ abstract class TaskRemoteDataSource {
     required List<String> employeeIds,
     String? assignedShiftId,
   });
-  Future<void> updateStatus({
+
+  /// Uploads one media file to `tasks/{taskId}/attachments/{id}.<ext>` (unique
+  /// id, never overwrites) and returns the resolved [TaskAttachment]. Reports
+  /// byte progress via [onProgress] (transferred, total) for the loading overlay.
+  Future<TaskAttachment> uploadAttachment({
     required String taskId,
-    required TaskStatus status,
+    required File file,
+    required AttachmentType type,
+    required String uploadedBy,
+    String? uploadedByName,
+    int? durationMs,
+    void Function(int transferred, int total)? onProgress,
   });
-  Future<void> reviewTask({
-    required String taskId,
-    required bool approved,
-    required String reviewerId,
-    String? reviewNotes,
-  });
-  Future<String> uploadProof(String taskId, File file);
 
   // ─── Task templates (reusable blueprints) ──────────────────────
   Future<List<TaskTemplateModel>> getTemplates();
@@ -58,13 +62,20 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   CollectionReference<Map<String, dynamic>> get _templates =>
       _firestore.collection(AppConstants.taskTemplatesCollection);
 
+  // Newest-first ordering: the admin query orders on a single field
+  // (auto-indexed by Firestore, no setup). The branch / employee queries
+  // **filter** (`where` / `arrayContains`); adding `orderBy` on a *different*
+  // field would require a composite index and break loading until it's deployed,
+  // so those are intentionally NOT ordered server-side — the repository applies
+  // `sortTasksNewestFirst` instead (a per-branch / per-employee task list is
+  // small, so the client sort is cheap and never needs an index).
+  static const String _createdAt = 'createdAt';
+
   @override
   Future<List<TaskModel>> getAllTasks() async {
     try {
-      final snap = await _tasks.get();
-      return snap.docs
-          .map((d) => TaskModel.fromMap(d.data(), id: d.id))
-          .toList();
+      final snap = await _tasks.orderBy(_createdAt, descending: true).get();
+      return _mapSnap(snap);
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to load tasks.');
     }
@@ -74,9 +85,7 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   Future<List<TaskModel>> getTasksByBranch(String branchId) async {
     try {
       final snap = await _tasks.where('branchId', isEqualTo: branchId).get();
-      return snap.docs
-          .map((d) => TaskModel.fromMap(d.data(), id: d.id))
-          .toList();
+      return _mapSnap(snap);
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to load branch tasks.');
     }
@@ -89,9 +98,7 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
       // in the `assigneeIds` array.
       final snap =
           await _tasks.where('assigneeIds', arrayContains: employeeId).get();
-      return snap.docs
-          .map((d) => TaskModel.fromMap(d.data(), id: d.id))
-          .toList();
+      return _mapSnap(snap);
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to load your tasks.');
     }
@@ -102,11 +109,13 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
 
   @override
   Stream<List<TaskModel>> watchAllTasks() =>
-      _tasks.snapshots().map(_mapSnap);
+      _tasks.orderBy(_createdAt, descending: true).snapshots().map(_mapSnap);
 
   @override
-  Stream<List<TaskModel>> watchTasksByBranch(String branchId) =>
-      _tasks.where('branchId', isEqualTo: branchId).snapshots().map(_mapSnap);
+  Stream<List<TaskModel>> watchTasksByBranch(String branchId) => _tasks
+      .where('branchId', isEqualTo: branchId)
+      .snapshots()
+      .map(_mapSnap);
 
   @override
   Stream<List<TaskModel>> watchEmployeeTasks(String employeeId) => _tasks
@@ -182,60 +191,121 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     }
   }
 
-  @override
-  Future<void> updateStatus({
-    required String taskId,
-    required TaskStatus status,
-  }) async {
-    try {
-      await _tasks.doc(taskId).set({
-        'status': status.value,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-    } on FirebaseException catch (e) {
-      throw ServerException(e.message ?? 'Failed to update task status.');
-    }
-  }
+  /// Hard ceiling so a misconfigured/disabled Storage bucket or a dropped
+  /// connection fails cleanly instead of hanging the submit flow indefinitely.
+  /// Videos can be large, so the window is generous.
+  static const _uploadTimeout = Duration(seconds: 180);
 
   @override
-  Future<void> reviewTask({
+  Future<TaskAttachment> uploadAttachment({
     required String taskId,
-    required bool approved,
-    required String reviewerId,
-    String? reviewNotes,
+    required File file,
+    required AttachmentType type,
+    required String uploadedBy,
+    String? uploadedByName,
+    int? durationMs,
+    void Function(int transferred, int total)? onProgress,
   }) async {
+    // Unique id per upload → files are never overwritten (each attachment is
+    // preserved). A fresh Firestore push id is a guaranteed-unique 20-char id.
+    final id = _tasks.doc().id;
+    final ext = _extensionFor(file.path, type);
+    final upload = _storage
+        .ref('${AppConstants.tasksCollection}/$taskId/attachments/$id.$ext')
+        .putFile(file, SettableMetadata(contentType: _contentType(ext, type)));
+    // Live byte progress for the shared loading overlay.
+    final sub = upload.snapshotEvents
+        .listen((s) => onProgress?.call(s.bytesTransferred, s.totalBytes));
     try {
-      await _tasks.doc(taskId).set({
-        'status':
-            (approved ? TaskStatus.approved : TaskStatus.rejected).value,
-        if (approved) ...{
-          'approvedBy': reviewerId,
-          'approvedAt': FieldValue.serverTimestamp(),
-        } else ...{
-          'rejectedBy': reviewerId,
-          'rejectedAt': FieldValue.serverTimestamp(),
+      final snapshot = await upload.timeout(
+        _uploadTimeout,
+        onTimeout: () {
+          upload.cancel();
+          throw const ServerException(
+              'Upload timed out. Check your connection and try again.');
         },
-        'reviewNotes': ?reviewNotes,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      );
+      final url =
+          await snapshot.ref.getDownloadURL().timeout(const Duration(seconds: 30));
+      return TaskAttachment(
+        id: id,
+        url: url,
+        type: type,
+        uploadedAt: DateTime.now(),
+        uploadedBy: uploadedBy,
+        uploadedByName: uploadedByName,
+        durationMs: durationMs,
+      );
+    } on TimeoutException {
+      throw const ServerException(
+          'Upload timed out. Check your connection and try again.');
     } on FirebaseException catch (e) {
-      throw ServerException(e.message ?? 'Failed to review task.');
+      throw ServerException(_storageError(e));
+    } finally {
+      await sub.cancel();
     }
   }
 
-  @override
-  Future<String> uploadProof(String taskId, File file) async {
-    try {
-      // Fixed path → re-uploading overwrites the previous proof. Firebase issues
-      // a fresh download token on overwrite, so the saved URL changes.
-      final ref = _storage.ref('${AppConstants.tasksCollection}/$taskId/proof.jpg');
-      final snapshot = await ref.putFile(
-        file,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      return await snapshot.ref.getDownloadURL();
-    } on FirebaseException catch (e) {
-      throw ServerException(e.message ?? 'Proof upload failed. Please try again.');
+  /// Lower-case file extension, falling back to a sensible default per [type].
+  static String _extensionFor(String path, AttachmentType type) {
+    final dot = path.lastIndexOf('.');
+    if (dot != -1 && dot < path.length - 1) {
+      final ext = path.substring(dot + 1).toLowerCase();
+      if (ext.isNotEmpty && ext.length <= 5) return ext;
+    }
+    return type.isVideo ? 'mp4' : 'jpg';
+  }
+
+  /// MIME type from extension (falls back to a generic image/video type).
+  static String _contentType(String ext, AttachmentType type) {
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      case 'gif':
+        return 'image/gif';
+      case 'mp4':
+        return 'video/mp4';
+      case 'mov':
+        return 'video/quicktime';
+      case 'm4v':
+        return 'video/x-m4v';
+      case 'webm':
+        return 'video/webm';
+      default:
+        return type.isVideo ? 'video/mp4' : 'image/jpeg';
+    }
+  }
+
+  /// Translates a Storage [FirebaseException] into an actionable message.
+  ///
+  /// The previous implementation blamed *every* failure on the network, which
+  /// masked the real cause: an `unauthorized` / `object-not-found` error almost
+  /// always means the Storage rules aren't deployed or the bucket isn't enabled
+  /// — not a bad connection. Surfacing the real code is what makes the proof
+  /// pipeline diagnosable in the field.
+  static String _storageError(FirebaseException e) {
+    switch (e.code) {
+      case 'unauthorized':
+      case 'unauthenticated':
+        return 'Upload was blocked by Storage permissions (${e.code}). '
+            'Firebase Storage rules likely need to be deployed.';
+      case 'object-not-found':
+      case 'bucket-not-found':
+      case 'project-not-found':
+        return 'Firebase Storage isn\'t set up for this project (${e.code}). '
+            'Enable Storage in the Firebase console, then retry.';
+      case 'retry-limit-exceeded':
+      case 'canceled':
+        return 'Upload failed — check your connection and try again.';
+      default:
+        return e.message ?? 'Upload failed (${e.code}).';
     }
   }
 

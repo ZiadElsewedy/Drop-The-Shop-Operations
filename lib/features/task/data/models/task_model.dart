@@ -1,9 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fbro/core/extensions/firestore_extensions.dart';
+import 'package:fbro/core/enums/attachment_type.dart';
+import 'package:fbro/core/enums/recurrence_frequency.dart';
+import 'package:fbro/core/enums/schedule_shift.dart';
 import 'package:fbro/core/enums/task_type.dart';
 import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/enums/task_priority.dart';
+import 'package:fbro/features/task/domain/entities/activity_entry.dart';
 import 'package:fbro/features/task/domain/entities/checklist_item.dart';
+import 'package:fbro/features/task/domain/entities/recurrence_config.dart';
+import 'package:fbro/features/task/domain/entities/task_attachment.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 
 /// Firestore (de)serialization for [TaskEntity] — collection `tasks/{taskId}`.
@@ -26,14 +32,22 @@ class TaskModel {
   final List<ChecklistItem> checklist;
   final String? createdBy;
   final String? assignedShiftId;
+  final ScheduleShift? shift;
   final DateTime? deadline;
   final String? notes;
   final String? proofImageUrl;
+  final DateTime? startedAt;
+  final DateTime? submittedAt;
   final String? approvedBy;
   final DateTime? approvedAt;
   final String? rejectedBy;
   final DateTime? rejectedAt;
   final String? reviewNotes;
+  final int revisionNumber;
+  final bool requiresRework;
+  final String? rejectionReason;
+  final RecurrenceConfig? recurrence;
+  final List<ActivityEntry> activityLog;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -49,14 +63,22 @@ class TaskModel {
     this.checklist = const [],
     this.createdBy,
     this.assignedShiftId,
+    this.shift,
     this.deadline,
     this.notes,
     this.proofImageUrl,
+    this.startedAt,
+    this.submittedAt,
     this.approvedBy,
     this.approvedAt,
     this.rejectedBy,
     this.rejectedAt,
     this.reviewNotes,
+    this.revisionNumber = 0,
+    this.requiresRework = false,
+    this.rejectionReason,
+    this.recurrence,
+    this.activityLog = const [],
     this.createdAt,
     this.updatedAt,
   });
@@ -73,14 +95,22 @@ class TaskModel {
         checklist: _checklistFromList(map['checklist']),
         createdBy: map['createdBy'] as String?,
         assignedShiftId: map['assignedShiftId'] as String?,
+        shift: ScheduleShift.fromStringOrNull(map['shift'] as String?),
         deadline: map.date('deadline'),
         notes: map['notes'] as String?,
         proofImageUrl: map['proofImageUrl'] as String?,
+        startedAt: map.date('startedAt'),
+        submittedAt: map.date('submittedAt'),
         approvedBy: map['approvedBy'] as String?,
         approvedAt: map.date('approvedAt'),
         rejectedBy: map['rejectedBy'] as String?,
         rejectedAt: map.date('rejectedAt'),
         reviewNotes: map['reviewNotes'] as String?,
+        revisionNumber: (map['revisionNumber'] as num?)?.toInt() ?? 0,
+        requiresRework: map['requiresRework'] as bool? ?? false,
+        rejectionReason: map['rejectionReason'] as String?,
+        recurrence: _recurrenceFromMap(map['recurrence']),
+        activityLog: _activityLogFromList(map['activityLog']),
         createdAt: map.date('createdAt'),
         updatedAt: map.date('updatedAt'),
       );
@@ -97,14 +127,22 @@ class TaskModel {
         checklist: e.checklist,
         createdBy: e.createdBy,
         assignedShiftId: e.assignedShiftId,
+        shift: e.shift,
         deadline: e.deadline,
         notes: e.notes,
         proofImageUrl: e.proofImageUrl,
+        startedAt: e.startedAt,
+        submittedAt: e.submittedAt,
         approvedBy: e.approvedBy,
         approvedAt: e.approvedAt,
         rejectedBy: e.rejectedBy,
         rejectedAt: e.rejectedAt,
         reviewNotes: e.reviewNotes,
+        revisionNumber: e.revisionNumber,
+        requiresRework: e.requiresRework,
+        rejectionReason: e.rejectionReason,
+        recurrence: e.recurrence,
+        activityLog: e.activityLog,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
       );
@@ -126,14 +164,22 @@ class TaskModel {
         'checklist': _checklistToList(checklist),
         'createdBy': createdBy,
         'assignedShiftId': assignedShiftId,
+        'shift': shift?.value,
         'deadline': deadline == null ? null : Timestamp.fromDate(deadline!),
         'notes': notes,
         'proofImageUrl': proofImageUrl,
+        'startedAt': startedAt == null ? null : Timestamp.fromDate(startedAt!),
+        'submittedAt': submittedAt == null ? null : Timestamp.fromDate(submittedAt!),
         'approvedBy': approvedBy,
         'approvedAt': approvedAt == null ? null : Timestamp.fromDate(approvedAt!),
         'rejectedBy': rejectedBy,
         'rejectedAt': rejectedAt == null ? null : Timestamp.fromDate(rejectedAt!),
         'reviewNotes': reviewNotes,
+        'revisionNumber': revisionNumber,
+        'requiresRework': requiresRework,
+        'rejectionReason': rejectionReason,
+        'recurrence': _recurrenceToMap(recurrence),
+        'activityLog': _activityLogToList(activityLog),
       };
 
   /// Returns a copy with the Firestore-generated [id] applied (used on create).
@@ -149,14 +195,22 @@ class TaskModel {
         checklist: checklist,
         createdBy: createdBy,
         assignedShiftId: assignedShiftId,
+        shift: shift,
         deadline: deadline,
         notes: notes,
         proofImageUrl: proofImageUrl,
+        startedAt: startedAt,
+        submittedAt: submittedAt,
         approvedBy: approvedBy,
         approvedAt: approvedAt,
         rejectedBy: rejectedBy,
         rejectedAt: rejectedAt,
         reviewNotes: reviewNotes,
+        revisionNumber: revisionNumber,
+        requiresRework: requiresRework,
+        rejectionReason: rejectionReason,
+        recurrence: recurrence,
+        activityLog: activityLog,
         createdAt: createdAt,
         updatedAt: updatedAt,
       );
@@ -173,14 +227,22 @@ class TaskModel {
         checklist: checklist,
         createdBy: createdBy,
         assignedShiftId: assignedShiftId,
+        shift: shift,
         deadline: deadline,
         notes: notes,
         proofImageUrl: proofImageUrl,
+        startedAt: startedAt,
+        submittedAt: submittedAt,
         approvedBy: approvedBy,
         approvedAt: approvedAt,
         rejectedBy: rejectedBy,
         rejectedAt: rejectedAt,
         reviewNotes: reviewNotes,
+        revisionNumber: revisionNumber,
+        requiresRework: requiresRework,
+        rejectionReason: rejectionReason,
+        recurrence: recurrence,
+        activityLog: activityLog,
         createdAt: createdAt,
         updatedAt: updatedAt,
       );
@@ -226,6 +288,99 @@ class TaskModel {
             'completed': i.completed,
             'completedAt':
                 i.completedAt == null ? null : Timestamp.fromDate(i.completedAt!),
+          },
+      ];
+
+  static RecurrenceConfig? _recurrenceFromMap(dynamic raw) {
+    if (raw is! Map) return null;
+    return RecurrenceConfig(
+      frequency: RecurrenceFrequency.fromString(raw['frequency'] as String?),
+      interval: (raw['interval'] as int?) ?? 1,
+      weekday: (raw['weekday'] as int?) ?? 1,
+      hour: (raw['hour'] as int?) ?? 9,
+      minute: (raw['minute'] as int?) ?? 0,
+    );
+  }
+
+  static Map<String, dynamic>? _recurrenceToMap(RecurrenceConfig? r) {
+    if (r == null) return null;
+    return {
+      'frequency': r.frequency.value,
+      'interval': r.interval,
+      'weekday': r.weekday,
+      'hour': r.hour,
+      'minute': r.minute,
+    };
+  }
+
+  static List<ActivityEntry> _activityLogFromList(dynamic raw) {
+    if (raw is! List) return const [];
+    final result = <ActivityEntry>[];
+    for (final e in raw) {
+      if (e is Map) {
+        final at = (e['at'] as Timestamp?)?.toDate();
+        if (at == null) continue;
+        result.add(ActivityEntry(
+          status: e['status'] as String? ?? '',
+          actorId: e['actorId'] as String? ?? '',
+          actorName: e['actorName'] as String?,
+          at: at,
+          note: e['note'] as String?,
+          attachments: _attachmentsFromList(e['attachments']),
+        ));
+      }
+    }
+    return result;
+  }
+
+  static List<Map<String, dynamic>> _activityLogToList(
+          List<ActivityEntry> log) =>
+      [
+        for (final e in log)
+          {
+            'status': e.status,
+            'actorId': e.actorId,
+            'actorName': e.actorName,
+            'at': Timestamp.fromDate(e.at),
+            'note': e.note,
+            'attachments': _attachmentsToList(e.attachments),
+          },
+      ];
+
+  static List<TaskAttachment> _attachmentsFromList(dynamic raw) {
+    if (raw is! List) return const [];
+    final result = <TaskAttachment>[];
+    for (final a in raw) {
+      if (a is Map) {
+        final url = a['url'] as String? ?? '';
+        if (url.isEmpty) continue;
+        result.add(TaskAttachment(
+          id: a['id'] as String? ?? '',
+          url: url,
+          type: AttachmentType.fromString(a['type'] as String?),
+          uploadedAt:
+              (a['uploadedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+          uploadedBy: a['uploadedBy'] as String? ?? '',
+          uploadedByName: a['uploadedByName'] as String?,
+          durationMs: (a['durationMs'] as num?)?.toInt(),
+        ));
+      }
+    }
+    return result;
+  }
+
+  static List<Map<String, dynamic>> _attachmentsToList(
+          List<TaskAttachment> items) =>
+      [
+        for (final a in items)
+          {
+            'id': a.id,
+            'url': a.url,
+            'type': a.type.value,
+            'uploadedAt': Timestamp.fromDate(a.uploadedAt),
+            'uploadedBy': a.uploadedBy,
+            'uploadedByName': a.uploadedByName,
+            'durationMs': a.durationMs,
           },
       ];
 }

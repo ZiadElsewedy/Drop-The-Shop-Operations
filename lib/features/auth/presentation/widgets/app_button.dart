@@ -135,10 +135,11 @@ class _PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: AppColors.white,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
         borderRadius: AppRadius.buttonAll,
+        boxShadow: AppColors.primaryGlow(),
       ),
       child: Center(child: _buildChild()),
     );
@@ -151,11 +152,11 @@ class _PrimaryButton extends StatelessWidget {
         height: 22,
         child: CircularProgressIndicator(
           strokeWidth: 2.5,
-          color: AppColors.textDark,
+          color: AppColors.onPrimary,
         ),
       );
     }
-    final textStyle = AppTypography.labelLarge.copyWith(color: AppColors.textDark);
+    final textStyle = AppTypography.labelLarge.copyWith(color: AppColors.onPrimary);
     if (icon != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,

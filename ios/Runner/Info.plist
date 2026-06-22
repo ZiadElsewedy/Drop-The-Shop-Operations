@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>FBRO</string>
+	<string>DROP</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>fbro</string>
+	<string>DROP</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -38,9 +38,11 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>D R O P needs access to your camera so you can take a profile picture.</string>
+	<string>D R O P needs access to your camera so you can take a profile picture and capture task proof.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>D R O P needs access to your microphone so you can record video proof for tasks.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>D R O P needs access to your photos so you can set a profile picture and cover image.</string>
+	<string>D R O P needs access to your photos so you can set a profile picture and attach task proof.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

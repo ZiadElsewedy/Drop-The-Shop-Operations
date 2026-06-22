@@ -1,17 +1,32 @@
-# fbro
+# DROP
 
-A new Flutter project.
+**DROP — Operations Management System.** A role-based branch/shift operations
+app (admin · manager · employee) for running daily branch work: task assignment
+and review with proof, weekly scheduling and shift swaps, branch administration,
+and live operations dashboards.
 
-## Getting Started
+> The Flutter/Dart package identifier remains `fbro` for build stability — only
+> the product/brand name is **DROP**.
 
-This project is a starting point for a Flutter application.
+## Documentation
 
-A few resources to get you started if this is your first Flutter project:
+The source of truth lives in three repo-root docs, kept in sync with the code:
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- [`PROJECT_CONTEXT.md`](PROJECT_CONTEXT.md) — architecture, conventions, the
+  documentation self-check.
+- [`CURRENT_STATE.md`](CURRENT_STATE.md) — what's built and where it lives.
+- [`CHANGELOG.md`](CHANGELOG.md) — dated history of changes.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Getting started
+
+```bash
+flutter pub get
+flutter run
+```
+
+Firebase (Auth, Firestore, Storage, FCM) backs the app. After changing security
+rules, deploy them:
+
+```bash
+firebase deploy --only firestore:rules,storage
+```

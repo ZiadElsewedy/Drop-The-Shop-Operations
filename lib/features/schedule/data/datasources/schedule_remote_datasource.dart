@@ -34,6 +34,7 @@ abstract class ScheduleRemoteDataSource {
   // ── Shift swaps ──
   Future<List<ShiftSwapModel>> getBranchSwaps(String branchId);
   Future<List<ShiftSwapModel>> getEmployeeSwaps(String uid);
+  Future<List<ShiftSwapModel>> getAllSwaps();
   Future<ShiftSwapModel> createSwap(ShiftSwapModel swap);
   Future<void> updateSwapStatus({
     required String swapId,
@@ -169,6 +170,17 @@ class ScheduleRemoteDataSourceImpl implements ScheduleRemoteDataSource {
       return _sortSwaps(byId.values);
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to load your swap requests.');
+    }
+  }
+
+  @override
+  Future<List<ShiftSwapModel>> getAllSwaps() async {
+    try {
+      final snap = await _swaps.get();
+      return _sortSwaps(
+          snap.docs.map((d) => ShiftSwapModel.fromMap(d.data(), id: d.id)));
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to load swap requests.');
     }
   }
 

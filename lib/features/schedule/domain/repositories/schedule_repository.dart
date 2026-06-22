@@ -49,6 +49,9 @@ abstract class ScheduleRepository {
   /// Swap requests involving [uid] (as requester or target).
   Future<List<ShiftSwapEntity>> getEmployeeSwaps(String uid);
 
+  /// Every branch's swap requests — admin only (powers the Admin Home overview).
+  Future<List<ShiftSwapEntity>> getAllSwaps();
+
   /// Creates a swap request (status pending).
   Future<ShiftSwapEntity> createSwap(ShiftSwapEntity swap);
 

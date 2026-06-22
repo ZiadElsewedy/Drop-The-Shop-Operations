@@ -1,0 +1,79 @@
+import 'package:flutter/material.dart';
+import 'package:fbro/core/theme/app_colors.dart';
+import 'package:fbro/core/theme/app_spacing.dart';
+import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/glass_container.dart';
+
+/// A small premium metric tile — an icon chip, a big value, a label and an
+/// optional trend/status footnote. Used across the dashboards (admin overview,
+/// branch health, etc.). Built on [GlassContainer] for consistent depth.
+class DashboardMetricCard extends StatelessWidget {
+  const DashboardMetricCard({
+    super.key,
+    required this.icon,
+    required this.value,
+    required this.label,
+    this.trend,
+    this.trendColor,
+    this.onTap,
+    this.accent,
+  });
+
+  final IconData icon;
+  final String value;
+  final String label;
+
+  /// Optional small status/trend line under the label (e.g. "3 need review").
+  final String? trend;
+  final Color? trendColor;
+  final VoidCallback? onTap;
+
+  /// Tint for the icon chip (defaults to the white accent).
+  final Color? accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final tint = accent ?? AppColors.primary;
+    return GlassContainer(
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: tint.withAlpha(28),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, size: 18, color: tint),
+              ),
+              const Spacer(),
+              if (onTap != null)
+                const Icon(Icons.chevron_right_rounded,
+                    size: 18, color: AppColors.textTertiary),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(value, style: AppTypography.h1, maxLines: 1),
+          const SizedBox(height: 2),
+          Text(label, style: AppTypography.caption),
+          if (trend != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              trend!,
+              style: AppTypography.caption.copyWith(
+                color: trendColor ?? AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

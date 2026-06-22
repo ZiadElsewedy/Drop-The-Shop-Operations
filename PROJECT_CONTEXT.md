@@ -1,6 +1,8 @@
-# FBRO — Project Context
+# DROP — Project Context
 
-> **Source of truth for the FBRO codebase.** Read this first, before opening any
+> **Source of truth for the DROP codebase** (product name **DROP — Operations
+> Management System**; the Dart package identifier stays `fbro` for build
+> stability — only the brand is DROP). Read this first, before opening any
 > source file. It documents the architecture, dependency chains, where to make
 > changes, and the conventions every contributor (human or AI) must follow.
 >
@@ -21,19 +23,24 @@ currently ships a complete authentication system with an **account-approval
 gate** (new sign-ups start *pending* and can't use the app until a
 manager/admin approves them), a role system with role-based navigation + route
 guards (Phase 1), a production-ready user profile module, account settings, a
-**task management workflow** (Phase 3–4):
-managers/admins create + assign tasks, employees execute them (start → complete
-→ submit, with notes + proof image), and managers/admins review (approve /
-reject); an **admin management module** (Phase 5): branch CRUD, manager /
-employee management, **admin-only** pending-user approval, and branch assignment;
-and **operational dashboards + a Firebase Cloud Messaging foundation** (Phase 6):
-live role-scoped statistics (admin / manager / employee) and device-token
+**full operations task workflow** (Phase 3–4 + Stabilization + Phase 9 + Workflow
+Upgrade): managers/admins create + assign tasks (with optional checklist,
+recurrence, and branch picker); employees execute them (start → complete with
+checklist + notes + proof image → submit); managers/admins review (approve / reject),
+with approval auto-spawning the next recurring instance; every status transition
+is recorded in an embedded **activity timeline**; full-screen **Task Details**
+accessible by all roles; an **admin management module** (Phase 5): branch CRUD,
+manager / employee management, **admin-only** pending-user approval, and branch
+assignment; **operational dashboards + a Firebase Cloud Messaging foundation**
+(Phase 6): live role-scoped statistics (admin / manager / employee) and device-token
 registration for push; and a **weekly schedule + shift-swap system** (Phase 7):
 managers build their branch's weekly roster (Day → Morning / Night → Employees),
 employees view their week / today's team / manager and request shift swaps
 (coworker approves → manager approves → schedule updates automatically), and
-admins override any branch. All dressed in a custom monochrome (black & white)
-design system.
+admins override any branch. All dressed in the **DROP THE SHOP** design system —
+a **strictly monochrome** black / white / grey dark UI (the white `AppColors.primary`
+is the only accent; no chromatic brand color), with a **bottom navigation bar** as
+the role chrome.
 
 > **DROP THE SHOP operations system** — focused on daily store operations
 > (branches · shifts · tasks · employee activity · approvals). It is **not** a
@@ -53,6 +60,7 @@ design system.
 | State management   | `flutter_bloc` (Cubits only, no Blocs)                       |
 | Navigation         | `go_router` (declarative, auth-aware redirects)             |
 | Backend            | Firebase: Auth, Cloud Firestore, Storage, Google Sign-In    |
+| Push / server      | Firebase Cloud Messaging (`firebase_messaging`) + **Cloud Functions** (Node.js, `functions/`) called via `cloud_functions` — the Communications Center send engine |
 | Immutable models   | `freezed` + `freezed_annotation` (entities & states)        |
 | Media              | `image_picker`                                              |
 | Secure storage     | `flutter_secure_storage`                                    |
@@ -93,23 +101,25 @@ lib/
 ├── core/
 │   ├── constants/            # app_constants.dart (appName, collection names)
 │   ├── di/                   # injection.dart — AppDependencies service locator
-│   ├── enums/                # user_role · approval_status · task_* · notification_type · schedule_day · schedule_shift · swap_status
+│   ├── enums/                # user_role · approval_status · task_* · recurrence_frequency · notification_type · schedule_day · schedule_shift · swap_status · broadcast_audience · broadcast_category
 │   ├── extensions/           # context_extensions (currentUser/currentRole) · firestore_extensions (Map.date — Timestamp→DateTime)
 │   ├── services/             # notification_service.dart (FCM foundation, Phase 6)
 │   ├── errors/               # exceptions.dart (data layer) / failures.dart (domain)
 │   ├── routes/               # app_router.dart (role dispatch + guards), route_names.dart
 │   ├── theme/                # app_colors / typography / spacing / radius / app_theme
-│   └── widgets/              # app_snackbar, app_dialog (showConfirmDialog), app_card, app_empty_state, status_badge, drop_logo, skeleton, list_skeleton, role_scaffold, user_avatar (+AvatarStack), app_motion (EntranceFade), app_search_field
+│   └── widgets/              # app_snackbar, app_dialog (showConfirmDialog), app_card, app_empty_state, status_badge (+`.task` = the task-status chip), drop_logo, skeleton, list_skeleton, role_scaffold (bottom-nav chrome), app_bottom_nav (AppBottomNav + AppNavItem), user_avatar (+AvatarStack), app_motion (EntranceFade), app_search_field, glass_container (GlassContainer — the shared premium surface), dashboard_metric_card (DashboardMetricCard), action_card (ActionCard), admin_section_header (AdminSectionHeader), timeline_tile (TimelineTile)
 └── features/
     ├── auth/                 # Sign-in/up, phone OTP, Google, email verify, password, role, approval
     ├── profile/              # View + edit profile, image uploads, username checks
-    ├── task/                 # Task feature — data/domain + use cases + TaskCubit + functional role screens (Phase 3–4); realtime list streams + reusable templates (Stabilization); Phase 9 — multi-assignee (assigneeIds[]) + checklist templates + redesigned cards + assignee directory
+    ├── task/                 # Task feature — data/domain + use cases + TaskCubit + functional role screens (Phase 3–4); realtime streams + templates (Stabilization); Phase 9 — multi-assignee + checklist + redesigned cards; Workflow Upgrade — RecurrenceConfig + ActivityEntry + TaskDetailsScreen + MyTasksScreen redesign; presentation/activity_format.dart (shared timeline label/colour/time helpers)
     ├── branch/               # Branch feature — data/domain + BranchCubit + branch management (Phase 5)
-    ├── admin/                # Admin module — user-admin data/domain + AdminUsersCubit + dashboard/managers/employees/approvals (Phase 5)
+    ├── admin/                # Admin module — user-admin data/domain + AdminUsersCubit + dashboard/managers/employees/approvals (Phase 5). Admin redesign (2026-06-19): command-center Home (greeting · hero · metric grid · quick actions · pending preview · activity feed · manage), EmployeeCard + employee_metrics (computeEmployeeMetrics — per-employee perf from the task stream)
     ├── statistics/           # Statistics feature — entity/model/repo/datasource + StatisticsCubit; powers all 3 dashboards (Phase 6, +Phase 7 schedule figures)
     ├── schedule/             # Weekly schedule + shift swaps (Phase 7) — full slice + ScheduleCubit & ShiftSwapCubit; weekly_schedules + shift_swaps
+    ├── operations/           # Branch Operations cockpit (task-centric → operations-centric redesign, 2026-06-21). domain: `ShiftFilter` · `EmployeeWorkload` · `BranchSummary` · `computeBranchWorkload` (joins the branch task stream × getUsersByBranch × today's weekly_schedule, overload-first). presentation: `BranchOperationsCubit` (read/derive — repo-direct; writes still via TaskCubit) + `BranchOperationsState`; pages `BranchOperationsScreen` (the cockpit: summary header · shift toggle · workload cards · FAB), `ManagerOperationsScreen` (manager's own branch), `EmployeeDetailScreen` (drill — tasks by status); widget `WorkloadCard`
+    ├── communications/       # Communications Center (Phase 1 slice + Phase 2 engine + Phase 3 UI, 2026-06-21) — Broadcast slice: data/domain (`BroadcastEntity`/`BroadcastModel`/`BroadcastRepository(+Impl)`/`BroadcastRemoteDataSource`) + `SendBroadcast` use case + `BroadcastCubit` (+ `branches()`/`branchUsers()` pickers) + `domain/broadcast_permissions.dart`. **Phase 2:** send via the callable `sendBroadcast` Cloud Function (`functions/index.js`); audiences allBranches/branch/**user (DM)**. **Phase 3 UI:** `presentation/pages/` (`communications_screen` feed · `compose_broadcast_screen` role-gated form · `broadcast_detail_screen`) + `widgets/broadcast_card.dart` + `communications_format.dart`; route `/communications` (admin + manager)
     ├── manager/              # ManagerShell + ManagerHomeScreen (live branch dashboard, Phase 6)
-    ├── employee/             # EmployeeShell + EmployeeHomeScreen (live own dashboard, Phase 6)
+    ├── employee/             # EmployeeShell + EmployeeHomeScreen (live command center: progress-ring hero + actionable task list; redesign v2)
     └── settings/             # Settings + change password (presentation only)
 ```
 
@@ -130,8 +140,10 @@ lib/
 > auth `GetUsersByBranch` use case for the member/assignee list). `TaskCubit` is
 > a hybrid: use cases for writes, **`TaskRepository` directly** for realtime list
 > streams + template CRUD, and **`BranchRepository`** for the admin branch
-> picker. All app-wide cubits are provided in `main.dart`
-> (`auth`/`profile`/`task`/`branch`/`adminUsers`/`statistics`/`schedule`/`shiftSwap`).
+> picker. `BroadcastCubit` (Communications Center) is the same hybrid: the
+> **`SendBroadcast` use case** for the write, **`BroadcastRepository` directly**
+> for the realtime feed stream. All app-wide cubits are provided in `main.dart`
+> (`auth`/`profile`/`task`/`branch`/`adminUsers`/`statistics`/`schedule`/`shiftSwap`/`branchOperations`/`broadcast`).
 
 ---
 
@@ -245,21 +257,25 @@ unreachable from the chrome) and the **weekly `schedule` (Phase 7)** is the
 production roster. The `users/{uid}.assignedShift` and `tasks.assignedShiftId`
 fields remain as nullable strings (harmless, unused).
 
-### Task chain (Phase 3–4 — full vertical slice)
+### Task chain (Phase 3–4 + Stabilization + Phase 9 + Workflow Upgrade — full operations workflow)
 
 ```
-MyTasksScreen (employee)                ManagerTasksView          (presentation/pages + widgets)
-+ _CompleteSheet (notes+proof)          ← BranchTasksScreen (manager) / TaskManagementScreen (admin)
-+ TaskCard / task_action_sheets (create·assign·review)
+TaskDetailsScreen  (all roles — full-screen: status, assignees, checklist, timeline, actions)
+MyTasksScreen (employee — tabbed/sectioned: Active→5 sections / Done)
+ManagerTasksView (manager, flat list) · AdminTaskOverviewScreen (admin, branch
+overview + drill-down) — both render the shared ManagerTaskCard
+task_card · task_action_sheets (create·assign·review) · task_template_sheets
         ↓  context.read<TaskCubit>()      (provided app-wide in main.dart)
 TaskCubit  + TaskState                                        (presentation/cubit)
-        ↓  one use case per WRITE action (reads/streams/templates: repo-direct)
+        ↓  one use case per WRITE action (reads/streams/templates/activity: repo-direct or inline)
 CreateTask · UpdateTask · DeleteTask · AssignTask
-ChangeTaskStatus · ReviewTask · UploadTaskProof   (domain/usecases)
+UploadTaskAttachment  (image/video → TaskAttachment)   (domain/usecases)
 GetUsersByBranch (auth use case — assignee picker)
 TaskRepository.watch{AllTasks,TasksByBranch,EmployeeTasks}  (realtime lists)
 TaskRepository.{get,create,delete}Template                 (task templates)
 BranchRepository.getBranches                               (admin branch picker)
+TaskCubit._appendActivity  (inline — appends ActivityEntry to task.activityLog)
+TaskCubit._spawnNextRecurrence  (inline on approve — creates next recurring task)
         ↓
 TaskRepository (abstract)                                    (domain/repositories)
         ↓   AppDependencies.taskRepository  (composed in injection.dart)
@@ -267,7 +283,7 @@ TaskRepositoryImpl                                           (data/repositories)
         ↓
 TaskRemoteDataSource                                         (data/datasources)
         ↓                              ↓                       ↓
-Cloud Firestore  tasks/{taskId}   task_templates/{id}   Storage tasks/{id}/proof.jpg
+Cloud Firestore  tasks/{taskId}   task_templates/{id}   Storage tasks/{id}/attachments/{id}.<ext>
 ```
 
 - Full vertical slice: `TaskCubit` (app-wide, provided in `main.dart`) injects
@@ -277,52 +293,15 @@ Cloud Firestore  tasks/{taskId}   task_templates/{id}   Storage tasks/{id}/proof
   Task branch dropdown) — the documented convention for stream/non-action repo
   access. Datasource throws `ServerException`; repo → `ServerFailure`; maps
   `TaskModel → TaskEntity`.
-- **Core workflow:** a manager/admin creates + assigns a task (assignee picked
-  from branch employees via the auth `GetUsersByBranch`); the employee drives it
-  `pending → started → completed (+notes/proof) → waitingReview`; a manager/admin
-  reviews → `approved` | `rejected` (writing the audit fields). `TaskType`
-  (daily/special), `TaskStatus` and `TaskPriority` are enums in `core/enums`.
-- **Branch is never free text.** A manager's task takes their own `branchId`; an
-  **admin picks an existing branch from a Firestore-backed dropdown**
-  (`TaskCubit.branches()` → `BranchRepository`). This guarantees the task's
-  `branchId` matches the employees' `users/{uid}.branchId`, so the Assign picker
-  (`branchEmployees`) is always populated — the fix for orphaned/unassignable
-  tasks.
-- **Realtime lists.** `TaskCubit.load` subscribes to a **live Firestore snapshot
-  stream** by role (admin: `watchAllTasks` · manager: `watchTasksByBranch` ·
-  employee: `watchEmployeeTasks`), so a newly assigned task or any status change
-  appears **immediately** (backed by the offline cache). Mutations keep the list
-  visible (`loaded(tasks, busy)`) and the stream reflects the result; on error the
-  previous list is restored. Pull-to-refresh re-subscribes. The subscription is
-  cancelled in `close()`.
-- **Status transitions are validated in `TaskCubit._canTransition`** (invalid
-  moves are blocked client-side and surfaced as an error snackbar); WHO may write
-  is enforced in `firestore.rules` (`tasks/{taskId}`): admin all branches,
-  manager own branch, employee own assigned tasks with **limited writes** (may
-  advance status / add notes / proof but may not reassign, change branch, or
-  approve/reject). Proof images upload to Storage `tasks/{taskId}/proof.jpg`.
-- **Checklist templates** (`task_templates/{id}`): reusable **checklists** ("Open
-  Shop", "Close Shop") that **prefill** the task form *and generate the task's
-  checklist*. Same `TaskCubit`/`TaskRepository` (no new cubit/DI): `templates`
-  (branch-scoped read, filtered client-side), `saveTemplate`, `deleteTemplate`.
-  UI is a two-step New Task chooser (Blank / From a template) + a Manage Templates
-  sheet (`task_template_sheets.dart`) with a **checklist editor**. A template
-  holds content (title/desc/type/priority) + `checklistItems[]`
-  (`ChecklistItemTemplate`: id/title/isRequired) + `branchId` (`''` = global).
-- **Multi-assignee + checklist (Phase 9).** A task carries `assigneeIds[]`
-  (`TaskEntity`, replacing the single `assignedEmployeeId`, which `TaskModel`
-  keeps as a synced **primary mirror** for backward-compatible rules/stats) and a
-  `checklist` of `ChecklistItem`s (`checklist_item.dart`: id/title/isRequired/
-  completed/completedAt). The assign sheet is multi-select (one · many · whole
-  team) → `TaskCubit.assignEmployees(employeeIds)`; the employee query/stream and
-  `firestore.rules` use `assigneeIds arrayContains`. A task **cannot be completed
-  until every required checklist item is done** (`TaskEntity.requiredChecklist
-  Complete`, gated in `TaskCubit.completeTask`); employees tick items via
-  `TaskCubit.toggleChecklistItem`. `TaskCubit` also builds a per-branch **user
-  directory** (uid → `UserEntity`, via `GetUsersByBranch`) carried on
-  `TaskState.loaded` so cards render real avatars · names · roles (`UserAvatar`/
-  `AvatarStack`). Redesigned `task_card.dart` shows avatars + checklist progress +
-  status/priority; the manager review sheet shows checklist progress.
+- **Core workflow:** a manager/admin creates + assigns a task (optionally with a checklist + recurrence); the employee drives it via **`TaskCubit.completeAndSubmit`** — a single action that uploads proof + notes and advances the task directly to `waitingReview` (recording both `completed` and `waitingReview` activity entries in one write); a manager/admin reviews → `approved` | `rejected`; approval auto-spawns the next recurrence when `frequency != none`. Every transition appends an `ActivityEntry` to `task.activityLog`. Proof is uploaded **before** the status write inside `completeAndSubmit`, so a failed upload aborts the transition (task stays `started`, photo retained for retry) rather than silently submitting evidence-less work. The standalone `completeTask` use case was removed (dead since the two-step UX was eliminated); `submitForReview` + the `completed → waitingReview` transition remain only so any pre-existing `completed`-state task can still be advanced. `TaskType` (daily/special), `TaskStatus`, `TaskPriority`, and `RecurrenceFrequency` are enums in `core/enums`.
+- **Branch is never free text.** A manager's task takes their own `branchId`; an **admin picks an existing branch from a Firestore-backed dropdown** (`TaskCubit.branches()` → `BranchRepository`). This guarantees the task's `branchId` matches the employees' `users/{uid}.branchId`, so the Assign picker is always populated.
+- **Realtime lists.** `TaskCubit.load` subscribes to a **live Firestore snapshot stream** by role (admin: `watchAllTasks` · manager: `watchTasksByBranch` · employee: `watchEmployeeTasks`), so a newly assigned task or any status change appears **immediately** (backed by the offline cache). Mutations keep the list visible (`loaded(tasks, busy)`) and the stream reflects the result; on error the previous list is restored. Pull-to-refresh re-subscribes. The subscription is cancelled in `close()`.
+- **Every status transition is a single atomic `_updateTask` write** that sets the new `status`, its per-transition audit timestamp (`startedAt`/`submittedAt`/`approvedAt`/`rejectedAt`), and appends the `ActivityEntry` in one Firestore document write — there is no two-write pattern. The `_mutating` flag prevents concurrent writes. **Status transitions are validated in `TaskCubit._canTransition`** (invalid moves are blocked client-side); WHO may write is enforced in `firestore.rules` (`tasks/{taskId}`): admin all branches, manager own branch, employee own assigned tasks with **limited writes** (may advance status / add notes / proof but may not reassign, change branch, or approve/reject). Proof images upload to Storage `tasks/{taskId}/proof.jpg`.
+- **Checklist templates** (`task_templates/{id}`): reusable **checklists** ("Open Shop", "Close Shop") that **prefill** the task form *and generate the task's checklist*. Same `TaskCubit`/`TaskRepository` (no new cubit/DI). UI: two-step New Task chooser (Blank / From a template) + Manage Templates sheet (`task_template_sheets.dart`) with a **checklist editor**.
+- **Multi-assignee + checklist (Phase 9).** A task carries `assigneeIds[]` (replacing the single `assignedEmployeeId`, which `TaskModel` keeps as a synced **primary mirror** for backward-compatible rules/stats) and a `checklist` of `ChecklistItem`s. A task **cannot be completed until every required checklist item is done** (`TaskEntity.requiredChecklistComplete`); employees tick items via `TaskCubit.toggleChecklistItem`. `TaskCubit` builds a per-branch **user directory** (`TaskState.loaded.directory`) so cards render real avatars · names · roles.
+- **Recurring tasks (Workflow Upgrade).** `TaskEntity` carries an optional `RecurrenceConfig` (frequency/interval/weekday/hour/minute, `nextOccurrence()`). On task creation, the manager/admin picks a recurrence via the `_RecurrencePicker` chip row in the form sheet. When `TaskCubit.approveTask` succeeds and `task.recurrence?.frequency != none`, `_spawnNextRecurrence(source)` creates the next task (same content, checklist reset, deadline = `recurrence.nextOccurrence(now)`). Best-effort — a spawn failure never blocks the approval.
+- **Activity timeline (Workflow Upgrade).** Every status-changing `TaskCubit` action appends an `ActivityEntry` (actorId/actorName/status/at/note) to `task.activityLog[]` **inline**, inside the same single atomic `_updateTask` write that sets the new status (the standalone `_appendActivity` helper was removed in the single-write refactor). This is the spec's **event-based** timeline; `TaskDetailsScreen` and the admin recent-activity feed render it dynamically newest-first via the shared `TimelineTile` + `activity_format.dart` (actor, time-ago, optional note) — missing/optional steps and rework loops just work (no hardcoded sequence).
+- **Task Details Screen (Workflow Upgrade).** `TaskDetailsScreen(task, directory)` is a full-screen `StatefulWidget` accessible via `Navigator.push` (slide transition) from both `ManagerTasksView` and `MyTasksScreen`. It wraps in `BlocBuilder<TaskCubit>` so the displayed task refreshes from the live stream. Contains: `_StatusHeader` (animated pills), `_AssigneeBlock` ("Assigned by Name·Role"), `_ChecklistBlock` (progress bar + interactive items for employees on started tasks), `_SubmittedBlock` (notes + proof), `_ActivityTimeline`, and `_EmployeeActions` / `_ReviewBlock` by role.
 
 ### Admin module chain (Phase 5)
 
@@ -369,16 +348,23 @@ Firestore branches/{id}   Firestore users/{uid}     aggregates users/tasks/shift
   **branch-scoped** collections once (single-field `where` queries — automatic
   indexes) and **counts client-side** (status/type/today breakdowns), avoiding
   composite indexes; `count()` aggregate queries are a future optimization.
-  All three role dashboards (`AdminDashboardScreen`, `ManagerHomeScreen`,
-  `EmployeeHomeScreen`) read it via the shared `StatGrid` widget.
+  The `AdminDashboardScreen` / `ManagerHomeScreen` consume it via the shared
+  `StatGrid` widget; the **`EmployeeHomeScreen` (redesign v2)** reads
+  `StatisticsCubit` only for **today's shift** (`currentShiftName` /
+  `upcomingShiftName`) and computes its task breakdown + progress ring from the
+  live `TaskCubit` list instead (the ground truth — `employeeStats` does not
+  populate `activeTasks`).
 - **Notifications** (`core/services/notification_service.dart`, FCM): requests
-  permission, persists the device `fcmToken` on `users/{uid}` (best-effort), and
-  surfaces foreground pushes as in-app snackbars (wired in `main.dart` via a
-  `scaffoldMessengerKey` + an `AuthCubit` listener that registers/forgets the
-  token on auth changes). `core/enums/notification_type.dart` is the event
-  contract. **Sending** the events needs a server trigger (out of scope — no
-  Cloud Functions / Node.js); this is the client foundation only. No history /
-  inbox / chat.
+  permission, persists the device token in `users/{uid}.fcmTokens` (an **array**,
+  multi-device + refresh-aware, since Phase 2; the legacy single `fcmToken` is
+  still read server-side for back-compat), surfaces **foreground** pushes as
+  in-app snackbars, and routes **tap** opens (`onMessageTap`) — wired in
+  `main.dart` via a `scaffoldMessengerKey` + an `AuthCubit` listener that
+  registers/forgets the token on auth changes. `core/enums/notification_type.dart`
+  is the event contract. **Sending is now implemented** for the Communications
+  Center via the callable `sendBroadcast` Cloud Function (`functions/index.js`,
+  Phase 2 — the first server-side push engine); other `NotificationType` events
+  still have no server trigger. No history / inbox / chat.
 
 ### Schedule chain (Phase 7 — full vertical slice)
 
@@ -412,11 +398,115 @@ Cloud Firestore  weekly_schedules/{branchId_yyyy-MM-dd}    Cloud Firestore  shif
   validated in `ShiftSwapCubit`; `firestore.rules` enforce who may write.
   `BranchScheduleScreen` carries a `BlocListener` that refreshes `ScheduleCubit`
   whenever a swap action settles, so an approved swap updates the Schedule tab
-  with no manual refresh (Phase 8).
+  with no manual refresh (Phase 8). **A swap may only be requested for an upcoming
+  shift** (2026-06-20): the pure `domain/swap_eligibility.dart` (`SwapEligibility`)
+  is the single source of truth, enforced at the sheet, the `requestSwap` cubit
+  gate, and the `shift_swaps` create rule (`swapSlotInFuture`). Admins get
+  all-branch swap visibility via `ScheduleRepository.getAllSwaps()` →
+  `ShiftSwapCubit.pendingSwaps()` (feeds the Admin Home Pending Actions panel).
 - **Dashboards reuse this data:** the `statistics` datasource reads
   `weekly_schedules` for the current week to compute the employee current/upcoming
   shift, the manager scheduled/morning/night-today counts, and the admin schedule
   coverage (`ScheduleWeek` + `ScheduleDay` imported into statistics).
+
+### Branch Operations chain (task→operations redesign)
+
+```
+AdminTaskOverviewScreen (admin branch overview)  ManagerOperationsScreen (manager own branch)
+        └─────────────── drill / land ───────────────┘
+                          ↓ Navigator.push
+BranchOperationsScreen  (the cockpit: summary header · shift toggle · WorkloadCard list · FAB)
+        ↓ context.read<BranchOperationsCubit>()        ↓ tap employee (Navigator.push)
+BranchOperationsCubit + BranchOperationsState   EmployeeDetailScreen (tasks by status)
+        ↓ (repo-direct; reuses auth GetUsersByBranch)         ↓ tap task → TaskDetailsScreen
+TaskRepository.watchTasksByBranch  ⨯  GetUsersByBranch  ⨯  ScheduleRepository.getSchedule
+        ↓                          computeBranchWorkload (pure)
+   Cloud Firestore  tasks/{id}        users/{uid}        weekly_schedules/{id}
+```
+
+- **Read/derive only.** `BranchOperationsCubit` (app-wide, in `main.dart`)
+  subscribes the **live** `watchTasksByBranch` stream + one-shot branch members +
+  this week's roster, and emits `computeBranchWorkload(...)` (the pure domain
+  aggregation). The shift filter is cubit state applied as a **pure re-derive**
+  (no I/O). **All task writes** (create / assign / review) still go through
+  `TaskCubit`, which the cockpit also loads — both watch the same branch stream, so
+  a write shows on the cockpit immediately. The cockpit's New-Task FAB reuses
+  `startNewTaskFlow`; "All tasks" + the employee drill render the shared
+  `ManagerTaskCard` → `TaskDetailsScreen`. No new collection, no new go_router
+  route (cockpit + drills are `Navigator.push`); the one schema delta is
+  `tasks.shift`.
+
+### Communications Center chain (Phase 1 slice + Phase 2 send engine)
+
+```
+SEND (write)                                  RECEIVE (feed read)
+BroadcastCubit.send(...)                       BroadcastCubit.load({branchId})
+  ↓ client guard: BroadcastPermissions          ↓ repository directly (stream)
+SendBroadcast use case                         BroadcastRepository.watchBroadcasts
+  ↓                                              ↓
+BroadcastRepository.sendBroadcast(entity)      BroadcastRemoteDataSource
+  ↓                                              ↓
+BroadcastRemoteDataSource (FirebaseFunctions)  Cloud Firestore broadcasts/{id}
+  ↓ httpsCallable('sendBroadcast')              (admin: orderBy createdAt ·
+══════════ Cloud Function (Node.js) ══════════  branch: whereIn[branch,''])
+functions/index.js  sendBroadcast (onCall):
+  validate sender perms → resolve recipients →
+  write broadcasts/{id} → gather users.fcmTokens →
+  messaging.sendEachForMulticast → prune dead tokens →
+  return { success, recipientCount, deliveredCount, broadcastId }
+  ↓ push (notification + data)
+Device  ← NotificationService (foreground · background · tap)
+```
+
+- **Hybrid cubit** (mirrors `TaskCubit`): `BroadcastCubit` (app-wide, in
+  `main.dart`) injects the **`SendBroadcast` use case** for the write and the
+  **`BroadcastRepository` directly** for the realtime feed. Datasource throws
+  `ServerException` (from `FirebaseFunctionsException`/`FirebaseException`); repo
+  → `ServerFailure`; maps `BroadcastModel ⇄ BroadcastEntity`.
+- **Send is server-authoritative (Phase 2).** The client never writes the
+  broadcast doc — `BroadcastRemoteDataSource.sendBroadcast` invokes the
+  **callable `sendBroadcast` Cloud Function** (`functions/index.js`), which
+  validates the sender's permissions, resolves recipients, **writes** the
+  `broadcasts/{id}` doc (Admin SDK), pushes the FCM notification, prunes dead
+  tokens, and returns the **delivery summary** (`{ success, recipientCount }`).
+  `firestore.rules` therefore **deny all client writes** to `broadcasts`.
+- **Recipient-resolution matrix** (pure `domain/broadcast_permissions.dart`,
+  re-enforced in the function): **admin** → all users / any branch / any user;
+  **manager** → their own branch / a user inside it; **employee** → none. The
+  client guard gates the UI + the send call; the function is the authority.
+- **Three audiences.** `BroadcastAudience.allBranches` (every user, admin-only),
+  `branch` (one branch), and **`user`** (a direct message). The branch/all feed's
+  queryable field is `branchId` (`''` = all-branches sentinel); a **DM** uses a
+  non-branch `branchId` marker (`'__direct__'`) + `targetUserId`, so it never
+  surfaces in a branch/all feed and is read only by the recipient + admin.
+- **Index-free, rules-safe reads** (unchanged from Phase 1): admin feed
+  `orderBy('createdAt', descending: true)`; branch member feed
+  `where('branchId', whereIn: [selfBranch, ''])`, client-sorted newest-first.
+- **FCM device + delivery** lives in `core/services/notification_service.dart`:
+  permission, the device token kept in `users/{uid}.fcmTokens` (**array**,
+  multi-device, `arrayUnion` on register/refresh, `arrayRemove` on sign-out), and
+  message routing — **foreground** (`onMessage` → in-app snackbar), **background**
+  (top-level handler in `main.dart`; the OS renders the `notification` block),
+  and **tap** (`onMessageOpenedApp` + `getInitialMessage` → `onMessageTap`,
+  wired in `main.dart` to navigate + log the `broadcastId`). The backend
+  (`functions/`) is a Node.js Cloud Functions codebase deployed separately
+  (`firebase deploy --only functions`).
+- **UI (Phase 3).** A single `/communications` area (admin + manager; employees
+  blocked by the router's `_isCommunicationsArea` guard), entered from the
+  `RoleScaffold` header's campaign icon (shown only to admin/manager). Screens:
+  `CommunicationsScreen` (the feed — `BroadcastCard`s from the cubit stream, a
+  "New Broadcast" FAB), `ComposeBroadcastScreen` (role-gated form: audience via
+  `BroadcastPermissions.allowedAudiences` → branch dropdown / searchable
+  recipient picker / category chips / title / multiline body → `BroadcastCubit.send`
+  → success snackbar with the recipient count → `pop`), and `BroadcastDetailScreen`
+  (`/communications/:broadcastId`, resolved from the tapped entity via `extra`
+  with a live-feed fallback). The compose pickers read `BroadcastCubit.branches()`
+  / `branchUsers()` (repo-direct, mirroring `TaskCubit`). Built entirely on the
+  shared design system (`GlassContainer`, `AppButton`, `AppTextField` (now with a
+  `maxLines` option), `AppDropdownField`, `AppSearchField`, `UserAvatar`,
+  `AppEmptyState`, `EntranceFade`) — strictly monochrome, colour only for an
+  urgent category. Delivery stats (`recipientCount` / `deliveredCount`) are
+  written by the function and shown on the card + detail.
 
 ### Shared (core) dependencies
 
@@ -444,19 +534,40 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Auth ⇄ Profile sync (name/avatar)**     | `lib/features/profile/data/repositories/profile_repository_impl.dart`    |
 | **Task type/status/priority values**      | `lib/core/enums/task_type.dart` · `task_status.dart` · `task_priority.dart` |
 | **Task schema / serialization (incl. audit fields)** | `lib/features/task/domain/entities/task_entity.dart` + `data/models/task_model.dart` (then run codegen) |
-| **Task reads/writes / review / proof upload** | `lib/features/task/data/datasources/task_remote_datasource.dart` (Firestore + Storage `tasks/{id}/proof.jpg`) |
+| **Task shift tag (morning/night/any)** | `task_entity.dart` (`shift` — nullable `ScheduleShift`, **null = "any"**) + `task_model.dart` (`'shift'` ↔ `ScheduleShift.fromStringOrNull`) + `core/enums/schedule_shift.dart` (`fromStringOrNull` — null-preserving parse). Drives the Branch Operations shift filter; supersedes the unused legacy `assignedShiftId`. Tested in `test/task_model_shift_test.dart` |
+| **Branch Operations workload (derive)** | `lib/features/operations/domain/branch_workload.dart` (`computeBranchWorkload` → `BranchWorkload`) + `employee_workload.dart` (`EmployeeWorkload`) + `branch_summary.dart` (`BranchSummary`) + `shift_filter.dart` (`ShiftFilter`). Pure/deterministic (`day`/`now` injectable), joins task stream × `getUsersByBranch` × today's `weekly_schedule`, sorts overload-first. Tested in `test/branch_workload_test.dart` |
+| **Branch Operations cubit / state** | `lib/features/operations/presentation/cubit/branch_operations_cubit.dart` + `branch_operations_state.dart` — read/derive only; subscribes `TaskRepository.watchTasksByBranch` + one-shot `GetUsersByBranch` + `ScheduleRepository.getSchedule`; `setFilter` re-derives without I/O. Repo-direct; wired in `injection.dart` + `main.dart`. **Writes stay in `TaskCubit`** (both watch the same branch stream, so writes propagate live) |
+| **Branch Operations cockpit (screen)** | `lib/features/operations/presentation/pages/branch_operations_screen.dart` (summary header · `_ShiftToggle` · `WorkloadCard` list · New-Task FAB via `startNewTaskFlow` · "All tasks" → `BranchTaskListScreen`) + widget `presentation/widgets/workload_card.dart` (`WorkloadCard`, widget-tested in `test/workload_card_test.dart`). Manager entry: `manager_operations_screen.dart`; admin entry: the branch-overview drill (`admin_task_overview_screen.dart` `_openBranch`) |
+| **Employee operations drill (tasks by status)** | `lib/features/operations/presentation/pages/employee_detail_screen.dart` — reads the loaded `TaskCubit` filtered to one employee, groups by status (Rework·In progress·Pending·Submitted·Completed), renders `ManagerTaskCard` (→ `TaskDetailsScreen`) |
+| **Full branch task list (incl. unassigned)** | `lib/features/task/presentation/pages/branch_task_list_screen.dart` (`BranchTaskListScreen` — extracted from the old admin drill; reached via the cockpit "All tasks"). The former `BranchTasksScreen` + `ManagerTasksView` (flat manager list) were **deleted** (retired by the cockpit) |
+| **Operations routing / nav entry** | Manager: `RouteNames.managerTasks` (`/manager/tasks`) now renders `ManagerOperationsScreen` (was `BranchTasksScreen`) in `app_router.dart`. Admin: `adminTasks` → `AdminTaskOverviewScreen` (branch overview) whose `_openBranch` drill opens `BranchOperationsScreen`. The cockpit + drills are `Navigator.push` (like `TaskDetailsScreen`), not go_router routes |
+| **Task reads/writes / media upload** | `lib/features/task/data/datasources/task_remote_datasource.dart` (Firestore + Storage `tasks/{id}/attachments/{id}.<ext>` via `uploadAttachment`) |
+| **Task list ordering (newest first)** | Admin query: Firestore `orderBy('createdAt', descending: true)` (index-free). Filtered branch/employee queries stay filter-only (a filter + `orderBy` needs a composite index → broke loading, reverted) and are ordered by `sortTasksNewestFirst` (`domain/task_ordering.dart`, pending-timestamp on top) in the repo. Tested in `test/task_ordering_test.dart` |
+| **Video thumbnails** | `presentation/widgets/video_thumbnail_image.dart` (`VideoThumbnailImage` — `video_thumbnail` poster frame, bounded LRU cache, loading + film-glyph fallback). Used by `attachment_gallery.dart` + `attachment_picker.dart`; play overlay drawn by the caller on top |
+| **Task media (images + videos)** | Model: `domain/entities/task_attachment.dart` (`TaskAttachment` incl. `durationMs` + `AttachmentLimits`) + `core/enums/attachment_type.dart`; attached to `ActivityEntry.attachments[]`. Pick: `presentation/widgets/attachment_picker.dart` (`AttachmentPickerField`, captures video duration via `video_player`). View: `attachment_gallery.dart` (compact wrap **or** `columns` grid + `showDuration`) + `attachment_viewer.dart` (fullscreen zoom/`video_player`) + `video_thumbnail_image.dart` (cached real frames). Resolve/format: `presentation/attachment_format.dart` (`attachmentsForEvent` / `latestAttachments` / `attachmentSummary` / `formatVideoDuration`, legacy-proof back-compat). Upload: `UploadTaskAttachment`. Tested in `test/task_attachment_test.dart` |
+| **Submission review surface** | `presentation/widgets/submission_details_sheet.dart` (`SubmissionDetailsSheet` / `showSubmissionDetailsSheet`) — large modal opened from a tapped submission timeline card; shows employee response + 2-col gallery + manager feedback + sticky Approve/Rework. Cycle resolution: pure `resolveSubmission(task, index)` in `attachment_format.dart` (content + per-cycle decision, rework-loop aware). Tested in `test/submission_resolution_test.dart`. The timeline `_EventCard` (`pages/task_details_screen.dart`) is now a **summary** (status·actor·time·attachment summary·note preview) |
+| **Submission loading UX / progress** | Lives on the cubit: `TaskState.loaded` carries `isSubmitting` + `submissionProgress` (`presentation/submission_progress.dart`: Preparing→Uploading→Finalizing, with bytes→%/MB), preserved on every emit incl. the stream. `completeAndSubmit` throttles progress emits (whole-percent); byte progress aggregated from each upload's Storage `snapshotEvents`. The Task Details screen renders one state-driven `submission_loading_overlay.dart` (fullscreen, interaction-blocking, `PopScope` blocks back). Only `completeAndSubmit` sets `isSubmitting`. Video thumbnails are **local** (`video_thumbnail_image.dart`, view-time, LRU cache) — no server posters. Tested: `test/submission_progress_test.dart` |
+| **Task status animations** | `pages/task_details_screen.dart`: `_StatusHeader` (stateful — status glow, amber **pulse** for In Review, static green/red glow), `_StatusPill` (`AnimatedSwitcher` cross-fade+scale on status change), timeline cards wrapped in `EntranceFade`. Monochrome base preserved; colour only as soft glow/tint |
 | **Task repository contract / impl**       | `lib/features/task/domain/repositories/task_repository.dart` + `data/repositories/task_repository_impl.dart` (wired in `core/di/injection.dart`) |
 | **Task workflow logic / status transitions / state** | `lib/features/task/presentation/cubit/task_cubit.dart` (`_canTransition`) + `task_state.dart` |
 | **A new task action**                     | add `domain/usecases/`, a `TaskRepository(+Impl)` method, a datasource method, wire in `task_cubit.dart` **and** `core/di/injection.dart` |
 | **Task screens (admin/manager/employee)** | `lib/features/task/presentation/pages/` (`my_tasks_screen` employee · `branch_tasks_screen`/`task_management_screen` → shared `widgets/manager_tasks_view.dart`) |
 | **Task UI actions (create/assign/review/complete) + card** | `lib/features/task/presentation/widgets/` (`task_action_sheets.dart`, `task_card.dart`, `task_empty_state.dart`) |
 | **Multi-assignee (assigneeIds[]) — schema/logic** | `task_entity.dart` (`assigneeIds`, `isAssigned`) + `task_model.dart` (writes `assigneeIds` + primary `assignedEmployeeId` mirror; reads with legacy fallback) → `assign_task.dart` use case → `TaskCubit.assignEmployees` → multi-select `_AssignSheet` in `task_action_sheets.dart`; rules `tasks/{id}` (`assigneeIds arrayContains`); stats `employeeStats` |
-| **Checklist (template + task) schema/logic** | `lib/features/task/domain/entities/checklist_item.dart` (`ChecklistItem` + `ChecklistItemTemplate`) + `task_template_entity.dart` (`checklistItems`, `buildTaskChecklist`) + `task_entity.dart` (`checklist`, `requiredChecklistComplete`/progress getters); serialization in `task_template_model.dart` / `task_model.dart`; completion gate + toggling in `TaskCubit` (`completeTask`/`toggleChecklistItem`); checklist editor in `task_template_sheets.dart` |
+| **Assign-on-create (in the task form)** | `task_action_sheets.dart` `_AssigneePicker` + `_EmployeeChip` (compact team chips, "Whole team"/"Clear all", loaded via `TaskCubit.branchEmployees`; admin reloads + clears on branch change) → `_save()` passes `assigneeIds` to `TaskCubit.createTask` (new optional param, seeded onto the `TaskEntity`) / `editTask` (`copyWith`). No separate create-then-assign step needed |
+| **Checklist (template + task) schema/logic** | `lib/features/task/domain/entities/checklist_item.dart` (`ChecklistItem` + `ChecklistItemTemplate`) + `task_template_entity.dart` (`checklistItems`, `buildTaskChecklist`) + `task_entity.dart` (`checklist`, `requiredChecklistComplete`/progress getters); serialization in `task_template_model.dart` / `task_model.dart`; completion gate + toggling in `TaskCubit` (`completeAndSubmit`/`toggleChecklistItem`); checklist editor in `task_template_sheets.dart` |
 | **Assignee identity on cards (uid → user)** | `TaskCubit` directory (`_ensureDirectory` via `GetUsersByBranch`) → `TaskState.loaded.directory` → `task_card.dart` (`resolveAssignees`, `_AssigneesRow`) |
 | **Reliable avatars (image + initials fallback)** | `lib/core/widgets/user_avatar.dart` (`UserAvatar`, `UserAvatar.fromUser`, `AvatarStack`, `avatarInitials`) — used by task cards, admin user cards, schedule chips/pickers |
 | **Card / list entrance motion** | `lib/core/widgets/app_motion.dart` (`EntranceFade`, `staggerDelay`) |
 | **Search box (admin lists)** | `lib/core/widgets/app_search_field.dart` (`AppSearchField`) |
 | **Admin task branch picker (dropdown, not free text)** | `task_action_sheets.dart` (`_BranchDropdown`) ← `TaskCubit.branches()` ← `BranchRepository` (wired into `TaskCubit` in `injection.dart`) |
+| **Recurring tasks (schema / logic)**      | `lib/core/enums/recurrence_frequency.dart` (`RecurrenceFrequency` enum) + `lib/features/task/domain/entities/recurrence_config.dart` (freezed, `nextOccurrence()`) + `task_entity.dart` (`recurrence` field) + `task_model.dart` (`_recurrenceFromMap`/`_recurrenceToMap`) + `TaskCubit._spawnNextRecurrence` (auto-spawn on approve) |
+| **Recurrence picker UI**                  | `task_action_sheets.dart` → `_RecurrencePicker` chip row (None/Daily/Weekly/Monthly); shown only on new-task creation |
+| **Inline checklist editor in task form**  | `task_action_sheets.dart` → `_InlineChecklistEditor` + `_ChecklistItemRow`; state in `_TaskFormSheetState` as parallel lists (`_itemControllers`/`_itemRequired`/`_itemIds`/`_itemOriginals`); shown for both create and edit; edit preserves `completed` state via `_itemOriginals` merge in `_buildChecklist()` |
+| **Task "Type" field (no longer in form)** | `TaskType` enum (`core/enums/task_type.dart`) is still stored on the entity but no longer shown in the form UI. Auto-inferred in `_TaskFormSheetState._save()`: recurring → `TaskType.daily`, one-off → `TaskType.special`. Edit preserves existing type unchanged |
+| **Activity timeline (schema / logic)**    | `lib/features/task/domain/entities/activity_entry.dart` (freezed: status/actorId/actorName/at/note/**attachments**) + `task_entity.dart` (`activityLog` field) + `task_model.dart` (`_activityLogFromList`/`_activityLogToList`, incl. `_attachmentsFromList`). Entries are appended **inline** in each status-changing `TaskCubit` method (single atomic write). This **is** the spec's event-based task timeline — rendered newest-first as rich `_EventCard`s (status badge, actor, note, **`AttachmentGallery`**) via `activity_format.dart` + `attachment_format.dart` |
+| **Task Details Screen (full-screen view)**| `lib/features/task/presentation/pages/task_details_screen.dart` — opened via `Navigator.push(PageRouteBuilder)` from both `ManagerTasksView._card()` and `MyTasksScreen`; wraps in `BlocBuilder<TaskCubit>` for live updates; contains `_StatusHeader`, `_AssigneeBlock`, `_ChecklistBlock`, `_SubmittedBlock`, `_ActivityTimeline` (renders shared `TimelineTile`), `_EmployeeActions` / `_ReviewBlock` |
+| **Employee My Tasks (tabbed/sectioned)**  | `lib/features/task/presentation/pages/my_tasks_screen.dart` — `TabController` (Active/Done), 5 sorted sections, animated entrance, `EmployeeTaskCard` minimal card, taps open `TaskDetailsScreen` |
 | **Task realtime list streams**            | `TaskRepository.watch{AllTasks,TasksByBranch,EmployeeTasks}` (+impl + `TaskRemoteDataSource`) → `TaskCubit.load` subscribes by role |
 | **Task templates (schema / serialization)** | `lib/features/task/domain/entities/task_template_entity.dart` + `data/models/task_template_model.dart` (then run codegen) |
 | **Task templates (reads/writes)**         | `task_remote_datasource.dart` + `task_repository(_impl).dart` (`getTemplates`/`createTemplate`/`deleteTemplate`) → `TaskCubit.templates`/`saveTemplate`/`deleteTemplate`; rules `task_templates/{id}` |
@@ -472,26 +583,52 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Schedule/swap reads/writes (Firestore)**| `lib/features/schedule/data/datasources/schedule_remote_datasource.dart` (`weekly_schedules` + `shift_swaps`) + `data/repositories/schedule_repository_impl.dart` (+ `domain/repositories/schedule_repository.dart`) |
 | **Schedule logic / week+branch nav / assign-remove** | `lib/features/schedule/presentation/cubit/schedule_cubit.dart` + `schedule_state.dart` |
 | **Shift-swap workflow / status transitions** | `lib/features/schedule/presentation/cubit/shift_swap_cubit.dart` + `shift_swap_state.dart` |
-| **Schedule screens (admin/manager/employee)** | `lib/features/schedule/presentation/pages/` (`schedule_management_screen` admin · `branch_schedule_screen` manager · `my_schedule_screen` employee) → shared `widgets/manager_schedule_view.dart` · `swap_view.dart` · `schedule_helpers.dart` |
+| **Shift-swap "future shifts only" rule**  | `lib/features/schedule/domain/swap_eligibility.dart` (`SwapEligibility.slotStart`/`isRequestable`/`pastShiftMessage`) — enforced in `ShiftSwapCubit.requestSwap` (gate) + `swap_view.dart` (sheet `_send`) + `firestore.rules` (`shift_swaps` create → `swapSlotInFuture`). Tested in `test/swap_eligibility_test.dart` |
+| **Admin all-branch swap visibility**      | `ScheduleRepository.getAllSwaps()` (+ datasource + impl) → `ShiftSwapCubit.pendingSwaps()` (one-shot, non-emitting, for the Admin Home count) **and** `ShiftSwapCubit.loadAll()`/`SwapScope.all` (the list state for the admin swap **queue modal** opened from the floating `SwapAlertCard` inside the schedule grid) |
+| **Schedule = assignments, not quotas** | The grid shows **assigned head-count only** — no required/target/understaffed model (removed deliberately; admin assigns by judgment). Cell density + "Empty" come from `validAssignments(...).length` in `shift_cell.dart`; the only signals are *empty* (neutral) and *broken reference* (flagged). |
+| **Schedule orphan / broken-reference handling** | `schedule_helpers.dart` (`isOrphanAssignment` / `validAssignments` / `orphanAssignments`) → `broken_assignment_banner.dart` (`brokenSlots` + `BrokenAssignmentBanner` + resolve sheet Remove/Reassign) and `shift_details_sheet.dart` (per-slot orphan row). A slot uid that isn't a current branch member is excluded from coverage and flagged as "Former employee" — **never** shown as a uid or fake "Unknown" name. Tested in `schedule_helpers_test.dart` |
+| **Schedule screens (admin/manager/employee)** | `lib/features/schedule/presentation/pages/` (`schedule_management_screen` admin · `branch_schedule_screen` manager — **single operations-grid surface**, swaps via floating alert; `my_schedule_screen` employee — My Week + Swaps; past slots show "Past" not a Swap action) → shared `widgets/manager_schedule_view.dart` (the grid surface) · `swap_view.dart` (`SwapListView`, `showBranch` for the admin queue) |
+| **Schedule grid / cell / sheets (reusable widgets)** | `lib/features/schedule/presentation/widgets/`: `schedule_grid.dart` (`ScheduleGrid`) · `shift_cell.dart` (`ShiftCell` — assigned-count density tile, no quota) · `employee_row.dart` (`EmployeeRow`) · `shift_details_sheet.dart` (`showShiftDetailsSheet`) · `swap_alert_card.dart` (`SwapAlertCard` + `showSwapQueueSheet`) · `broken_assignment_banner.dart` · `employee_picker_sheet.dart` (`showEmployeePicker`) · `sheet_chrome.dart` (`SheetHandle`). Tested in `test/schedule_grid_test.dart` |
 | **Schedule routes / role entry point**    | `lib/core/routes/route_names.dart` (`adminSchedule`/`managerSchedule`/`mySchedule` + `scheduleForRole`) + `app_router.dart` + `role_scaffold.dart` (calendar icon → Schedule) |
 | **Schedule/swap DI wiring**               | `lib/core/di/injection.dart` (`scheduleCubit`/`shiftSwapCubit`) + `main.dart` providers |
-| **Dashboard screens (live stats)**        | `lib/features/admin/presentation/pages/admin_dashboard_screen.dart` · `manager/.../manager_home_screen.dart` · `employee/.../employee_home_screen.dart` (+ shared `statistics/presentation/widgets/stat_grid.dart` — `StatGrid` + `StatGridSkeleton` loading placeholder) |
+| **Broadcast schema / serialization**      | `lib/features/communications/domain/entities/broadcast_entity.dart` (+ `category`/`targetUserId`/`recipientCount`, Phase 2) + `data/models/broadcast_model.dart` (then run codegen) + `lib/core/enums/broadcast_audience.dart` (`BroadcastAudience` — allBranches/branch/**user**; `''` = all-branches sentinel, `'__direct__'` = DM marker) |
+| **Broadcast recipient-resolution / permissions** | `lib/features/communications/domain/broadcast_permissions.dart` (`BroadcastPermissions.canSend`/`allowedAudiences`/`validate` — admin: all/branch/user · manager: own-branch/user-in-branch · employee: none) — the client guard; **re-enforced in `functions/index.js`** + `firestore.rules`. Tested in `test/broadcast_permissions_test.dart` |
+| **Broadcast SEND engine (Cloud Function)** | `functions/index.js` (callable `sendBroadcast`: validate perms → resolve recipients → write `broadcasts/{id}` → gather `users.fcmTokens` → `messaging.sendEachForMulticast` → prune dead tokens → return `{success, recipientCount, deliveredCount, broadcastId}`) + `functions/package.json` + `firebase.json` (`functions`). Deploy: `firebase deploy --only functions` |
+| **Broadcast send (client path)**          | `BroadcastCubit.send(...)` (client guard via `BroadcastPermissions`, returns recipientCount) → `SendBroadcast` use case → `BroadcastRepositoryImpl` → `BroadcastRemoteDataSource.sendBroadcast` (invokes the callable via `FirebaseFunctions`, `toCallablePayload()`) |
+| **Broadcast feed (Firestore read)**       | `lib/features/communications/data/datasources/broadcast_remote_datasource.dart` `watchBroadcasts` (`broadcasts/{id}`; admin `orderBy(createdAt)`, branch `where('branchId', whereIn:[branch,''])` client-sorted; DMs excluded via the `'__direct__'` marker) → `BroadcastCubit.load({branchId})` |
+| **Broadcast repository / use case / state** | `domain/repositories/broadcast_repository.dart` (+impl) · `domain/usecases/send_broadcast.dart` (`SendBroadcast`) · `presentation/cubit/broadcast_cubit.dart` + `broadcast_state.dart` |
+| **Broadcast DI wiring / provider**        | `lib/core/di/injection.dart` (`broadcastCubit`; datasource takes `FirebaseFirestore` + `FirebaseFunctions`) + `main.dart` provider + `AppConstants.broadcastsCollection` + `firestore.rules` (`broadcasts/{id}` — **client writes denied**, function-owned) |
+| **FCM device token storage (multi-device)** | `lib/core/services/notification_service.dart` — `registerToken`/`_rotateToken` (`users/{uid}.fcmTokens` `arrayUnion`, refresh-aware), `forgetUser` (`arrayRemove` on sign-out). Read server-side by `functions/index.js`. Wired in `main.dart` (`AuthCubit` listener) |
+| **FCM receive handling (fg/bg/tap)**      | `lib/core/services/notification_service.dart` (`onMessage` → `onForeground`; `onMessageOpenedApp` + `getInitialMessage` → `onMessageTap`) + `lib/main.dart` (background top-level handler, foreground snackbar via `_messengerKey`, tap → `_router.go(home)` + log `broadcastId`) |
+| **Communications Center UI (feed/compose/detail)** | `lib/features/communications/presentation/pages/` (`communications_screen.dart` feed + FAB · `compose_broadcast_screen.dart` role-gated form · `broadcast_detail_screen.dart`) + `widgets/broadcast_card.dart` + `presentation/communications_format.dart` (time/audience/category formatting). Card render tested in `test/broadcast_card_test.dart` |
+| **Communications routes / entry point**   | `route_names.dart` (`communications` `/communications` · `communicationsCompose` `/communications/compose` · `communicationsDetailPattern` `/communications/:broadcastId` + `communicationsDetail(id)`) + `app_router.dart` (3 routes, declared compose-before-detail; `_isCommunicationsArea` guard — admin + manager, employees bounced) + `role_scaffold.dart` (campaign icon, admin/manager only) |
+| **Broadcast category (announcement/alert/reminder/emergency)** | `lib/core/enums/broadcast_category.dart` (`BroadcastCategory` — value/label/isUrgent/fromString; pure Dart, icon+colour mapping in `communications_format.dart`). Tested in `test/broadcast_category_test.dart` |
+| **Broadcast compose pickers (branch/recipient)** | `BroadcastCubit.branches()` / `branchUsers(branchId)` (repo-direct, `BranchRepository` + `GetUsersByBranch`, mirrors `TaskCubit`) — wired in `injection.dart` |
+| **Broadcast delivery stats (recipient/delivered)** | `recipientCount` (write time) + `deliveredCount` (post-multicast `broadcastRef.update`) on `broadcasts/{id}` — set by `functions/index.js`, read via `BroadcastModel`/`BroadcastEntity`, shown on `broadcast_card.dart` + `broadcast_detail_screen.dart` |
+| **Multiline text field**                  | `lib/features/auth/presentation/widgets/app_text_field.dart` (`maxLines`/`minLines`, default 1; ignored when `obscureText`) — used by the broadcast body |
+| **Dashboard screens (live stats)**        | `admin_dashboard_screen.dart` (**command center, 2026-06-19** — `DashboardMetricCard` grid + hero + activity feed; see "Admin Home (command center)") · `manager/.../manager_home_screen.dart` (shared `statistics/presentation/widgets/stat_grid.dart` — `StatGrid` + `StatGridSkeleton`, + `HeroStatCard`) · `employee/.../employee_home_screen.dart` (**bespoke, redesign v2** — own `_HeroTodayCard`/`_ProgressRing`/`_RingPainter`/`_StatStrip`/`_HomeTaskCard` with inline actions; task counts from the live `TaskCubit` list, shift from `StatisticsCubit`) |
 | **Push notifications (FCM)**              | `lib/core/services/notification_service.dart` + `core/enums/notification_type.dart`; wired in `main.dart` (background handler, init, token register on auth, foreground snackbar) |
 | **Admin routes**                          | `lib/core/routes/route_names.dart` (`adminBranches`/`adminManagers`/`adminEmployees`/`adminAnalytics`/`adminApprovals`) + `app_router.dart` (under `_isAdminArea`) |
-| **Admin Home (4 KPIs) / module nav**      | `lib/features/admin/presentation/pages/admin_dashboard_screen.dart` (KPI cards + nav tiles) |
+| **Admin Home (command center)**           | `lib/features/admin/presentation/pages/admin_dashboard_screen.dart` — greeting · hero (most-urgent insight) · **Pending Actions** panel (the public `PendingActions` widget: swaps · approvals · reviews · overdue — replaced the recent-activity feed 2026-06-20; **always rendered**, shows an "all caught up" state when empty) · `DashboardMetricCard` grid · `ActionCard` quick actions · pending-approvals preview · Manage grid. Reads `StatisticsCubit` + `TaskCubit` (all-branches stream, for overdue) + `AdminUsersCubit.pendingUsers()` + `ShiftSwapCubit.pendingSwaps()` |
+| **Admin Pending Actions panel (widget)**  | `lib/features/admin/presentation/widgets/pending_actions.dart` (`PendingActions` — presentational: counts + callbacks; widget-tested in `test/pending_actions_widget_test.dart`) |
+| **Premium card surface (shared)**         | `lib/core/widgets/glass_container.dart` (`GlassContainer` — gradient·border·depth·press/hover; built on by `DashboardMetricCard`/`ActionCard`/`HeroStatCard`/`AdminUserCard`/`EmployeeCard`) |
+| **Dashboard metric / quick-action / section-header tiles** | `lib/core/widgets/dashboard_metric_card.dart` · `action_card.dart` · `admin_section_header.dart` |
+| **Vertical timeline row (shared)**        | `lib/core/widgets/timeline_tile.dart` (`TimelineTile`) — used by the Task Details activity timeline (the admin recent-activity feed was replaced by Pending Actions 2026-06-20) |
+| **Task activity label/colour/time format**| `lib/features/task/presentation/activity_format.dart` (`activityTitle` / `activityColor` / `relativeTime`) |
+| **Employee card + performance metrics**   | `lib/features/admin/presentation/widgets/employee_card.dart` (`EmployeeCard`) + `lib/features/admin/presentation/employee_metrics.dart` (`EmployeeMetrics` + `computeEmployeeMetrics` — derived from the task stream; pending preview via `AdminUsersCubit.pendingUsers()`) |
 | **Admin Analytics (full metric wall)**    | `lib/features/admin/presentation/pages/admin_analytics_screen.dart` (route `/admin/analytics`; reuses `StatGrid`) |
 | **Branches page (premium cards + search)**| `lib/features/branch/presentation/pages/branch_management_screen.dart` (manager + employee counts via `AdminUsersCubit.usersWithRole`) |
-| **Admin user cards / search + filters**   | `admin_user_card.dart` (avatar-led) · `admin_users_list_view.dart` (search, Managers/Approvals) · `employee_management_screen.dart` (search + active/inactive + branch) |
-| **Schedule UI polish (badges/avatars/coverage)** | `lib/features/schedule/presentation/widgets/manager_schedule_view.dart` + `schedule_helpers.dart` (`userForUid`) + `pages/my_schedule_screen.dart` (no logic change) |
+| **Admin user cards / search + filters**   | `admin_user_card.dart` (avatar-led, on `GlassContainer`; Managers/Approvals) · `admin_users_list_view.dart` (search) · `employee_management_screen.dart` (search + active/inactive + branch; renders **`EmployeeCard`** with the perf metric strip) |
+| **Schedule UI polish (cells/avatars/rows)** | Manager/admin: the grid widgets above (`shift_cell.dart`, `employee_row.dart`) + `schedule_helpers.dart` (`userForUid`/`roleLabel`). Employee: `pages/my_schedule_screen.dart` |
 | **Admin/branch DI wiring**                | `lib/core/di/injection.dart` (`branchCubit`/`adminUsersCubit`/`adminStatsCubit`) + `main.dart` providers |
 | **A role's home/dashboard screen**        | `lib/features/{employee,manager,admin}/presentation/pages/`              |
-| **Shared role chrome**                    | `lib/core/widgets/role_scaffold.dart`                                    |
+| **Shared role chrome (header + bottom nav)** | `lib/core/widgets/role_scaffold.dart` (header bell/avatar + bottom nav) → `lib/core/widgets/app_bottom_nav.dart` (`AppBottomNav` + `AppNavItem`) |
 | **Signed-in user/role off a context**     | `lib/core/extensions/context_extensions.dart` (`context.currentUser` / `context.currentRole`) |
 | **Confirmation / delete dialogs**         | `lib/core/widgets/app_dialog.dart` (`showConfirmDialog(...)`)            |
 | **Form fields (text / password / dropdown)** | `lib/features/auth/presentation/widgets/` — `app_text_field.dart` (`AppTextField`: label·hint·prefix·suffix·readOnly·onTap·built-in show/hide), `app_password_field.dart` (`AppPasswordField`), `app_dropdown_field.dart` (`AppDropdownField<T>` — branch/role/status/priority) |
 | **Primary / secondary / ghost buttons**   | `lib/features/auth/presentation/widgets/app_button.dart` (`AppButton` · `AppButton.secondary` · `AppButton.ghost`) |
 | **Reusable card shell / empty state**     | `lib/core/widgets/app_card.dart` (`AppCard` — surface·radius 24·press·hover) · `app_empty_state.dart` (`AppEmptyState`; `TaskEmptyState` delegates to it) |
-| **Status pills (task/approval/swap/active)** | `lib/core/widgets/status_badge.dart` (`StatusBadge` + `.task`/`.approval`/`.swap`/`.active` factories — colour+label in one place) |
+| **Status pills (task/approval/swap/active)** | `lib/core/widgets/status_badge.dart` (`StatusBadge` + `.task`/`.approval`/`.swap`/`.active` factories — colour+label in one place; **`.task` is the canonical task-status chip**) |
 | **Role checks / feedback off a context**  | `lib/core/extensions/context_extensions.dart` (`context.isAdmin`/`isManager`/`isEmployee`, `context.showSuccess`/`showError`) |
 | **Firestore Timestamp→DateTime mapping**  | `lib/core/extensions/firestore_extensions.dart` (`map.date('field')` in every `*Model.fromMap`) |
 | **Roles enum / role values**              | `lib/core/enums/user_role.dart`                                         |
@@ -592,6 +729,10 @@ Patterns below are established across the codebase and **must be reused**.
   `features/<f>/presentation/widgets`.
 - Buttons use `AppButton` (variants: `primary` / `secondary` / `ghost`) with a
   built-in `isLoading` spinner — don't hand-roll buttons.
+- Premium card surfaces use **`GlassContainer`** (the shared gradient/border/
+  depth surface with press+hover feedback) — build cards on it (e.g.
+  `DashboardMetricCard`, `ActionCard`, `EmployeeCard`) rather than re-declaring
+  the gradient `BoxDecoration`. Vertical timelines use the shared `TimelineTile`.
 - User feedback uses `AppSnackbar.success/error`, never raw `ScaffoldMessenger`.
 - Loading placeholders use `Skeleton`.
 - Pull spacing/radius from `AppSpacing` / `AppRadius`; never hardcode.
@@ -599,12 +740,22 @@ Patterns below are established across the codebase and **must be reused**.
 ### Theme conventions
 - The app is **dark-mode only** today (`themeMode: ThemeMode.dark`); a `light`
   theme exists in `AppTheme` but is not wired up.
-- **Strictly monochrome**: `AppColors.primary` is white; the only chromatic
-  colors are the semantic `success` / `error` / `warning`, used for status only.
+- **Strictly monochrome** (black / white / grey): `AppColors.primary` is white —
+  the only accent. It carries every primary action, focus state, active bottom-nav
+  tab, and key highlight. Text/icons that sit **on** the white accent use
+  `AppColors.onPrimary` (dark). Use `primarySurface` (white ~12% wash) for tinted
+  tiles / the active nav pill; `primaryGradient` is a white→grey (≈ flat white)
+  accent fill; `primaryGlow(...)` is kept **flat** (no shadow). The only chromatic
+  colors are the semantic `success` / `error` / `warning` (status only).
 - Never use raw `Color(...)` or `TextStyle(...)` in features — reference
-  `AppColors`, `AppTypography`, `AppSpacing`, `AppRadius`.
+  `AppColors`, `AppTypography`, `AppSpacing`, `AppRadius`. A primary fill is the
+  white `primary`/`primaryGradient` (dark `onPrimary` text).
 - Global component styling (inputs, buttons, app bar) lives in `AppTheme`; tune
   it there rather than per-widget.
+- **Role chrome is a bottom navigation bar.** `RoleScaffold` hosts each role
+  dashboard under a header (bell + avatar → profile) and an `AppBottomNav`
+  (Home · Tasks · Schedule · Profile); tabs push the role-scoped routes
+  (`tasksForRole`/`scheduleForRole`/`profile`). Add cross-role nav here.
 
 ### Roles & access model
 - The access role is the `UserRole` enum (`core/enums/user_role.dart`), stored
@@ -665,6 +816,14 @@ Patterns below are established across the codebase and **must be reused**.
   team); a swap is read/written by the two involved employees and the branch
   manager/admin, with **create** restricted to the requester in their own branch
   (the status order is validated client-side in `ShiftSwapCubit`).
+  **`broadcasts/{id}` (Communications Center — Phase 1 + Phase 2 engine)**:
+  **read** = admin, OR the individual recipient of a direct message
+  (`targetUserId`), OR a branch member of a branch/all-branches broadcast
+  (`branchId == '' || branchId == selfBranch()`). **All client writes are
+  denied** (`create, update, delete: if false`) — the `sendBroadcast` Cloud
+  Function (Admin SDK, which bypasses rules) is the sole writer and enforces the
+  send-permission matrix server-side. A DM carries the `'__direct__'` branchId
+  marker so it never appears in a branch/all feed query.
 - Routes are role-guarded in the GoRouter `redirect`: admin areas are
   admin-only, manager areas admit **manager + admin** (the hierarchy), the
   employee home (`/`) is employee-only. Add a new role area as a path prefix

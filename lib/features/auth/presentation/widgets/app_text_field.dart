@@ -21,6 +21,11 @@ class AppTextField extends StatefulWidget {
   final bool readOnly;
   final VoidCallback? onTap;
 
+  /// Multi-line support (default single line). Set [maxLines] > 1 (and optionally
+  /// [minLines]) for a textarea-style field; ignored when [obscureText] is true.
+  final int maxLines;
+  final int? minLines;
+
   const AppTextField({
     super.key,
     required this.controller,
@@ -39,6 +44,8 @@ class AppTextField extends StatefulWidget {
     this.maxLength,
     this.readOnly = false,
     this.onTap,
+    this.maxLines = 1,
+    this.minLines,
   });
 
   @override
@@ -123,6 +130,8 @@ class _AppTextFieldState extends State<AppTextField>
           maxLength: widget.maxLength,
           readOnly: widget.readOnly,
           onTap: widget.onTap,
+          maxLines: widget.obscureText ? 1 : widget.maxLines,
+          minLines: widget.obscureText ? 1 : widget.minLines,
           style: AppTypography.body.copyWith(
             color: isDark ? AppColors.textPrimary : AppColors.textDark,
             fontSize: 15,

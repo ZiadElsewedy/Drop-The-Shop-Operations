@@ -94,12 +94,12 @@ class _AdminUsersListViewState extends State<AdminUsersListView> {
           ? null
           : FloatingActionButton.extended(
               onPressed: widget.onAdd,
-              backgroundColor: AppColors.white,
-              foregroundColor: AppColors.textDark,
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.onPrimary,
               icon: const Icon(Icons.add_rounded),
               label: Text(widget.addLabel ?? 'Add',
                   style: AppTypography.label
-                      .copyWith(color: AppColors.textDark)),
+                      .copyWith(color: AppColors.onPrimary)),
             ),
       body: Column(
         children: [

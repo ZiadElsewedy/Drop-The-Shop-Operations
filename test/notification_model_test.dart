@@ -1,0 +1,106 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:fbro/core/enums/notification_type.dart';
+import 'package:fbro/features/notifications/data/models/notification_model.dart';
+import 'package:fbro/features/notifications/domain/entities/notification_entity.dart';
+
+/// Verifies the notification model (Notification System Phase 1 — Part 1)
+/// serializes/deserializes cleanly, including the typed payload reads.
+void main() {
+  group('NotificationModel serialization', () {
+    test('toMap writes the type name + payload (createdAt is server-side)', () {
+      final map = NotificationModel.fromEntity(NotificationEntity(
+        id: 'n1',
+        recipientUid: 'u1',
+        senderUid: 'mgr',
+        type: NotificationType.taskRework,
+        title: 'Task Needs Rework',
+        body: 'Missing stock photo',
+        createdAt: DateTime(2026, 6, 22),
+        payload: const {
+          'taskId': 't1',
+          'revisionNumber': 2,
+          'route': 'task_details',
+        },
+      )).toMap();
+
+      expect(map['type'], 'taskRework');
+      expect(map['recipientUid'], 'u1');
+      expect(map['senderUid'], 'mgr');
+      expect((map['payload'] as Map)['taskId'], 't1');
+      expect((map['payload'] as Map)['revisionNumber'], 2);
+      // createdAt is written by the datasource as a server timestamp.
+      expect(map.containsKey('createdAt'), false);
+    });
+
+    test('fromMap reads type, timestamps and payload', () {
+      final m = NotificationModel.fromMap({
+        'recipientUid': 'u1',
+        'type': 'broadcastEmergency',
+        'title': 'Evacuate',
+        'body': 'Leave now',
+        'createdAt': Timestamp.fromDate(DateTime(2026, 6, 22, 8, 30)),
+        'readAt': null,
+        'payload': const {
+          'broadcastId': 'b1',
+          'category': 'emergency',
+          'priority': 'high',
+          'route': 'broadcast_detail',
+        },
+      }, id: 'n9');
+
+      expect(m.id, 'n9');
+      expect(m.type, NotificationType.broadcastEmergency);
+      expect(m.readAt, isNull);
+      final e = m.toEntity();
+      expect(e.broadcastId, 'b1');
+      expect(e.category, 'emergency');
+      expect(e.route, 'broadcast_detail');
+      expect(e.isUnread, true);
+    });
+
+    test('typed payload getters on the entity', () {
+      final e = NotificationEntity(
+        id: 'n1',
+        recipientUid: 'u1',
+        type: NotificationType.taskRework,
+        title: 'x',
+        body: 'y',
+        createdAt: DateTime(2026),
+        payload: const {
+          'taskId': 't1',
+          'revisionNumber': 3,
+          'route': 'task_details',
+        },
+      );
+      expect(e.taskId, 't1');
+      expect(e.revisionNumber, 3);
+      expect(e.route, 'task_details');
+      expect(e.broadcastId, isNull);
+    });
+
+    test('an unknown type degrades gracefully (no crash)', () {
+      final m = NotificationModel.fromMap(const {
+        'recipientUid': 'u1',
+        'type': 'somethingNew',
+        'title': 'x',
+        'body': 'y',
+      });
+      // Falls back to a known type rather than throwing.
+      expect(m.type, NotificationType.taskAssigned);
+    });
+
+    test('NotificationType.fromBroadcastCategory maps categories', () {
+      expect(NotificationType.fromBroadcastCategory('alert'),
+          NotificationType.broadcastAlert);
+      expect(NotificationType.fromBroadcastCategory('reminder'),
+          NotificationType.broadcastReminder);
+      expect(NotificationType.fromBroadcastCategory('emergency'),
+          NotificationType.broadcastEmergency);
+      expect(NotificationType.fromBroadcastCategory('announcement'),
+          NotificationType.broadcastAnnouncement);
+      expect(NotificationType.fromBroadcastCategory('???'),
+          NotificationType.broadcastAnnouncement);
+    });
+  });
+}

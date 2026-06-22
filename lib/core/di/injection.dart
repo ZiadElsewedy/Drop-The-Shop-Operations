@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -38,9 +39,7 @@ import 'package:fbro/features/task/domain/usecases/create_task.dart';
 import 'package:fbro/features/task/domain/usecases/update_task.dart';
 import 'package:fbro/features/task/domain/usecases/delete_task.dart';
 import 'package:fbro/features/task/domain/usecases/assign_task.dart';
-import 'package:fbro/features/task/domain/usecases/change_task_status.dart';
-import 'package:fbro/features/task/domain/usecases/review_task.dart';
-import 'package:fbro/features/task/domain/usecases/upload_task_proof.dart';
+import 'package:fbro/features/task/domain/usecases/upload_task_attachment.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 import 'package:fbro/features/branch/data/datasources/branch_remote_datasource.dart';
 import 'package:fbro/features/branch/data/repositories/branch_repository_impl.dart';
@@ -59,6 +58,18 @@ import 'package:fbro/features/schedule/data/repositories/schedule_repository_imp
 import 'package:fbro/features/schedule/domain/repositories/schedule_repository.dart';
 import 'package:fbro/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
+import 'package:fbro/features/operations/presentation/cubit/branch_operations_cubit.dart';
+import 'package:fbro/features/communications/data/datasources/broadcast_remote_datasource.dart';
+import 'package:fbro/features/communications/data/repositories/broadcast_repository_impl.dart';
+import 'package:fbro/features/communications/domain/repositories/broadcast_repository.dart';
+import 'package:fbro/features/communications/domain/usecases/send_broadcast.dart';
+import 'package:fbro/features/communications/presentation/cubit/broadcast_cubit.dart';
+import 'package:fbro/features/notifications/data/datasources/notification_remote_datasource.dart';
+import 'package:fbro/features/notifications/data/repositories/notification_repository_impl.dart';
+import 'package:fbro/features/notifications/domain/repositories/notification_repository.dart';
+import 'package:fbro/features/notifications/domain/usecases/mark_notification_read.dart';
+import 'package:fbro/features/notifications/domain/usecases/notify_task_event.dart';
+import 'package:fbro/features/notifications/presentation/cubit/notification_cubit.dart';
 
 class AppDependencies {
   AppDependencies._();
@@ -77,6 +88,15 @@ class AppDependencies {
   // ─── Weekly schedule + shift swaps (Phase 7) ────────────────
   static late final ScheduleCubit scheduleCubit;
   static late final ShiftSwapCubit shiftSwapCubit;
+
+  // ─── Branch Operations cockpit (task→operations redesign) ───
+  static late final BranchOperationsCubit branchOperationsCubit;
+
+  // ─── Communications Center (Phase 1) ────────────────────────
+  static late final BroadcastCubit broadcastCubit;
+
+  // ─── Notifications (Notification System Phase 1) ────────────
+  static late final NotificationCubit notificationCubit;
 
   /// FCM foundation (Phase 6) — token registration + foreground handling.
   static late final NotificationService notificationService;
@@ -111,6 +131,13 @@ class AppDependencies {
     final BranchRepository branchRepository =
         BranchRepositoryImpl(branchRemoteDataSource);
 
+    // Notification repository is built early — the TaskCubit needs the
+    // NotifyTaskEvent use case for its automatic task-event notifications.
+    final NotificationRepository notificationRepository =
+        NotificationRepositoryImpl(
+      NotificationRemoteDataSourceImpl(FirebaseFirestore.instance),
+    );
+
     authCubit = AuthCubit(
       repository: authRepository,
       signInWithEmail: SignInWithEmail(authRepository),
@@ -143,10 +170,9 @@ class AppDependencies {
       updateTask: UpdateTask(taskRepository),
       deleteTask: DeleteTask(taskRepository),
       assignTask: AssignTask(taskRepository),
-      changeTaskStatus: ChangeTaskStatus(taskRepository),
-      reviewTask: ReviewTask(taskRepository),
-      uploadTaskProof: UploadTaskProof(taskRepository),
+      uploadTaskAttachment: UploadTaskAttachment(taskRepository),
       getUsersByBranch: GetUsersByBranch(authRepository),
+      notifyTaskEvent: NotifyTaskEvent(notificationRepository),
     );
 
     // ─── Admin module (Phase 5) ───────────────────────────────
@@ -171,6 +197,38 @@ class AppDependencies {
     scheduleCubit =
         ScheduleCubit(scheduleRepository, GetUsersByBranch(authRepository));
     shiftSwapCubit = ShiftSwapCubit(scheduleRepository);
+
+    // ─── Branch Operations cockpit ────────────────────────────
+    // Read/derive cubit composing the task stream × branch members × today's
+    // roster; writes still flow through [taskCubit].
+    branchOperationsCubit = BranchOperationsCubit(
+      taskRepository: taskRepository,
+      scheduleRepository: scheduleRepository,
+      getUsersByBranch: GetUsersByBranch(authRepository),
+    );
+
+    // ─── Communications Center (Phase 1 + Phase 2 send engine) ─
+    // Hybrid cubit (like TaskCubit): the SendBroadcast use case for the write
+    // (→ the callable `sendBroadcast` Cloud Function), the repository directly
+    // for the realtime feed stream (Firestore).
+    final BroadcastRepository broadcastRepository = BroadcastRepositoryImpl(
+      BroadcastRemoteDataSourceImpl(
+        FirebaseFirestore.instance,
+        FirebaseFunctions.instance,
+      ),
+    );
+    broadcastCubit = BroadcastCubit(
+      repository: broadcastRepository,
+      sendBroadcast: SendBroadcast(broadcastRepository),
+      branchRepository: branchRepository,
+      getUsersByBranch: GetUsersByBranch(authRepository),
+    );
+
+    // ─── Notifications (Notification System Phase 1) ──────────
+    notificationCubit = NotificationCubit(
+      repository: notificationRepository,
+      markRead: MarkNotificationRead(notificationRepository),
+    );
 
     notificationService = NotificationService(
       FirebaseMessaging.instance,

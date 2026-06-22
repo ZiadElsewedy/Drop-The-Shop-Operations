@@ -1,5 +1,6 @@
 import 'dart:io';
-import 'package:fbro/core/enums/task_status.dart';
+import 'package:fbro/core/enums/attachment_type.dart';
+import 'package:fbro/features/task/domain/entities/task_attachment.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
 
@@ -43,25 +44,23 @@ abstract class TaskRepository {
     String? assignedShiftId,
   });
 
-  /// Moves the task to [status] (employee start/complete/submit). Approve/reject
-  /// go through [reviewTask] so the audit fields are written together.
-  Future<void> updateStatus({
+  /// Uploads one media file (image / video) to Storage under the task's
+  /// `attachments/` folder and returns the resolved [TaskAttachment]. Each call
+  /// creates a uniquely-named object (no overwrite).
+  ///
+  /// Status transitions (start / complete+submit / approve / reject) all flow
+  /// through [updateTask] as a single write that also appends the activity-log
+  /// entry (with its attachments), so there is intentionally no separate
+  /// status/review method here.
+  Future<TaskAttachment> uploadAttachment({
     required String taskId,
-    required TaskStatus status,
+    required File file,
+    required AttachmentType type,
+    required String uploadedBy,
+    String? uploadedByName,
+    int? durationMs,
+    void Function(int transferred, int total)? onProgress,
   });
-
-  /// Reviews the task: sets the terminal status (approved/rejected) together with
-  /// the audit fields (approvedBy/approvedAt or rejectedBy/rejectedAt) and an
-  /// optional [reviewNotes]. Manager (own branch) / admin only.
-  Future<void> reviewTask({
-    required String taskId,
-    required bool approved,
-    required String reviewerId,
-    String? reviewNotes,
-  });
-
-  /// Uploads a proof image to Storage for the task and returns its download URL.
-  Future<String> uploadProof(String taskId, File file);
 
   // ─── Task templates (reusable blueprints) ──────────────────────
   /// All task templates (manager/admin). Branch scoping is applied by the cubit.

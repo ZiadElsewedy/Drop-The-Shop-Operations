@@ -1,0 +1,205 @@
+import 'dart:async';
+import 'dart:developer' as developer;
+
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fbro/core/enums/broadcast_audience.dart';
+import 'package:fbro/core/errors/failures.dart';
+import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
+import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
+import 'package:fbro/features/branch/domain/repositories/branch_repository.dart';
+import 'package:fbro/features/communications/domain/broadcast_permissions.dart';
+import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
+import 'package:fbro/features/communications/domain/repositories/broadcast_repository.dart';
+import 'package:fbro/features/communications/domain/usecases/send_broadcast.dart';
+import 'package:fbro/features/communications/presentation/cubit/broadcast_state.dart';
+
+/// Drives the Communications Center. A **hybrid** cubit, matching `TaskCubit`:
+/// the write (`send`) goes through the [SendBroadcast] use case (→ the callable
+/// `sendBroadcast` Cloud Function), while the live feed subscribes to
+/// [BroadcastRepository.watchBroadcasts] directly (the documented stream-access
+/// convention).
+///
+/// The sent broadcast appears in the feed via the same stream — no manual
+/// refetch. WHO may send what is validated client-side here ([BroadcastPermissions],
+/// defense-in-depth + UI affordance) and enforced authoritatively by the Cloud
+/// Function + `firestore.rules`.
+class BroadcastCubit extends Cubit<BroadcastState> {
+  final BroadcastRepository _repository;
+  final SendBroadcast _sendBroadcast;
+
+  /// Picker support for the Compose screen — the branch selector + the
+  /// individual-recipient list (mirrors `TaskCubit.branches` / `branchEmployees`,
+  /// the documented repo-direct picker convention).
+  final BranchRepository _branchRepository;
+  final GetUsersByBranch _getUsersByBranch;
+
+  BroadcastCubit({
+    required this._repository,
+    required this._sendBroadcast,
+    required this._branchRepository,
+    required this._getUsersByBranch,
+  }) : super(const BroadcastState.initial());
+
+  StreamSubscription<List<BroadcastEntity>>? _sub;
+  bool _hasSnapshot = false;
+
+  List<BroadcastEntity> get _broadcasts =>
+      state.maybeWhen(loaded: (b, _) => b, orElse: () => const []);
+
+  bool get _sending =>
+      state.maybeWhen(loaded: (_, sending) => sending, orElse: () => false);
+
+  /// Subscribes to the live broadcast feed.
+  ///
+  /// - [branchId] `null` → admin feed (all branches).
+  /// - [branchId] set → branch member feed (their branch + all-branches).
+  Future<void> load({String? branchId}) async {
+    _hasSnapshot = false;
+    emit(const BroadcastState.loading());
+    await _sub?.cancel();
+    _sub = _repository.watchBroadcasts(branchId: branchId).listen(
+      (broadcasts) {
+        _hasSnapshot = true;
+        emit(BroadcastState.loaded(broadcasts, sending: _sending));
+      },
+      onError: (Object e, StackTrace st) {
+        developer.log('Broadcast: feed stream error',
+            name: 'communications', error: e, stackTrace: st);
+        // Only surface if no first snapshot arrived; otherwise keep the last
+        // good feed visible (mirrors TaskCubit / BranchOperationsCubit).
+        if (!_hasSnapshot) emit(BroadcastState.error(_message(e)));
+      },
+    );
+  }
+
+  /// Sends a broadcast from [sender] to [audience]:
+  /// - [BroadcastAudience.allBranches] — every user (admin only).
+  /// - [BroadcastAudience.branch] — a branch (admin: any via [branchId]; manager:
+  ///   their own; [branchId] defaults to the sender's branch).
+  /// - [BroadcastAudience.user] — one individual ([targetUserId] required;
+  ///   [targetUserBranchId] is the recipient's branch, used to validate a
+  ///   manager send). [category] tags the push for client-side routing.
+  ///
+  /// Returns the **resolved recipient count** on success (the delivery summary
+  /// from the engine), or `null` on validation/permission/transport failure. The
+  /// new branch/all broadcast surfaces through the feed stream — no refetch.
+  Future<int?> send({
+    required UserEntity sender,
+    required String title,
+    required String message,
+    BroadcastAudience audience = BroadcastAudience.allBranches,
+    String? branchId,
+    String? targetUserId,
+    String? targetUserBranchId,
+    String category = 'general',
+  }) async {
+    if (_sending) return null;
+
+    final trimmedTitle = title.trim();
+    final trimmedMessage = message.trim();
+    if (trimmedTitle.isEmpty || trimmedMessage.isEmpty) {
+      _emitError('A broadcast needs a title and a message.');
+      return null;
+    }
+
+    // Branch broadcasts default to the sender's own branch when unspecified.
+    final targetBranch =
+        (branchId ?? '').trim().isNotEmpty ? branchId!.trim() : (sender.branchId ?? '');
+    final target = (targetUserId ?? '').trim();
+
+    // Client-side permission guard (the function re-enforces it authoritatively).
+    final denial = BroadcastPermissions.validate(
+      role: sender.role,
+      audience: audience,
+      senderBranchId: sender.branchId,
+      targetBranchId: targetBranch,
+      targetUserBranchId: targetUserBranchId,
+    );
+    if (denial != null) {
+      _emitError(denial);
+      return null;
+    }
+    if (audience == BroadcastAudience.branch && targetBranch.isEmpty) {
+      _emitError('Pick a branch to broadcast to.');
+      return null;
+    }
+    if (audience == BroadcastAudience.user && target.isEmpty) {
+      _emitError('Pick a recipient.');
+      return null;
+    }
+
+    final broadcast = BroadcastEntity(
+      id: '',
+      title: trimmedTitle,
+      message: trimmedMessage,
+      senderId: sender.uid,
+      senderName: _senderName(sender),
+      senderRole: sender.role,
+      audience: audience,
+      branchId: audience == BroadcastAudience.branch ? targetBranch : null,
+      targetUserId: audience == BroadcastAudience.user ? target : null,
+      category: category.trim().isEmpty ? 'general' : category.trim(),
+    );
+
+    final prev = _broadcasts;
+    emit(BroadcastState.loaded(prev, sending: true));
+    try {
+      final sent = await _sendBroadcast(broadcast);
+      // Keep the feed visible; the stream emits the new broadcast (branch/all).
+      emit(BroadcastState.loaded(_broadcasts));
+      return sent.recipientCount ?? 0;
+    } on Failure catch (e) {
+      _emitError(e.message);
+      return null;
+    } catch (_) {
+      _emitError('Could not send the broadcast. Please try again.');
+      return null;
+    }
+  }
+
+  /// Surface an error without losing the current feed (when one is loaded).
+  void _emitError(String message) {
+    final prev = _broadcasts;
+    emit(BroadcastState.error(message));
+    if (_hasSnapshot) emit(BroadcastState.loaded(prev));
+  }
+
+  String _senderName(UserEntity user) {
+    final name = user.displayName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    final email = user.email.trim();
+    return email.isNotEmpty ? email : 'DROP';
+  }
+
+  String _message(Object e) =>
+      e is Failure ? e.message : 'Could not load broadcasts. Please try again.';
+
+  // ─── Picker support (Compose screen) ───────────────────────────
+  /// Active branches for the admin's audience branch selector.
+  Future<List<BranchEntity>> branches() async {
+    try {
+      final list = await _branchRepository.getBranches();
+      return list.where((b) => b.isActive).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Active members of [branchId] for the individual-recipient picker.
+  Future<List<UserEntity>> branchUsers(String branchId) async {
+    if (branchId.trim().isEmpty) return const [];
+    try {
+      final users = await _getUsersByBranch(branchId.trim());
+      return users.where((u) => u.isActive).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<void> close() {
+    _sub?.cancel();
+    return super.close();
+  }
+}

@@ -11,7 +11,11 @@ import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
+import 'package:fbro/features/branch/presentation/cubit/branch_cubit.dart';
+import 'package:fbro/features/branch/presentation/cubit/branch_state.dart';
 import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
+import 'package:fbro/features/schedule/domain/swap_eligibility.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_state.dart';
 import 'package:fbro/features/schedule/presentation/widgets/schedule_helpers.dart';
@@ -24,10 +28,15 @@ class SwapListView extends StatelessWidget {
     super.key,
     required this.isManager,
     required this.currentUid,
+    this.showBranch = false,
   });
 
   final bool isManager;
   final String currentUid;
+
+  /// Show each swap's branch (admin views span multiple branches). Resolved via
+  /// [BranchCubit]; the manager view leaves this off (single, known branch).
+  final bool showBranch;
 
   @override
   Widget build(BuildContext context) {
@@ -73,6 +82,7 @@ class SwapListView extends StatelessWidget {
                         swap: s,
                         isManager: isManager,
                         currentUid: currentUid,
+                        showBranch: showBranch,
                       ),
                     ],
                   ),
@@ -88,11 +98,13 @@ class _SwapCard extends StatelessWidget {
     required this.swap,
     required this.isManager,
     required this.currentUid,
+    this.showBranch = false,
   });
 
   final ShiftSwapEntity swap;
   final bool isManager;
   final String currentUid;
+  final bool showBranch;
 
   @override
   Widget build(BuildContext context) {
@@ -120,8 +132,24 @@ class _SwapCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          Text('${swap.day.label} · ${swap.shift.label}',
-              style: AppTypography.bodySmall),
+          Row(
+            children: [
+              Text('${swap.day.label} · ${swap.shift.label}',
+                  style: AppTypography.bodySmall),
+              if (swap.createdAt != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                const Text('·',
+                    style: TextStyle(color: AppColors.textTertiary)),
+                const SizedBox(width: AppSpacing.sm),
+                Text(_relativeTime(swap.createdAt!),
+                    style: AppTypography.caption),
+              ],
+            ],
+          ),
+          if (showBranch) ...[
+            const SizedBox(height: AppSpacing.xs),
+            _BranchLine(branchId: swap.branchId),
+          ],
           if ((swap.note ?? '').isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(swap.note!, style: AppTypography.bodySmall),
@@ -180,6 +208,51 @@ class _SwapCard extends StatelessWidget {
       const SizedBox(height: AppSpacing.md),
       Wrap(spacing: AppSpacing.sm, runSpacing: AppSpacing.xs, children: buttons),
     ];
+  }
+}
+
+/// Compact "submitted N ago" label for a swap's createdAt timestamp.
+String _relativeTime(DateTime t) {
+  final d = DateTime.now().difference(t);
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+  if (d.inHours < 24) return '${d.inHours}h ago';
+  if (d.inDays < 7) return '${d.inDays}d ago';
+  return '${(d.inDays / 7).floor()}w ago';
+}
+
+/// Resolves a swap's `branchId` to a branch name via [BranchCubit] (admin queue
+/// spans branches). Falls back to a short id if the branch list isn't loaded.
+class _BranchLine extends StatelessWidget {
+  const _BranchLine({required this.branchId});
+  final String branchId;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<BranchCubit, BranchState>(
+      builder: (context, state) {
+        final branches = state.maybeWhen(
+          loaded: (b, _) => b,
+          orElse: () => const <BranchEntity>[],
+        );
+        String name = branchId.isEmpty ? 'Unassigned branch' : branchId;
+        for (final b in branches) {
+          if (b.id == branchId) {
+            name = b.name;
+            break;
+          }
+        }
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.store_mall_directory_outlined,
+                size: 13, color: AppColors.textTertiary),
+            const SizedBox(width: 4),
+            Text(name, style: AppTypography.caption),
+          ],
+        );
+      },
+    );
   }
 }
 
@@ -307,6 +380,13 @@ class _SwapRequestSheetState extends State<_SwapRequestSheet> {
     final target = _target;
     if (target == null) {
       AppSnackbar.error(context, 'Pick a coworker to swap with.');
+      return;
+    }
+    // Immediate feedback (spec §2): can't swap a past/in-progress shift. The
+    // cubit re-validates as the authoritative gate.
+    if (!SwapEligibility.isRequestable(
+        widget.weekStart, widget.day, widget.shift)) {
+      AppSnackbar.error(context, SwapEligibility.pastShiftMessage);
       return;
     }
     final note = _note.text.trim();

@@ -5,6 +5,7 @@ import 'package:fbro/core/enums/swap_status.dart';
 import 'package:fbro/core/errors/failures.dart';
 import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
 import 'package:fbro/features/schedule/domain/repositories/schedule_repository.dart';
+import 'package:fbro/features/schedule/domain/swap_eligibility.dart';
 import 'shift_swap_state.dart';
 
 /// Drives the shift-swap workflow (Phase 7). An employee requests a swap on one
@@ -12,11 +13,16 @@ import 'shift_swap_state.dart';
 /// which rewrites the schedule. The list shown depends on the view: an employee
 /// sees swaps involving them ([loadMine]); a manager sees their branch's queue
 /// ([loadBranch]). Calls [ScheduleRepository] directly (no use-case layer).
+/// Which slice of swaps the cubit is showing: the signed-in employee's own
+/// ([mine]), one branch's queue ([branch], manager), or every branch ([all],
+/// admin).
+enum SwapScope { mine, branch, all }
+
 class ShiftSwapCubit extends Cubit<ShiftSwapState> {
   final ScheduleRepository _repository;
 
-  /// Reload context — true = branch queue (manager), false = own swaps (employee).
-  bool _branchMode = false;
+  /// Reload context — drives which fetch [_load]/[_mutate] re-run.
+  SwapScope _scope = SwapScope.mine;
   String _key = '';
 
   ShiftSwapCubit(this._repository) : super(const ShiftSwapState.initial());
@@ -32,15 +38,22 @@ class ShiftSwapCubit extends Cubit<ShiftSwapState> {
 
   /// Employee view — swaps where [uid] is requester or target.
   Future<void> loadMine(String uid) async {
-    _branchMode = false;
+    _scope = SwapScope.mine;
     _key = uid;
     await _load();
   }
 
   /// Manager view — the branch's swap queue.
   Future<void> loadBranch(String branchId) async {
-    _branchMode = true;
+    _scope = SwapScope.branch;
     _key = branchId;
+    await _load();
+  }
+
+  /// Admin view — every branch's swap queue.
+  Future<void> loadAll() async {
+    _scope = SwapScope.all;
+    _key = '';
     await _load();
   }
 
@@ -57,19 +70,39 @@ class ShiftSwapCubit extends Cubit<ShiftSwapState> {
     required String targetId,
     String? targetName,
     String? note,
-  }) =>
-      _mutate(() => _repository.createSwap(ShiftSwapEntity(
-            id: '',
-            branchId: branchId,
-            weekStart: weekStart,
-            day: day,
-            shift: shift,
-            requesterId: requesterId,
-            requesterName: requesterName,
-            targetId: targetId,
-            targetName: targetName,
-            note: note,
-          )));
+  }) async {
+    // Authoritative client gate (spec §2): no swaps for past/in-progress shifts.
+    if (!SwapEligibility.isRequestable(weekStart, day, shift)) {
+      final prev = _swaps;
+      emit(const ShiftSwapState.error(SwapEligibility.pastShiftMessage));
+      emit(ShiftSwapState.loaded(prev));
+      return;
+    }
+    await _mutate(() => _repository.createSwap(ShiftSwapEntity(
+          id: '',
+          branchId: branchId,
+          weekStart: weekStart,
+          day: day,
+          shift: shift,
+          requesterId: requesterId,
+          requesterName: requesterName,
+          targetId: targetId,
+          targetName: targetName,
+          note: note,
+        )));
+  }
+
+  /// One-shot fetch of every **open** swap request (not resolved), across all
+  /// branches — used by the Admin Home "Pending Actions" panel for at-a-glance
+  /// operational visibility. Does not emit (mirrors `AdminUsersCubit.pendingUsers`).
+  Future<List<ShiftSwapEntity>> pendingSwaps() async {
+    try {
+      final all = await _repository.getAllSwaps();
+      return all.where((s) => !s.status.isResolved).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
 
   /// Target coworker approves → awaiting manager.
   Future<void> coworkerApprove(ShiftSwapEntity swap) => _mutate(() => _repository
@@ -85,12 +118,23 @@ class ShiftSwapCubit extends Cubit<ShiftSwapState> {
       _mutate(() => _repository.managerApproveSwap(swap));
 
   // ── Internals ──────────────────────────────────────────────────
-  Future<List<ShiftSwapEntity>> _fetch() => _branchMode
-      ? _repository.getBranchSwaps(_key)
-      : _repository.getEmployeeSwaps(_key);
+  Future<List<ShiftSwapEntity>> _fetch() {
+    switch (_scope) {
+      case SwapScope.mine:
+        return _repository.getEmployeeSwaps(_key);
+      case SwapScope.branch:
+        return _repository.getBranchSwaps(_key);
+      case SwapScope.all:
+        return _repository.getAllSwaps();
+    }
+  }
+
+  /// True when there's nothing to fetch — an empty key for the mine/branch
+  /// scopes (the all scope needs no key).
+  bool get _noTarget => _scope != SwapScope.all && _key.isEmpty;
 
   Future<void> _load() async {
-    if (_key.isEmpty) {
+    if (_noTarget) {
       emit(const ShiftSwapState.loaded([]));
       return;
     }
@@ -105,7 +149,7 @@ class ShiftSwapCubit extends Cubit<ShiftSwapState> {
   }
 
   Future<void> _mutate(Future<void> Function() action) async {
-    if (_busy || _key.isEmpty) return;
+    if (_busy || _noTarget) return;
     final prev = _swaps;
     emit(ShiftSwapState.loaded(prev, busy: true));
     try {

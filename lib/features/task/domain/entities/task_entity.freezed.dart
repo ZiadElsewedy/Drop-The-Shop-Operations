@@ -39,6 +39,12 @@ mixin _$TaskEntity {
 
   /// Optional shift this task belongs to (references `shifts/{shiftId}`).
   String? get assignedShiftId => throw _privateConstructorUsedError;
+
+  /// The operational shift this task belongs to (Branch Operations) —
+  /// `morning` / `night`, or **null** when the task is not shift-specific
+  /// ("any", applies under every shift filter). Drives the Branch Operations
+  /// shift filter; supersedes the unused legacy [assignedShiftId] string.
+  ScheduleShift? get shift => throw _privateConstructorUsedError;
   DateTime? get deadline => throw _privateConstructorUsedError;
 
   /// Free-text notes added by the executing employee.
@@ -46,7 +52,13 @@ mixin _$TaskEntity {
 
   /// Download URL of the proof image the employee uploads on completion.
   String? get proofImageUrl =>
-      throw _privateConstructorUsedError; // ─── Review audit (Phase 4 — lightweight, not a full history) ───
+      throw _privateConstructorUsedError; // ─── Lifecycle timestamps (one per status transition, set atomically) ───
+  /// When an employee first started the task.
+  DateTime? get startedAt => throw _privateConstructorUsedError;
+
+  /// When the employee submitted for review (via completeAndSubmit or submitForReview).
+  DateTime? get submittedAt =>
+      throw _privateConstructorUsedError; // ─── Review audit fields ─────────────────────────────────────
   /// uid of the manager/admin who approved the task, + when.
   String? get approvedBy => throw _privateConstructorUsedError;
   DateTime? get approvedAt => throw _privateConstructorUsedError;
@@ -56,7 +68,28 @@ mixin _$TaskEntity {
   DateTime? get rejectedAt => throw _privateConstructorUsedError;
 
   /// Reviewer's note left on approve/reject.
-  String? get reviewNotes => throw _privateConstructorUsedError;
+  String? get reviewNotes =>
+      throw _privateConstructorUsedError; // ─── Rework distinction (Notification System Phase 1) ─────────
+  /// How many times this task has been sent back for rework. 0 = a new task,
+  /// 1 = first rework, 2 = second, … Incremented only by "Request Rework"
+  /// (not by a terminal "Reject"). Drives the `REWORK #n` badge + payload.
+  int get revisionNumber => throw _privateConstructorUsedError;
+
+  /// True while the task is awaiting a redo after a rework request; cleared
+  /// when the employee resubmits. Distinguishes a rework loop from a plain
+  /// rejection / new task.
+  bool get requiresRework => throw _privateConstructorUsedError;
+
+  /// The reviewer's reason captured on the last rework / reject decision
+  /// (shown to the employee + carried in the notification body).
+  String? get rejectionReason => throw _privateConstructorUsedError;
+
+  /// Recurrence rule — null means "one-off" (does not repeat). When set, the
+  /// [TaskCubit] auto-creates the next instance after this task is approved.
+  RecurrenceConfig? get recurrence => throw _privateConstructorUsedError;
+
+  /// Activity timeline: one entry per status transition, ordered oldest→newest.
+  List<ActivityEntry> get activityLog => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
 
@@ -86,17 +119,27 @@ abstract class $TaskEntityCopyWith<$Res> {
     List<ChecklistItem> checklist,
     String? createdBy,
     String? assignedShiftId,
+    ScheduleShift? shift,
     DateTime? deadline,
     String? notes,
     String? proofImageUrl,
+    DateTime? startedAt,
+    DateTime? submittedAt,
     String? approvedBy,
     DateTime? approvedAt,
     String? rejectedBy,
     DateTime? rejectedAt,
     String? reviewNotes,
+    int revisionNumber,
+    bool requiresRework,
+    String? rejectionReason,
+    RecurrenceConfig? recurrence,
+    List<ActivityEntry> activityLog,
     DateTime? createdAt,
     DateTime? updatedAt,
   });
+
+  $RecurrenceConfigCopyWith<$Res>? get recurrence;
 }
 
 /// @nodoc
@@ -125,14 +168,22 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? checklist = null,
     Object? createdBy = freezed,
     Object? assignedShiftId = freezed,
+    Object? shift = freezed,
     Object? deadline = freezed,
     Object? notes = freezed,
     Object? proofImageUrl = freezed,
+    Object? startedAt = freezed,
+    Object? submittedAt = freezed,
     Object? approvedBy = freezed,
     Object? approvedAt = freezed,
     Object? rejectedBy = freezed,
     Object? rejectedAt = freezed,
     Object? reviewNotes = freezed,
+    Object? revisionNumber = null,
+    Object? requiresRework = null,
+    Object? rejectionReason = freezed,
+    Object? recurrence = freezed,
+    Object? activityLog = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -182,6 +233,10 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.assignedShiftId
                 : assignedShiftId // ignore: cast_nullable_to_non_nullable
                       as String?,
+            shift: freezed == shift
+                ? _value.shift
+                : shift // ignore: cast_nullable_to_non_nullable
+                      as ScheduleShift?,
             deadline: freezed == deadline
                 ? _value.deadline
                 : deadline // ignore: cast_nullable_to_non_nullable
@@ -194,6 +249,14 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.proofImageUrl
                 : proofImageUrl // ignore: cast_nullable_to_non_nullable
                       as String?,
+            startedAt: freezed == startedAt
+                ? _value.startedAt
+                : startedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            submittedAt: freezed == submittedAt
+                ? _value.submittedAt
+                : submittedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
             approvedBy: freezed == approvedBy
                 ? _value.approvedBy
                 : approvedBy // ignore: cast_nullable_to_non_nullable
@@ -214,6 +277,26 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.reviewNotes
                 : reviewNotes // ignore: cast_nullable_to_non_nullable
                       as String?,
+            revisionNumber: null == revisionNumber
+                ? _value.revisionNumber
+                : revisionNumber // ignore: cast_nullable_to_non_nullable
+                      as int,
+            requiresRework: null == requiresRework
+                ? _value.requiresRework
+                : requiresRework // ignore: cast_nullable_to_non_nullable
+                      as bool,
+            rejectionReason: freezed == rejectionReason
+                ? _value.rejectionReason
+                : rejectionReason // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            recurrence: freezed == recurrence
+                ? _value.recurrence
+                : recurrence // ignore: cast_nullable_to_non_nullable
+                      as RecurrenceConfig?,
+            activityLog: null == activityLog
+                ? _value.activityLog
+                : activityLog // ignore: cast_nullable_to_non_nullable
+                      as List<ActivityEntry>,
             createdAt: freezed == createdAt
                 ? _value.createdAt
                 : createdAt // ignore: cast_nullable_to_non_nullable
@@ -225,6 +308,20 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
           )
           as $Val,
     );
+  }
+
+  /// Create a copy of TaskEntity
+  /// with the given fields replaced by the non-null parameter values.
+  @override
+  @pragma('vm:prefer-inline')
+  $RecurrenceConfigCopyWith<$Res>? get recurrence {
+    if (_value.recurrence == null) {
+      return null;
+    }
+
+    return $RecurrenceConfigCopyWith<$Res>(_value.recurrence!, (value) {
+      return _then(_value.copyWith(recurrence: value) as $Val);
+    });
   }
 }
 
@@ -249,17 +346,28 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     List<ChecklistItem> checklist,
     String? createdBy,
     String? assignedShiftId,
+    ScheduleShift? shift,
     DateTime? deadline,
     String? notes,
     String? proofImageUrl,
+    DateTime? startedAt,
+    DateTime? submittedAt,
     String? approvedBy,
     DateTime? approvedAt,
     String? rejectedBy,
     DateTime? rejectedAt,
     String? reviewNotes,
+    int revisionNumber,
+    bool requiresRework,
+    String? rejectionReason,
+    RecurrenceConfig? recurrence,
+    List<ActivityEntry> activityLog,
     DateTime? createdAt,
     DateTime? updatedAt,
   });
+
+  @override
+  $RecurrenceConfigCopyWith<$Res>? get recurrence;
 }
 
 /// @nodoc
@@ -287,14 +395,22 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? checklist = null,
     Object? createdBy = freezed,
     Object? assignedShiftId = freezed,
+    Object? shift = freezed,
     Object? deadline = freezed,
     Object? notes = freezed,
     Object? proofImageUrl = freezed,
+    Object? startedAt = freezed,
+    Object? submittedAt = freezed,
     Object? approvedBy = freezed,
     Object? approvedAt = freezed,
     Object? rejectedBy = freezed,
     Object? rejectedAt = freezed,
     Object? reviewNotes = freezed,
+    Object? revisionNumber = null,
+    Object? requiresRework = null,
+    Object? rejectionReason = freezed,
+    Object? recurrence = freezed,
+    Object? activityLog = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -344,6 +460,10 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.assignedShiftId
             : assignedShiftId // ignore: cast_nullable_to_non_nullable
                   as String?,
+        shift: freezed == shift
+            ? _value.shift
+            : shift // ignore: cast_nullable_to_non_nullable
+                  as ScheduleShift?,
         deadline: freezed == deadline
             ? _value.deadline
             : deadline // ignore: cast_nullable_to_non_nullable
@@ -356,6 +476,14 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.proofImageUrl
             : proofImageUrl // ignore: cast_nullable_to_non_nullable
                   as String?,
+        startedAt: freezed == startedAt
+            ? _value.startedAt
+            : startedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
+        submittedAt: freezed == submittedAt
+            ? _value.submittedAt
+            : submittedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
         approvedBy: freezed == approvedBy
             ? _value.approvedBy
             : approvedBy // ignore: cast_nullable_to_non_nullable
@@ -376,6 +504,26 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.reviewNotes
             : reviewNotes // ignore: cast_nullable_to_non_nullable
                   as String?,
+        revisionNumber: null == revisionNumber
+            ? _value.revisionNumber
+            : revisionNumber // ignore: cast_nullable_to_non_nullable
+                  as int,
+        requiresRework: null == requiresRework
+            ? _value.requiresRework
+            : requiresRework // ignore: cast_nullable_to_non_nullable
+                  as bool,
+        rejectionReason: freezed == rejectionReason
+            ? _value.rejectionReason
+            : rejectionReason // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        recurrence: freezed == recurrence
+            ? _value.recurrence
+            : recurrence // ignore: cast_nullable_to_non_nullable
+                  as RecurrenceConfig?,
+        activityLog: null == activityLog
+            ? _value._activityLog
+            : activityLog // ignore: cast_nullable_to_non_nullable
+                  as List<ActivityEntry>,
         createdAt: freezed == createdAt
             ? _value.createdAt
             : createdAt // ignore: cast_nullable_to_non_nullable
@@ -404,18 +552,27 @@ class _$TaskEntityImpl extends _TaskEntity {
     final List<ChecklistItem> checklist = const <ChecklistItem>[],
     this.createdBy,
     this.assignedShiftId,
+    this.shift,
     this.deadline,
     this.notes,
     this.proofImageUrl,
+    this.startedAt,
+    this.submittedAt,
     this.approvedBy,
     this.approvedAt,
     this.rejectedBy,
     this.rejectedAt,
     this.reviewNotes,
+    this.revisionNumber = 0,
+    this.requiresRework = false,
+    this.rejectionReason,
+    this.recurrence,
+    final List<ActivityEntry> activityLog = const <ActivityEntry>[],
     this.createdAt,
     this.updatedAt,
   }) : _assigneeIds = assigneeIds,
        _checklist = checklist,
+       _activityLog = activityLog,
        super._();
 
   @override
@@ -471,6 +628,13 @@ class _$TaskEntityImpl extends _TaskEntity {
   /// Optional shift this task belongs to (references `shifts/{shiftId}`).
   @override
   final String? assignedShiftId;
+
+  /// The operational shift this task belongs to (Branch Operations) —
+  /// `morning` / `night`, or **null** when the task is not shift-specific
+  /// ("any", applies under every shift filter). Drives the Branch Operations
+  /// shift filter; supersedes the unused legacy [assignedShiftId] string.
+  @override
+  final ScheduleShift? shift;
   @override
   final DateTime? deadline;
 
@@ -481,7 +645,15 @@ class _$TaskEntityImpl extends _TaskEntity {
   /// Download URL of the proof image the employee uploads on completion.
   @override
   final String? proofImageUrl;
-  // ─── Review audit (Phase 4 — lightweight, not a full history) ───
+  // ─── Lifecycle timestamps (one per status transition, set atomically) ───
+  /// When an employee first started the task.
+  @override
+  final DateTime? startedAt;
+
+  /// When the employee submitted for review (via completeAndSubmit or submitForReview).
+  @override
+  final DateTime? submittedAt;
+  // ─── Review audit fields ─────────────────────────────────────
   /// uid of the manager/admin who approved the task, + when.
   @override
   final String? approvedBy;
@@ -497,6 +669,43 @@ class _$TaskEntityImpl extends _TaskEntity {
   /// Reviewer's note left on approve/reject.
   @override
   final String? reviewNotes;
+  // ─── Rework distinction (Notification System Phase 1) ─────────
+  /// How many times this task has been sent back for rework. 0 = a new task,
+  /// 1 = first rework, 2 = second, … Incremented only by "Request Rework"
+  /// (not by a terminal "Reject"). Drives the `REWORK #n` badge + payload.
+  @override
+  @JsonKey()
+  final int revisionNumber;
+
+  /// True while the task is awaiting a redo after a rework request; cleared
+  /// when the employee resubmits. Distinguishes a rework loop from a plain
+  /// rejection / new task.
+  @override
+  @JsonKey()
+  final bool requiresRework;
+
+  /// The reviewer's reason captured on the last rework / reject decision
+  /// (shown to the employee + carried in the notification body).
+  @override
+  final String? rejectionReason;
+
+  /// Recurrence rule — null means "one-off" (does not repeat). When set, the
+  /// [TaskCubit] auto-creates the next instance after this task is approved.
+  @override
+  final RecurrenceConfig? recurrence;
+
+  /// Activity timeline: one entry per status transition, ordered oldest→newest.
+  final List<ActivityEntry> _activityLog;
+
+  /// Activity timeline: one entry per status transition, ordered oldest→newest.
+  @override
+  @JsonKey()
+  List<ActivityEntry> get activityLog {
+    if (_activityLog is EqualUnmodifiableListView) return _activityLog;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_activityLog);
+  }
+
   @override
   final DateTime? createdAt;
   @override
@@ -504,7 +713,7 @@ class _$TaskEntityImpl extends _TaskEntity {
 
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, createdBy: $createdBy, assignedShiftId: $assignedShiftId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -534,11 +743,16 @@ class _$TaskEntityImpl extends _TaskEntity {
                 other.createdBy == createdBy) &&
             (identical(other.assignedShiftId, assignedShiftId) ||
                 other.assignedShiftId == assignedShiftId) &&
+            (identical(other.shift, shift) || other.shift == shift) &&
             (identical(other.deadline, deadline) ||
                 other.deadline == deadline) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.proofImageUrl, proofImageUrl) ||
                 other.proofImageUrl == proofImageUrl) &&
+            (identical(other.startedAt, startedAt) ||
+                other.startedAt == startedAt) &&
+            (identical(other.submittedAt, submittedAt) ||
+                other.submittedAt == submittedAt) &&
             (identical(other.approvedBy, approvedBy) ||
                 other.approvedBy == approvedBy) &&
             (identical(other.approvedAt, approvedAt) ||
@@ -549,6 +763,18 @@ class _$TaskEntityImpl extends _TaskEntity {
                 other.rejectedAt == rejectedAt) &&
             (identical(other.reviewNotes, reviewNotes) ||
                 other.reviewNotes == reviewNotes) &&
+            (identical(other.revisionNumber, revisionNumber) ||
+                other.revisionNumber == revisionNumber) &&
+            (identical(other.requiresRework, requiresRework) ||
+                other.requiresRework == requiresRework) &&
+            (identical(other.rejectionReason, rejectionReason) ||
+                other.rejectionReason == rejectionReason) &&
+            (identical(other.recurrence, recurrence) ||
+                other.recurrence == recurrence) &&
+            const DeepCollectionEquality().equals(
+              other._activityLog,
+              _activityLog,
+            ) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -569,14 +795,22 @@ class _$TaskEntityImpl extends _TaskEntity {
     const DeepCollectionEquality().hash(_checklist),
     createdBy,
     assignedShiftId,
+    shift,
     deadline,
     notes,
     proofImageUrl,
+    startedAt,
+    submittedAt,
     approvedBy,
     approvedAt,
     rejectedBy,
     rejectedAt,
     reviewNotes,
+    revisionNumber,
+    requiresRework,
+    rejectionReason,
+    recurrence,
+    const DeepCollectionEquality().hash(_activityLog),
     createdAt,
     updatedAt,
   ]);
@@ -603,14 +837,22 @@ abstract class _TaskEntity extends TaskEntity {
     final List<ChecklistItem> checklist,
     final String? createdBy,
     final String? assignedShiftId,
+    final ScheduleShift? shift,
     final DateTime? deadline,
     final String? notes,
     final String? proofImageUrl,
+    final DateTime? startedAt,
+    final DateTime? submittedAt,
     final String? approvedBy,
     final DateTime? approvedAt,
     final String? rejectedBy,
     final DateTime? rejectedAt,
     final String? reviewNotes,
+    final int revisionNumber,
+    final bool requiresRework,
+    final String? rejectionReason,
+    final RecurrenceConfig? recurrence,
+    final List<ActivityEntry> activityLog,
     final DateTime? createdAt,
     final DateTime? updatedAt,
   }) = _$TaskEntityImpl;
@@ -649,6 +891,13 @@ abstract class _TaskEntity extends TaskEntity {
   /// Optional shift this task belongs to (references `shifts/{shiftId}`).
   @override
   String? get assignedShiftId;
+
+  /// The operational shift this task belongs to (Branch Operations) —
+  /// `morning` / `night`, or **null** when the task is not shift-specific
+  /// ("any", applies under every shift filter). Drives the Branch Operations
+  /// shift filter; supersedes the unused legacy [assignedShiftId] string.
+  @override
+  ScheduleShift? get shift;
   @override
   DateTime? get deadline;
 
@@ -658,7 +907,14 @@ abstract class _TaskEntity extends TaskEntity {
 
   /// Download URL of the proof image the employee uploads on completion.
   @override
-  String? get proofImageUrl; // ─── Review audit (Phase 4 — lightweight, not a full history) ───
+  String? get proofImageUrl; // ─── Lifecycle timestamps (one per status transition, set atomically) ───
+  /// When an employee first started the task.
+  @override
+  DateTime? get startedAt;
+
+  /// When the employee submitted for review (via completeAndSubmit or submitForReview).
+  @override
+  DateTime? get submittedAt; // ─── Review audit fields ─────────────────────────────────────
   /// uid of the manager/admin who approved the task, + when.
   @override
   String? get approvedBy;
@@ -673,7 +929,32 @@ abstract class _TaskEntity extends TaskEntity {
 
   /// Reviewer's note left on approve/reject.
   @override
-  String? get reviewNotes;
+  String? get reviewNotes; // ─── Rework distinction (Notification System Phase 1) ─────────
+  /// How many times this task has been sent back for rework. 0 = a new task,
+  /// 1 = first rework, 2 = second, … Incremented only by "Request Rework"
+  /// (not by a terminal "Reject"). Drives the `REWORK #n` badge + payload.
+  @override
+  int get revisionNumber;
+
+  /// True while the task is awaiting a redo after a rework request; cleared
+  /// when the employee resubmits. Distinguishes a rework loop from a plain
+  /// rejection / new task.
+  @override
+  bool get requiresRework;
+
+  /// The reviewer's reason captured on the last rework / reject decision
+  /// (shown to the employee + carried in the notification body).
+  @override
+  String? get rejectionReason;
+
+  /// Recurrence rule — null means "one-off" (does not repeat). When set, the
+  /// [TaskCubit] auto-creates the next instance after this task is approved.
+  @override
+  RecurrenceConfig? get recurrence;
+
+  /// Activity timeline: one entry per status transition, ordered oldest→newest.
+  @override
+  List<ActivityEntry> get activityLog;
   @override
   DateTime? get createdAt;
   @override

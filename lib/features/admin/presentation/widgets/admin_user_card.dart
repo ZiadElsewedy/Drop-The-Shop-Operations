@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/glass_container.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 
@@ -34,19 +34,10 @@ class AdminUserCard extends StatelessWidget {
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [AppColors.darkSurfaceElevated, AppColors.darkSurface],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: AppRadius.cardAll,
-        border: Border.all(color: AppColors.darkBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: GlassContainer(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -116,7 +107,8 @@ class AdminUserCard extends StatelessWidget {
               children: actions,
             ),
           ],
-        ],
+          ],
+        ),
       ),
     );
   }

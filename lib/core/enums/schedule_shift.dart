@@ -19,4 +19,14 @@ enum ScheduleShift {
   /// Parses the stored string; unknown/missing → [morning].
   static ScheduleShift fromString(String? raw) =>
       raw == 'night' ? ScheduleShift.night : ScheduleShift.morning;
+
+  /// Parses the stored string **preserving absence** — `morning`/`night` map to
+  /// the shift, anything else (including null) → null. Used for an *optional*
+  /// shift tag (e.g. a task that may not be shift-specific), where the lossy
+  /// [fromString] default would wrongly coerce a missing value to morning.
+  static ScheduleShift? fromStringOrNull(String? raw) => switch (raw) {
+        'morning' => ScheduleShift.morning,
+        'night' => ScheduleShift.night,
+        _ => null,
+      };
 }

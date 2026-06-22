@@ -44,7 +44,7 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
       // part of UserModel.toMap(), so subsequent re-login merges never reset an
       // admin-assigned role/branch or re-pend an approved account.
       //
-      // FBRO is an internal ops system: a new account is NOT usable yet. It is
+      // DROP is an internal ops system: a new account is NOT usable yet. It is
       // seeded as a PENDING, INACTIVE employee with no branch and is confined to
       // the Pending Approval screen until a manager/admin approves it (flips
       // approvalStatus → approved, isActive → true, assigns role + branch).

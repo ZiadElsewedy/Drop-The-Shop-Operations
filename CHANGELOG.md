@@ -1,8 +1,9 @@
 # Changelog
 
-All notable changes to **FBRO** are recorded here. After every completed
-feature, append a short summary of what was **added / removed / fixed /
-refactored**. See [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for architecture.
+All notable changes to **DROP — Operations Management System** (Dart package id
+`fbro`) are recorded here. After every completed feature, append a short summary
+of what was **added / removed / fixed / refactored**. See
+[PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for architecture.
 
 The project adheres loosely to [Keep a Changelog](https://keepachangelog.com)
 and [Semantic Versioning](https://semver.org).
@@ -10,6 +11,772 @@ and [Semantic Versioning](https://semver.org).
 ---
 
 ## [Unreleased]
+
+### Fixed (2026-06-21 — Communications Center: "UNAUTHENTICATED" on Send)
+
+Sending a broadcast failed with a raw **UNAUTHENTICATED** snackbar — because the
+`sendBroadcast` callable wasn't deployed yet, so the gateway rejected the call
+before the function code ran (hence the raw gateway code, not the function's own
+"please sign in" message). The function stays **2nd-gen** (`firebase-functions/v2`,
+the v6 default): it deploys cleanly and the Firebase CLI grants the public invoker
+for callable functions automatically. (A brief detour to 1st-gen was reverted — it
+hit a "Cannot set CPU on GCF gen 1" deploy error with firebase-functions v6.)
+
+- **Friendlier client error** — `BroadcastRemoteDataSource` now maps a
+  `FirebaseFunctionsException` to a user-facing message (full-sentence
+  `HttpsError` messages from the function are surfaced verbatim; raw transport
+  codes like `UNAUTHENTICATED`/`INTERNAL` become "Couldn’t reach the broadcast
+  service. Please try again in a moment.") and logs the real `code`/`message` via
+  `dart:developer`. Also threads the returned `deliveredCount` back to the model.
+- ⚠️ The function **must be deployed** for Send to work (rules deny client writes
+  by design): `firebase deploy --only functions` — requires the **Blaze** plan.
+  If a deployed call still returns UNAUTHENTICATED, grant the invoker:
+  `gcloud functions add-invoker-policy-binding sendBroadcast --region=us-central1 --member=allUsers`.
+
+### Added (2026-06-21 — Communications Center · Phase 3: Center UI)
+
+The role-gated UI on the Phase 1 + 2 backend (no backend-architecture change
+beyond what the UI needed). Built entirely on the shared DROP design system —
+strictly monochrome, colour only for an urgent category. `flutter analyze` clean
+(0 issues); **101 tests pass** (+6); `node --check functions/index.js` valid.
+
+- **Entry point + route** — a campaign icon in the `RoleScaffold` header (shown
+  only to admin + manager) opens the new **`/communications`** area. The router
+  gains `_isCommunicationsArea` and a redirect guard that **bounces employees**;
+  three `GoRoute`s (`/communications`, `/communications/compose`,
+  `/communications/:broadcastId`) with compose declared before the param route.
+- **Feed** ([communications_screen.dart](lib/features/communications/presentation/pages/communications_screen.dart))
+  — a live list of [BroadcastCard](lib/features/communications/presentation/widgets/broadcast_card.dart)s
+  (title · body preview · sender · audience · time · delivery
+  `recipientCount`/`deliveredCount`) from the cubit stream, with a **New
+  Broadcast** FAB, pull-to-refresh, skeleton + empty/error states. Admin sees all
+  branches; a manager sees their branch + all-branches.
+- **Compose** ([compose_broadcast_screen.dart](lib/features/communications/presentation/pages/compose_broadcast_screen.dart))
+  — a role-gated form: audience chips from
+  `BroadcastPermissions.allowedAudiences` (admin: Everyone / Branch / Individual ·
+  manager: Branch (own, fixed) / Individual (in-branch); **unauthorized options
+  are hidden**), an admin branch dropdown, a **searchable recipient picker**
+  (`AppSearchField` + user tiles), category chips (announcement / alert /
+  reminder / emergency), a title field and a **multiline** body, and a sticky
+  **Send Broadcast** CTA. Send → `BroadcastCubit.send` (client permission guard +
+  loading) → success snackbar *"Broadcast sent to N recipients"* → `pop`; errors
+  surface via a `BlocListener`.
+- **Detail** ([broadcast_detail_screen.dart](lib/features/communications/presentation/pages/broadcast_detail_screen.dart))
+  — full message · sender · category · audience · sent date · recipient +
+  delivered counts. Resolves the broadcast from the tapped entity (`extra`) with
+  a live-feed fallback by id; graceful "unavailable" state otherwise.
+- **`BroadcastCategory` enum** ([broadcast_category.dart](lib/core/enums/broadcast_category.dart))
+  — announcement / alert / reminder / emergency (pure Dart; icon + colour mapping
+  in `communications_format.dart`, which also formats relative/full time and the
+  audience label). Tested in
+  [broadcast_category_test.dart](test/broadcast_category_test.dart).
+- **`deliveredCount` persisted** — the `sendBroadcast` Cloud Function now writes
+  `deliveredCount` back to the doc after the multicast (`broadcastRef.update`), so
+  the feed/detail can show "delivered M / N". Added to `BroadcastEntity`/`Model`.
+- **Compose pickers on the cubit** — `BroadcastCubit.branches()` /
+  `branchUsers(branchId)` (repo-direct via `BranchRepository` + `GetUsersByBranch`,
+  mirroring `TaskCubit`; DI updated).
+- **Shared-widget reuse** — `AppTextField` gains an optional `maxLines`/`minLines`
+  (default 1; ignored when obscured) for the body; everything else reuses
+  `GlassContainer`, `AppButton`, `AppDropdownField`, `AppSearchField`,
+  `UserAvatar`, `AppEmptyState`, `EntranceFade`, `ListSkeleton`, `AppSnackbar`.
+- **Tests** — `broadcast_card_test.dart` (headless render: title/body/sender/
+  audience/category/delivery + tap), `broadcast_category_test.dart`, and a
+  `deliveredCount` round-trip added to `broadcast_model_test.dart`.
+
+### Added (2026-06-21 — Communications Center · Phase 2: notification send engine)
+
+The **push delivery engine** on top of the Phase 1 slice — recipient resolution,
+FCM, a Cloud Function send pipeline, and Flutter receive handling. The Phase 1
+architecture (entity / repository / use case / cubit) is **preserved**; the send
+path now routes through a callable Cloud Function instead of a direct Firestore
+write. `flutter analyze` clean (0 issues); **95 tests pass** (+15);
+`node --check functions/index.js` valid. New dependency: `cloud_functions`.
+
+- **Recipient resolution / permissions** — pure
+  [`broadcast_permissions.dart`](lib/features/communications/domain/broadcast_permissions.dart)
+  (`BroadcastPermissions.canSend` / `allowedAudiences` / `validate`): admin →
+  all users / any branch / any individual; manager → their **own** branch / an
+  individual **inside** it; employee → none. It is the client guard (UI
+  affordance + pre-send validation) and is **re-enforced authoritatively** in the
+  Cloud Function + `firestore.rules`. Tested in
+  [broadcast_permissions_test.dart](test/broadcast_permissions_test.dart).
+- **Individual (direct-message) audience** — new `BroadcastAudience.user`.
+  `BroadcastEntity`/`Model` gain `targetUserId`, `category`, and `recipientCount`.
+  A DM is persisted with a non-branch `branchId` marker (`'__direct__'`) +
+  `targetUserId`, so it never surfaces in a branch/all feed query and is readable
+  only by the recipient + an admin (read rule updated; feed queries unchanged).
+- **FCM token storage → array** — `NotificationService` now keeps the device
+  token in **`users/{uid}.fcmTokens`** (`arrayUnion` on register and on
+  `onTokenRefresh`, rotating out the stale token; `arrayRemove` on sign-out), so
+  multiple devices per user are supported and dead tokens don't accumulate.
+  Registered on login / app-start via the existing `AuthCubit` listener. The
+  legacy single `fcmToken` is no longer written but is still **read** by the
+  function for back-compat.
+- **Backend send engine** — new Node.js [`functions/`](functions/) codebase
+  (firebase-admin + firebase-functions v2), registered in `firebase.json`. The
+  callable **`sendBroadcast`** ([functions/index.js](functions/index.js)):
+  validates the sender's permissions, resolves recipients (all / branch /
+  individual), **writes** `broadcasts/{id}` (Admin SDK), gathers recipient
+  `fcmTokens`, sends via `messaging.sendEachForMulticast`, prunes
+  permanently-invalid tokens, and returns the **delivery summary**
+  `{ success, recipientCount, deliveredCount, broadcastId }`.
+- **Client send path** — `BroadcastRemoteDataSource.sendBroadcast` now invokes
+  the callable (`cloud_functions`, `toCallablePayload()`) instead of writing
+  Firestore; `BroadcastCubit.send` gained `audience` / `targetUserId` /
+  `targetUserBranchId` / `category`, applies the client permission guard, and
+  returns the resolved **recipient count**. `firestore.rules` now **deny all
+  client writes** to `broadcasts` (the function is the sole writer).
+- **Notification payload** — `notification: { title, body }` + `data: { type,
+  category, senderId, broadcastId, title, body }` (all strings).
+- **Flutter receive handling** — `NotificationService` routes **foreground**
+  (`onMessage` → in-app snackbar), **background** (top-level handler in
+  `main.dart`; the OS renders the `notification` block), and **tap**
+  (`onMessageOpenedApp` + `getInitialMessage` → `onMessageTap`, wired in
+  `main.dart` to navigate home + log the `broadcastId` for the future
+  deep-link). The router is now created once so the tap handler can navigate.
+- ⚠️ **Deploy** `firebase deploy --only functions,firestore:rules` (the function
+  needs the **Blaze** plan; `cd functions && npm install` first). iOS push also
+  needs an APNs key + the `remote-notification` background mode (console/native,
+  not set in this repo).
+
+### Added (2026-06-21 — Communications Center · Phase 1: Broadcast vertical slice)
+
+First slice of the **Communications Center** — a one-way **broadcast**
+foundation. **Backend + cubit only** (no UI / routes yet — the compose + feed
+screens are a later phase), built as a full Clean-Architecture vertical slice
+reusing the established patterns. `flutter analyze` clean (0 issues); **80 tests
+pass** (+6 new).
+
+- **`BroadcastEntity`** (freezed, `communications/domain/entities`) — `id ·
+  title · message · senderId · senderName · senderRole (UserRole) · audience
+  (BroadcastAudience) · branchId · createdAt`, with an `isBranchScoped` getter.
+- **`BroadcastAudience` enum** (`core/enums/broadcast_audience.dart`) —
+  `allBranches` / `branch`, with `value` / `label` / `fromString` (unknown →
+  `allBranches`, the widest, safest default).
+- **`BroadcastModel`** (`communications/data/models`) — Firestore
+  (de)serialization (`fromMap`/`fromEntity`/`toMap`/`toEntity`/`copyWithId`). An
+  all-branches broadcast is stored with an **empty `branchId` sentinel** (never
+  null) so a branch member's `whereIn: [myBranch, '']` query stays provably safe
+  under the read rule; `createdAt` is a server timestamp. Round-trip + sentinel +
+  back-compat covered by `test/broadcast_model_test.dart` (6 cases).
+- **`BroadcastRepository` (+Impl)** + **`BroadcastRemoteDataSource` (+Impl)** over
+  the new **`broadcasts/{broadcastId}`** collection
+  (`AppConstants.broadcastsCollection`). Datasource throws `ServerException`; repo
+  → `ServerFailure`; maps `BroadcastModel → BroadcastEntity`. Reads are
+  **index-free**: the admin feed is `orderBy('createdAt', descending: true)`; a
+  branch member's feed is `where('branchId', whereIn: [selfBranch, ''])` (their
+  branch + all-branches in one query), sorted newest-first client-side (a
+  just-sent doc with a pending server timestamp pinned on top).
+- **`SendBroadcast` use case** (`communications/domain/usecases`) — wraps
+  `BroadcastRepository.sendBroadcast`, the canonical one-action-per-write pattern.
+- **`BroadcastCubit` (+ `BroadcastState`)** — a **hybrid** cubit (mirrors
+  `TaskCubit`): the `SendBroadcast` use case for the write, the repository
+  directly for the realtime feed stream. `load({branchId})` subscribes (admin:
+  all · branch member: their branch + all-branches), `send(...)` validates +
+  posts (the new broadcast surfaces via the same stream — no refetch). Keeps the
+  last good feed visible on a transient error; cancels its subscription in
+  `close()`. Provided app-wide in `main.dart`; composed in `injection.dart`
+  (`broadcastCubit`).
+- **Firestore rules** — new `broadcasts/{id}` block: **read** = admin, OR any
+  all-branches broadcast (`branchId == ''`, visible to every signed-in user), OR
+  a branch member whose branch matches; **create** = the sender themself (admin
+  any branch/all-branches; own-branch manager their branch only, never
+  all-branches); **update/delete** = admin or the owning-branch manager
+  (employees never write broadcasts). ⚠️ Deploy `firestore.rules`.
+- **Next phase:** the Communications Center UI (compose + feed screens + role
+  entry point/route) and optional notification fan-out on send.
+
+### Added (2026-06-21 — Assign employees while creating a task)
+
+The New/Edit Task form now has an **"Assign to"** picker, so a manager/admin can
+assign one or more of the branch's employees *as they create the task* — no more
+"create first, then assign". `flutter analyze` clean; 80 tests pass.
+
+- **`createTask` gains `assigneeIds`** (`TaskCubit`) — seeded onto the new
+  `TaskEntity` so the assignment persists in the same create write; edit threads
+  `assigneeIds` through `editTask`'s `copyWith`.
+- **`_AssigneePicker` + `_EmployeeChip`** in `task_action_sheets.dart` — a compact
+  selectable-chip team picker (avatar · name · toggle, with "Whole team" / "Clear
+  all") loaded via `TaskCubit.branchEmployees(branchId)`. Manager: branch fixed;
+  admin: loads the picked branch and **clears the selection when the branch
+  changes**. Seeded from the task's existing assignees when editing. The standalone
+  `_AssignSheet` (quick reassign from a card) is unchanged.
+
+### Added / Changed (2026-06-21 — Branch Operations cockpit · steps 2–3: cubit + screens)
+
+Built the cockpit on the step-1 schema + domain. The task-centric task list is
+replaced by an **operations-centric** surface (Admin dashboard → Branch
+Operations → Employee details → Task details). Strictly monochrome, reusing the
+existing component library. **74 tests pass** (+3 widget); operations/task/core
+scope `flutter analyze` clean.
+
+- **`BranchOperationsCubit` + `BranchOperationsState`** (`operations/presentation/
+  cubit/`) — read/derive only: subscribes `TaskRepository.watchTasksByBranch`,
+  one-shot `GetUsersByBranch` + `ScheduleRepository.getSchedule`, and emits
+  `computeBranchWorkload(...)`. `setFilter` re-derives from the cached snapshot
+  (no refetch). Repo-direct (reuses the auth `GetUsersByBranch` use case like
+  `ScheduleCubit`); wired in `injection.dart` + `main.dart`. **Writes stay in
+  `TaskCubit`** — both watch the same branch stream, so a create/assign/review
+  propagates to the cockpit live.
+- **`BranchOperationsScreen`** (the cockpit) — summary header (Active · Overdue ·
+  Pending review · Staff active), an instant `[All][Morning][Night]` shift toggle,
+  overload-first `WorkloadCard` list, a New-Task FAB (`startNewTaskFlow`, branch
+  fixed), and an "All tasks" action. `WorkloadCard` extracted as a reusable widget
+  (avatar · role · shift badge · 4-up metric strip · current-task preview · error
+  border when `needsAttention`), widget-tested in `test/workload_card_test.dart`.
+- **`ManagerOperationsScreen`** — thin wrapper resolving the manager's own branch;
+  it is now the `/manager/tasks` page (the Operations tab).
+- **`EmployeeDetailScreen`** — the task-centric drill: one employee's tasks grouped
+  by status (Rework · In progress · Pending · Submitted · Completed), each a
+  `ManagerTaskCard` opening the existing `TaskDetailsScreen`.
+- **`BranchTaskListScreen`** (public) — extracted from the admin overview's private
+  drill; the full per-branch task list (incl. **unassigned** tasks), reached via the
+  cockpit "All tasks".
+- **Routing / retirement** — `app_router` repoints `/manager/tasks` to
+  `ManagerOperationsScreen`; the admin branch-overview drill (`_openBranch`) now
+  opens `BranchOperationsScreen`. The former `BranchTasksScreen` and
+  `ManagerTasksView` (flat manager task list) are **deleted** — superseded by the
+  cockpit + `BranchTaskListScreen`.
+
+### Added (2026-06-21 — Branch Operations redesign · step 1: shift tag + workload aggregation)
+
+First slice of the task-centric → **operations-centric** redesign (the Branch
+Operations cockpit: Admin dashboard → Branch Operations → Employee details → Task
+details; tasks live *inside* operations, no standalone Task Management screen).
+**Domain + schema only** — no cubit / screen / route yet (steps 2–3). `flutter
+analyze` clean (0 issues); **71 tests pass** (+12 new).
+
+- **`tasks.shift`** — new optional operational shift tag on `TaskEntity`
+  (nullable `ScheduleShift`; **null = "any"**, not shift-specific), serialized in
+  `TaskModel` (`'shift'` ↔ new `ScheduleShift.fromStringOrNull`, which **preserves
+  absence** instead of the lossy `fromString` morning-default). Back-compat:
+  missing / unknown → null. Supersedes the unused legacy `assignedShiftId`.
+  Freezed re-run. Tested in `test/task_model_shift_test.dart`.
+- **New `operations` feature (domain)** — pure aggregation behind the future
+  cockpit: `ShiftFilter` (all / morning / night, with `matchesTask` /
+  `matchesEmployee`), `EmployeeWorkload` (per-card view model: active / overdue /
+  submitted / completedToday + current task + today's shift), `BranchSummary` (the
+  four header numbers), and `computeBranchWorkload(...)` → `BranchWorkload`, which
+  joins the branch task stream × `getUsersByBranch` × today's `weekly_schedule`
+  under a shift lens and sorts employees **overload-first**. Deterministic
+  (`day` / `now` injectable), mirroring `computeEmployeeMetrics`. Tested in
+  `test/branch_workload_test.dart` (12 cases: bucketing, shift scoping, sort
+  order, current-task selection, completed-today, no-schedule fallback).
+- **Next:** `BranchOperationsCubit` + state (step 2), then the cockpit screen +
+  routes `/admin/branch/:branchId` & employee drill-down, and retiring the
+  standalone task screens as destinations (step 3).
+
+### Fixed + Added (2026-06-21 — submission loading UX + premium status animations)
+
+`flutter analyze` clean (0 issues); 59 tests pass.
+
+- **Fixed: video submit looked frozen.** Root cause (traced, not guessed): the
+  submit pipeline (`completeAndSubmit` → parallel `putFile` → `_updateTask`) is
+  fully async / non-blocking, but **no loading state was surfaced** — the submit
+  button stayed enabled and the screen rendered nothing for the `busy` flag, so a
+  multi-second video upload appeared frozen. (Not a main-isolate block; thumbnail
+  generation is display-time, not in the submit path.)
+- **Submission state moved to the cubit.** `TaskState.loaded` now carries
+  `isSubmitting` + `submissionProgress` (`SubmissionProgress` in
+  `presentation/submission_progress.dart`), preserved on every emit (incl. the
+  Firestore stream) so the **whole Task Details screen** reacts and progress
+  survives rebuilds / disposal. Progress emits are throttled to whole-percent
+  changes.
+- **Single, state-driven submission overlay** (`submission_loading_overlay.dart`)
+  rendered by the screen in a Stack when `isSubmitting`: stages **Preparing media
+  → Uploading attachments → Finalizing**, a **real progress bar + percentage +
+  transferred/total MB** (aggregated from each upload's Storage `snapshotEvents`).
+  `PopScope` blocks back during submit. Only `completeAndSubmit` sets
+  `isSubmitting` (approve/reject/start use `busy`) → exactly one overlay ever
+  exists (audited across submit / rework / review-approval flows).
+- **Reverted server-side video posters.** Persistent poster uploads
+  (`TaskAttachment.thumbnailUrl`, submit-time generation) were removed — not
+  justified for low video volume. Videos use **local generation + in-memory LRU
+  caching** (`VideoThumbnailImage`) at view time. `durationMs` is still captured
+  at pick. (No `firestore`/storage change.)
+- **Premium status animations** (monochrome-preserving) on the task detail status
+  header — a soft status glow with an **amber pulse for In Review** and static
+  **green** (Approved) / **red** (Rework) glow + faint tint; the status badge
+  **cross-fades + scales** on change; timeline event cards **stagger-fade in**
+  (reused `EntranceFade` / `staggerDelay`).
+
+### Changed (2026-06-21 — Submission Details surface: lightweight timeline + deep review sheet)
+
+Split the overloaded task timeline into a scan layer and a deep review layer.
+`flutter analyze` clean (0 issues); 54 tests pass (+`submission_resolution_test.dart`).
+
+- **Timeline = summary only.** `_EventCard` now shows status · actor · timestamp ·
+  attachment summary ("2 photos · 1 video") · a 2-line truncated note preview —
+  no inline media. Submission-related cards (`completed` / `waitingReview`) are
+  tappable (chevron affordance).
+- **New `SubmissionDetailsSheet`** (`widgets/submission_details_sheet.dart`) — a
+  large iOS-style modal bottom sheet (~90% height, no full-screen route) that is
+  the full review surface: header (task + "Completed by X · date"), **Employee
+  Response** (full note), **Attachments** (2-col gallery), **Manager Feedback**
+  (per-cycle decision + note), and a sticky **Approve / Request Rework** bar when
+  the submission is pending (read-only otherwise).
+- **Submission resolution** — pure `resolveSubmission(task, index)` (in
+  `attachment_format.dart`) maps a tapped event to its cycle's content event and
+  the decision that followed it; correctly handles rework loops (each cycle →
+  its own media + feedback). Tested in `submission_resolution_test.dart`.
+- **`AttachmentGallery` gains a grid mode** (`columns`, `showDuration`) reused by
+  the sheet — 2-column cells, video tiles show a duration pill. Compact wrap mode
+  unchanged for other call sites. Media rendering (`AttachmentGallery` +
+  `AttachmentViewer` + `VideoThumbnailImage`) is reused, not duplicated.
+- **Video duration** — captured best-effort at pick time (`video_player` reads
+  the local file), threaded through the upload chain, stored on
+  `TaskAttachment.durationMs`, and rendered as `mm:ss` (`formatVideoDuration`).
+  Legacy videos without a stored duration simply omit the pill.
+
+### Fixed (2026-06-21 — task-load regression) + Added (real video thumbnails)
+
+- **Fixed: "Failed to load tasks" for employees & managers.** Root cause: the
+  newest-first follow-up added `orderBy('createdAt', descending: true)` to the
+  **filtered** task queries — `where('assigneeIds', arrayContains: uid)` (employee)
+  and `where('branchId', …)` (manager). A filter + `orderBy` on a different field
+  needs a **composite index**, which wasn't deployed, so Firestore threw
+  `failed-precondition` on the snapshot stream; `TaskCubit`'s `onError` swallowed
+  the exception and showed the generic message. **Fix:** removed server-side
+  `orderBy` from those two queries (back to the automatic single-field
+  array/equality index) and rely on the existing client-side
+  `sortTasksNewestFirst`; the admin query keeps its index-free `orderBy`. Emptied
+  `firestore.indexes.json` (no composite index needed) — **the
+  `firebase deploy --only firestore:indexes` step is no longer required.**
+- **Fixed: swallowed stream errors.** `TaskCubit` now logs the real error + stack
+  trace (`dart:developer`) on stream failure, so the exact exception is visible
+  instead of only a generic UI message.
+- **Added: real video thumbnails.** New `VideoThumbnailImage` (backed by
+  `video_thumbnail`) extracts an actual poster frame from each video (network URL
+  or local file), shown in the attachment gallery and the submission picker with
+  the play overlay on top. Frames are generated at 256px/JPEG-q60 and memoised in
+  a bounded LRU cache (≈60 entries) keyed by source; concurrent requests share
+  one future; failures drop from the cache (retryable) and fall back to a
+  film-glyph tile. New dependency: `video_thumbnail`.
+
+### Added (2026-06-20 — Task submission media upgrade: multiple images & videos)
+
+Replaced the single proof image with multiple images + videos, attached to **task
+events** (not the task globally). `flutter analyze` clean (0 issues); 48 tests
+pass (+9 new). New dependency: `video_player`.
+
+- **Model** — new `TaskAttachment` entity (`id · url · type · uploadedAt ·
+  uploadedBy · uploadedByName`) + `AttachmentType` enum (image/video).
+  `ActivityEntry` gains `List<TaskAttachment> attachments`, so each submission /
+  rework cycle keeps its own evidence. `TaskModel` (de)serializes attachments
+  inside `activityLog`.
+- **Storage** — uploads go to `tasks/{taskId}/attachments/{id}.<ext>` with a
+  unique id per file (never overwritten); `storage.rules` widened from
+  `{file}` to `{allPaths=**}` to cover the nested folder. Content-type inferred
+  from extension.
+- **Submission** — `TaskCubit.completeAndSubmit` now takes
+  `List<PickedAttachment>`, uploads each before the status write (failure aborts
+  and keeps the selection), and attaches the result to the submission event.
+  First image mirrors to the legacy `proofImageUrl` for back-compat. New use case
+  `UploadTaskAttachment` replaces `UploadTaskProof`.
+- **Picker** — `AttachmentPickerField`: multi-photo, video, and camera capture
+  (photo / record) with validation via `AttachmentLimits` (≤6 photos, ≤3 videos,
+  ≤50 MB each). New iOS `NSMicrophoneUsageDescription`.
+- **Viewing** — `AttachmentGallery` (image grid + video tiles with play overlay)
+  on the timeline event cards, "Submitted work", and the review sheet; tapping
+  opens fullscreen `showAttachmentViewer` — swipeable, pinch-zoom images
+  (`InteractiveViewer`), inline `video_player`, each captioned "Uploaded by X ·
+  20 Jun 2026 • 4:32 PM". Helpers in `attachment_format.dart` resolve per-event
+  media with legacy-proof back-compat (no double-render).
+- **Uploads parallelized** — `completeAndSubmit` uploads attachments with
+  `Future.wait` (order preserved) instead of sequentially, so multiple photos no
+  longer queue behind each other.
+- **Pre-upload optimization** — photos are resized + recompressed by image_picker
+  (`maxWidth 1600`, `quality 70`, in `AttachmentLimits`) before upload, cutting
+  upload time + Storage cost. Video transcoding is deferred (bounded by the
+  3-min duration cap + size limit rather than a heavy native codec dependency).
+- **Separate size limits** — images ≤15 MB, videos ≤200 MB (was a shared 50 MB);
+  `AttachmentLimits.maxBytesFor(type)` / `maxMbFor(type)`, enforced per type in
+  the picker.
+- **Newest-first task lists** — admin query uses Firestore
+  `orderBy('createdAt', descending: true)` (index-free); the filtered branch +
+  employee queries are ordered by a pure `sortTasksNewestFirst`
+  (`domain/task_ordering.dart`) in the repository, which also keeps a just-created
+  task (pending server timestamp → locally null) pinned to the top. *(Note: an
+  earlier revision added server-side `orderBy` to the filtered queries too; that
+  required an undeployed composite index and broke loading — reverted in the
+  2026-06-21 fix above.)*
+- **Tests** — `task_attachment_test.dart` (model round-trip + format helpers) and
+  `task_ordering_test.dart` (newest-first incl. pending-timestamp on top).
+
+⚠️ Deploy `storage.rules` (`firebase deploy --only storage`). Video playback needs
+an on-device check.
+
+### Changed (2026-06-20 — Schedule assignment-grid redesign, no staffing quotas)
+
+Re-architected the manager/admin schedule from first principles — from vertical
+day cards to a weekly **assignment grid** (an operations-control surface). The
+schedule represents **assignments, not staffing quotas** — no required-headcount
+or understaffed-vs-target model; the admin assigns by operational judgment.
+`flutter analyze` clean (0 issues); 39 tests pass.
+
+- **New mental model** — `ScheduleGrid`: days are columns (Sun→Sat), shifts are
+  rows (Morning/Night). Each `ShiftCell` shows **how many employees are assigned**
+  — a monochrome density tint (more people = brighter), a muted "Empty" state, a
+  white ring on today, and an orphan flag. Horizontally scrollable with a
+  **pinned shift rail + day headers** (mobile constraint).
+- **No quotas** — removed the `Staffing` domain model, `StaffingHealth`,
+  `StaffingBadge`, and all required/target/understaffed/critical concepts. Cells
+  and sheets show plain assignment counts; the only surfaced signals are **empty**
+  (a neutral fact) and **broken reference** (a data-integrity issue).
+- **Cell interaction** — tapping a cell opens `ShiftDetailsSheet`: a neutral
+  "N assigned" / "No one assigned yet", assigned employees as premium
+  `EmployeeRow`s (avatar · name · role · status dot) with double-booking
+  conflicts surfaced, plus assign / remove and broken-slot resolve — updates live.
+- **Swaps** — removed the separate "Swap Requests" tab; swaps now surface as a
+  floating `SwapAlertCard` inside the grid that opens a queue modal (reusing
+  `SwapListView`). Swap cards now show the **submitted time** alongside
+  requester · branch · shift · reason.
+- **Broken assignments** — `BrokenAssignmentBanner` → resolve sheet with
+  **Remove / Reassign** per slot, labelled `Day · Shift` + "Former employee"
+  (user-friendly; raw uids / "Unknown member" debug text gone).
+- **Screens** — `BranchScheduleScreen` (manager) and `ScheduleManagementScreen`
+  (admin) are now a single operations surface (DefaultTabController/TabBar gone);
+  the grid self-refreshes when a swap settles.
+- **Reusable widgets** (engineering req.) — `ScheduleGrid`, `ShiftCell`,
+  `EmployeeRow`, `ShiftDetailsSheet`, `SwapAlertCard`, `BrokenAssignmentBanner`,
+  shared `showEmployeePicker` + `SheetHandle`; presentation kept free of
+  business-rule assumptions.
+- **Tests** — headless `schedule_grid_test.dart` (renders assigned counts,
+  excludes/flags orphans, Empty state, no uid leak, cell-tap routing, shift
+  filter).
+
+### Changed (2026-06-20 — Premium UI redesign: Branch Schedule, Admin Home, Task timeline)
+
+A visual/product-refinement pass — monochrome, token-driven, no schema/logic change.
+`flutter analyze` clean (0 issues); 35 tests pass.
+
+- **Branch Schedule** (`manager_schedule_view.dart`) — denser, premium rebuild. The
+  oversized day cards are replaced by a compact **calendar date-rail + two shift
+  lanes** layout (`_dateRail` / `_shiftLane`): a fixed date tile (today fills
+  white), a hairline divider, then Morning/Night lanes each with an icon, label,
+  live count, a round **+** add affordance, and refined avatar chips (full-radius,
+  circular remove target). Padding tightened (lg→md) so more of the week fits on
+  screen. Broken-reference chips keep their amber treatment.
+- **Admin Home** (`admin_dashboard_screen.dart`) — premium tightening. Greeting
+  collapsed to a single line ("Good morning, Ziad", `h1`) instead of a stacked
+  `h2`+`display`; section gaps reduced (xxl→xl) to cut dead space; the **hero** now
+  places the big metric **beside** its title+summary (one block) with the daily
+  throughput moved to the eyebrow row — less vertical sprawl, clearer hierarchy.
+- **Task timeline** (`task_details_screen.dart`) — the plain `TimelineTile` rows
+  are replaced by rich **event cards** strung on a spine: a status badge (icon +
+  colour from `activityFormat`, new `activityIcon`), timestamp, **actor with avatar
+  + role**, a quoted note block (accent left-border), and an **attachment
+  thumbnail** (the submitted proof surfaces on the submission event).
+
+### Fixed (2026-06-20 — Product/UI verification pass: visibility, orphans, admin swap reachability)
+
+A product-engineer verification pass driven by real-UI review — every change here
+fixes something that was **wired in code but broken or unreachable in the actual
+flow**. `flutter analyze` clean (0 issues); **35 tests pass** (25 + 10 new,
+including headless **widget** tests that render the affected UI).
+
+- **Admin "Pending Actions" was invisible.** The whole section was gated behind
+  `if (pendingActions > 0)`, so on empty/zero data it silently vanished — looking
+  like the feature wasn't there. It's now **always rendered**, with an explicit
+  "You're all caught up" state. The panel was also **extracted to a public,
+  testable widget** ([pending_actions.dart](lib/features/admin/presentation/widgets/pending_actions.dart))
+  and covered by a widget test that actually pumps it
+  ([pending_actions_widget_test.dart](test/pending_actions_widget_test.dart)).
+- **Branch Schedule "Unknown" employees → explicit broken-reference handling.**
+  Root cause: `getUsersByBranch` returns only users whose **current** `branchId`
+  matches, so a uid left in a schedule slot after its owner was moved to another
+  branch / removed resolves to a silent `"Unknown"`. Now those orphaned
+  assignments are **detected** (`isOrphanAssignment`), **surfaced explicitly** (a
+  top-of-week warning banner + a distinct warning chip — "Unknown member · <uid>",
+  never a fake name), and **resolvable** (tap → confirm → remove the stale entry,
+  then reassign a current employee via "Add"). The employee "Working with" list
+  already dropped orphans (no fake name leaked there).
+- **Admin could not see or approve swap requests at all.** `ScheduleManagementScreen`
+  had no swap tab — only the manager screen did. It's now a **two-tab screen**
+  (Schedule · Swap Requests) with an **all-branches** queue
+  (`ShiftSwapCubit.loadAll()` + `SwapScope.all` + `getAllSwaps`), each card
+  labelled with its **branch** (`showBranch`, resolved via `BranchCubit`), plus the
+  same auto-refresh-on-approval `BlocListener` the manager screen has. The Pending
+  Actions "Swap Requests" row now lands somewhere the admin can actually act.
+- **Employee was offered "Swap" on past shifts.** The week rows showed an active
+  Swap button on every non-today, non-off day — including days already past this
+  week. Past/in-progress slots now show a muted "Past" label instead, keeping the
+  offered action in lock-step with `SwapEligibility` (the send-time + cubit + rules
+  gates from the previous entry remain as the backstop).
+
+### Added / Changed (2026-06-20 — Shift-swap hardening + Admin Pending Actions)
+
+First slice of the Operations refinement spec — **shift-swap correctness** (spec
+§2) and **admin operational visibility** (spec §1). No schema/entity/route change;
+no codegen. `flutter analyze` clean (**0 issues**); **25 tests pass** (17 + 8 new).
+
+**§2 — "Future shifts only" swap validation (the spec's critical rule), enforced
+in three layers:**
+- **Domain (source of truth):** new pure helper
+  [`SwapEligibility`](lib/features/schedule/domain/swap_eligibility.dart) —
+  `slotStart(weekStart, day, shift)` derives a slot's concrete start instant
+  (week's Sunday + day offset + shift start: morning 08:30 / night 16:30, mirroring
+  `ScheduleShift.timeRange`) and `isRequestable(...)` is true only when that start
+  is **strictly in the future**. Unit-tested
+  ([swap_eligibility_test.dart](test/swap_eligibility_test.dart), 8 cases:
+  yesterday → invalid, today-already-started → invalid, today-later/tomorrow/next-week
+  → valid, exact-start boundary → invalid).
+- **Cubit (authoritative client gate):** `ShiftSwapCubit.requestSwap` now rejects a
+  past/in-progress slot with a clear error (`SwapEligibility.pastShiftMessage`)
+  before any write.
+- **UI (immediate feedback):** the Request-Swap sheet (`swap_view.dart`) validates
+  on send and shows the same message.
+- **Firestore rules (server backstop):** `shift_swaps` **create** now requires
+  `swapSlotInFuture(request.resource.data)` — the rule recomputes the slot start
+  from `weekStart`/`day`/`shift` (via `swapDayOffset` + `swapShiftMinutes` +
+  `duration.value`) and requires it `> request.time`. ⚠️ Needs deploy.
+
+**§1 — Admin Home "Pending Actions" (replaces "Recent activity"):** the low-value
+activity feed on `admin_dashboard_screen.dart` is gone; in its place a consolidated,
+**actionable** queue right under the hero — Swap Requests · Employee Approvals ·
+Tasks Waiting Review · Overdue Tasks. Each non-empty queue is one tappable row
+(`_ActionRow`) that jumps straight to where it's resolved; the section header shows
+the total ("Pending Actions · N awaiting you"); empty queues are hidden.
+
+**Admin swap visibility plumbing (spec §2 — "Admin must see swap requests"):** new
+`ScheduleRepository.getAllSwaps()` (+ datasource + impl) — every branch's swaps —
+and `ShiftSwapCubit.pendingSwaps()`, a one-shot fetch of all **open** (non-resolved)
+swaps that powers the Pending Actions count without disturbing the cubit's
+list state (mirrors `AdminUsersCubit.pendingUsers`).
+
+### Changed (2026-06-19 — Admin command-center redesign + reusable component library)
+
+A premium-operations pass on the **Admin** experience (enterprise / Apple-inspired
+dark UI), built on a new shared component library so repeated card patterns stop
+being copy-pasted. **Strictly monochrome** — the existing `AppColors` tokens were
+kept (owner chose not to shift the palette); colour stays reserved for status.
+No schema / route / entity / Firestore-rule changes; no codegen (no freezed
+touched). `flutter analyze` clean (**0 issues**); 17 tests pass (12 + 5 new).
+
+**New reusable components (`lib/core/widgets/`):**
+- **`GlassContainer`** — the one shared premium surface (elevated→surface
+  gradient, hairline border, soft depth shadow, large radius) with built-in
+  press-scale + hover feedback and a `highlight`/`accent` mode. `HeroStatCard`
+  and `AdminUserCard` were **refactored onto it** (dedup — the gradient/border/
+  shadow `BoxDecoration` lived in 4+ places).
+- **`DashboardMetricCard`** — icon chip · value · label · optional trend/status
+  footnote (built on `GlassContainer`).
+- **`ActionCard`** — premium quick-action tile (icon chip + title + optional
+  subtitle), replacing boring `ListTile`s.
+- **`AdminSectionHeader`** — prominent section header (title + optional subtitle +
+  optional trailing action), distinct from the micro-label `SectionHeader`.
+- **`TimelineTile`** — generic vertical-timeline row (dot · spine · title ·
+  timestamp · actor · note), rendered purely from data. The Task Details activity
+  timeline (`_ActivityTimeline`/`_TimelineRow`) was rebuilt on it, and the admin
+  recent-activity feed reuses it.
+- **`TaskStatusChip`** requirement is satisfied by the existing
+  `StatusBadge.task(status)` factory (no duplicate widget created).
+
+**New shared formatting (`lib/features/task/presentation/activity_format.dart`):**
+`activityTitle(status)` / `activityColor(status)` / `relativeTime(dt)` — the
+status→label/colour + relative-time mapping, previously private to Task Details,
+now shared with the admin activity feed.
+
+**Admin Home → command center** (`admin_dashboard_screen.dart`, rebuilt):
+time-aware **greeting header** (salutation · date · branch/employee scope) → a
+focal **hero card** that surfaces the most urgent insight (pending approvals →
+tasks awaiting review → overdue → all-clear) with a metric, summary, today's
+throughput progress bar and a CTA → a 2×2 **metrics grid**
+(`DashboardMetricCard`: Branches · Employees · Managers · Active tasks, with
+trend lines) → **quick actions** (`ActionCard`: Add Branch · Add Manager · Assign
+Task · Approve Employee) → a **pending-approvals** preview (read-only, via the new
+`AdminUsersCubit.pendingUsers()`) → a **recent-activity feed** (`TimelineTile`,
+derived from the live task stream's `activityLog`) → a **Manage** grid (Schedules
+· Employees · Analytics · Settings). Reads three live sources: `StatisticsCubit`,
+the `TaskCubit` all-branches stream, and pending users. Every module stays
+reachable in 1–2 taps.
+
+**Employee Management page** (`employee_management_screen.dart`): the generic
+`AdminUserCard` was replaced by a new **`EmployeeCard`** (avatar · name · role ·
+branch · active/inactive badge) carrying a **performance metric strip**
+(Completed · Pending · Completion rate · Late). Metrics are derived from the live
+admin task stream via the new pure helper **`computeEmployeeMetrics`**
+(`employee_metrics.dart`) — no new backend query/schema. `EmployeeMetrics` is unit
+tested ([employee_metrics_test.dart](test/employee_metrics_test.dart), 5 cases).
+
+**Task timeline (data architecture note):** the spec's recommended event-based
+timeline (`TaskEvent`/`TaskEventType`) is **already implemented** as
+`TaskEntity.activityLog` (`List<ActivityEntry>{status, actorId, actorName, at,
+note}`); the timeline renders dynamically from that list (supports missing /
+optional steps and rework loops — no hardcoded sequence). This pass extracted the
+reusable `TimelineTile` and shared the formatting, rather than re-modelling.
+
+### Changed (2026-06-19 — Employee schedule premium redesign)
+
+**`my_schedule_screen.dart` fully rebuilt** to a premium, animated schedule view:
+
+- **Staggered entrance animations:** `_MyWeekTab` is now a `StatefulWidget` with a
+  900 ms `AnimationController`; each section fades in + slides up with its own
+  `Interval`-based `CurvedAnimation` (greeting → today card → week header → week
+  rows). Animation replays on every refresh so the user always feels the update.
+- **Greeting header:** time-aware salutation ("Good morning/afternoon/evening,
+  [FirstName] 👋") + formatted date (e.g. "Friday, 20 Jun").
+- **Today hero card:** prominent card with a rounded-square shift icon box, "TODAY"
+  pill badge, large shift-name headline, time range line with a `_CountdownRow`
+  ("In Xm" pill visible when shift starts within the next 2 hours), two-column
+  **Manager / Working with** layout (avatar + name + role label, `_TeamAvatars`
+  avatar stack with first-name summary text), and a tappable "View Shift Details"
+  divider row that opens `_ShiftDetailsSheet` — a bottom sheet listing the full
+  team for that shift.
+- **Week rows (all 7 days):** every day of the week is now shown (no more
+  skipping off-days). Each row has `_DayChip` (3-letter day + date number; today
+  gets white filled square + dark text), a circular shift icon, shift name + time
+  range, and a Swap button / "Today" filled pill / "—" for off days.
+- **App bar:** notification bell icon added alongside the refresh icon.
+- No data-layer changes — uses existing `ScheduleCubit` + `ShiftSwapCubit`.
+  `flutter analyze` clean (2 pre-existing infos).
+
+### Fixed (2026-06-19 — Task proof upload + admin task experience)
+
+**Rebrand:** the product is now **DROP — Operations Management System**. All
+user-facing names (app label/display name, web manifest + title, `appName`,
+README) and in-code product references say **DROP**; the Dart package identifier
+stays `fbro` for build stability (documented).
+
+**P1 — Proof photo upload (critical fix).** Employee proof images weren't
+reaching reviewers. Root cause was twofold: (a) `completeAndSubmit` caught any
+upload error and submitted the task **anyway**, permanently dropping the photo,
+while (b) the catch-all message always blamed "internet connection," masking the
+real cause (Storage rules not deployed / Storage not enabled). Now proof is
+uploaded **before** the status write — a failure aborts the transition (task
+stays `started`, photo retained for retry), the cubit returns success so the UI
+only leaves on success, the employee can clear/replace the photo, and the
+datasource maps Storage error codes to honest, actionable messages (+60s upload
+timeout). **Infra still required:** deploy `storage.rules` and ensure Firebase
+Storage is enabled, or every upload will keep failing regardless of app code.
+
+**P2 — Admin task experience.** `TaskManagementScreen` is now
+`AdminTaskOverviewScreen`: a **branch-based overview** (Active / Pending Review /
+Overdue / Completion Rate per branch, sorted so branches needing attention come
+first, plus a company summary strip) with a per-branch drill-down to the full
+task list. Replaces the flat all-branches list that didn't scale. **Fixed
+`setState() callback returned a Future`** — `_load()` was using `setState(() =>`
+with an async method, making the lambda return a `Future`; fixed by extracting the
+Future first then updating state synchronously in a block body.
+
+**P4 — Architecture cleanup.** Removed dead code: `ChangeTaskStatus` /
+`ReviewTask` use-case files, the `updateStatus` / `reviewTask` repository +
+datasource chains, and the unused `completeTask` cubit method. Extracted a shared
+`ManagerTaskCard` widget and `startNewTaskFlow` helper so the manager view and
+admin overview/drill-down render task cards and the New-Task flow from one source
+of truth. `flutter analyze` clean (0 issues — **fixed the 2 pre-existing infos**:
+`prefer_initializing_formals` in `AuthCubit` and `ProfileCubit` constructor
+parameters now use initializing formals (`this._signInWithEmail`,
+`this._updateProfile`) instead of the intermediate named-parameter pattern).
+
+### Changed (2026-06-18 — Employee Home Screen Redesign v2)
+
+Full rebuild of `employee_home_screen.dart` into a personal operations command
+center. The screen is a single live dashboard driven by the **TaskCubit task
+list** (ground truth) for everything task-related, with the `StatisticsCubit`
+used only for today's shift. No new files, routes, cubits, models, or schema —
+presentation only.
+
+- **Time-aware greeting** — date pill ("WED, 18 JUN") + "Good morning, [First Name]" (display type), animated entrance.
+- **Animated "Today" hero card** — a sweeping **circular progress ring** (`_ProgressRing` + `_RingPainter` CustomPaint) showing *finished / total* with a count-up centre, paired with today's shift (Morning/Night/Off + "Next:" line) and a live summary pill ("4 to do · 1 in review" / "All caught up").
+- **Count-up stat strip** — 4 chips (To do / Active / In review / Done) computed from the live task list via a `_Counts` helper + `TweenAnimationBuilder`. **Fixes a latent bug:** the old strip read `stats.activeTasks`, which `employeeStats` never populates, so "In progress" was always 0; counts now come from the task list.
+- **Actionable task cards** — each card has a footer action so the employee can work **without leaving Home**: pending → **Start task** (primary, calls `TaskCubit.startTask` inline), started → **Continue** (opens Details), rejected → **View feedback**, in-review → muted "Awaiting review". Body tap opens `TaskDetailsScreen` (fade + slide). Cards show title, description, animated checklist progress, and meta chips (relative due — "Due today"/"Overdue"/"Due in 2d", "From [manager]" resolved via the cubit directory, and the rejection note).
+- **Sections** — Needs attention (rejected) · Submitted (in review) · Up next (active, sorted started-first then soonest deadline, top 3 + "View N more"), plus an "Open all tasks" row that navigates to the Tasks tab (`RouteNames.tasksForRole`).
+- **Polish** — `_Pressable` scale-on-press feedback on every tappable surface; staggered `EntranceFade`; an error `BlocListener` (guarded to Home being the visible route); a last-good-snapshot cache so inline-action transitions never blank the list; combined `_HomeShimmer` loading state; refined empty / all-caught-up states. Stays strictly monochrome (colour only for status).
+
+`flutter analyze` clean (0 errors, 0 warnings; 2 pre-existing infos unchanged).
+
+### Fixed (2026-06-18 — Proof submission error visibility)
+- **Upload error now shown on the right screen.** `_CompleteButton._submit()` was fire-and-forget: it launched `completeAndSubmit` and immediately popped the screen. If the Storage upload failed, the warning snackbar fired on `MyTasksScreen` (the previous screen) after the user had already navigated away — easy to miss. `_submit()` is now `async` and `await`s `completeAndSubmit` before calling `pop()`. The upload-failure snackbar now appears while the user is still looking at the task details screen.
+- **User-friendly upload error messages.** Upload failure messages no longer reference internal infrastructure ("Enable Firebase Storage and deploy storage.rules"). Both `completeTask` and `completeAndSubmit` now show: `"Photo upload failed — check your internet connection and try again."` The root cause (Storage not enabled) is still documented in `CURRENT_STATE.md` for the operator.
+
+`flutter analyze` clean (0 errors, 0 warnings; 2 pre-existing infos unchanged).
+
+### Fixed (2026-06-18 — Task Workflow Architecture: single-write state machine)
+
+**Root cause of duplicate activity entries, status regressions, and unreliable checklist.**
+
+Every status-transition method (`startTask`, `submitForReview`, `approveTask`, `rejectTask`) was doing two conflicting Firestore writes:
+
+1. **Write 1 (thin)** — `_changeTaskStatus` / `_reviewTask`: sets `status=newStatus` only, via `merge:true`
+2. **Write 2 (fat)** — `_appendActivity` → `_updateTask`: writes the **entire** task map from the *original* entity (which still carries `status=oldStatus`), via `merge:true`, reverting Write 1
+
+Because `merge:true` overwrites every specified field, Write 2 always reverted the status back to the pre-transition value. The Firestore real-time stream fired after each write, so the UI would bounce: `pending → started → pending`. This caused:
+- Employees seeing "Start Task" again after tapping it → tapping again → **duplicate "Started" activity entries**
+- Checklist becoming non-interactive (gated on `status == started`) because status bounced back to `pending`
+- Managers seeing the review block re-appear after approving/rejecting
+
+**Fix:** Replaced the two-write pattern with a **single `_updateTask` call** in each method that atomically writes the new `status`, any audit fields (`approvedBy`/`rejectedBy`/`approvedAt`/`rejectedAt`/`reviewNotes`), and the new `ActivityEntry`, all in one Firestore document write. No more race condition.
+
+- `startTask` — single write: `status=started` + activity entry
+- `submitForReview` — single write: `status=waitingReview` + activity entry  
+- `approveTask` — single write: `status=approved` + audit fields + activity entry + spawn recurrence
+- `rejectTask` — single write: `status=rejected` + audit fields + activity entry
+
+Removed `_appendActivity` helper (was the source of the double-write).
+Removed `ChangeTaskStatus` and `ReviewTask` use cases from `TaskCubit` (no longer needed; use case files kept as dormant domain objects).
+Updated `_canTransition` to include `started → waitingReview` (the path `completeAndSubmit` uses), making the state machine complete.
+DI wiring (`injection.dart`) updated to match the removed cubit dependencies.
+
+**Second pass — complete single-write architecture with audit timestamps:**
+
+Added `startedAt` and `submittedAt` fields to `TaskEntity` (freezed) and `TaskModel` (serialization + Firestore Timestamp ↔ DateTime). Completing the per-transition audit timestamp set: every status transition now writes its own named timestamp in the same atomic document update — `startedAt` (`startTask`), `submittedAt` (`submitForReview` and `completeAndSubmit`), `approvedAt` (`approveTask`), `rejectedAt` (`rejectTask`).
+
+**Full audit result — every task action verified clean:**
+
+| Action | Writes | Stale-data risk |
+|---|---|---|
+| `createTask` | 1 Firestore create | none |
+| `editTask` | 1 Firestore update | none |
+| `deleteTask` | 1 Firestore delete | none |
+| `assignEmployees` | 1 thin merge (no status change) | none |
+| `startTask` | 1 atomic update (status + startedAt + activity) | none |
+| `completeTask` | 1 atomic update (status + notes/proof + activity) | none |
+| `submitForReview` | 1 atomic update (status + submittedAt + activity) | none |
+| `completeAndSubmit` | 1 Storage upload + 1 atomic update (status + submittedAt + activity) | none |
+| `approveTask` | 1 atomic update (status + approvedAt + audit + activity) | none |
+| `rejectTask` | 1 atomic update (status + rejectedAt + audit + activity) | none |
+| `toggleChecklistItem` | 1 atomic update (checklist only, no status change) | none |
+
+Freezed codegen re-run (2 outputs written). `flutter analyze` clean (0 errors, 0 warnings; 2 pre-existing infos unchanged).
+
+### Changed (2026-06-18 — App Icon & Name)
+- **App icon** updated to new DROP branding image on both Android and iOS (all sizes generated via `flutter_launcher_icons` from `assets/E22CA445-D611-4A31-8EE5-BB661032E09C.png`).
+- **App display name** changed from `FBRO` → `DROP` in `AndroidManifest.xml` (android:label) and `Info.plist` (CFBundleDisplayName + CFBundleName). Dart package name (`name: fbro` in pubspec.yaml) unchanged.
+- Added `flutter_launcher_icons: ^0.14.3` as a dev dependency.
+
+### Added (2026-06-18 — Inline Checklist Editor in Task Form)
+- **Inline checklist editor** in the Create/Edit Task bottom sheet (`_InlineChecklistEditor` + `_ChecklistItemRow`). Managers can now add, remove, and reorder checklist steps directly on any blank task (not just templates). Each step has a **required/optional toggle** (star icon). On create: steps become `ChecklistItem`s on the task; on edit: existing steps preserve their `completed`/`completedAt` state, new steps are appended uncompleted.
+- When a task is created from a **template**, its checklist is now **pre-populated and editable** (was read-only preview before) — managers can trim or extend the template checklist before creating.
+
+### Changed (2026-06-18 — Task Form Simplified)
+- **Removed the "Type" dropdown** (`TaskType: daily / special`) from the Create/Edit Task form. It was visually redundant with the "Repeats" picker ("Type: daily" looked identical to "Repeats: Daily"). Type is now **auto-inferred**: recurring tasks → `TaskType.daily`; one-off tasks → `TaskType.special`. The field is still stored on the entity for stats/filtering — it just no longer requires manual input.
+
+### Fixed (2026-06-18 — Product Review: Employee UX)
+- **Two-step complete → submit UX eliminated.** After an employee tapped "Submit
+  Completion" (status → `completed`), they had to re-find the task card and tap
+  "Submit for Review" a second time. `TaskCubit.completeAndSubmit` now uploads the
+  proof image and advances the task directly to `waitingReview` in a **single
+  Firestore write**, recording both `completed` and `waitingReview` activity
+  entries with the same timestamp. The bottom-sheet button is renamed **"Complete &
+  Submit"**. The separate `completeTask` (→ `completed`) and `submitForReview`
+  paths are preserved for backward compat (e.g. tasks already in `completed` state
+  still show "Submit for Review").
+- **QA Checklist corrected** — R2 (task assignment) was documented as
+  "refresh-based"; tasks are in fact realtime Firestore streams (`TaskCubit`).
+  Updated E7/E10/E11 scenarios and the real-time note accordingly. Removed the
+  obsolete known-limitation about the admin free-text branch field (fixed in
+  Stabilization). Added accuracy notes on activity-log analytics limits and
+  recurring-task spawn behaviour.
+
+### Added (2026-06-18 — Operations Workflow Upgrade)
+- **Recurring tasks** — `RecurrenceFrequency` enum (none/daily/weekly/monthly) + `RecurrenceConfig` entity (`frequency`, `interval`, `weekday`, `hour`, `minute`, `nextOccurrence()`). Manager/admin can set recurrence on any task. On approval, `TaskCubit._spawnNextRecurrence` auto-creates the next instance with the checklist reset and deadline advanced.
+- **Activity timeline** — `ActivityEntry` entity embedded in `task.activityLog[]`. Every status transition (create/start/submit/approve/reject) appends an entry with actor, timestamp, and optional note. Shown newest-first on the Task Details page.
+- **Task Details Screen** (`task_details_screen.dart`) — full-screen scrollable view: status header with animated pills, assignee block with "Assigned by Name·Role", checklist with live progress bar, submitted work (notes + proof image), activity timeline, and role-appropriate action buttons. Accessible from both manager (`ManagerTasksView`) and employee (`MyTasksScreen`) task cards.
+- **Employee task UX redesign** (`my_tasks_screen.dart`) — tabbed layout (Active / Done) with 5 sorted sections: Needs Attention (rejected), In Progress, Today's Tasks, Upcoming, In Review. Animated entrance (fade+slide, staggered per card). Minimal card with status dot, deadline, checklist progress pill, and recurrence badge. Tapping any card opens `TaskDetailsScreen` with slide transition.
+- **Recurrence picker** in task form sheet (`_RecurrencePicker`) — animated chip row: None / Daily / Weekly / Monthly. Only shown on new task creation.
+- **`RecurrenceConfig`** and **`ActivityEntry`** are freezed entities with full Firestore serialisation in `task_model.dart`.
 
 ### Added
 - `PROJECT_CONTEXT.md` — architecture, dependency maps, modification map, and
@@ -25,6 +792,144 @@ and [Semantic Versioning](https://semver.org).
   documentation protocol into every new session (read all three docs first,
   verify against the codebase, auto-update docs + any stale project memory
   before finishing).
+
+---
+
+## 2026-06-18 — Task UX overhaul: proof bug, monochrome cards, "Assigned by", username removal
+
+A product-design + architecture pass toward an enterprise (Linear/Notion/Asana)
+feel: **black/white/grey, minimal, scannable**. Fixes the proof-photo flow,
+redesigns task cards, surfaces **who assigned a task**, and removes the
+operationally-useless username. Architecture, routing, role system, and Firebase
+integration are unchanged.
+
+### Fixed — review-photo / "User is not authorized" on Complete
+- **Root cause:** the error is Firebase **Storage's `unauthorized`** — `storage.rules`
+  aren't deployed / Storage isn't enabled. The upload code + rules are correct
+  (`tasks/{taskId}/proof.jpg`, any signed-in user). **⚠️ Action required (console):**
+  enable Storage + `firebase deploy --only storage,firestore:rules`.
+- **Code fix (resilience):** `TaskCubit.completeTask` uploaded the proof *inside*
+  the completion action, so a Storage failure **aborted the whole completion** —
+  the employee couldn't even mark the task done and lost their notes. The proof is
+  now **best-effort**: on upload failure the task still completes (notes kept) and a
+  **precise, actionable warning** surfaces ("…Enable Firebase Storage and deploy
+  storage.rules, then re-attach it.") instead of a blocking, cryptic error.
+- **Manager can now view the submitted work:** the Review sheet
+  ([task_action_sheets.dart](lib/features/task/presentation/widgets/task_action_sheets.dart))
+  gained a **"Submitted work"** block showing the employee's notes + the proof image
+  (it previously showed neither).
+
+### Changed — task cards redesigned (monochrome, scannable)
+- Rebuilt [task_card.dart](lib/features/task/presentation/widgets/task_card.dart) as a
+  calm, enterprise card: **no priority rail, no coloured chips, no loud status
+  badge**. Clear hierarchy — Title · subtle status (greyscale dot + label) ·
+  Description · assignee (avatar/name/role) · **meta key-values** (Assigned by · Due ·
+  Priority) · greyscale checklist · actions. **Removed all red/yellow** from the card
+  body; colour is now reserved strictly for **destructive** actions (Delete) — even
+  the amber "Review"/"Restart" accents are now monochrome.
+- **"Assigned by" added everywhere relevant** — the card resolves the task's
+  `createdBy` → "Name · Role" (e.g. "Ahmed Hassan · Manager"; global creators not in
+  the branch directory show "Admin"). Managers/employees now instantly see who
+  created a task. **Overdue** is flagged inline (greyscale) on the Due row.
+
+### Changed — username removed (no operational value)
+- Audited: username was **never collected at registration**, only **forced in
+  profile editing** ("Username is required"), and is a leftover from the app's
+  earlier social iteration — it provides no store-operations value (identity is Full
+  Name · Email · Role · Branch). Removed the username field + validation + the
+  uniqueness check from the edit-profile flow
+  ([edit_profile_page.dart](lib/features/profile/presentation/pages/edit_profile_page.dart)).
+  The dormant model field + `CheckUsername` use case are left as harmless legacy
+  (no longer read/written by any UI) — a full model purge is a safe follow-up.
+
+### Verified
+- `flutter analyze` clean (2 pre-existing infos); **12 tests pass**. No
+  entity/route/rule schema change; the proof + completion **workflow and permissions
+  are intact** — the fix is resilience + UX, not a permission change.
+
+### Still open (next, per the brief)
+- **Full-screen employee Tasks experience** (search · filters · My Tasks / Overdue /
+  Completed sections) — the redesigned card is the building block.
+- **Broad screen simplification** (Home/Admin/Manager altitude pass).
+- **Deploy `storage.rules` + enable Storage** so proof photos actually upload.
+
+---
+
+## 2026-06-17 — DROP THE SHOP UI redesign + Tasks crash fix
+
+Restructures the role chrome to match the product mockups and redesigns the
+signature auth screens — **while keeping the strictly-monochrome black / white /
+grey palette** (the owner confirmed B&W/grey stays the main color; no indigo).
+Also fixes a **pre-existing layout crash** on the Tasks screen. **No business
+logic, routing model, entity/model, or Firebase-rule changes** — the work is the
+shared chrome, the signature screens, and one render fix. The `assets/drop_logo.png`
+wordmark is preserved and still rendered by `DropLogo`.
+
+### Fixed (crash — pre-existing, Phase 9)
+- **Opening the Tasks screen crashed with "BoxConstraints forces an infinite
+  height".** `TaskCard`'s root was a `Row(crossAxisAlignment: stretch)` with a
+  fixed-width priority rail; inside a `ListView` (unbounded height) `stretch`
+  forces the rail to infinite height → assertion (the `RenderFlex`/`RenderBox.size`
+  crash seen in the debugger). The rail is now a `PositionedDirectional` element in
+  a `Stack`, so it stretches to the card's real content height instead of forcing
+  infinity — identical look, no crash. Locked in with
+  [task_card_layout_test.dart](test/task_card_layout_test.dart) (pumps a `TaskCard`
+  in a `ListView`). Pre-existing since Phase 9 (surfaced now that the UI was run).
+
+### Fixed (search field — "a field inside a field")
+- **`AppSearchField` rendered an ugly nested box** (Branches / Employees /
+  Managers). Its inner `TextField` set only `border: InputBorder.none`, so it still
+  inherited the global `InputDecorationTheme`'s `filled: true`,
+  `enabledBorder`/`focusedBorder` outlines, and 18px padding — drawing a second
+  filled, bordered, padded box inside the search surface. Rebuilt to **fully
+  neutralise** the input theme (`filled: false`, all border states
+  `InputBorder.none`, `isCollapsed: true`, zero content padding) so it's ONE clean
+  rounded surface, with a **focus highlight** (border + magnifier brighten) and a
+  circular clear button — monochrome. Locked in with
+  [app_search_field_test.dart](test/app_search_field_test.dart).
+
+### Changed (chrome — bottom navigation)
+- **`RoleScaffold`** rebuilt around a **bottom navigation bar**
+  (Home · Tasks · Schedule · Profile) plus a clean header (notification bell +
+  tappable avatar → profile). The old app-bar icon row (Tasks / Schedule) and the
+  overflow menu (Profile / Settings / Sign out) are gone — Tasks/Schedule are
+  bottom-nav tabs and the Profile tab still carries Settings + Sign out (both
+  verified reachable). Each tab pushes its existing role-scoped route (launcher
+  pattern; a persistent `StatefulShellRoute` is a noted follow-up).
+- New shared widget **`app_bottom_nav.dart`** (`AppBottomNav` + `AppNavItem`) — a
+  flat dark bar with a top hairline, a white-wash pill behind the active icon, and
+  a white active label (monochrome).
+
+### Changed (signature screens)
+- **Splash** — DROP brand lockup (logo + `THE SHOP` + "Operations Management
+  System"), a subtle neutral glow bloom, and a bottom loading bar + version.
+- **Pending Approval** — centered redesign around a **breathing clock** (mono
+  white-on-near-black, pulsing halo), a "Pending Approval" headline, the
+  under-review copy, and a **"What happens next?"** 3-step card + Log out. Keeps
+  the real-time `watchCurrentUser` redirect.
+- **Login / Register** — copy aligned to the mockups (`Welcome Back` / `Sign in to
+  continue`, `Create Account` / `Join DROP THE SHOP`).
+
+### Changed (design tokens — palette unchanged, names added)
+- **`AppColors`** stays **monochrome** (`primary` = white). Added token *names*
+  consumed by the new chrome/screens — `onPrimary` (dark text on the white
+  accent), `primarySurface` (white ~12% wash for the active nav pill / tiles), and
+  a `primaryGlow(...)` helper kept **flat** (returns no shadow, so buttons stay
+  flat white). `AppButton` primary uses `primaryGradient` (white→grey ≈ flat) +
+  dark `onPrimary` text. FABs use the white accent + dark `onPrimary` label
+  (unchanged look).
+
+### Verified
+- `flutter analyze` clean (only the 2 pre-existing `prefer_initializing_formals`
+  infos); **11 unit tests pass** (10 prior + the new TaskCard layout regression).
+  No entity/model/cubit/repository/route/Firebase-rule change (`git diff` confirms
+  only theme/widget/screen/doc files).
+
+### Notes / honest limitations
+- Flutter UI can't be rendered/clicked in this environment, so visual work was done
+  at the **token + shared-chrome** level and verified by `flutter analyze` + tests
+  (incl. a real layout-assertion reproduction for the Tasks crash). Per-screen pixel
+  polish is a natural follow-up.
 
 ---
 

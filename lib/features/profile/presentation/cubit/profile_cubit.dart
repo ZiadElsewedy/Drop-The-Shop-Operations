@@ -19,12 +19,11 @@ class ProfileCubit extends Cubit<ProfileState> {
 
   ProfileCubit({
     required this._getProfile,
-    required UpdateProfile updateProfile,
+    required this._updateProfile,
     required this._uploadProfileImage,
     required this._uploadCoverImage,
     required this._checkUsername,
-  })  : _updateProfile = updateProfile,
-        super(const ProfileState.initial());
+  }) : super(const ProfileState.initial());
 
   /// The currently-known profile, regardless of transient state.
   ProfileEntity? get _current => state.mapOrNull(
