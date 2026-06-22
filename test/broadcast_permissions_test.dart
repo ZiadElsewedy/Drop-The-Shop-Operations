@@ -30,12 +30,23 @@ void main() {
       expect(BroadcastPermissions.canBroadcast(UserRole.employee), isFalse);
     });
 
-    test('allowedAudiences reflects the matrix', () {
-      expect(BroadcastPermissions.allowedAudiences(UserRole.admin),
-          BroadcastAudience.values);
+    test('allowedAudiences excludes the derived custom audience', () {
+      // `custom` is derived (a multi-pick under the people picker), not a chip.
+      expect(BroadcastPermissions.allowedAudiences(UserRole.admin), [
+        BroadcastAudience.allBranches,
+        BroadcastAudience.branch,
+        BroadcastAudience.user,
+      ]);
       expect(BroadcastPermissions.allowedAudiences(UserRole.manager),
           [BroadcastAudience.branch, BroadcastAudience.user]);
       expect(BroadcastPermissions.allowedAudiences(UserRole.employee), isEmpty);
+      // custom is still permitted (canSend) for admin + manager, just not listed.
+      expect(
+          BroadcastPermissions.canSend(UserRole.manager, BroadcastAudience.custom),
+          isTrue);
+      expect(
+          BroadcastPermissions.canSend(UserRole.employee, BroadcastAudience.custom),
+          isFalse);
     });
   });
 

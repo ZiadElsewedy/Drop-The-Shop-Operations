@@ -11,8 +11,22 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-22 (Communications Center — Phase 2 · Commit 2)
+**Last updated:** 2026-06-22 (Communications Center — Phase 2 · Commit 3)
 **Version:** 1.0.0+1 · **Branch:** `feature/notification` (DROP — monochrome enterprise UX)
+
+> **Communications Center · Phase 2 — Commit 3 (2026-06-22):** Advanced recipient
+> targeting. New **`BroadcastAudience.custom`** (multi-recipient; `__custom__`
+> marker + `targetUserIds` array, never in a branch feed). `targetUserIds` +
+> `roleFilter` are threaded as **send-time intents** through `SendBroadcast`/repo/
+> datasource/`BroadcastCubit.send` → the callable (no `BroadcastEntity` change).
+> The composer's individual picker is now a **multi-select "People"** picker with
+> **Select all / Clear** (1 → DM, 2+ → custom); branch/all sends gain a **role
+> filter** (Everyone / Managers / Employees). `dispatchBroadcast` resolves custom
+> via `getAll` (manager picks filtered to own branch) + applies `roleFilter`;
+> `broadcasts` read rule allows `uid in targetUserIds`. `BroadcastPermissions`
+> gains custom; `allowedAudiences` lists only selectable chips. **Deferred:** saved
+> audiences. ⚠️ Deploy `firestore:rules,functions`. **Pending:** scheduler ·
+> reminders · analytics dashboard.
 
 > **Communications Center · Phase 2 — Commit 2 (2026-06-22):** Broadcast
 > **templates** + a `{{placeholder}}` engine + a premium **composer**. New

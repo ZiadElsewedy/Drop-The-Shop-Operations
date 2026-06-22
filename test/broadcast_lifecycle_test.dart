@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
 import 'package:fbro/core/enums/broadcast_channel.dart';
 import 'package:fbro/core/enums/broadcast_priority.dart';
+import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/features/communications/data/models/broadcast_model.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
 
@@ -139,6 +140,30 @@ void main() {
         deliveredCount: 7,
       );
       expect(odd.failedCount, 0);
+    });
+
+    test('custom (multi-recipient) audience uses its own branch marker', () {
+      expect(BroadcastAudience.fromString('custom'), BroadcastAudience.custom);
+      expect(BroadcastAudience.custom.isCustom, isTrue);
+
+      final model = BroadcastModel.fromEntity(const BroadcastEntity(
+        id: 'c1',
+        title: 't',
+        message: 'm',
+        senderId: 'mgr',
+        senderName: 'Mgr',
+        senderRole: UserRole.manager,
+        audience: BroadcastAudience.custom,
+      ));
+      // Custom keeps the doc out of every branch/all feed (own marker).
+      expect(model.branchId, BroadcastModel.customBranchMarker);
+      expect(model.branchId, isNot(''));
+      expect(model.branchId, isNot(BroadcastModel.directBranchMarker));
+
+      // The marker maps back to a null entity branch on read.
+      final back = model.toEntity();
+      expect(back.audience, BroadcastAudience.custom);
+      expect(back.branchId, isNull);
     });
 
     test('isActive only when neither archived nor deleted', () {

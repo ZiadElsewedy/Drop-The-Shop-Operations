@@ -97,6 +97,10 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     String category = 'general',
     BroadcastPriority priority = BroadcastPriority.normal,
     BroadcastChannel channel = BroadcastChannel.both,
+    /// Recipient list for a [BroadcastAudience.custom] send.
+    List<String> targetUserIds = const [],
+    /// Restricts a branch/all send to one role (''/`all` = everyone).
+    String roleFilter = '',
   }) async {
     if (_sending) return null;
 
@@ -132,6 +136,10 @@ class BroadcastCubit extends Cubit<BroadcastState> {
       _emitError('Pick a recipient.');
       return null;
     }
+    if (audience == BroadcastAudience.custom && targetUserIds.isEmpty) {
+      _emitError('Pick at least one recipient.');
+      return null;
+    }
 
     final broadcast = BroadcastEntity(
       id: '',
@@ -151,7 +159,12 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     final prev = _broadcasts;
     emit(BroadcastState.loaded(prev, sending: true));
     try {
-      final sent = await _sendBroadcast(broadcast);
+      final sent = await _sendBroadcast(
+        broadcast,
+        targetUserIds:
+            audience == BroadcastAudience.custom ? targetUserIds : const [],
+        roleFilter: roleFilter,
+      );
       // Keep the feed visible; the stream emits the new broadcast (branch/all).
       emit(BroadcastState.loaded(_broadcasts));
       return sent.recipientCount ?? 0;

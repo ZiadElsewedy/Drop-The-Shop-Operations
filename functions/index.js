@@ -45,6 +45,10 @@ const NOTIFICATIONS = "notifications";
 // branch / all feed query.
 const DIRECT_BRANCH_MARKER = "__direct__";
 
+// `branchId` marker for a hand-picked multi-recipient (custom) broadcast
+// (mirrors BroadcastModel.customBranchMarker).
+const CUSTOM_BRANCH_MARKER = "__custom__";
+
 // FCM multicast hard limit per request.
 const MULTICAST_CHUNK = 500;
 
@@ -111,15 +115,29 @@ async function dispatchBroadcast(params) {
   const audience = String(params.audience || "").trim();
   const senderId = String(params.senderId || "").trim();
   const senderRole = String(params.senderRole || "manager").trim() || "manager";
+  const senderBranch = String(params.senderBranch || "").trim();
   const senderName = String(params.senderName || "DROP").trim() || "DROP";
   const targetUserId = String(params.targetUserId || "").trim();
+  const roleFilter = String(params.roleFilter || "").trim();
+  const targetUserIds = Array.isArray(params.targetUserIds)
+    ? params.targetUserIds.map((s) => String(s || "").trim()).filter(Boolean)
+    : [];
   let branchId = String(params.branchId || "").trim();
+  // Persisted recipient list — set for a custom send (drives the read rule).
+  let persistedTargetIds = [];
+
+  // Restrict a fetched user set to a single role (zigzag-merge equality — no
+  // composite index). 'all'/'' means everyone.
+  const applyRole = (docs) =>
+    roleFilter && roleFilter !== "all"
+      ? docs.filter((d) => (d.data().role || "employee") === roleFilter)
+      : docs;
 
   // ── Resolve recipients per audience (caller has validated permissions) ──
   let recipientDocs = [];
   if (audience === "allBranches") {
     const snap = await db.collection(USERS).where("isActive", "==", true).get();
-    recipientDocs = snap.docs;
+    recipientDocs = applyRole(snap.docs);
     branchId = "";
   } else if (audience === "branch") {
     const snap = await db
@@ -127,7 +145,7 @@ async function dispatchBroadcast(params) {
       .where("branchId", "==", branchId)
       .where("isActive", "==", true)
       .get();
-    recipientDocs = snap.docs;
+    recipientDocs = applyRole(snap.docs);
   } else if (audience === "user") {
     const targetSnap = await db.collection(USERS).doc(targetUserId).get();
     if (!targetSnap.exists) {
@@ -135,6 +153,23 @@ async function dispatchBroadcast(params) {
     }
     recipientDocs = [targetSnap];
     branchId = DIRECT_BRANCH_MARKER;
+  } else if (audience === "custom") {
+    if (targetUserIds.length === 0) {
+      throw new HttpsError("invalid-argument", "Pick at least one recipient.");
+    }
+    const refs = targetUserIds.map((id) => db.collection(USERS).doc(id));
+    const snaps = await db.getAll(...refs);
+    let docs = snaps.filter((s) => s.exists);
+    // A manager may only message users inside their own branch.
+    if (senderRole === "manager") {
+      docs = docs.filter((d) => (d.data().branchId || "") === senderBranch);
+    }
+    if (docs.length === 0) {
+      throw new HttpsError("not-found", "None of the recipients are available.");
+    }
+    recipientDocs = docs;
+    persistedTargetIds = docs.map((d) => d.id);
+    branchId = CUSTOM_BRANCH_MARKER;
   } else {
     throw new HttpsError("invalid-argument", "Unknown broadcast audience.");
   }
@@ -158,6 +193,7 @@ async function dispatchBroadcast(params) {
     audience,
     branchId,
     targetUserId: audience === "user" ? targetUserId : "",
+    targetUserIds: persistedTargetIds,
     recipientCount,
     openedCount: 0,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -301,6 +337,10 @@ exports.sendBroadcast = onCall(async (request) => {
   const audience = String(payload.audience || "").trim();
   const branchId = String(payload.branchId || "").trim();
   const targetUserId = String(payload.targetUserId || "").trim();
+  const roleFilter = String(payload.roleFilter || "").trim();
+  const targetUserIds = Array.isArray(payload.targetUserIds)
+    ? payload.targetUserIds.map((s) => String(s || "").trim()).filter(Boolean)
+    : [];
 
   if (!title || !body) {
     throw new HttpsError("invalid-argument", "A broadcast needs a title and a message.");
@@ -345,6 +385,11 @@ exports.sendBroadcast = onCall(async (request) => {
         throw new HttpsError("permission-denied", "Managers can only message users inside their own branch.");
       }
     }
+  } else if (audience === "custom") {
+    if (targetUserIds.length === 0) {
+      throw new HttpsError("invalid-argument", "Pick at least one recipient.");
+    }
+    // A manager's out-of-branch picks are filtered out inside dispatch.
   } else {
     throw new HttpsError("invalid-argument", "Unknown broadcast audience.");
   }
@@ -354,6 +399,7 @@ exports.sendBroadcast = onCall(async (request) => {
   const result = await dispatchBroadcast({
     senderId: auth.uid,
     senderRole,
+    senderBranch,
     senderName,
     title,
     body,
@@ -363,6 +409,8 @@ exports.sendBroadcast = onCall(async (request) => {
     audience,
     branchId,
     targetUserId,
+    targetUserIds,
+    roleFilter,
   });
 
   return { success: true, ...result };

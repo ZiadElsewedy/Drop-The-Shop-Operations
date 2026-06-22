@@ -11,10 +11,17 @@ class BroadcastRepositoryImpl implements BroadcastRepository {
   BroadcastRepositoryImpl(this._remote);
 
   @override
-  Future<BroadcastEntity> sendBroadcast(BroadcastEntity broadcast) async {
+  Future<BroadcastEntity> sendBroadcast(
+    BroadcastEntity broadcast, {
+    List<String> targetUserIds = const [],
+    String roleFilter = '',
+  }) async {
     try {
-      final created =
-          await _remote.sendBroadcast(BroadcastModel.fromEntity(broadcast));
+      final created = await _remote.sendBroadcast(
+        BroadcastModel.fromEntity(broadcast),
+        targetUserIds: targetUserIds,
+        roleFilter: roleFilter,
+      );
       return created.toEntity();
     } on ServerException catch (e) {
       throw ServerFailure(e.message);

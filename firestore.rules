@@ -232,7 +232,9 @@ service cloud.firestore {
     match /broadcasts/{broadcastId} {
       allow read: if isAdmin()
         || resource.data.get('targetUserId', '') == request.auth.uid
+        || request.auth.uid in resource.data.get('targetUserIds', [])
         || (resource.data.get('targetUserId', '') == ''
+            && resource.data.get('targetUserIds', []).size() == 0
             && (resource.data.get('branchId', '') == ''
                 || resource.data.get('branchId', '') == selfBranch()));
 

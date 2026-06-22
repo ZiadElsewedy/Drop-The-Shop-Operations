@@ -17,7 +17,14 @@
 enum BroadcastAudience {
   allBranches,
   branch,
-  user;
+  user,
+
+  /// A hand-picked set of individuals (Phase 2 Commit 3). Stored with a
+  /// non-branch `branchId` marker + a `targetUserIds` array, so it never
+  /// surfaces in a branch/all feed and is read only by the chosen recipients +
+  /// an admin. Derived (not a user-facing chip): the composer's people picker
+  /// sends a single pick as [user] and 2+ picks as [custom].
+  custom;
 
   /// The string persisted in Firestore (`broadcasts/{id}.audience`).
   String get value => name;
@@ -27,17 +34,20 @@ enum BroadcastAudience {
         BroadcastAudience.allBranches => 'All branches',
         BroadcastAudience.branch => 'Branch',
         BroadcastAudience.user => 'Individual',
+        BroadcastAudience.custom => 'Selected people',
       };
 
   bool get isAllBranches => this == BroadcastAudience.allBranches;
   bool get isBranch => this == BroadcastAudience.branch;
   bool get isUser => this == BroadcastAudience.user;
+  bool get isCustom => this == BroadcastAudience.custom;
 
   /// Parses the stored string; unknown / missing → [allBranches] (the widest,
   /// least-surprising default for a legacy or malformed document).
   static BroadcastAudience fromString(String? raw) => switch (raw) {
         'branch' => BroadcastAudience.branch,
         'user' => BroadcastAudience.user,
+        'custom' => BroadcastAudience.custom,
         _ => BroadcastAudience.allBranches,
       };
 }

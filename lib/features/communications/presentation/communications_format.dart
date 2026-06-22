@@ -34,12 +34,14 @@ String audienceLabel(BroadcastEntity b) => switch (b.audience) {
       BroadcastAudience.allBranches => 'Everyone',
       BroadcastAudience.branch => 'Branch',
       BroadcastAudience.user => 'Direct',
+      BroadcastAudience.custom => 'Selected',
     };
 
 IconData audienceIcon(BroadcastAudience a) => switch (a) {
       BroadcastAudience.allBranches => Icons.public_rounded,
       BroadcastAudience.branch => Icons.store_mall_directory_outlined,
       BroadcastAudience.user => Icons.person_outline_rounded,
+      BroadcastAudience.custom => Icons.groups_outlined,
     };
 
 IconData categoryIcon(BroadcastCategory c) => switch (c) {

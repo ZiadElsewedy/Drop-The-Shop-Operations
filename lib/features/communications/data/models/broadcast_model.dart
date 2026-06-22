@@ -24,6 +24,11 @@ class BroadcastModel {
   /// Mirrored by the Cloud Function (`functions/index.js`).
   static const String directBranchMarker = '__direct__';
 
+  /// `branchId` marker for a hand-picked multi-recipient (`custom`) broadcast.
+  /// Like [directBranchMarker], it keeps the doc out of every branch/all feed;
+  /// the chosen recipients read it via the `targetUserIds` array.
+  static const String customBranchMarker = '__custom__';
+
   final String id;
   final String title;
   final String message;
@@ -121,6 +126,8 @@ class BroadcastModel {
         return '';
       case BroadcastAudience.user:
         return directBranchMarker;
+      case BroadcastAudience.custom:
+        return customBranchMarker;
       case BroadcastAudience.branch:
         return e.branchId ?? '';
     }
@@ -192,9 +199,12 @@ class BroadcastModel {
         senderName: senderName,
         senderRole: senderRole,
         audience: audience,
-        // The persisted markers ('' for all, directBranchMarker for a DM) map
-        // back to a null entity branchId; a real branch id is preserved.
-        branchId: (branchId.isEmpty || branchId == directBranchMarker)
+        // The persisted markers ('' for all, directBranchMarker for a DM,
+        // customBranchMarker for a custom send) map back to a null entity
+        // branchId; a real branch id is preserved.
+        branchId: (branchId.isEmpty ||
+                branchId == directBranchMarker ||
+                branchId == customBranchMarker)
             ? null
             : branchId,
         targetUserId: targetUserId.isEmpty ? null : targetUserId,

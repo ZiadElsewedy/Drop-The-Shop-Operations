@@ -12,6 +12,40 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-06-22 — Communications Center · Phase 2 Commit 3: advanced recipient targeting)
+
+Third commit of the **Premium Upgrade** — multi-recipient + role-filtered
+sending, threaded as **send-time intents** (no `BroadcastEntity`/freezed change).
+`node --check functions/index.js` valid.
+
+- **`BroadcastAudience.custom`** — a hand-picked multi-recipient send. Stored with
+  a `__custom__` branch marker (mirrors the DM `__direct__` marker) + a
+  `targetUserIds` array, so it never leaks into a branch/all feed; the chosen
+  recipients read it via the array. `custom` is **derived** (a 2+ multi-pick under
+  the people picker), not a selectable chip.
+- **Send pipeline** — `SendBroadcast`/`BroadcastRepository(+Impl)`/
+  `BroadcastRemoteDataSource(+Impl)`/`BroadcastCubit.send` thread `targetUserIds`
+  (custom recipients) + `roleFilter` (restrict a branch/all send to managers /
+  employees) into the callable payload. `BroadcastPermissions` gains `custom`
+  (admin any · manager own-branch members · employee none); `allowedAudiences`
+  now explicitly lists the *selectable* audiences (excludes the derived `custom`).
+- **Cloud Function** — `dispatchBroadcast` resolves `custom` via `db.getAll`
+  (manager picks filtered to their own branch), applies `roleFilter` to branch/all
+  fetches (client-side filter — no composite index), and persists `targetUserIds`
+  on the doc. `firestore.rules` broadcasts **read** now also allows
+  `request.auth.uid in targetUserIds`, and the branch/all read clause requires
+  `targetUserIds` empty (so a custom doc never surfaces in a branch feed).
+- **Composer** — the "Individual" picker became a **multi-select "People"** picker
+  with **Select all / Clear** + a "{n} selected" count; sending one routes as a
+  DM (`user`), two-plus as `custom`. Branch + All-branches sends gain a **role
+  filter** (Everyone / Managers / Employees). Placeholder context updated for the
+  single-select case.
+- **Tests** — `broadcast_permissions_test` updated for `custom` + the
+  selectable-audience change; `broadcast_lifecycle_test` covers the custom marker
+  round-trip. ⚠️ Deploy `firestore:rules,functions`.
+- **Deferred:** *saved audiences* (named reusable filters) — a follow-up; today's
+  targeting covers individual / role-based / branch-based / multi-select.
+
 ### Added (2026-06-22 — Communications Center · Phase 2 Commit 2: broadcast templates + placeholder engine + premium composer)
 
 Second commit of the **Communications Center Premium Upgrade**. Adds a reusable

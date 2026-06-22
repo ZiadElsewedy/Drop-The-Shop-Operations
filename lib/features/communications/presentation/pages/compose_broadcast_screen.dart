@@ -57,10 +57,13 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
   List<BranchEntity> _branches = const [];
   BranchEntity? _selectedBranch; // admin's chosen branch (branch / individual)
   List<UserEntity> _users = const [];
-  UserEntity? _selectedUser;
+  final Set<String> _selectedUsers = {}; // multi-select recipient uids
   bool _loadingUsers = false;
   String _userQuery = '';
   bool _submitting = false;
+
+  /// Role filter for a branch / all-branches send ('all' = everyone).
+  String _roleFilter = 'all';
 
   bool get _isAdmin => _sender.role.isAdmin;
 
@@ -109,7 +112,7 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
     setState(() {
       _loadingUsers = true;
       _users = const [];
-      _selectedUser = null;
+      _selectedUsers.clear();
     });
     final users = await context.read<BroadcastCubit>().branchUsers(branchId);
     if (!mounted) return;
@@ -123,7 +126,7 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
   void _selectAudience(BroadcastAudience a) {
     setState(() {
       _audience = a;
-      _selectedUser = null;
+      _selectedUsers.clear();
       _userQuery = '';
     });
     if (a == BroadcastAudience.user && !_isAdmin) {
@@ -142,6 +145,23 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
     return null;
   }
 
+  /// The single selected recipient (when exactly one is picked), else null.
+  UserEntity? get _singleSelectedUser {
+    if (_selectedUsers.length != 1) return null;
+    for (final u in _users) {
+      if (u.uid == _selectedUsers.first) return u;
+    }
+    return null;
+  }
+
+  String? _userBranch(String? uid) {
+    if (uid == null) return null;
+    for (final u in _users) {
+      if (u.uid == uid) return u.branchId;
+    }
+    return null;
+  }
+
   bool get _canSend {
     if (_titleCtrl.text.trim().isEmpty || _bodyCtrl.text.trim().isEmpty) {
       return false;
@@ -152,7 +172,8 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
       case BroadcastAudience.branch:
         return _isAdmin ? _selectedBranch != null : true;
       case BroadcastAudience.user:
-        return _selectedUser != null;
+      case BroadcastAudience.custom:
+        return _selectedUsers.isNotEmpty;
     }
   }
 
@@ -168,15 +189,27 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
 
   Future<void> _send() async {
     setState(() => _submitting = true);
+    // A people-pick of one sends as a direct message (user); two or more as a
+    // multi-recipient custom broadcast.
+    final people = _selectedUsers.toList();
+    final isPeople = _audience == BroadcastAudience.user;
+    final sendAudience = isPeople && people.length > 1
+        ? BroadcastAudience.custom
+        : _audience;
+    final singleUid = isPeople && people.length == 1 ? people.first : null;
+    final isBranchOrAll = _audience == BroadcastAudience.branch ||
+        _audience == BroadcastAudience.allBranches;
+
     final count = await context.read<BroadcastCubit>().send(
           sender: _sender,
           title: _titleCtrl.text,
           message: _bodyCtrl.text,
-          audience: _audience,
+          audience: sendAudience,
           branchId: _audience == BroadcastAudience.branch ? _targetBranchId : null,
-          targetUserId:
-              _audience == BroadcastAudience.user ? _selectedUser?.uid : null,
-          targetUserBranchId: _selectedUser?.branchId,
+          targetUserId: singleUid,
+          targetUserBranchId: _userBranch(singleUid),
+          targetUserIds: sendAudience == BroadcastAudience.custom ? people : const [],
+          roleFilter: isBranchOrAll ? _roleFilter : '',
           category: _category.value,
           priority: _priority,
           channel: _channel,
@@ -321,7 +354,7 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
     final now = DateTime.now();
     final date = '${now.day}/${now.month}/${now.year}';
     final branchName = _selectedBranch?.name ?? _ownBranchName ?? '';
-    final employeeName = _selectedUser?.displayName ?? '';
+    final employeeName = _singleSelectedUser?.displayName ?? '';
     return {
       'sender_name': _sender.displayName ?? _sender.email,
       'date': date,
@@ -349,16 +382,19 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
   String _audienceChoiceLabel(BroadcastAudience a) => switch (a) {
         BroadcastAudience.allBranches => 'Everyone',
         BroadcastAudience.branch => 'Branch',
-        BroadcastAudience.user => 'Individual',
+        BroadcastAudience.user => 'People',
+        BroadcastAudience.custom => 'People',
       };
 
-  /// The audience-specific picker (branch selector / recipient picker).
+  /// The audience-specific picker (branch selector / role filter / people picker).
   List<Widget> _audienceTarget() {
     switch (_audience) {
       case BroadcastAudience.allBranches:
         return [
           const SizedBox(height: AppSpacing.md),
           const _Hint('Every active user across all branches will be notified.'),
+          const SizedBox(height: AppSpacing.md),
+          _roleSelector(),
         ];
       case BroadcastAudience.branch:
         return [
@@ -380,8 +416,11 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
               label: _ownBranchName ?? 'Your branch',
               caption: 'Everyone in your branch will be notified.',
             ),
+          const SizedBox(height: AppSpacing.md),
+          _roleSelector(),
         ];
       case BroadcastAudience.user:
+      case BroadcastAudience.custom:
         return [
           const SizedBox(height: AppSpacing.md),
           if (_isAdmin) ...[
@@ -405,6 +444,33 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
     }
   }
 
+  /// A role filter for a branch / all-branches send (Everyone / Managers /
+  /// Employees), applied server-side.
+  Widget _roleSelector() {
+    const options = [
+      ('all', 'Everyone'),
+      ('manager', 'Managers'),
+      ('employee', 'Employees'),
+    ];
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        for (final (value, label) in options)
+          _Choice(
+            icon: switch (value) {
+              'manager' => Icons.shield_outlined,
+              'employee' => Icons.badge_outlined,
+              _ => Icons.groups_outlined,
+            },
+            label: label,
+            selected: _roleFilter == value,
+            onTap: () => setState(() => _roleFilter = value),
+          ),
+      ],
+    );
+  }
+
   Widget _userPicker() {
     if (_isAdmin && _selectedBranch == null) {
       return const _Hint('Pick a branch to choose a recipient.');
@@ -423,6 +489,8 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
       return const _Hint('No active users to message in this branch.');
     }
     final filtered = _filteredUsers;
+    final allSelected = filtered.isNotEmpty &&
+        filtered.every((u) => _selectedUsers.contains(u.uid));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -431,14 +499,43 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
           onChanged: (v) => setState(() => _userQuery = v),
         ),
         const SizedBox(height: AppSpacing.sm),
+        Row(
+          children: [
+            Text(
+              _selectedUsers.isEmpty
+                  ? 'Select one or more'
+                  : '${_selectedUsers.length} selected',
+              style: AppTypography.caption,
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: () => setState(() {
+                if (allSelected) {
+                  for (final u in filtered) {
+                    _selectedUsers.remove(u.uid);
+                  }
+                } else {
+                  for (final u in filtered) {
+                    _selectedUsers.add(u.uid);
+                  }
+                }
+              }),
+              child: Text(allSelected ? 'Clear all' : 'Select all',
+                  style:
+                      AppTypography.caption.copyWith(color: AppColors.primary)),
+            ),
+          ],
+        ),
         if (filtered.isEmpty)
           const _Hint('No people match your search.')
         else
           for (final u in filtered)
             _UserTile(
               user: u,
-              selected: _selectedUser?.uid == u.uid,
-              onTap: () => setState(() => _selectedUser = u),
+              selected: _selectedUsers.contains(u.uid),
+              onTap: () => setState(() {
+                if (!_selectedUsers.add(u.uid)) _selectedUsers.remove(u.uid);
+              }),
             ),
       ],
     );
