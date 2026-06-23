@@ -12,6 +12,36 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed (2026-06-23 — Simplification pass · slice 1: lean Notification Center)
+
+First slice of the product-simplification pass (philosophy: DROP is a lean
+premium internal ops tool, not enterprise — fewer screens / controls / decisions).
+The Notification Center is now a clean, glanceable **action inbox**. Client-only —
+no schema / rules / function change. `flutter analyze` clean (0 issues); **165
+tests pass**.
+
+- **Filter reduced to All / Unread.** Removed the Tasks / Broadcasts type filters
+  (and the already-removed System) — `NotificationFilter` is now just
+  `all` / `unread`.
+- **Action-first grouping.** Replaced the 5-bucket date grouping (Pinned · Today ·
+  Yesterday · This week · Earlier) with **Needs action** (task assigned · rework ·
+  reminder · overdue) above **Earlier** (approvals · submissions · broadcasts),
+  each newest-first. New pure `isActionNeeded` + `groupByPriority` in
+  `notification_format.dart`.
+- **Removed power-user chrome:** search field, per-tile actions menu, pin, and the
+  archived-view toggle are gone from the UI. The tile is now display-only;
+  interaction is **tap to open** (marks read + deep-links) and **swipe to delete**.
+  **Mark all read** stays.
+- **Archive kept in architecture, hidden** — `archivedAt`/`pinnedAt` fields and the
+  cubit/repo methods remain (archived items stay filtered out of the inbox); only
+  the UI surface was removed.
+- **Tests** — `notification_grouping_test` rewritten for the lean API
+  (All/Unread, `isActionNeeded`, `groupByPriority`).
+- **Deferred to next slices:** exact-task deep-link fix (`/task/:taskId`),
+  Communications Center slimming (drop Deleted/Analytics, overflow nav), compose
+  simplification (remove Priority + Delivery selectors), and the data-layer
+  removal of the now-dormant pin field.
+
 ### Fixed + Changed (2026-06-23 — Stabilization pass: analyze clean, docs synced, NotificationType trimmed)
 
 A trust-but-verify stabilization checkpoint before resuming feature work — no new

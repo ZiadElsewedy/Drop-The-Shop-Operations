@@ -5,31 +5,25 @@ import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/features/notifications/domain/entities/notification_entity.dart';
 
-/// The per-tile action menu (Notification Center — Phase 2).
-enum NotificationTileAction { pin, unpin, archive, unarchive, delete }
-
 /// A single notification in the inbox — icon (tinted by type), title, body,
-/// time-ago, an unread dot, a pin indicator, and a per-tile actions menu
-/// (pin · archive · delete). Strictly monochrome; semantic colour only for the
-/// rework / rejected / approved / emergency accents. Tapping marks it read +
-/// deep-links.
+/// time-ago, and an unread dot. Strictly monochrome; semantic colour only for
+/// the rework / rejected / approved / emergency / overdue accents. Tapping marks
+/// it read + deep-links. Deliberately display-only (2026-06-23 simplification):
+/// no per-tile menu / pin — the inbox uses swipe-to-delete instead.
 class NotificationTile extends StatelessWidget {
   const NotificationTile({
     super.key,
     required this.notification,
     this.onTap,
-    this.onAction,
   });
 
   final NotificationEntity notification;
   final VoidCallback? onTap;
-  final void Function(NotificationTileAction action)? onAction;
 
   @override
   Widget build(BuildContext context) {
     final unread = notification.isUnread;
     final accent = _accentFor(notification.type);
-    final pinned = notification.isPinned;
 
     return InkWell(
       onTap: onTap,
@@ -40,8 +34,7 @@ class NotificationTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: unread ? AppColors.darkSurfaceElevated : AppColors.darkSurface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: pinned ? AppColors.primary.withAlpha(70) : AppColors.darkBorder),
+          border: Border.all(color: AppColors.darkBorder),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,11 +56,6 @@ class NotificationTile extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      if (pinned) ...[
-                        Icon(Icons.push_pin_rounded,
-                            size: 12, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                      ],
                       Expanded(
                         child: Text(
                           notification.title,
@@ -104,55 +92,8 @@ class NotificationTile extends StatelessWidget {
                 ],
               ),
             ),
-            if (onAction != null) _menu(),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _menu() {
-    return PopupMenuButton<NotificationTileAction>(
-      tooltip: 'Actions',
-      icon: const Icon(Icons.more_horiz_rounded,
-          size: 18, color: AppColors.textTertiary),
-      color: AppColors.darkSurfaceElevated,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      onSelected: onAction,
-      itemBuilder: (context) => [
-        if (notification.isPinned)
-          _item(NotificationTileAction.unpin, Icons.push_pin_outlined, 'Unpin')
-        else
-          _item(NotificationTileAction.pin, Icons.push_pin_rounded, 'Pin'),
-        if (notification.isArchived)
-          _item(NotificationTileAction.unarchive, Icons.unarchive_rounded,
-              'Unarchive')
-        else
-          _item(NotificationTileAction.archive, Icons.archive_outlined,
-              'Archive'),
-        _item(NotificationTileAction.delete, Icons.delete_outline_rounded,
-            'Delete',
-            destructive: true),
-      ],
-    );
-  }
-
-  PopupMenuItem<NotificationTileAction> _item(
-    NotificationTileAction value,
-    IconData icon,
-    String label, {
-    bool destructive = false,
-  }) {
-    final color = destructive ? AppColors.error : AppColors.textPrimary;
-    return PopupMenuItem<NotificationTileAction>(
-      value: value,
-      height: 44,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(width: AppSpacing.md),
-          Text(label, style: AppTypography.body.copyWith(color: color)),
-        ],
       ),
     );
   }
