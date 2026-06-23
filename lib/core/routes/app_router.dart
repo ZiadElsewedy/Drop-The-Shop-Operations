@@ -33,7 +33,6 @@ import 'package:fbro/features/communications/presentation/pages/compose_broadcas
 import 'package:fbro/features/communications/presentation/pages/broadcast_detail_screen.dart';
 import 'package:fbro/features/communications/presentation/pages/broadcast_templates_screen.dart';
 import 'package:fbro/features/communications/presentation/pages/broadcast_schedules_screen.dart';
-import 'package:fbro/features/communications/presentation/pages/communications_analytics_screen.dart';
 import 'package:fbro/features/notifications/presentation/pages/notifications_screen.dart';
 import 'route_names.dart';
 
@@ -283,13 +282,6 @@ GoRouter createRouter(AuthCubit authCubit) {
         pageBuilder: (context, state) => _slideTransition(
           state,
           const BroadcastSchedulesScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.communicationsAnalytics,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const CommunicationsAnalyticsScreen(),
         ),
       ),
       GoRoute(

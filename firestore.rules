@@ -253,18 +253,6 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
-    // ── Broadcast opens (Communications Center — Phase 2 analytics) ──
-    // A tiny per-recipient guard doc (`{broadcastId}_{uid}`) that makes
-    // open-tracking idempotent (one open counted per recipient). The recipient
-    // creates their own; nobody updates/deletes it.
-    match /broadcastOpens/{openId} {
-      allow read: if isAdmin()
-        || resource.data.get('uid', '') == request.auth.uid;
-      allow create: if isSignedIn()
-        && request.resource.data.get('uid', '') == request.auth.uid;
-      allow update, delete: if false;
-    }
-
     // ── Broadcast templates (Communications Center — Phase 2 Commit 2) ──
     // Reusable broadcast blueprints (mirrors `task_templates`). A template
     // carries a `branchId` (owning branch) or '' for a GLOBAL template
@@ -316,14 +304,6 @@ service cloud.firestore {
     match /reminderConfig/{id} {
       allow read: if isAdmin() || isManager();
       allow write: if isAdmin();
-    }
-
-    // ── Communications analytics (Phase 2 Commit 6) ──
-    // Precomputed monthly rollups maintained ONLY by Cloud Functions (Admin SDK,
-    // bypasses rules). Admin + manager read for the dashboard; clients never write.
-    match /analytics/{period} {
-      allow read: if isAdmin() || isManager();
-      allow write: if false;
     }
 
     // ── Notifications (Notification System Phase 1) ────────────────

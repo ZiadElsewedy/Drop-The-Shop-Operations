@@ -72,9 +72,6 @@ import 'package:fbro/features/communications/data/datasources/broadcast_schedule
 import 'package:fbro/features/communications/data/repositories/broadcast_schedule_repository_impl.dart';
 import 'package:fbro/features/communications/domain/repositories/broadcast_schedule_repository.dart';
 import 'package:fbro/features/communications/presentation/cubit/broadcast_schedule_cubit.dart';
-import 'package:fbro/features/communications/data/datasources/comms_analytics_remote_datasource.dart';
-import 'package:fbro/features/communications/data/repositories/comms_analytics_repository_impl.dart';
-import 'package:fbro/features/communications/domain/repositories/comms_analytics_repository.dart';
 import 'package:fbro/features/notifications/data/datasources/notification_remote_datasource.dart';
 import 'package:fbro/features/notifications/data/repositories/notification_repository_impl.dart';
 import 'package:fbro/features/notifications/domain/repositories/notification_repository.dart';
@@ -111,9 +108,6 @@ class AppDependencies {
 
   // ─── Broadcast schedules (Phase 2 Commit 4) ─────────────────
   static late final BroadcastScheduleCubit broadcastScheduleCubit;
-
-  // ─── Communications analytics (Phase 2 Commit 6) ────────────
-  static late final CommsAnalyticsRepository commsAnalyticsRepository;
 
   // ─── Notifications (Notification System Phase 1) ────────────
   static late final NotificationCubit notificationCubit;
@@ -259,11 +253,6 @@ class AppDependencies {
     );
     broadcastScheduleCubit =
         BroadcastScheduleCubit(broadcastScheduleRepository);
-
-    // ─── Communications analytics (Phase 2 Commit 6) ──────────
-    commsAnalyticsRepository = CommsAnalyticsRepositoryImpl(
-      CommsAnalyticsRemoteDataSourceImpl(FirebaseFirestore.instance),
-    );
 
     // ─── Notifications (Notification System Phase 1) ──────────
     notificationCubit = NotificationCubit(

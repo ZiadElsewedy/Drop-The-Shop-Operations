@@ -19,8 +19,8 @@ import 'package:fbro/features/communications/presentation/widgets/broadcast_card
 
 /// Broadcast detail (Phase 2) — opened at `/communications/:broadcastId`. Shows
 /// the full message, sender, category, audience, priority, channel, time, and
-/// the **delivery analytics** (recipients · delivered · failed · open rate),
-/// plus a per-item actions menu (repeat · duplicate · archive · delete).
+/// minimal **delivery diagnostics** (recipients · delivered · failed), plus a
+/// per-item actions menu (repeat · duplicate · archive · delete).
 class BroadcastDetailScreen extends StatefulWidget {
   const BroadcastDetailScreen({
     super.key,
@@ -36,18 +36,6 @@ class BroadcastDetailScreen extends StatefulWidget {
 }
 
 class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
-  @override
-  void initState() {
-    super.initState();
-    // Record the open once (drives the open-rate analytics; idempotent).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final uid = context.currentUser?.uid;
-      if (uid != null) {
-        context.read<BroadcastCubit>().trackOpen(widget.broadcastId, uid);
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<BroadcastCubit, BroadcastState>(
@@ -92,7 +80,6 @@ class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
   Widget _detail(BuildContext context, BroadcastEntity b) {
     final category = BroadcastCategory.fromString(b.category);
     final catColor = categoryColor(category);
-    final openRate = _openRate(b);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, AppSpacing.lg,
@@ -166,8 +153,9 @@ class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
         ),
         const SizedBox(height: AppSpacing.md),
 
-        // Delivery analytics
-        const _SectionLabel('Delivery analytics'),
+        // Delivery diagnostics (sent / delivered / failed) — operational health,
+        // not analytics. Open/read tracking was removed in the 2026-06-23 pass.
+        const _SectionLabel('Delivery'),
         GlassContainer(
           child: Column(
             children: [
@@ -195,25 +183,11 @@ class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
                 padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                 child: Divider(height: 1, color: AppColors.darkBorder),
               ),
-              Row(
-                children: [
-                  Expanded(
-                    child: _Stat(
-                      icon: Icons.error_outline_rounded,
-                      label: 'Failed',
-                      value: b.failedCount?.toString() ?? '—',
-                      color: (b.failedCount ?? 0) > 0 ? AppColors.error : null,
-                    ),
-                  ),
-                  _vDivider(),
-                  Expanded(
-                    child: _Stat(
-                      icon: Icons.drafts_outlined,
-                      label: 'Open rate',
-                      value: openRate,
-                    ),
-                  ),
-                ],
+              _Stat(
+                icon: Icons.error_outline_rounded,
+                label: 'Failed',
+                value: b.failedCount?.toString() ?? '—',
+                color: (b.failedCount ?? 0) > 0 ? AppColors.error : null,
               ),
             ],
           ),
@@ -255,14 +229,6 @@ class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
         ),
       ],
     );
-  }
-
-  /// "42%" once opens + recipients are known; "—" otherwise.
-  String _openRate(BroadcastEntity b) {
-    final r = b.recipientCount ?? 0;
-    final o = b.openedCount;
-    if (o == null || r == 0) return '—';
-    return '${((o / r) * 100).round()}%';
   }
 
   Widget _vDivider() => Container(

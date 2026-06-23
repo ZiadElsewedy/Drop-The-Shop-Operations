@@ -25,9 +25,6 @@ abstract class BroadcastRepository {
   /// Archives ([archived] true) / unarchives a broadcast.
   Future<void> setArchived(String id, bool archived);
 
-  /// Soft-deletes ([deleted] true) / restores a broadcast (analytics preserved).
+  /// Soft-deletes ([deleted] true) / restores a broadcast.
   Future<void> setDeleted(String id, bool deleted);
-
-  /// Records that [uid] opened broadcast [broadcastId] (idempotent; best-effort).
-  Future<void> trackOpen(String broadcastId, String uid);
 }

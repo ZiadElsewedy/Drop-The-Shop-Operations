@@ -14,8 +14,6 @@ class AppConstants {
   // ─── Communications Center — Phase 2 ──────────────────────────
   static const String broadcastTemplatesCollection = 'broadcastTemplates';
   static const String broadcastSchedulesCollection = 'broadcastSchedules';
-  static const String broadcastOpensCollection = 'broadcastOpens';
-  static const String analyticsCollection = 'analytics';
   static const String reminderConfigCollection = 'reminderConfig';
   static const String savedAudiencesCollection = 'savedAudiences';
   static const String taskRemindersCollection = 'taskReminders';

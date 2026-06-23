@@ -222,16 +222,6 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     }
   }
 
-  /// Records that [uid] opened [broadcastId] (drives the open-rate analytics).
-  /// Best-effort; never surfaces an error.
-  Future<void> trackOpen(String broadcastId, String uid) async {
-    try {
-      await _repository.trackOpen(broadcastId, uid);
-    } catch (_) {
-      // Best-effort.
-    }
-  }
-
   /// Surface an error without losing the current feed (when one is loaded).
   void _emitError(String message) {
     final prev = _broadcasts;

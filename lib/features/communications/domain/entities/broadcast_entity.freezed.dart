@@ -52,10 +52,6 @@ mixin _$BroadcastEntity {
   /// after the FCM multicast completes; null until then / legacy).
   int? get deliveredCount => throw _privateConstructorUsedError;
 
-  /// How many recipients have opened this broadcast (Phase 2 analytics; set by
-  /// the open-tracking path, null/0 until then).
-  int? get openedCount => throw _privateConstructorUsedError;
-
   /// When this broadcast was archived (hidden from the default feed but kept
   /// for history). Null = active.
   DateTime? get archivedAt => throw _privateConstructorUsedError;
@@ -94,7 +90,6 @@ abstract class $BroadcastEntityCopyWith<$Res> {
     BroadcastChannel channel,
     int? recipientCount,
     int? deliveredCount,
-    int? openedCount,
     DateTime? archivedAt,
     DateTime? deletedAt,
     DateTime? createdAt,
@@ -130,7 +125,6 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
     Object? channel = null,
     Object? recipientCount = freezed,
     Object? deliveredCount = freezed,
-    Object? openedCount = freezed,
     Object? archivedAt = freezed,
     Object? deletedAt = freezed,
     Object? createdAt = freezed,
@@ -193,10 +187,6 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
                 ? _value.deliveredCount
                 : deliveredCount // ignore: cast_nullable_to_non_nullable
                       as int?,
-            openedCount: freezed == openedCount
-                ? _value.openedCount
-                : openedCount // ignore: cast_nullable_to_non_nullable
-                      as int?,
             archivedAt: freezed == archivedAt
                 ? _value.archivedAt
                 : archivedAt // ignore: cast_nullable_to_non_nullable
@@ -239,7 +229,6 @@ abstract class _$$BroadcastEntityImplCopyWith<$Res>
     BroadcastChannel channel,
     int? recipientCount,
     int? deliveredCount,
-    int? openedCount,
     DateTime? archivedAt,
     DateTime? deletedAt,
     DateTime? createdAt,
@@ -274,7 +263,6 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
     Object? channel = null,
     Object? recipientCount = freezed,
     Object? deliveredCount = freezed,
-    Object? openedCount = freezed,
     Object? archivedAt = freezed,
     Object? deletedAt = freezed,
     Object? createdAt = freezed,
@@ -337,10 +325,6 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
             ? _value.deliveredCount
             : deliveredCount // ignore: cast_nullable_to_non_nullable
                   as int?,
-        openedCount: freezed == openedCount
-            ? _value.openedCount
-            : openedCount // ignore: cast_nullable_to_non_nullable
-                  as int?,
         archivedAt: freezed == archivedAt
             ? _value.archivedAt
             : archivedAt // ignore: cast_nullable_to_non_nullable
@@ -376,7 +360,6 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
     this.channel = BroadcastChannel.both,
     this.recipientCount,
     this.deliveredCount,
-    this.openedCount,
     this.archivedAt,
     this.deletedAt,
     this.createdAt,
@@ -436,11 +419,6 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
   @override
   final int? deliveredCount;
 
-  /// How many recipients have opened this broadcast (Phase 2 analytics; set by
-  /// the open-tracking path, null/0 until then).
-  @override
-  final int? openedCount;
-
   /// When this broadcast was archived (hidden from the default feed but kept
   /// for history). Null = active.
   @override
@@ -455,7 +433,7 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
 
   @override
   String toString() {
-    return 'BroadcastEntity(id: $id, title: $title, message: $message, senderId: $senderId, senderName: $senderName, senderRole: $senderRole, audience: $audience, branchId: $branchId, targetUserId: $targetUserId, category: $category, priority: $priority, channel: $channel, recipientCount: $recipientCount, deliveredCount: $deliveredCount, openedCount: $openedCount, archivedAt: $archivedAt, deletedAt: $deletedAt, createdAt: $createdAt)';
+    return 'BroadcastEntity(id: $id, title: $title, message: $message, senderId: $senderId, senderName: $senderName, senderRole: $senderRole, audience: $audience, branchId: $branchId, targetUserId: $targetUserId, category: $category, priority: $priority, channel: $channel, recipientCount: $recipientCount, deliveredCount: $deliveredCount, archivedAt: $archivedAt, deletedAt: $deletedAt, createdAt: $createdAt)';
   }
 
   @override
@@ -487,8 +465,6 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
                 other.recipientCount == recipientCount) &&
             (identical(other.deliveredCount, deliveredCount) ||
                 other.deliveredCount == deliveredCount) &&
-            (identical(other.openedCount, openedCount) ||
-                other.openedCount == openedCount) &&
             (identical(other.archivedAt, archivedAt) ||
                 other.archivedAt == archivedAt) &&
             (identical(other.deletedAt, deletedAt) ||
@@ -514,7 +490,6 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
     channel,
     recipientCount,
     deliveredCount,
-    openedCount,
     archivedAt,
     deletedAt,
     createdAt,
@@ -548,7 +523,6 @@ abstract class _BroadcastEntity extends BroadcastEntity {
     final BroadcastChannel channel,
     final int? recipientCount,
     final int? deliveredCount,
-    final int? openedCount,
     final DateTime? archivedAt,
     final DateTime? deletedAt,
     final DateTime? createdAt,
@@ -603,11 +577,6 @@ abstract class _BroadcastEntity extends BroadcastEntity {
   /// after the FCM multicast completes; null until then / legacy).
   @override
   int? get deliveredCount;
-
-  /// How many recipients have opened this broadcast (Phase 2 analytics; set by
-  /// the open-tracking path, null/0 until then).
-  @override
-  int? get openedCount;
 
   /// When this broadcast was archived (hidden from the default feed but kept
   /// for history). Null = active.

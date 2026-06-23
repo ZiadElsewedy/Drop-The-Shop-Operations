@@ -115,12 +115,6 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
         title: Text('Communications Center', style: AppTypography.h3),
         actions: [
           IconButton(
-            tooltip: 'Analytics',
-            onPressed: () => context.push(RouteNames.communicationsAnalytics),
-            icon: const Icon(Icons.insights_outlined,
-                color: AppColors.textSecondary),
-          ),
-          IconButton(
             tooltip: 'Scheduled',
             onPressed: () => context.push(RouteNames.communicationsSchedules),
             icon: const Icon(Icons.schedule_rounded,

@@ -49,9 +49,6 @@ class BroadcastEntity with _$BroadcastEntity {
     /// How many devices the push was actually delivered to (set by the function
     /// after the FCM multicast completes; null until then / legacy).
     int? deliveredCount,
-    /// How many recipients have opened this broadcast (Phase 2 analytics; set by
-    /// the open-tracking path, null/0 until then).
-    int? openedCount,
     /// When this broadcast was archived (hidden from the default feed but kept
     /// for history). Null = active.
     DateTime? archivedAt,

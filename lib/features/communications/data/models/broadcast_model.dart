@@ -49,7 +49,6 @@ class BroadcastModel {
   final BroadcastChannel channel;
   final int? recipientCount;
   final int? deliveredCount;
-  final int? openedCount;
   final DateTime? archivedAt;
   final DateTime? deletedAt;
   final DateTime? createdAt;
@@ -69,7 +68,6 @@ class BroadcastModel {
     this.channel = BroadcastChannel.both,
     this.recipientCount,
     this.deliveredCount,
-    this.openedCount,
     this.archivedAt,
     this.deletedAt,
     this.createdAt,
@@ -91,7 +89,6 @@ class BroadcastModel {
         channel: BroadcastChannel.fromString(map['channel'] as String?),
         recipientCount: (map['recipientCount'] as num?)?.toInt(),
         deliveredCount: (map['deliveredCount'] as num?)?.toInt(),
-        openedCount: (map['openedCount'] as num?)?.toInt(),
         archivedAt: map.date('archivedAt'),
         deletedAt: map.date('deletedAt'),
         createdAt: map.date('createdAt'),
@@ -112,7 +109,6 @@ class BroadcastModel {
         channel: e.channel,
         recipientCount: e.recipientCount,
         deliveredCount: e.deliveredCount,
-        openedCount: e.openedCount,
         archivedAt: e.archivedAt,
         deletedAt: e.deletedAt,
         createdAt: e.createdAt,
@@ -168,7 +164,6 @@ class BroadcastModel {
     String? id,
     int? recipientCount,
     int? deliveredCount,
-    int? openedCount,
   }) =>
       BroadcastModel(
         id: id ?? this.id,
@@ -185,7 +180,6 @@ class BroadcastModel {
         channel: channel,
         recipientCount: recipientCount ?? this.recipientCount,
         deliveredCount: deliveredCount ?? this.deliveredCount,
-        openedCount: openedCount ?? this.openedCount,
         archivedAt: archivedAt,
         deletedAt: deletedAt,
         createdAt: createdAt,
@@ -213,7 +207,6 @@ class BroadcastModel {
         channel: channel,
         recipientCount: recipientCount,
         deliveredCount: deliveredCount,
-        openedCount: openedCount,
         archivedAt: archivedAt,
         deletedAt: deletedAt,
         createdAt: createdAt,

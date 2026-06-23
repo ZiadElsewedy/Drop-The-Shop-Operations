@@ -34,12 +34,6 @@ abstract class BroadcastRemoteDataSource {
   /// analytics are preserved; the doc is hidden from the default feed and can be
   /// restored. Same field-restricted client write as [setArchived].
   Future<void> setDeleted(String id, bool deleted);
-
-  /// Records that [uid] opened broadcast [broadcastId] — writes the idempotent
-  /// `broadcastOpens/{broadcastId}_{uid}` guard doc (create-once). The
-  /// `onBroadcastOpened` Cloud Function bumps the open analytics + `openedCount`.
-  /// Best-effort; a failure (incl. already-opened) is swallowed.
-  Future<void> trackOpen(String broadcastId, String uid);
 }
 
 class BroadcastRemoteDataSourceImpl implements BroadcastRemoteDataSource {
@@ -130,25 +124,6 @@ class BroadcastRemoteDataSourceImpl implements BroadcastRemoteDataSource {
       );
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to update the broadcast.');
-    }
-  }
-
-  @override
-  Future<void> trackOpen(String broadcastId, String uid) async {
-    if (broadcastId.isEmpty || uid.isEmpty) return;
-    final ref = _firestore
-        .collection(AppConstants.broadcastOpensCollection)
-        .doc('${broadcastId}_$uid');
-    try {
-      final snap = await ref.get();
-      if (snap.exists) return; // already counted (create-once)
-      await ref.set({
-        'broadcastId': broadcastId,
-        'uid': uid,
-        'at': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {
-      // Best-effort analytics — never disrupt viewing.
     }
   }
 

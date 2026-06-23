@@ -27,10 +27,7 @@
  */
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const {
-  onDocumentCreated,
-  onDocumentUpdated,
-} = require("firebase-functions/v2/firestore");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { logger } = require("firebase-functions");
 const admin = require("firebase-admin");
@@ -44,38 +41,9 @@ const USERS = "users";
 const BROADCASTS = "broadcasts";
 const NOTIFICATIONS = "notifications";
 const BROADCAST_SCHEDULES = "broadcastSchedules";
-const BROADCAST_OPENS = "broadcastOpens";
 const TASKS = "tasks";
 const TASK_REMINDERS = "taskReminders";
 const REMINDER_CONFIG = "reminderConfig";
-const ANALYTICS = "analytics";
-
-// ── Precomputed analytics rollups (Phase 2 Commit 6) ──
-// One doc per month (`analytics/{YYYY-MM}`) holds `totals.{metric}` and
-// `days.{DD}.{metric}` counters, maintained incrementally so the dashboard
-// reads a handful of docs instead of scanning collections.
-function analyticsMonthKey(date) {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-async function bumpAnalytics(metrics, when) {
-  const now = when || new Date();
-  const dk = String(now.getUTCDate()).padStart(2, "0");
-  const totals = {};
-  const day = {};
-  let any = false;
-  for (const [k, v] of Object.entries(metrics)) {
-    if (!v) continue;
-    any = true;
-    totals[k] = admin.firestore.FieldValue.increment(v);
-    day[k] = admin.firestore.FieldValue.increment(v);
-  }
-  if (!any) return;
-  await db
-    .collection(ANALYTICS)
-    .doc(analyticsMonthKey(now))
-    .set({ totals, days: { [dk]: day } }, { merge: true })
-    .catch((err) => logger.warn("bumpAnalytics failed", { error: String(err) }));
-}
 
 // `branchId` marker for a direct message — never a real branch id and never ''
 // (mirrors BroadcastModel.directBranchMarker), so a DM never appears in a
@@ -232,7 +200,6 @@ async function dispatchBroadcast(params) {
     targetUserId: audience === "user" ? targetUserId : "",
     targetUserIds: persistedTargetIds,
     recipientCount,
-    openedCount: 0,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
@@ -346,13 +313,6 @@ async function dispatchBroadcast(params) {
   // Persist the delivery result on the doc so the Communications Center feed /
   // detail can show "delivered N / M" (best-effort; never fails the send).
   await broadcastRef.update({ deliveredCount }).catch(() => {});
-
-  // Precomputed analytics (best-effort).
-  await bumpAnalytics({
-    broadcastsSent: 1,
-    recipients: recipientCount,
-    delivered: deliveredCount,
-  });
 
   logger.info("broadcast dispatched", {
     broadcastId: broadcastRef.id,
@@ -475,10 +435,6 @@ exports.onNotificationCreated = onDocumentCreated(
     const snap = event.data;
     if (!snap) return;
     const n = snap.data() || {};
-
-    // Every created notification counts as "sent" (incl. broadcast docs that
-    // are pushed elsewhere) — bump before the early-returns below.
-    await bumpAnalytics({ notifSent: 1 });
 
     // Already pushed by the broadcast engine — don't double-send.
     if (n.pushedByFunction === true) return;
@@ -681,10 +637,6 @@ exports.broadcastHousekeeping = onSchedule("every 24 hours", async () => {
       db.collection(NOTIFICATIONS).where("archivedAt", "<=", cutoff(60)),
       "old archived notifications",
     );
-    await deleteQuery(
-      db.collection(BROADCAST_OPENS).where("at", "<=", cutoff(90)),
-      "old broadcast-open guards",
-    );
   } catch (err) {
     logger.warn("housekeeping failed", { error: String(err) });
   }
@@ -823,44 +775,3 @@ exports.runTaskReminders = onSchedule("every 30 minutes", async () => {
   logger.info("task reminders run", { scanned: snap.size, sent });
 });
 
-/**
- * Analytics: count a notification "read" the first time `readAt` is set
- * (Phase 2 Commit 6).
- */
-exports.onNotificationRead = onDocumentUpdated(
-  `${NOTIFICATIONS}/{id}`,
-  async (event) => {
-    const before = event.data && event.data.before ? event.data.before.data() : null;
-    const after = event.data && event.data.after ? event.data.after.data() : null;
-    if (!before || !after) return;
-    const wasUnread = !before.readAt;
-    const nowRead = !!after.readAt;
-    if (wasUnread && nowRead) {
-      await bumpAnalytics({ notifRead: 1 });
-    }
-  },
-);
-
-/**
- * Analytics: a recipient opened a broadcast (Phase 2 Commit 6). The client
- * creates a `broadcastOpens/{broadcastId}_{uid}` guard doc once per recipient
- * (idempotent — create-only); this trigger bumps the opened rollup and the
- * broadcast's own `openedCount`.
- */
-exports.onBroadcastOpened = onDocumentCreated(
-  `${BROADCAST_OPENS}/{id}`,
-  async (event) => {
-    const snap = event.data;
-    if (!snap) return;
-    const o = snap.data() || {};
-    const broadcastId = String(o.broadcastId || "").trim();
-    await bumpAnalytics({ opened: 1 });
-    if (broadcastId) {
-      await db
-        .collection(BROADCASTS)
-        .doc(broadcastId)
-        .update({ openedCount: admin.firestore.FieldValue.increment(1) })
-        .catch(() => {});
-    }
-  },
-);

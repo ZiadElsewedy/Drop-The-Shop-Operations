@@ -12,6 +12,36 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Removed (2026-06-23 — Simplification pass · slice 3: kill the analytics pipeline)
+
+Decision A — analytics were vanity (open rate / read rate / monthly rollups /
+charts drove no admin decision). Removed the entire pipeline; kept **minimal
+delivery diagnostics (recipients · delivered · failed)** for operational health.
+`build_runner` re-run; `flutter analyze` clean (0 issues); **160 tests pass**;
+`node --check functions/index.js` valid.
+
+- **Cloud Functions** — deleted `onNotificationRead` and `onBroadcastOpened`
+  triggers, the `bumpAnalytics` helper + `analytics/{YYYY-MM}` rollups, and the
+  `broadcastOpens` housekeeping. `dispatchBroadcast` no longer writes
+  `openedCount`. Five operational functions remain (`sendBroadcast`,
+  `onNotificationCreated`, `runBroadcastSchedules`, `broadcastHousekeeping`,
+  `runTaskReminders`).
+- **Client** — deleted the `comms_analytics` slice (entity / repo / datasource /
+  `communications_analytics_screen`) + its DI wiring + the `/communications/analytics`
+  route + the Communications app-bar Analytics icon. Removed `BroadcastCubit.trackOpen`
+  and the open-tracking chain (datasource/repo). The broadcast detail screen now
+  shows **Delivery** diagnostics (recipients · delivered · failed) — the "open
+  rate" stat is gone.
+- **Schema** — dropped `openedCount` from `BroadcastEntity`/`BroadcastModel`
+  (freezed regenerated). `recipientCount`/`deliveredCount`/`failedCount` stay.
+- **Rules + constants** — removed the `analytics` and `broadcastOpens` rule
+  blocks and the `analyticsCollection`/`broadcastOpensCollection` constants.
+- **Tests** — deleted `comms_analytics_test`; trimmed `openedCount` assertions
+  from `broadcast_lifecycle_test`.
+- **Deferred to next slices:** the Deleted-view/soft-delete removal + nav-overflow
+  (Slice 3b) and the Priority/Delivery-selector + Category 4→3 (Slice 4, Decision
+  B — cascades through templates + schedules).
+
 ### Fixed (2026-06-23 — Simplification pass · slice 2: task notifications open the exact task)
 
 A task notification (assigned · rework · approved · rejected · submitted ·
