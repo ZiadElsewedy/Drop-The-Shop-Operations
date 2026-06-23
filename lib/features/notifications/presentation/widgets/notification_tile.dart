@@ -181,8 +181,6 @@ class NotificationTile extends StatelessWidget {
         return Icons.alarm_outlined;
       case NotificationType.broadcastAnnouncement:
         return Icons.campaign_outlined;
-      default:
-        return Icons.notifications_none_rounded;
     }
   }
 

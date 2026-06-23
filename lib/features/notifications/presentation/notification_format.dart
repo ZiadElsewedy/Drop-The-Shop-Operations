@@ -6,20 +6,21 @@ import 'package:fbro/features/notifications/domain/entities/notification_entity.
 /// tested (the project's convention for derive logic, like `activity_format` and
 /// `branch_workload`).
 
-/// A type-group filter for the inbox toolbar.
+/// A type-group filter for the inbox toolbar. There is no "System" group: every
+/// live [NotificationType] is `task*` or `broadcast*` (the schedule/swap/admin
+/// types were trimmed in the 2026-06-23 stabilization pass). Re-add a group here
+/// only when a real producer for a non-task/non-broadcast type ships.
 enum NotificationFilter {
   all,
   unread,
   task,
-  broadcast,
-  system;
+  broadcast;
 
   String get label => switch (this) {
         NotificationFilter.all => 'All',
         NotificationFilter.unread => 'Unread',
         NotificationFilter.task => 'Tasks',
         NotificationFilter.broadcast => 'Broadcasts',
-        NotificationFilter.system => 'System',
       };
 
   /// Whether [n] passes this filter.
@@ -33,8 +34,6 @@ enum NotificationFilter {
         return _isTask(n.type);
       case NotificationFilter.broadcast:
         return _isBroadcast(n.type);
-      case NotificationFilter.system:
-        return !_isTask(n.type) && !_isBroadcast(n.type);
     }
   }
 

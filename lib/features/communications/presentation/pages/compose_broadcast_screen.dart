@@ -996,7 +996,7 @@ class _Tappable extends StatelessWidget {
             Icon(icon, size: 18, color: AppColors.textSecondary),
             const SizedBox(width: AppSpacing.md),
             Expanded(child: Text(label, style: AppTypography.label)),
-            if (trailing != null) trailing!,
+            ?trailing,
           ],
         ),
       ),

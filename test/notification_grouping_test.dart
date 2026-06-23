@@ -30,19 +30,18 @@ void main() {
 
   group('NotificationFilter', () {
     final task = _n('t', at: now, type: NotificationType.taskApproved);
+    final reminder = _n('rm', at: now, type: NotificationType.taskReminder);
     final bc = _n('b', at: now, type: NotificationType.broadcastAlert);
-    final sys = _n('s', at: now, type: NotificationType.swapApproved);
     final unread = _n('u', at: now, read: false);
     final read = _n('r', at: now, read: true);
 
-    test('task / broadcast / system partitioning', () {
+    test('task / broadcast partitioning', () {
       expect(NotificationFilter.task.matches(task), isTrue);
+      // Reminders are task* — they belong to the Tasks group.
+      expect(NotificationFilter.task.matches(reminder), isTrue);
       expect(NotificationFilter.task.matches(bc), isFalse);
       expect(NotificationFilter.broadcast.matches(bc), isTrue);
       expect(NotificationFilter.broadcast.matches(task), isFalse);
-      // Anything that isn't task* or broadcast* counts as system.
-      expect(NotificationFilter.system.matches(sys), isTrue);
-      expect(NotificationFilter.system.matches(task), isFalse);
       expect(NotificationFilter.all.matches(task), isTrue);
     });
 

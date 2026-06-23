@@ -17,7 +17,6 @@ import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_template_entity.dart';
-import 'package:fbro/features/communications/presentation/communications_format.dart';
 import 'package:fbro/features/communications/presentation/cubit/broadcast_template_cubit.dart';
 import 'package:fbro/features/communications/presentation/cubit/broadcast_template_state.dart';
 import 'package:fbro/features/communications/presentation/widgets/template_card.dart';

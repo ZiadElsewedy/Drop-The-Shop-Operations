@@ -12,6 +12,49 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed + Changed (2026-06-23 — Stabilization pass: analyze clean, docs synced, NotificationType trimmed)
+
+A trust-but-verify stabilization checkpoint before resuming feature work — no new
+features. Verified on the real toolchain (**Flutter 3.44.2 / Dart 3.12.2**):
+`build_runner` runs, **`flutter analyze` is clean (0 issues)**, **164 tests pass**,
+`node --check functions/index.js` valid.
+
+- **Corrected a stale doc premise.** Prior entries claimed "the local SDK is too
+  old to build, so freezed files were hand-edited." The SDK builds fine. Re-ran
+  `dart run build_runner build --delete-conflicting-outputs`: three freezed files
+  (`broadcast_template_entity`, `broadcast_schedule_state`, `broadcast_template_state`)
+  had **cosmetic-only** drift (formatter line-wrapping; same fields/types/logic) —
+  now regenerated and committed. The notification-core freezed files were already
+  exact.
+- **`flutter analyze` → 0 issues** (was 3): removed an unused `communications_format`
+  import in `broadcast_templates_screen.dart`; replaced the deprecated
+  `activeColor` with `activeThumbColor` on the `Switch.adaptive` in
+  `broadcast_schedules_screen.dart`; replaced `if (x != null) x!` with the
+  null-aware element `?x` in `compose_broadcast_screen.dart`.
+- **`NotificationType` trimmed 27 → 11.** Removed 16 "reserved" schedule / swap /
+  admin types (`shiftChanged`, `managerNote`, `tomorrowShiftReminder`,
+  `swapApproved`, `swapRejected`, `taskWaitingReview`, `employeeCompletedTask`,
+  `newEmployeePendingApproval`, `shiftWithoutEmployees`, `newSwapRequest`,
+  `swapPendingApproval`, `newEmployeeRegistration`, `branchWithoutManager`,
+  `manyRejectedTasks`, `branchWithoutActiveEmployees`, `branchWithoutSchedule`)
+  that had **no producer** in client or Cloud Functions — pure dead surface. Every
+  remaining value has a live trigger (task lifecycle via `NotifyTaskEvent`,
+  reminders via `runTaskReminders`, broadcasts via `dispatchBroadcast`). Safe:
+  these types were never written to Firestore, and `NotificationModel.fromMap`
+  already falls back for an unknown type. Re-add a value only alongside its
+  producer.
+- **Removed the coupled, now-empty "System" inbox filter.** After the trim every
+  type is `task*` or `broadcast*`, so `NotificationFilter.system` (`!task &&
+  !broadcast`) could never match — the toolbar is now All / Unread / Tasks /
+  Broadcasts. Dropping the only fully-covered case also made `notification_tile`'s
+  `_iconFor` switch exhaustive, so its unreachable `default` was removed (future
+  type additions are now a compile-time prompt).
+- **Tests** — updated `notification_grouping_test` (the system-partition case
+  became a task-vs-broadcast case; reminders assert under Tasks).
+- **No change** to data schema, rules, indexes, functions, routes, or the
+  outstanding **deploy debt** (the 7 Cloud Functions remain undeployed; push is
+  inert until `firebase deploy` + iOS APNs).
+
 ### Added (2026-06-22 — Communications Center · Phase 2 Commit 6: analytics aggregation + dashboard)
 
 Final commit of the **Premium Upgrade** — communications **analytics** via

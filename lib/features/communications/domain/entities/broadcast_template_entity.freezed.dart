@@ -65,8 +65,10 @@ abstract class $BroadcastTemplateEntityCopyWith<$Res> {
 }
 
 /// @nodoc
-class _$BroadcastTemplateEntityCopyWithImpl<$Res,
-        $Val extends BroadcastTemplateEntity>
+class _$BroadcastTemplateEntityCopyWithImpl<
+  $Res,
+  $Val extends BroadcastTemplateEntity
+>
     implements $BroadcastTemplateEntityCopyWith<$Res> {
   _$BroadcastTemplateEntityCopyWithImpl(this._value, this._then);
 
@@ -176,8 +178,11 @@ abstract class _$$BroadcastTemplateEntityImplCopyWith<$Res>
 
 /// @nodoc
 class __$$BroadcastTemplateEntityImplCopyWithImpl<$Res>
-    extends _$BroadcastTemplateEntityCopyWithImpl<$Res,
-        _$BroadcastTemplateEntityImpl>
+    extends
+        _$BroadcastTemplateEntityCopyWithImpl<
+          $Res,
+          _$BroadcastTemplateEntityImpl
+        >
     implements _$$BroadcastTemplateEntityImplCopyWith<$Res> {
   __$$BroadcastTemplateEntityImplCopyWithImpl(
     _$BroadcastTemplateEntityImpl _value,
@@ -365,10 +370,9 @@ class _$BroadcastTemplateEntityImpl extends _BroadcastTemplateEntity {
   @pragma('vm:prefer-inline')
   _$$BroadcastTemplateEntityImplCopyWith<_$BroadcastTemplateEntityImpl>
   get copyWith =>
-      __$$BroadcastTemplateEntityImplCopyWithImpl<_$BroadcastTemplateEntityImpl>(
-        this,
-        _$identity,
-      );
+      __$$BroadcastTemplateEntityImplCopyWithImpl<
+        _$BroadcastTemplateEntityImpl
+      >(this, _$identity);
 }
 
 abstract class _BroadcastTemplateEntity extends BroadcastTemplateEntity {

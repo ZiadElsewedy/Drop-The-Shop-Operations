@@ -361,10 +361,13 @@ Firestore branches/{id}   Firestore users/{uid}     aggregates users/tasks/shift
   in-app snackbars, and routes **tap** opens (`onMessageTap`) — wired in
   `main.dart` via a `scaffoldMessengerKey` + an `AuthCubit` listener that
   registers/forgets the token on auth changes. `core/enums/notification_type.dart`
-  is the event contract. **Sending is now implemented** for the Communications
-  Center via the callable `sendBroadcast` Cloud Function (`functions/index.js`,
-  Phase 2 — the first server-side push engine); other `NotificationType` events
-  still have no server trigger. No history / inbox / chat.
+  is the event contract — after the **2026-06-23 stabilization pass every value
+  has a live producer**: task lifecycle (client `NotifyTaskEvent`), task reminders
+  (`runTaskReminders` Cloud Function), and broadcasts (`sendBroadcast` /
+  `dispatchBroadcast`). The ~16 unused reserved schedule/swap/admin types were
+  **trimmed** (re-add a value only alongside a real producer). A live in-app
+  **inbox** exists at `/notifications` (the `notifications` feature slice);
+  there is no chat.
 
 ### Schedule chain (Phase 7 — full vertical slice)
 

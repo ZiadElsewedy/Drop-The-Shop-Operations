@@ -11,8 +11,24 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-22 (Communications Center — Phase 2 · Commit 6 — **Premium Upgrade complete**)
+**Last updated:** 2026-06-23 (Stabilization pass — analyze clean, docs synced, NotificationType trimmed)
 **Version:** 1.0.0+1 · **Branch:** `feature/notification` (DROP — monochrome enterprise UX)
+
+> **Stabilization pass (2026-06-23):** Trust-but-verify checkpoint before resuming
+> feature work. **Corrects stale doc claims** — the local SDK (**Flutter 3.44.2 /
+> Dart 3.12.2**) **builds this project fine**; earlier "SDK too old, freezed
+> hand-edited" notes are obsolete (`build_runner` was re-run — 3 freezed files had
+> cosmetic-only formatting drift, now regenerated). **`flutter analyze` is clean
+> (0 issues)** — fixed 3 real issues (unused import in `broadcast_templates_screen`,
+> `activeColor`→`activeThumbColor` deprecation in `broadcast_schedules_screen`,
+> `use_null_aware_elements` in `compose_broadcast_screen`). **The suite is now 164
+> tests (all pass)** — earlier "117 tests" was stale. **`NotificationType` trimmed
+> 27 → 11 values**: removed 16 reserved schedule/swap/admin types that had **no
+> producer** (every remaining value has a live trigger); the coupled, now-empty
+> **System** inbox filter was removed too (inbox is All / Unread / Tasks /
+> Broadcasts). No feature work, no schema change to live data (trimmed types were
+> never written). ⚠️ The deploy debt is unchanged — the 7 Cloud Functions remain
+> undeployed (see Suggested next steps #5).
 
 > **Communications Center · Phase 2 — Commit 6 (2026-06-22) — FINAL:** Communications
 > **analytics** via **precomputed aggregates**. A monthly rollup
@@ -575,7 +591,7 @@
 | Branches (Phase 5, +Phase 9) | ✅ Complete   | `BranchEntity`/`Model`/`Repository`/`RemoteDataSource` + `BranchCubit`; admin CRUD + activate/deactivate + soft delete; `branches/{id}` rules. **Phase 9:** premium cards (manager + employee count + status) + search |
 | Admin module (Phase 5, +Phase 9 UX) | ✅ Complete | Branch / manager / employee management + **admin-only** pending-user approval + branch assignment. `AdminUsersCubit`, `UserAdminRepository` over `users/{uid}`. **Phase 9:** Admin Home restructured to **4 KPIs** + module nav; new **Analytics** page (`/admin/analytics`); avatar-led user cards; search + active/inactive/branch filters |
 | Dashboards / Statistics (Phase 6, +Phase 7) | ✅ Complete | `statistics` feature (`StatisticsCubit`) drives **live** admin / manager / employee dashboards. **Phase 7:** shift/coverage figures read the weekly schedule. **Phase 9:** the full metric wall moved to the Analytics page; the Admin Home shows only 4 headline KPIs |
-| Notifications (Phase 6 + Notification System Phase 1, +Comms Phase 2 Commit 1) | ✅ In-app inbox + management + task push | FCM client (permission + `fcmTokens` array + fg/bg/tap). Real **in-app inbox** — `notifications` slice + `notifications/{id}` + `/notifications` screen (bell + unread dot). **Automatic task triggers** (assign/rework/submit/approve/reject). **Push:** broadcasts via `sendBroadcast`; task events via `onNotificationCreated`. **Comms Phase 2 Commit 1 — Notification Center management:** `archivedAt`/`pinnedAt` fields; **delete · archive · pin**, **search**, **type filters** (All/Unread/Tasks/Broadcasts/System), **archived view**, **date grouping** (Pinned · Today · Yesterday · This week · Earlier), **swipe** actions, and **infinite pagination** (ordered growing-window stream via the new `recipientUid+createdAt` index); pure helpers in `notification_format.dart`. Schedule/swap/admin `NotificationType` events still have no trigger (later phases) |
+| Notifications (Phase 6 + Notification System Phase 1, +Comms Phase 2 Commit 1) | ✅ In-app inbox + management + task push | FCM client (permission + `fcmTokens` array + fg/bg/tap). Real **in-app inbox** — `notifications` slice + `notifications/{id}` + `/notifications` screen (bell + unread dot). **Automatic task triggers** (assign/rework/submit/approve/reject). **Push:** broadcasts via `sendBroadcast`; task events via `onNotificationCreated`. **Comms Phase 2 Commit 1 — Notification Center management:** `archivedAt`/`pinnedAt` fields; **delete · archive · pin**, **search**, **type filters** (All/Unread/Tasks/Broadcasts), **archived view**, **date grouping** (Pinned · Today · Yesterday · This week · Earlier), **swipe** actions, and **infinite pagination** (ordered growing-window stream via the new `recipientUid+createdAt` index); pure helpers in `notification_format.dart`. **`NotificationType` trimmed (2026-06-23) to the 11 values with a live producer** — task lifecycle, task reminders, broadcasts; the unused schedule/swap/admin reserved types were removed (re-add only with a producer). **Push is undeployed** — functions exist but inert until `firebase deploy` |
 | Communications Center (Phase 1 + 2 engine + 3 UI, +**Premium Upgrade Phase 2 Commits 1–2**) | ✅ End-to-end + history + templates | `communications` slice + callable `sendBroadcast` (now via reusable `dispatchBroadcast()`). Recipient-resolution matrix (`BroadcastPermissions`); audiences allBranches/branch/**user (DM)**; `broadcasts/{id}` content writes function-owned. UI: `/communications` (admin + manager, employees blocked). **Commit 1:** broadcast `priority`/`channel`/`openedCount`/`archivedAt`/`deletedAt`; **history** feed (Active/Archived/Deleted + actions: open · repeat · duplicate · archive · delete/restore); detail **delivery analytics** (recipients · delivered · failed · open rate); archive/soft-delete = field-restricted client writes. **Commit 2:** **templates** — `broadcastTemplates` slice + `BroadcastTemplateCubit`, pure `TemplateRenderer` (`{{placeholders}}`), library (`/communications/templates`: grid/list · search · category filter · favorites · recents · editor), premium **composer** (priority/channel selectors · char counters · live preview · use/save template). **Pending (later commits):** advanced audiences · scheduler (recurring) · reminders · analytics dashboard. Push/Function need deploy (Blaze) + iOS APNs |
 | Profile          | ✅ Complete    | View/edit (Full Name · Bio · avatar+cover). **Username removed (2026-06-18)** from editing/validation — no operational value (legacy social field); dormant model field + `CheckUsername` use case remain as harmless legacy |
 | Settings         | ✅ Complete    | Settings page + change password + delete account              |
@@ -1174,7 +1190,7 @@ writes are denied by the rules.
 2. **Bootstrap first admin** — in the Firebase console set `role: admin`, `approvalStatus: approved`, `isActive: true` on the founder's account; then verify register → Pending Approval → approve → role dispatch end to end.
 3. **Firestore rules for `activityLog`/`recurrence`** — the new fields written by `TaskCubit` are covered by the existing employee self-update path. Confirm the limited-employee rule allows writing `activityLog` (array union) without allowing `recurrence` changes. Harden if needed.
 4. **Recurring tasks: server-side spawn** — the current `_spawnNextRecurrence` runs client-side on approve. A Cloud Function on `tasks/{taskId}` write (status==approved + frequency!=none) would be more reliable for offline/concurrent approval cases.
-5. **Notifications sender** — add a server trigger for the `NotificationType` events (task assigned, waiting review, approved/rejected) to device tokens (Cloud Function or external) + native FCM setup (APNs key + Push capability on iOS).
+5. **Deploy the notification engine** — the 7 Cloud Functions (`sendBroadcast`, `onNotificationCreated`, `runTaskReminders`, `runBroadcastSchedules`, `broadcastHousekeeping`, `onNotificationRead`, `onBroadcastOpened`) are written + tested but **not deployed**; `firebase deploy --only functions,firestore:rules,firestore:indexes` (Blaze plan) + native FCM setup (APNs key + Push/Background-Modes capability on iOS) are required before any push fires. Until then in-app notifications work but push is inert.
 6. **Task workflow hardening** — enforce status transitions in `firestore.rules` (who can write each status value), not only client-side in `TaskCubit._canTransition`.
 7. **Stats optimization** (if data grows) — move dashboard counts to Firestore `count()` aggregate queries with composite indexes.
 8. Add a Cloud Function to clean up `users/{uid}` Firestore document on account deletion.

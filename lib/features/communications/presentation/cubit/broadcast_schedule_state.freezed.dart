@@ -21,7 +21,10 @@ mixin _$BroadcastScheduleState {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)
+    required TResult Function(
+      List<BroadcastScheduleEntity> schedules,
+      bool busy,
+    )
     loaded,
     required TResult Function(String message) error,
   }) => throw _privateConstructorUsedError;
@@ -29,14 +32,16 @@ mixin _$BroadcastScheduleState {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult? Function(String message)? error,
   }) => throw _privateConstructorUsedError;
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) => throw _privateConstructorUsedError;
@@ -73,8 +78,10 @@ abstract class $BroadcastScheduleStateCopyWith<$Res> {
 }
 
 /// @nodoc
-class _$BroadcastScheduleStateCopyWithImpl<$Res,
-        $Val extends BroadcastScheduleState>
+class _$BroadcastScheduleStateCopyWithImpl<
+  $Res,
+  $Val extends BroadcastScheduleState
+>
     implements $BroadcastScheduleStateCopyWith<$Res> {
   _$BroadcastScheduleStateCopyWithImpl(this._value, this._then);
 
@@ -132,7 +139,10 @@ class _$InitialImpl implements _Initial {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)
+    required TResult Function(
+      List<BroadcastScheduleEntity> schedules,
+      bool busy,
+    )
     loaded,
     required TResult Function(String message) error,
   }) {
@@ -144,7 +154,8 @@ class _$InitialImpl implements _Initial {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult? Function(String message)? error,
   }) {
     return initial?.call();
@@ -155,7 +166,8 @@ class _$InitialImpl implements _Initial {
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -252,7 +264,10 @@ class _$LoadingImpl implements _Loading {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)
+    required TResult Function(
+      List<BroadcastScheduleEntity> schedules,
+      bool busy,
+    )
     loaded,
     required TResult Function(String message) error,
   }) {
@@ -264,7 +279,8 @@ class _$LoadingImpl implements _Loading {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult? Function(String message)? error,
   }) {
     return loading?.call();
@@ -275,7 +291,8 @@ class _$LoadingImpl implements _Loading {
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -423,7 +440,10 @@ class _$LoadedImpl implements _Loaded {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)
+    required TResult Function(
+      List<BroadcastScheduleEntity> schedules,
+      bool busy,
+    )
     loaded,
     required TResult Function(String message) error,
   }) {
@@ -435,7 +455,8 @@ class _$LoadedImpl implements _Loaded {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult? Function(String message)? error,
   }) {
     return loaded?.call(schedules, busy);
@@ -446,7 +467,8 @@ class _$LoadedImpl implements _Loaded {
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {
@@ -582,7 +604,10 @@ class _$ErrorImpl implements _Error {
   TResult when<TResult extends Object?>({
     required TResult Function() initial,
     required TResult Function() loading,
-    required TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)
+    required TResult Function(
+      List<BroadcastScheduleEntity> schedules,
+      bool busy,
+    )
     loaded,
     required TResult Function(String message) error,
   }) {
@@ -594,7 +619,8 @@ class _$ErrorImpl implements _Error {
   TResult? whenOrNull<TResult extends Object?>({
     TResult? Function()? initial,
     TResult? Function()? loading,
-    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult? Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult? Function(String message)? error,
   }) {
     return error?.call(message);
@@ -605,7 +631,8 @@ class _$ErrorImpl implements _Error {
   TResult maybeWhen<TResult extends Object?>({
     TResult Function()? initial,
     TResult Function()? loading,
-    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)? loaded,
+    TResult Function(List<BroadcastScheduleEntity> schedules, bool busy)?
+    loaded,
     TResult Function(String message)? error,
     required TResult orElse(),
   }) {

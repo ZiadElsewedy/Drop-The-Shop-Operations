@@ -151,7 +151,7 @@ class _ScheduleCard extends StatelessWidget {
                   Switch.adaptive(
                     value: schedule.enabled,
                     onChanged: onToggle,
-                    activeColor: AppColors.primary,
+                    activeThumbColor: AppColors.primary,
                   )
                 else
                   Text('Completed', style: AppTypography.caption),
