@@ -46,15 +46,13 @@ IconData audienceIcon(BroadcastAudience a) => switch (a) {
 
 IconData categoryIcon(BroadcastCategory c) => switch (c) {
       BroadcastCategory.announcement => Icons.campaign_outlined,
-      BroadcastCategory.alert => Icons.warning_amber_rounded,
       BroadcastCategory.reminder => Icons.alarm_rounded,
       BroadcastCategory.emergency => Icons.error_outline_rounded,
     };
 
 /// Status colour for a category — monochrome by default; only the urgent
-/// categories carry a semantic colour (alert → warning, emergency → error).
+/// emergency category carries a semantic colour (→ error).
 Color categoryColor(BroadcastCategory c) => switch (c) {
-      BroadcastCategory.alert => AppColors.warning,
       BroadcastCategory.emergency => AppColors.error,
       _ => AppColors.textSecondary,
     };

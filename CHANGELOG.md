@@ -12,6 +12,24 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed (2026-06-24 — Simplification pass · slice 4a: Category 4→3, drop Alert)
+
+Decision B (part 1) — merged the broadcast categories from 4 to 3 by removing
+**Alert** (it overlapped Reminder/Emergency and delivered identically). Final set:
+**Announcement · Reminder · Emergency**. `flutter analyze` clean (0 issues); **160
+tests pass**; `node --check functions/index.js` valid.
+
+- `BroadcastCategory` drops `alert` — `isUrgent` is now emergency-only; `fromString`
+  maps the retired `'alert'` string → announcement (back-compat). The compose
+  category chips iterate `.values`, so they auto-collapse to 3.
+- `NotificationType` drops `broadcastAlert`; `fromBroadcastCategory` and the
+  function `categoryToType` no longer special-case alert. `notification_tile` and
+  `communications_format` drop the alert icon/colour cases.
+- Tests updated (`broadcast_category`, `notification_model`/`grouping`,
+  `broadcast_card`, `broadcast_model`).
+- **Next:** slice 4b — remove the Priority + Delivery selectors (delivery becomes
+  category-derived).
+
 ### Removed (2026-06-24 — Simplification pass · slice 3b: drop soft-delete + collapse Comms nav)
 
 Removed the broadcast **soft-delete / Deleted view** and collapsed the

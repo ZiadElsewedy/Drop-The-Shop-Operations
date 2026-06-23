@@ -64,8 +64,6 @@ const BATCH_LIMIT = 500;
 // NotificationType.fromBroadcastCategory on the client).
 function categoryToType(category) {
   switch (category) {
-    case "alert":
-      return "broadcastAlert";
     case "reminder":
       return "broadcastReminder";
     case "emergency":

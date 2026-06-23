@@ -84,7 +84,7 @@ void main() {
     test('empty sections are omitted', () {
       final items = [
         _n('a', at: now, type: NotificationType.taskApproved),
-        _n('b', at: now, type: NotificationType.broadcastAlert),
+        _n('b', at: now, type: NotificationType.broadcastAnnouncement),
       ];
       final sections = groupByPriority(items);
       expect(sections.length, 1);

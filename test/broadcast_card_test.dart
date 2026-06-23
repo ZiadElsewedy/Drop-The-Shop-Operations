@@ -28,7 +28,7 @@ void main() {
       senderRole: UserRole.manager,
       audience: BroadcastAudience.branch,
       branchId: 'branch-7',
-      category: 'alert',
+      category: 'reminder',
       recipientCount: 24,
       deliveredCount: 21,
       createdAt: DateTime.now(),
@@ -40,7 +40,7 @@ void main() {
         find.textContaining('count the back room'), findsOneWidget); // body
     expect(find.text('Ziad'), findsOneWidget); // sender
     expect(find.text('Branch'), findsOneWidget); // audience pill
-    expect(find.text('Alert'), findsOneWidget); // category
+    expect(find.text('Reminder'), findsOneWidget); // category
     expect(find.text('Delivered 21/24'), findsOneWidget); // delivery status
   });
 

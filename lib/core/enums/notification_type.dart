@@ -24,7 +24,6 @@ enum NotificationType {
   taskOverdue,
   // ── Broadcast events (`sendBroadcast` / `dispatchBroadcast` Cloud Function) ──
   broadcastAnnouncement,
-  broadcastAlert,
   broadcastReminder,
   broadcastEmergency;
 
@@ -43,8 +42,6 @@ enum NotificationType {
   /// `sendBroadcast` Cloud Function's `categoryToType`.
   static NotificationType fromBroadcastCategory(String? category) {
     switch (category) {
-      case 'alert':
-        return broadcastAlert;
       case 'reminder':
         return broadcastReminder;
       case 'emergency':

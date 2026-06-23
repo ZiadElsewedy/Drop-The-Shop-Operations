@@ -6,7 +6,6 @@
 /// lives in the presentation layer (`communications_format.dart`).
 enum BroadcastCategory {
   announcement,
-  alert,
   reminder,
   emergency;
 
@@ -18,13 +17,11 @@ enum BroadcastCategory {
 
   /// Whether this category should read with an attention colour (status-only
   /// colour, per the monochrome design language).
-  bool get isUrgent =>
-      this == BroadcastCategory.alert || this == BroadcastCategory.emergency;
+  bool get isUrgent => this == BroadcastCategory.emergency;
 
   /// Parses the stored string; unknown / missing (incl. the legacy `'general'`
-  /// default) → [announcement].
+  /// and the retired `'alert'` value) → [announcement].
   static BroadcastCategory fromString(String? raw) => switch (raw) {
-        'alert' => BroadcastCategory.alert,
         'reminder' => BroadcastCategory.reminder,
         'emergency' => BroadcastCategory.emergency,
         _ => BroadcastCategory.announcement,

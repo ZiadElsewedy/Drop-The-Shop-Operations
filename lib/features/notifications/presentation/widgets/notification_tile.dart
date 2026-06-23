@@ -116,8 +116,6 @@ class NotificationTile extends StatelessWidget {
         return Icons.running_with_errors_rounded;
       case NotificationType.broadcastEmergency:
         return Icons.warning_amber_rounded;
-      case NotificationType.broadcastAlert:
-        return Icons.notification_important_outlined;
       case NotificationType.broadcastReminder:
         return Icons.alarm_outlined;
       case NotificationType.broadcastAnnouncement:
@@ -135,7 +133,6 @@ class NotificationTile extends StatelessWidget {
         return AppColors.error;
       case NotificationType.taskRework:
       case NotificationType.taskReminder:
-      case NotificationType.broadcastAlert:
         return AppColors.warning;
       default:
         return AppColors.primary;

@@ -130,8 +130,6 @@ void main() {
     });
 
     test('NotificationType.fromBroadcastCategory maps categories', () {
-      expect(NotificationType.fromBroadcastCategory('alert'),
-          NotificationType.broadcastAlert);
       expect(NotificationType.fromBroadcastCategory('reminder'),
           NotificationType.broadcastReminder);
       expect(NotificationType.fromBroadcastCategory('emergency'),
