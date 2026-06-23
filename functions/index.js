@@ -83,20 +83,15 @@ function isDeadTokenError(code) {
   );
 }
 
-// Whether a broadcast should ride at high FCM priority (Phase 2). High-delivery
-// priorities (`high` / `emergency`) and the legacy emergency category qualify.
-// Mirrors BroadcastPriority.isHighDelivery on the client.
-function isHighDelivery(priority, category) {
-  return priority === "high" || priority === "emergency" || category === "emergency";
+// Delivery is derived from the broadcast category (mirrors BroadcastCategory on
+// the client — there is no separate priority/channel dial): announcement is a
+// quiet inbox-only message; reminder + emergency also push; emergency rides at
+// high FCM priority. Every category writes the in-app inbox.
+function categorySendsPush(category) {
+  return category !== "announcement";
 }
-
-// Channel gating (Phase 2). Missing channel → "both" (the widest default),
-// mirroring BroadcastChannel.fromString.
-function channelSendsPush(channel) {
-  return channel !== "inbox"; // push | both | (unknown→both)
-}
-function channelWritesInbox(channel) {
-  return channel !== "push"; // inbox | both | (unknown→both)
+function categoryIsHigh(category) {
+  return category === "emergency";
 }
 
 /**
@@ -113,8 +108,6 @@ async function dispatchBroadcast(params) {
   const title = String(params.title || "").trim();
   const body = String(params.body || params.message || "").trim();
   const category = String(params.category || "general").trim() || "general";
-  const priority = String(params.priority || "normal").trim() || "normal";
-  const channel = String(params.channel || "both").trim() || "both";
   const audience = String(params.audience || "").trim();
   const senderId = String(params.senderId || "").trim();
   const senderRole = String(params.senderRole || "manager").trim() || "manager";
@@ -178,7 +171,7 @@ async function dispatchBroadcast(params) {
   }
 
   const recipientCount = recipientDocs.length;
-  const isHigh = isHighDelivery(priority, category);
+  const isHigh = categoryIsHigh(category);
   const notifType = categoryToType(category);
 
   // ── Persist the broadcast doc (authoritative — schema matches BroadcastModel) ──
@@ -188,8 +181,6 @@ async function dispatchBroadcast(params) {
     title,
     message: body,
     category,
-    priority,
-    channel,
     senderId,
     senderName,
     senderRole,
@@ -204,7 +195,8 @@ async function dispatchBroadcast(params) {
   // ── Persist one in-app notification doc per recipient (inbox channel only).
   // Flagged `pushedByFunction:true` so the onNotificationCreated trigger doesn't
   // double-push. Best-effort — a write failure never fails the send. ──
-  if (channelWritesInbox(channel)) {
+  // Every category writes the in-app inbox (announcement is inbox-only).
+  {
     const notifPayload = {
       broadcastId: broadcastRef.id,
       category,
@@ -239,7 +231,7 @@ async function dispatchBroadcast(params) {
 
   // ── Push the notification (chunked; prune dead tokens) — push channels only ──
   let deliveredCount = 0;
-  if (channelSendsPush(channel)) {
+  if (categorySendsPush(category)) {
     // Gather FCM tokens (de-duplicated; remember each token's owner).
     const tokens = [];
     const tokenOwner = new Map();
@@ -315,8 +307,6 @@ async function dispatchBroadcast(params) {
   logger.info("broadcast dispatched", {
     broadcastId: broadcastRef.id,
     audience,
-    channel,
-    priority,
     recipientCount,
     deliveredCount,
   });
@@ -334,8 +324,6 @@ exports.sendBroadcast = onCall(async (request) => {
   const title = String(payload.title || "").trim();
   const body = String(payload.body || payload.message || "").trim();
   const category = String(payload.category || "general").trim() || "general";
-  const priority = String(payload.priority || "normal").trim() || "normal";
-  const channel = String(payload.channel || "both").trim() || "both";
   const audience = String(payload.audience || "").trim();
   const branchId = String(payload.branchId || "").trim();
   const targetUserId = String(payload.targetUserId || "").trim();
@@ -406,8 +394,6 @@ exports.sendBroadcast = onCall(async (request) => {
     title,
     body,
     category,
-    priority,
-    channel,
     audience,
     branchId,
     targetUserId,
@@ -571,8 +557,6 @@ exports.runBroadcastSchedules = onSchedule("every 5 minutes", async () => {
         title: s.title,
         body: s.message,
         category: s.category,
-        priority: s.priority,
-        channel: s.channel,
         audience: s.audience,
         branchId: s.branchId || "",
         targetUserId: "",

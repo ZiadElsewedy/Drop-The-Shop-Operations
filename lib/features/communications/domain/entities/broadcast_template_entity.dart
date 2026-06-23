@@ -1,7 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/features/communications/domain/template_renderer.dart';
 
 part 'broadcast_template_entity.freezed.dart';
@@ -22,8 +20,6 @@ class BroadcastTemplateEntity with _$BroadcastTemplateEntity {
     required String title,
     required String message,
     @Default(BroadcastCategory.announcement) BroadcastCategory category,
-    @Default(BroadcastPriority.normal) BroadcastPriority priority,
-    @Default(BroadcastChannel.both) BroadcastChannel channel,
     /// Who created the template.
     @Default('') String ownerId,
     /// Owning branch; null/empty = a global template.

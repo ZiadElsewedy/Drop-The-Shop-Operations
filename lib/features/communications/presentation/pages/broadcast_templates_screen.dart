@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/core/routes/route_names.dart';
 import 'package:fbro/core/theme/app_colors.dart';
@@ -104,8 +102,6 @@ class _BroadcastTemplatesScreenState extends State<BroadcastTemplatesScreen> {
         senderId: '',
         senderName: '',
         category: t.category.value,
-        priority: t.priority,
-        channel: t.channel,
       );
 
   Future<void> _openEditor({BroadcastTemplateEntity? existing}) =>
@@ -341,8 +337,6 @@ class _TemplateEditorState extends State<_TemplateEditor> {
   late final TextEditingController _title;
   late final TextEditingController _message;
   late BroadcastCategory _category;
-  late BroadcastPriority _priority;
-  late BroadcastChannel _channel;
   bool _saving = false;
 
   @override
@@ -352,8 +346,6 @@ class _TemplateEditorState extends State<_TemplateEditor> {
     _title = TextEditingController(text: e?.title ?? '');
     _message = TextEditingController(text: e?.message ?? '');
     _category = e?.category ?? BroadcastCategory.announcement;
-    _priority = e?.priority ?? BroadcastPriority.normal;
-    _channel = e?.channel ?? BroadcastChannel.both;
     _title.addListener(() => setState(() {}));
     _message.addListener(() => setState(() {}));
   }
@@ -391,8 +383,6 @@ class _TemplateEditorState extends State<_TemplateEditor> {
       title: _title.text.trim(),
       message: _message.text.trim(),
       category: _category,
-      priority: _priority,
-      channel: _channel,
       ownerId: existing?.ownerId ?? user.uid,
       // Admin templates are global ('' branch); a manager's are branch-scoped.
       branchId: user.role.isAdmin ? null : (user.branchId ?? ''),
@@ -441,14 +431,6 @@ class _TemplateEditorState extends State<_TemplateEditor> {
             _label('Category'),
             _chips<BroadcastCategory>(BroadcastCategory.values, _category,
                 (c) => c.label, (c) => setState(() => _category = c)),
-            const SizedBox(height: AppSpacing.lg),
-            _label('Priority'),
-            _chips<BroadcastPriority>(BroadcastPriority.values, _priority,
-                (p) => p.label, (p) => setState(() => _priority = p)),
-            const SizedBox(height: AppSpacing.lg),
-            _label('Channel'),
-            _chips<BroadcastChannel>(BroadcastChannel.values, _channel,
-                (c) => c.label, (c) => setState(() => _channel = c)),
             const SizedBox(height: AppSpacing.lg),
             _label('Message'),
             AppTextField(

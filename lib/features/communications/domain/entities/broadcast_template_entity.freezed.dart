@@ -21,8 +21,6 @@ mixin _$BroadcastTemplateEntity {
   String get title => throw _privateConstructorUsedError;
   String get message => throw _privateConstructorUsedError;
   BroadcastCategory get category => throw _privateConstructorUsedError;
-  BroadcastPriority get priority => throw _privateConstructorUsedError;
-  BroadcastChannel get channel => throw _privateConstructorUsedError;
 
   /// Who created the template.
   String get ownerId => throw _privateConstructorUsedError;
@@ -53,8 +51,6 @@ abstract class $BroadcastTemplateEntityCopyWith<$Res> {
     String title,
     String message,
     BroadcastCategory category,
-    BroadcastPriority priority,
-    BroadcastChannel channel,
     String ownerId,
     String? branchId,
     bool isFavorite,
@@ -86,8 +82,6 @@ class _$BroadcastTemplateEntityCopyWithImpl<
     Object? title = null,
     Object? message = null,
     Object? category = null,
-    Object? priority = null,
-    Object? channel = null,
     Object? ownerId = null,
     Object? branchId = freezed,
     Object? isFavorite = null,
@@ -113,14 +107,6 @@ class _$BroadcastTemplateEntityCopyWithImpl<
                 ? _value.category
                 : category // ignore: cast_nullable_to_non_nullable
                       as BroadcastCategory,
-            priority: null == priority
-                ? _value.priority
-                : priority // ignore: cast_nullable_to_non_nullable
-                      as BroadcastPriority,
-            channel: null == channel
-                ? _value.channel
-                : channel // ignore: cast_nullable_to_non_nullable
-                      as BroadcastChannel,
             ownerId: null == ownerId
                 ? _value.ownerId
                 : ownerId // ignore: cast_nullable_to_non_nullable
@@ -165,8 +151,6 @@ abstract class _$$BroadcastTemplateEntityImplCopyWith<$Res>
     String title,
     String message,
     BroadcastCategory category,
-    BroadcastPriority priority,
-    BroadcastChannel channel,
     String ownerId,
     String? branchId,
     bool isFavorite,
@@ -198,8 +182,6 @@ class __$$BroadcastTemplateEntityImplCopyWithImpl<$Res>
     Object? title = null,
     Object? message = null,
     Object? category = null,
-    Object? priority = null,
-    Object? channel = null,
     Object? ownerId = null,
     Object? branchId = freezed,
     Object? isFavorite = null,
@@ -225,14 +207,6 @@ class __$$BroadcastTemplateEntityImplCopyWithImpl<$Res>
             ? _value.category
             : category // ignore: cast_nullable_to_non_nullable
                   as BroadcastCategory,
-        priority: null == priority
-            ? _value.priority
-            : priority // ignore: cast_nullable_to_non_nullable
-                  as BroadcastPriority,
-        channel: null == channel
-            ? _value.channel
-            : channel // ignore: cast_nullable_to_non_nullable
-                  as BroadcastChannel,
         ownerId: null == ownerId
             ? _value.ownerId
             : ownerId // ignore: cast_nullable_to_non_nullable
@@ -270,8 +244,6 @@ class _$BroadcastTemplateEntityImpl extends _BroadcastTemplateEntity {
     required this.title,
     required this.message,
     this.category = BroadcastCategory.announcement,
-    this.priority = BroadcastPriority.normal,
-    this.channel = BroadcastChannel.both,
     this.ownerId = '',
     this.branchId,
     this.isFavorite = false,
@@ -289,12 +261,6 @@ class _$BroadcastTemplateEntityImpl extends _BroadcastTemplateEntity {
   @override
   @JsonKey()
   final BroadcastCategory category;
-  @override
-  @JsonKey()
-  final BroadcastPriority priority;
-  @override
-  @JsonKey()
-  final BroadcastChannel channel;
 
   /// Who created the template.
   @override
@@ -317,7 +283,7 @@ class _$BroadcastTemplateEntityImpl extends _BroadcastTemplateEntity {
 
   @override
   String toString() {
-    return 'BroadcastTemplateEntity(id: $id, title: $title, message: $message, category: $category, priority: $priority, channel: $channel, ownerId: $ownerId, branchId: $branchId, isFavorite: $isFavorite, usageCount: $usageCount, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'BroadcastTemplateEntity(id: $id, title: $title, message: $message, category: $category, ownerId: $ownerId, branchId: $branchId, isFavorite: $isFavorite, usageCount: $usageCount, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -330,9 +296,6 @@ class _$BroadcastTemplateEntityImpl extends _BroadcastTemplateEntity {
             (identical(other.message, message) || other.message == message) &&
             (identical(other.category, category) ||
                 other.category == category) &&
-            (identical(other.priority, priority) ||
-                other.priority == priority) &&
-            (identical(other.channel, channel) || other.channel == channel) &&
             (identical(other.ownerId, ownerId) || other.ownerId == ownerId) &&
             (identical(other.branchId, branchId) ||
                 other.branchId == branchId) &&
@@ -353,8 +316,6 @@ class _$BroadcastTemplateEntityImpl extends _BroadcastTemplateEntity {
     title,
     message,
     category,
-    priority,
-    channel,
     ownerId,
     branchId,
     isFavorite,
@@ -381,8 +342,6 @@ abstract class _BroadcastTemplateEntity extends BroadcastTemplateEntity {
     required final String title,
     required final String message,
     final BroadcastCategory category,
-    final BroadcastPriority priority,
-    final BroadcastChannel channel,
     final String ownerId,
     final String? branchId,
     final bool isFavorite,
@@ -400,10 +359,6 @@ abstract class _BroadcastTemplateEntity extends BroadcastTemplateEntity {
   String get message;
   @override
   BroadcastCategory get category;
-  @override
-  BroadcastPriority get priority;
-  @override
-  BroadcastChannel get channel;
 
   /// Who created the template.
   @override

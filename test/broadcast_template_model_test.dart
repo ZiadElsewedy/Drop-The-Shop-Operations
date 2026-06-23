@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/features/communications/data/models/broadcast_template_model.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_template_entity.dart';
 
@@ -15,8 +13,6 @@ void main() {
         title: 'Stock count',
         message: 'Count the back room, {{employee_name}}.',
         category: BroadcastCategory.reminder,
-        priority: BroadcastPriority.high,
-        channel: BroadcastChannel.inbox,
         ownerId: 'mgr-1',
         branchId: 'branch-7',
         isFavorite: true,
@@ -25,8 +21,6 @@ void main() {
 
       expect(map['title'], 'Stock count');
       expect(map['category'], 'reminder');
-      expect(map['priority'], 'high');
-      expect(map['channel'], 'inbox');
       expect(map['ownerId'], 'mgr-1');
       expect(map['branchId'], 'branch-7');
       expect(map['isFavorite'], true);
@@ -54,8 +48,6 @@ void main() {
         'message': 'm',
       }).toEntity();
       expect(e.category, BroadcastCategory.announcement);
-      expect(e.priority, BroadcastPriority.normal);
-      expect(e.channel, BroadcastChannel.both);
       expect(e.isFavorite, isFalse);
       expect(e.usageCount, 0);
       expect(e.isGlobal, isTrue);

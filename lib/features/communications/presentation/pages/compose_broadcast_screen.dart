@@ -3,8 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/enums/broadcast_recurrence.dart';
 import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/core/routes/route_names.dart';
@@ -54,8 +52,6 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
   late final List<BroadcastAudience> _allowed;
   late BroadcastAudience _audience;
   BroadcastCategory _category = BroadcastCategory.announcement;
-  BroadcastPriority _priority = BroadcastPriority.normal;
-  BroadcastChannel _channel = BroadcastChannel.both;
 
   List<BranchEntity> _branches = const [];
   BranchEntity? _selectedBranch; // admin's chosen branch (branch / individual)
@@ -83,8 +79,6 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
       _titleCtrl.text = p.title;
       _bodyCtrl.text = p.message;
       _category = BroadcastCategory.fromString(p.category);
-      _priority = p.priority;
-      _channel = p.channel;
       if (_allowed.contains(p.audience)) _audience = p.audience;
     }
     _titleCtrl.addListener(_onFormChanged);
@@ -214,8 +208,6 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
           targetUserIds: sendAudience == BroadcastAudience.custom ? people : const [],
           roleFilter: isBranchOrAll ? _roleFilter : '',
           category: _category.value,
-          priority: _priority,
-          channel: _channel,
         );
     if (!mounted) return;
     setState(() => _submitting = false);
@@ -255,8 +247,6 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
       title: _titleCtrl.text.trim(),
       message: _bodyCtrl.text.trim(),
       category: _category,
-      priority: _priority,
-      channel: _channel,
       audience: sendAudience,
       branchId: _audience == BroadcastAudience.branch ? _targetBranchId : null,
       roleFilter: isBranchOrAll ? _roleFilter : 'all',
@@ -323,15 +313,8 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
             const _Label('Category'),
             _categorySelector(),
             const SizedBox(height: AppSpacing.xl),
-            const _Label('Priority'),
-            _prioritySelector(),
-            if (_priority.isEmergency) ...[
-              const SizedBox(height: AppSpacing.sm),
-              const _EmergencyNotice(),
-            ],
-            const SizedBox(height: AppSpacing.xl),
-            const _Label('Delivery channel'),
-            _channelSelector(),
+            const SizedBox(height: AppSpacing.md),
+            _DeliveryHint(category: _category),
             const SizedBox(height: AppSpacing.xl),
             const _Label('Title'),
             AppTextField(
@@ -368,8 +351,6 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
               title: _titleCtrl.text,
               message: _bodyCtrl.text,
               category: _category,
-              priority: _priority,
-              channel: _channel,
             ),
           ],
         ),
@@ -389,8 +370,6 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
       _titleCtrl.text = TemplateRenderer.render(picked.title, ctx);
       _bodyCtrl.text = TemplateRenderer.render(picked.message, ctx);
       _category = picked.category;
-      _priority = picked.priority;
-      _channel = picked.channel;
     });
   }
 
@@ -403,8 +382,6 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
         title: _titleCtrl.text.trim(),
         message: _bodyCtrl.text.trim(),
         category: _category,
-        priority: _priority,
-        channel: _channel,
       ),
     );
   }
@@ -618,42 +595,6 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
     );
   }
 
-  Widget _prioritySelector() {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        for (final p in BroadcastPriority.values)
-          _Choice(
-            icon: priorityIcon(p),
-            label: p.label,
-            selected: _priority == p,
-            accent: p.isHighDelivery ? priorityColor(p) : null,
-            onTap: () => setState(() => _priority = p),
-          ),
-      ],
-    );
-  }
-
-  Widget _channelSelector() {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: [
-        for (final c in BroadcastChannel.values)
-          _Choice(
-            icon: switch (c) {
-              BroadcastChannel.push => Icons.notifications_active_outlined,
-              BroadcastChannel.inbox => Icons.inbox_outlined,
-              BroadcastChannel.both => Icons.all_inclusive_rounded,
-            },
-            label: c.label,
-            selected: _channel == c,
-            onTap: () => setState(() => _channel = c),
-          ),
-      ],
-    );
-  }
 }
 
 /// A live character counter shown under a field.
@@ -676,28 +617,32 @@ class _Counter extends StatelessWidget {
   }
 }
 
-/// Stronger UI treatment for an emergency broadcast (per the spec).
-class _EmergencyNotice extends StatelessWidget {
-  const _EmergencyNotice();
+/// A read-only note on how the chosen category is delivered — delivery is
+/// derived from the category (no manual priority/channel dial): announcement is
+/// quiet inbox-only; reminder + emergency push; emergency rides high priority.
+class _DeliveryHint extends StatelessWidget {
+  const _DeliveryHint({required this.category});
+  final BroadcastCategory category;
   @override
   Widget build(BuildContext context) {
+    final emergency = category == BroadcastCategory.emergency;
+    final color = emergency ? AppColors.error : AppColors.textSecondary;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.error.withAlpha(20),
+        color: color.withAlpha(emergency ? 20 : 14),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.error.withAlpha(70)),
+        border: Border.all(color: color.withAlpha(emergency ? 70 : 40)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.crisis_alert_rounded,
-              size: 18, color: AppColors.error),
+          Icon(emergency ? Icons.crisis_alert_rounded : Icons.send_outlined,
+              size: 18, color: color),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
-              'Emergency priority sends a high-priority push to every recipient '
-              'immediately, bypassing quiet hours.',
-              style: AppTypography.caption.copyWith(color: AppColors.error),
+              'Delivery: ${category.deliverySummary}',
+              style: AppTypography.caption.copyWith(color: color),
             ),
           ),
         ],
@@ -712,15 +657,11 @@ class _PreviewCard extends StatelessWidget {
     required this.title,
     required this.message,
     required this.category,
-    required this.priority,
-    required this.channel,
   });
 
   final String title;
   final String message;
   final BroadcastCategory category;
-  final BroadcastPriority priority;
-  final BroadcastChannel channel;
 
   @override
   Widget build(BuildContext context) {
@@ -761,9 +702,6 @@ class _PreviewCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              if (priority.isHighDelivery)
-                Icon(priorityIcon(priority),
-                    size: 16, color: priorityColor(priority)),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -782,7 +720,8 @@ class _PreviewCard extends StatelessWidget {
               Text(category.label,
                   style: AppTypography.caption.copyWith(color: catColor)),
               const SizedBox(width: 8),
-              Text('· ${channel.label}', style: AppTypography.caption),
+              Text('· ${category.deliverySummary}',
+                  style: AppTypography.caption),
             ],
           ),
         ],

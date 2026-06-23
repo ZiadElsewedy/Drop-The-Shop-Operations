@@ -1,69 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/features/communications/data/models/broadcast_model.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
 
-/// Phase 2 — broadcast lifecycle + delivery fields (priority, channel,
-/// archivedAt) round-trip cleanly and the derived getters
-/// (isActive/isArchived/failedCount) behave, with safe back-compat defaults for
-/// legacy docs.
+/// Broadcast lifecycle + delivery fields (archivedAt) round-trip cleanly and the
+/// derived getters (isActive / isArchived / failedCount) behave, with safe
+/// back-compat defaults for legacy docs. (Priority + channel were removed
+/// 2026-06-24 — delivery is derived from the category.)
 void main() {
-  group('BroadcastPriority / BroadcastChannel enums', () {
-    test('priority parse + high-delivery flag', () {
-      expect(BroadcastPriority.fromString('emergency'),
-          BroadcastPriority.emergency);
-      expect(BroadcastPriority.fromString('high'), BroadcastPriority.high);
-      expect(BroadcastPriority.fromString('low'), BroadcastPriority.low);
-      // unknown/missing → normal
-      expect(BroadcastPriority.fromString('???'), BroadcastPriority.normal);
-      expect(BroadcastPriority.fromString(null), BroadcastPriority.normal);
-      expect(BroadcastPriority.high.isHighDelivery, isTrue);
-      expect(BroadcastPriority.emergency.isHighDelivery, isTrue);
-      expect(BroadcastPriority.normal.isHighDelivery, isFalse);
-      expect(BroadcastPriority.emergency.isEmergency, isTrue);
-    });
-
-    test('channel parse + push/inbox gating', () {
-      expect(BroadcastChannel.fromString('push'), BroadcastChannel.push);
-      expect(BroadcastChannel.fromString('inbox'), BroadcastChannel.inbox);
-      // unknown/missing → both (widest)
-      expect(BroadcastChannel.fromString('???'), BroadcastChannel.both);
-      expect(BroadcastChannel.push.sendsPush, isTrue);
-      expect(BroadcastChannel.push.writesInbox, isFalse);
-      expect(BroadcastChannel.inbox.sendsPush, isFalse);
-      expect(BroadcastChannel.inbox.writesInbox, isTrue);
-      expect(BroadcastChannel.both.sendsPush, isTrue);
-      expect(BroadcastChannel.both.writesInbox, isTrue);
-    });
-  });
-
-  group('BroadcastModel — Phase 2 fields', () {
-    test('priority + channel round-trip through map + callable payload', () {
-      final model = BroadcastModel.fromEntity(const BroadcastEntity(
-        id: 'b1',
-        title: 'Fire drill',
-        message: 'Evacuate at 3pm',
-        senderId: 'admin',
-        senderName: 'HQ',
-        audience: BroadcastAudience.allBranches,
-        priority: BroadcastPriority.emergency,
-        channel: BroadcastChannel.both,
-      ));
-
-      expect(model.toMap()['priority'], 'emergency');
-      expect(model.toMap()['channel'], 'both');
-      expect(model.toCallablePayload()['priority'], 'emergency');
-      expect(model.toCallablePayload()['channel'], 'both');
-
-      final back = model.toEntity();
-      expect(back.priority, BroadcastPriority.emergency);
-      expect(back.channel, BroadcastChannel.both);
-    });
-
+  group('BroadcastModel — lifecycle fields', () {
     test('archivedAt parse from a doc', () {
       final entity = BroadcastModel.fromMap({
         'title': 't',
@@ -72,20 +19,18 @@ void main() {
         'senderName': 'n',
         'audience': 'branch',
         'branchId': 'b1',
-        'priority': 'high',
-        'channel': 'inbox',
+        'category': 'reminder',
         'recipientCount': 30,
         'deliveredCount': 27,
         'archivedAt': Timestamp.fromDate(DateTime(2026, 6, 22, 9)),
       }).toEntity();
 
-      expect(entity.priority, BroadcastPriority.high);
-      expect(entity.channel, BroadcastChannel.inbox);
+      expect(entity.category, 'reminder');
       expect(entity.isArchived, isTrue);
       expect(entity.isActive, isFalse); // archived ⇒ not active
     });
 
-    test('legacy doc (no Phase-2 fields) defaults to normal / both / active', () {
+    test('legacy doc (no lifecycle fields) → active', () {
       final entity = BroadcastModel.fromMap(const {
         'title': 't',
         'message': 'm',
@@ -93,8 +38,6 @@ void main() {
         'senderName': 'n',
       }).toEntity();
 
-      expect(entity.priority, BroadcastPriority.normal);
-      expect(entity.channel, BroadcastChannel.both);
       expect(entity.isActive, isTrue);
       expect(entity.isArchived, isFalse);
     });

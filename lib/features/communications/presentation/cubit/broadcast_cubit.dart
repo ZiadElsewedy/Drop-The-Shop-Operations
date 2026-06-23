@@ -3,8 +3,6 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/errors/failures.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
@@ -95,8 +93,6 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     String? targetUserId,
     String? targetUserBranchId,
     String category = 'general',
-    BroadcastPriority priority = BroadcastPriority.normal,
-    BroadcastChannel channel = BroadcastChannel.both,
     /// Recipient list for a [BroadcastAudience.custom] send.
     List<String> targetUserIds = const [],
     /// Restricts a branch/all send to one role (''/`all` = everyone).
@@ -152,8 +148,6 @@ class BroadcastCubit extends Cubit<BroadcastState> {
       branchId: audience == BroadcastAudience.branch ? targetBranch : null,
       targetUserId: audience == BroadcastAudience.user ? target : null,
       category: category.trim().isEmpty ? 'general' : category.trim(),
-      priority: priority,
-      channel: channel,
     );
 
     final prev = _broadcasts;
@@ -195,8 +189,6 @@ class BroadcastCubit extends Cubit<BroadcastState> {
         targetUserBranchId:
             sender.role.isManager ? sender.branchId : null,
         category: source.category,
-        priority: source.priority,
-        channel: source.channel,
       );
 
   /// Archives ([archived] true) / unarchives a broadcast. The feed stream

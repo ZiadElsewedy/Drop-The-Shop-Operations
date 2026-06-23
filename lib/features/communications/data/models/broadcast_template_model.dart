@@ -1,6 +1,4 @@
 import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:fbro/features/communications/domain/entities/broadcast_template_entity.dart';
 
@@ -13,8 +11,6 @@ class BroadcastTemplateModel {
   final String title;
   final String message;
   final BroadcastCategory category;
-  final BroadcastPriority priority;
-  final BroadcastChannel channel;
   final String ownerId;
   final String branchId; // '' = global
   final bool isFavorite;
@@ -27,8 +23,6 @@ class BroadcastTemplateModel {
     required this.title,
     required this.message,
     this.category = BroadcastCategory.announcement,
-    this.priority = BroadcastPriority.normal,
-    this.channel = BroadcastChannel.both,
     this.ownerId = '',
     this.branchId = '',
     this.isFavorite = false,
@@ -44,8 +38,6 @@ class BroadcastTemplateModel {
         title: map['title'] as String? ?? '',
         message: map['message'] as String? ?? '',
         category: BroadcastCategory.fromString(map['category'] as String?),
-        priority: BroadcastPriority.fromString(map['priority'] as String?),
-        channel: BroadcastChannel.fromString(map['channel'] as String?),
         ownerId: map['ownerId'] as String? ?? '',
         branchId: map['branchId'] as String? ?? '',
         isFavorite: map['isFavorite'] as bool? ?? false,
@@ -60,8 +52,6 @@ class BroadcastTemplateModel {
         title: e.title,
         message: e.message,
         category: e.category,
-        priority: e.priority,
-        channel: e.channel,
         ownerId: e.ownerId,
         branchId: e.branchId ?? '',
         isFavorite: e.isFavorite,
@@ -76,8 +66,6 @@ class BroadcastTemplateModel {
         'title': title,
         'message': message,
         'category': category.value,
-        'priority': priority.value,
-        'channel': channel.value,
         'ownerId': ownerId,
         'branchId': branchId,
         'isFavorite': isFavorite,
@@ -89,8 +77,6 @@ class BroadcastTemplateModel {
         title: title,
         message: message,
         category: category,
-        priority: priority,
-        channel: channel,
         ownerId: ownerId,
         branchId: branchId,
         isFavorite: isFavorite,
@@ -104,8 +90,6 @@ class BroadcastTemplateModel {
         title: title,
         message: message,
         category: category,
-        priority: priority,
-        channel: channel,
         ownerId: ownerId,
         branchId: branchId.isEmpty ? null : branchId,
         isFavorite: isFavorite,

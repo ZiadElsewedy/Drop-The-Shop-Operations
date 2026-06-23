@@ -1,8 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/enums/broadcast_recurrence.dart';
 import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/features/communications/data/models/broadcast_schedule_model.dart';
@@ -17,8 +15,6 @@ void main() {
         id: 's1',
         title: 'Daily standup',
         message: 'Standup in 10 minutes.',
-        priority: BroadcastPriority.high,
-        channel: BroadcastChannel.both,
         audience: BroadcastAudience.branch,
         branchId: 'branch-7',
         roleFilter: 'employee',
@@ -32,7 +28,6 @@ void main() {
         enabled: true,
       ).toMap();
 
-      expect(map['priority'], 'high');
       expect(map['audience'], 'branch');
       expect(map['roleFilter'], 'employee');
       expect(map['recurrenceType'], 'daily');

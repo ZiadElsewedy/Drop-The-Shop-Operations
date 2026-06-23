@@ -1,7 +1,5 @@
 import 'package:fbro/core/enums/broadcast_audience.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/enums/broadcast_recurrence.dart';
 import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/features/communications/domain/recurrence_rule.dart';
@@ -11,12 +9,11 @@ import 'package:fbro/features/communications/domain/recurrence_rule.dart';
 /// Function fires due schedules through the same `dispatchBroadcast` engine the
 /// instant-send uses, then advances [nextRunAt] from the recurrence rule.
 ///
-/// **Plain immutable class (not freezed) by design** — it carries 20 fields and
-/// the project cannot run `build_runner` in its current toolchain, so a
-/// hand-written value object avoids generated-file drift. It still honours the
-/// domain-layer contract (pure Dart, no Flutter/Firebase imports). [targetUserIds]
-/// for a `custom` schedule lives on the model/doc (not needed for list display),
-/// mirroring the instant-send design.
+/// **Plain immutable class (not freezed) by design** — a deliberate choice for a
+/// value object with this many fields (no generated-file churn). It still honours
+/// the domain-layer contract (pure Dart, no Flutter/Firebase imports).
+/// [targetUserIds] for a `custom` schedule lives on the model/doc (not needed for
+/// list display), mirroring the instant-send design.
 class BroadcastScheduleEntity {
   final String id;
 
@@ -24,8 +21,6 @@ class BroadcastScheduleEntity {
   final String title;
   final String message;
   final BroadcastCategory category;
-  final BroadcastPriority priority;
-  final BroadcastChannel channel;
 
   // ── Targeting ──
   final BroadcastAudience audience;
@@ -53,8 +48,6 @@ class BroadcastScheduleEntity {
     required this.title,
     required this.message,
     this.category = BroadcastCategory.announcement,
-    this.priority = BroadcastPriority.normal,
-    this.channel = BroadcastChannel.both,
     this.audience = BroadcastAudience.allBranches,
     this.branchId,
     this.roleFilter = 'all',
@@ -101,8 +94,6 @@ class BroadcastScheduleEntity {
         title: title,
         message: message,
         category: category,
-        priority: priority,
-        channel: channel,
         audience: audience,
         branchId: branchId,
         roleFilter: roleFilter,

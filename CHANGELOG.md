@@ -12,6 +12,39 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Removed (2026-06-24 — Simplification pass · slice 4b: remove Priority + Delivery, derive delivery from category)
+
+Decision B (part 2) — deleted the manual **Priority** and **Delivery-channel**
+selectors. Delivery is now derived from the category (the single dial):
+announcement → inbox only · reminder → push + inbox · emergency → push + inbox +
+high FCM priority. Two orthogonal manual axes collapse into one. `flutter analyze`
+clean (0 issues); **157 tests pass**; `node --check functions/index.js` valid.
+
+- **Enums deleted:** `BroadcastPriority` + `BroadcastChannel`. `BroadcastCategory`
+  gains pure `sendsPush` / `isHighPriority` / `deliverySummary` — the single source
+  of the delivery rule (the Cloud Function mirrors it).
+- **Schema:** dropped `priority` + `channel` from `BroadcastEntity`/`Model`,
+  `BroadcastTemplateEntity`/`Model`, and `BroadcastScheduleEntity`/`Model` (freezed
+  regenerated) — one fewer concept across all three broadcast shapes.
+- **Compose:** removed the Priority + Delivery-channel selectors; a read-only
+  `_DeliveryHint` and the preview footer now show `category.deliverySummary`. The
+  template editor drops the same two selectors.
+- **Detail:** the Priority + Channel rows collapse into one category-derived
+  **Delivery** row; the feed card drops the priority line.
+- **Cloud Function:** `dispatchBroadcast` derives push/inbox + high priority from
+  the category (`categorySendsPush` / `categoryIsHigh`) instead of reading
+  priority/channel; every category writes the inbox, announcement is push-suppressed.
+- **Also:** removed the stale "cannot run build_runner" comment on the schedule
+  entity. Tests updated (lifecycle / template / schedule model tests).
+
+**Guardrail check (no over-coupling found):** per the instruction to stop-and-report
+if removing Priority/Delivery exposed a root design problem — it did **not**. The
+fields were plain, duplicated value-object attributes; collapsing delivery into the
+category *removed* coupling (two manual dials → one derived rule). The only mild
+smell — priority/channel/category triplicated across broadcast/template/schedule —
+is inherent to "a template/schedule is a prefilled broadcast" and is now smaller
+(one field, not three). No compatibility layer was added.
+
 ### Changed (2026-06-24 — Simplification pass · slice 4a: Category 4→3, drop Alert)
 
 Decision B (part 1) — merged the broadcast categories from 4 to 3 by removing

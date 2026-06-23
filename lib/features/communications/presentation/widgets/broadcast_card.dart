@@ -72,23 +72,9 @@ class BroadcastCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Text(category.label,
-                                style: AppTypography.caption
-                                    .copyWith(color: catColor)),
-                            if (broadcast.priority.isHighDelivery) ...[
-                              _miniDot(),
-                              Icon(priorityIcon(broadcast.priority),
-                                  size: 12,
-                                  color: priorityColor(broadcast.priority)),
-                              const SizedBox(width: 2),
-                              Text(broadcast.priority.label,
-                                  style: AppTypography.caption.copyWith(
-                                      color: priorityColor(broadcast.priority))),
-                            ],
-                          ],
-                        ),
+                        Text(category.label,
+                            style: AppTypography.caption
+                                .copyWith(color: catColor)),
                       ],
                     ),
                   ),
@@ -184,10 +170,6 @@ class BroadcastCard extends StatelessWidget {
         child: Text('·', style: TextStyle(color: AppColors.textTertiary)),
       );
 
-  Widget _miniDot() => const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 5),
-        child: Text('·', style: TextStyle(color: AppColors.textTertiary)),
-      );
 }
 
 class _AudiencePill extends StatelessWidget {

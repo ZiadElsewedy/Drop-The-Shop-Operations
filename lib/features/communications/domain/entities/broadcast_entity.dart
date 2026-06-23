@@ -1,7 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/enums/user_role.dart';
 
 part 'broadcast_entity.freezed.dart';
@@ -36,13 +34,9 @@ class BroadcastEntity with _$BroadcastEntity {
     String? branchId,
     /// The individual recipient when [audience] is [BroadcastAudience.user].
     String? targetUserId,
-    /// Notification category (drives client-side routing/grouping of the push).
+    /// Notification category (announcement / reminder / emergency) — the single
+    /// dial; it derives delivery (push/inbox + FCM priority) on send.
     @Default('general') String category,
-    /// Delivery urgency (Phase 2) — drives FCM priority + UI emphasis. Orthogonal
-    /// to [category].
-    @Default(BroadcastPriority.normal) BroadcastPriority priority,
-    /// Delivery channel (Phase 2) — push only / inbox only / both.
-    @Default(BroadcastChannel.both) BroadcastChannel channel,
     /// How many users the send engine resolved as recipients (set by the
     /// function on send; null on an unsent/legacy doc).
     int? recipientCount,

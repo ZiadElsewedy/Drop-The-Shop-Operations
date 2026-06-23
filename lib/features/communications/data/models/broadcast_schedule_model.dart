@@ -1,8 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fbro/core/enums/broadcast_audience.dart';
 import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/enums/broadcast_channel.dart';
-import 'package:fbro/core/enums/broadcast_priority.dart';
 import 'package:fbro/core/enums/broadcast_recurrence.dart';
 import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/extensions/firestore_extensions.dart';
@@ -17,8 +15,6 @@ class BroadcastScheduleModel {
   final String title;
   final String message;
   final BroadcastCategory category;
-  final BroadcastPriority priority;
-  final BroadcastChannel channel;
   final BroadcastAudience audience;
   final String branchId; // '' for all-branches / non-branch
   final String roleFilter;
@@ -41,8 +37,6 @@ class BroadcastScheduleModel {
     required this.title,
     required this.message,
     this.category = BroadcastCategory.announcement,
-    this.priority = BroadcastPriority.normal,
-    this.channel = BroadcastChannel.both,
     this.audience = BroadcastAudience.allBranches,
     this.branchId = '',
     this.roleFilter = 'all',
@@ -67,8 +61,6 @@ class BroadcastScheduleModel {
         title: map['title'] as String? ?? '',
         message: map['message'] as String? ?? '',
         category: BroadcastCategory.fromString(map['category'] as String?),
-        priority: BroadcastPriority.fromString(map['priority'] as String?),
-        channel: BroadcastChannel.fromString(map['channel'] as String?),
         audience: BroadcastAudience.fromString(map['audience'] as String?),
         branchId: map['branchId'] as String? ?? '',
         roleFilter: map['roleFilter'] as String? ?? 'all',
@@ -100,8 +92,6 @@ class BroadcastScheduleModel {
         title: e.title,
         message: e.message,
         category: e.category,
-        priority: e.priority,
-        channel: e.channel,
         audience: e.audience,
         branchId: e.branchId ?? '',
         roleFilter: e.roleFilter,
@@ -129,8 +119,6 @@ class BroadcastScheduleModel {
         'title': title,
         'message': message,
         'category': category.value,
-        'priority': priority.value,
-        'channel': channel.value,
         'audience': audience.value,
         'branchId': branchId,
         'roleFilter': roleFilter,
@@ -153,8 +141,6 @@ class BroadcastScheduleModel {
         title: title,
         message: message,
         category: category,
-        priority: priority,
-        channel: channel,
         audience: audience,
         branchId: branchId,
         roleFilter: roleFilter,
@@ -178,8 +164,6 @@ class BroadcastScheduleModel {
         title: title,
         message: message,
         category: category,
-        priority: priority,
-        channel: channel,
         audience: audience,
         branchId: branchId.isEmpty ? null : branchId,
         roleFilter: roleFilter,

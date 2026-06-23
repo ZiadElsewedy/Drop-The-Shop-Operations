@@ -34,15 +34,9 @@ mixin _$BroadcastEntity {
   /// The individual recipient when [audience] is [BroadcastAudience.user].
   String? get targetUserId => throw _privateConstructorUsedError;
 
-  /// Notification category (drives client-side routing/grouping of the push).
+  /// Notification category (announcement / reminder / emergency) — the single
+  /// dial; it derives delivery (push/inbox + FCM priority) on send.
   String get category => throw _privateConstructorUsedError;
-
-  /// Delivery urgency (Phase 2) — drives FCM priority + UI emphasis. Orthogonal
-  /// to [category].
-  BroadcastPriority get priority => throw _privateConstructorUsedError;
-
-  /// Delivery channel (Phase 2) — push only / inbox only / both.
-  BroadcastChannel get channel => throw _privateConstructorUsedError;
 
   /// How many users the send engine resolved as recipients (set by the
   /// function on send; null on an unsent/legacy doc).
@@ -82,8 +76,6 @@ abstract class $BroadcastEntityCopyWith<$Res> {
     String? branchId,
     String? targetUserId,
     String category,
-    BroadcastPriority priority,
-    BroadcastChannel channel,
     int? recipientCount,
     int? deliveredCount,
     DateTime? archivedAt,
@@ -116,8 +108,6 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
     Object? branchId = freezed,
     Object? targetUserId = freezed,
     Object? category = null,
-    Object? priority = null,
-    Object? channel = null,
     Object? recipientCount = freezed,
     Object? deliveredCount = freezed,
     Object? archivedAt = freezed,
@@ -165,14 +155,6 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
                 ? _value.category
                 : category // ignore: cast_nullable_to_non_nullable
                       as String,
-            priority: null == priority
-                ? _value.priority
-                : priority // ignore: cast_nullable_to_non_nullable
-                      as BroadcastPriority,
-            channel: null == channel
-                ? _value.channel
-                : channel // ignore: cast_nullable_to_non_nullable
-                      as BroadcastChannel,
             recipientCount: freezed == recipientCount
                 ? _value.recipientCount
                 : recipientCount // ignore: cast_nullable_to_non_nullable
@@ -215,8 +197,6 @@ abstract class _$$BroadcastEntityImplCopyWith<$Res>
     String? branchId,
     String? targetUserId,
     String category,
-    BroadcastPriority priority,
-    BroadcastChannel channel,
     int? recipientCount,
     int? deliveredCount,
     DateTime? archivedAt,
@@ -248,8 +228,6 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
     Object? branchId = freezed,
     Object? targetUserId = freezed,
     Object? category = null,
-    Object? priority = null,
-    Object? channel = null,
     Object? recipientCount = freezed,
     Object? deliveredCount = freezed,
     Object? archivedAt = freezed,
@@ -297,14 +275,6 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
             ? _value.category
             : category // ignore: cast_nullable_to_non_nullable
                   as String,
-        priority: null == priority
-            ? _value.priority
-            : priority // ignore: cast_nullable_to_non_nullable
-                  as BroadcastPriority,
-        channel: null == channel
-            ? _value.channel
-            : channel // ignore: cast_nullable_to_non_nullable
-                  as BroadcastChannel,
         recipientCount: freezed == recipientCount
             ? _value.recipientCount
             : recipientCount // ignore: cast_nullable_to_non_nullable
@@ -340,8 +310,6 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
     this.branchId,
     this.targetUserId,
     this.category = 'general',
-    this.priority = BroadcastPriority.normal,
-    this.channel = BroadcastChannel.both,
     this.recipientCount,
     this.deliveredCount,
     this.archivedAt,
@@ -376,21 +344,11 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
   @override
   final String? targetUserId;
 
-  /// Notification category (drives client-side routing/grouping of the push).
+  /// Notification category (announcement / reminder / emergency) — the single
+  /// dial; it derives delivery (push/inbox + FCM priority) on send.
   @override
   @JsonKey()
   final String category;
-
-  /// Delivery urgency (Phase 2) — drives FCM priority + UI emphasis. Orthogonal
-  /// to [category].
-  @override
-  @JsonKey()
-  final BroadcastPriority priority;
-
-  /// Delivery channel (Phase 2) — push only / inbox only / both.
-  @override
-  @JsonKey()
-  final BroadcastChannel channel;
 
   /// How many users the send engine resolved as recipients (set by the
   /// function on send; null on an unsent/legacy doc).
@@ -411,7 +369,7 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
 
   @override
   String toString() {
-    return 'BroadcastEntity(id: $id, title: $title, message: $message, senderId: $senderId, senderName: $senderName, senderRole: $senderRole, audience: $audience, branchId: $branchId, targetUserId: $targetUserId, category: $category, priority: $priority, channel: $channel, recipientCount: $recipientCount, deliveredCount: $deliveredCount, archivedAt: $archivedAt, createdAt: $createdAt)';
+    return 'BroadcastEntity(id: $id, title: $title, message: $message, senderId: $senderId, senderName: $senderName, senderRole: $senderRole, audience: $audience, branchId: $branchId, targetUserId: $targetUserId, category: $category, recipientCount: $recipientCount, deliveredCount: $deliveredCount, archivedAt: $archivedAt, createdAt: $createdAt)';
   }
 
   @override
@@ -436,9 +394,6 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
                 other.targetUserId == targetUserId) &&
             (identical(other.category, category) ||
                 other.category == category) &&
-            (identical(other.priority, priority) ||
-                other.priority == priority) &&
-            (identical(other.channel, channel) || other.channel == channel) &&
             (identical(other.recipientCount, recipientCount) ||
                 other.recipientCount == recipientCount) &&
             (identical(other.deliveredCount, deliveredCount) ||
@@ -462,8 +417,6 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
     branchId,
     targetUserId,
     category,
-    priority,
-    channel,
     recipientCount,
     deliveredCount,
     archivedAt,
@@ -494,8 +447,6 @@ abstract class _BroadcastEntity extends BroadcastEntity {
     final String? branchId,
     final String? targetUserId,
     final String category,
-    final BroadcastPriority priority,
-    final BroadcastChannel channel,
     final int? recipientCount,
     final int? deliveredCount,
     final DateTime? archivedAt,
@@ -529,18 +480,10 @@ abstract class _BroadcastEntity extends BroadcastEntity {
   @override
   String? get targetUserId;
 
-  /// Notification category (drives client-side routing/grouping of the push).
+  /// Notification category (announcement / reminder / emergency) — the single
+  /// dial; it derives delivery (push/inbox + FCM priority) on send.
   @override
   String get category;
-
-  /// Delivery urgency (Phase 2) — drives FCM priority + UI emphasis. Orthogonal
-  /// to [category].
-  @override
-  BroadcastPriority get priority;
-
-  /// Delivery channel (Phase 2) — push only / inbox only / both.
-  @override
-  BroadcastChannel get channel;
 
   /// How many users the send engine resolved as recipients (set by the
   /// function on send; null on an unsent/legacy doc).

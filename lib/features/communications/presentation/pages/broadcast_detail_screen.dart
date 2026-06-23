@@ -123,15 +123,6 @@ class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
                       size: 14, color: AppColors.textTertiary),
                   const SizedBox(width: 6),
                   Text(audienceLabel(b), style: AppTypography.caption),
-                  if (b.priority.isHighDelivery) ...[
-                    const SizedBox(width: 10),
-                    Icon(priorityIcon(b.priority),
-                        size: 14, color: priorityColor(b.priority)),
-                    const SizedBox(width: 4),
-                    Text(b.priority.label,
-                        style: AppTypography.caption
-                            .copyWith(color: priorityColor(b.priority))),
-                  ],
                   const Spacer(),
                   Text(broadcastTimeAgo(b.createdAt),
                       style: AppTypography.caption),
@@ -210,13 +201,9 @@ class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
                   label: 'Category',
                   value: category.label),
               _MetaRow(
-                  icon: priorityIcon(b.priority),
-                  label: 'Priority',
-                  value: b.priority.label),
-              _MetaRow(
                   icon: Icons.send_outlined,
-                  label: 'Channel',
-                  value: b.channel.label),
+                  label: 'Delivery',
+                  value: category.deliverySummary),
               _MetaRow(
                   icon: Icons.schedule_rounded,
                   label: 'Sent',
