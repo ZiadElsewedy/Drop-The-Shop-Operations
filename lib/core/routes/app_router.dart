@@ -13,6 +13,7 @@ import 'package:fbro/features/manager/presentation/pages/manager_shell.dart';
 import 'package:fbro/features/employee/presentation/pages/employee_shell.dart';
 import 'package:fbro/features/task/presentation/pages/task_management_screen.dart';
 import 'package:fbro/features/task/presentation/pages/my_tasks_screen.dart';
+import 'package:fbro/features/task/presentation/pages/task_detail_loader_screen.dart';
 import 'package:fbro/features/operations/presentation/pages/manager_operations_screen.dart';
 import 'package:fbro/features/schedule/presentation/pages/schedule_management_screen.dart';
 import 'package:fbro/features/schedule/presentation/pages/branch_schedule_screen.dart';
@@ -178,6 +179,14 @@ GoRouter createRouter(AuthCubit authCubit) {
         pageBuilder: (context, state) => _slideTransition(
           state,
           const MyTasksScreen(),
+        ),
+      ),
+      // Exact-task deep-link (every role) — a task notification lands here.
+      GoRoute(
+        path: RouteNames.taskDetailPattern,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          TaskDetailLoaderScreen(taskId: state.pathParameters['taskId'] ?? ''),
         ),
       ),
       // ─── Weekly schedule (Phase 7) ─────────────────────────────

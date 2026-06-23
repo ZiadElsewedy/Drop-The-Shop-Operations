@@ -69,13 +69,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     _deepLink(n);
   }
 
-  /// A task notification opens the role's Tasks screen; a broadcast notification
-  /// opens its detail for admin/manager. (Exact-task deep-link is a follow-up.)
+  /// A task notification opens the **exact task**; a broadcast notification opens
+  /// its detail for admin/manager (the body is the message for employees).
   void _deepLink(NotificationEntity n) {
     final role = context.currentRole;
     switch (n.route) {
       case 'task_details':
-        if (role != null) context.push(RouteNames.tasksForRole(role));
+        final taskId = n.taskId;
+        if (taskId != null && taskId.isNotEmpty) {
+          context.push(RouteNames.taskDetail(taskId));
+        } else if (role != null) {
+          context.push(RouteNames.tasksForRole(role));
+        }
       case 'broadcast_detail':
         final id = n.broadcastId;
         if (id != null &&

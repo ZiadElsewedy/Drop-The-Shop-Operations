@@ -12,6 +12,25 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed (2026-06-23 — Simplification pass · slice 2: task notifications open the exact task)
+
+A task notification (assigned · rework · approved · rejected · submitted ·
+reminder · overdue) now opens the **exact task**, not the task list. `flutter
+analyze` clean (0 issues); **165 tests pass**.
+
+- **New `/task/:taskId` route** (`RouteNames.taskDetailPattern` / `taskDetail(id)`)
+  — a top-level route outside the role-area guards (a user only reaches it via a
+  task they were notified about; Firestore rules enforce read access).
+- **`TaskDetailLoaderScreen`** loads the task by id via
+  `TaskRepository.getTask` (already existed) and shows `TaskDetailsScreen`
+  (which then stays live from the app-wide `TaskCubit` stream); skeleton while
+  loading, a friendly "Task unavailable" state with Retry on miss/error.
+- **Both entry points fixed:** the inbox tile `_deepLink` and the FCM push-tap
+  handler (`main.dart onMessageTap`) now route `route == 'task_details'` with a
+  `taskId` to `/task/:taskId` (falling back to the list / inbox when absent).
+- No schema / rules / function change. The notification payload already carries
+  `taskId` + `route` (written by `NotifyTaskEvent` and `runTaskReminders`).
+
 ### Changed (2026-06-23 — Simplification pass · slice 1: lean Notification Center)
 
 First slice of the product-simplification pass (philosophy: DROP is a lean
