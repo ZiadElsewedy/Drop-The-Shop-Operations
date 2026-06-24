@@ -34,10 +34,10 @@ class ScheduleGrid extends StatelessWidget {
   /// shows both Morning and Night.
   final ScheduleShift? filter;
 
-  static const double _railWidth = 60;
-  static const double _cellWidth = 86;
-  static const double _cellHeight = 78;
-  static const double _headerHeight = 46;
+  static const double _railWidth = 78;
+  static const double _cellWidth = 128;
+  static const double _cellHeight = 122;
+  static const double _headerHeight = 50;
 
   /// Total intrinsic height for [filter] — lets callers embed the grid in a
   /// scroll view without unbounded-height surprises.
@@ -90,19 +90,42 @@ class ScheduleGrid extends StatelessWidget {
     return SizedBox(
       width: _railWidth,
       height: _cellHeight,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            isMorning ? Icons.wb_sunny_rounded : Icons.nightlight_round,
-            size: 16,
-            color: isMorning ? AppColors.warning : AppColors.textSecondary,
-          ),
-          const SizedBox(height: 4),
-          Text(shift.label,
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textSecondary)),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.only(right: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Brightness, not colour, distinguishes the shifts (morning brighter)
+            // — keeps the rail strictly monochrome.
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: isMorning
+                    ? AppColors.primarySurface
+                    : AppColors.darkSurfaceElevated,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: Icon(
+                isMorning ? Icons.wb_sunny_rounded : Icons.nightlight_round,
+                size: 17,
+                color:
+                    isMorning ? AppColors.textPrimary : AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 7),
+            Text(shift.label,
+                style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w600)),
+            const SizedBox(height: 1),
+            Text(shift.timeRange,
+                style: AppTypography.caption.copyWith(height: 1.1)),
+          ],
+        ),
       ),
     );
   }
@@ -150,8 +173,9 @@ class ScheduleGrid extends StatelessWidget {
     final uids = schedule.employeesFor(day, shift);
     final valid = validAssignments(uids, members);
     final orphans = orphanAssignments(uids, members);
+    final users = [for (final uid in valid) userForUid(uid, members)!];
     return ShiftCell(
-      count: valid.length,
+      users: users,
       isToday: isToday,
       hasOrphan: orphans.isNotEmpty,
       width: _cellWidth,

@@ -6,8 +6,11 @@ import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:fbro/features/schedule/presentation/widgets/schedule_grid.dart';
 
-UserEntity _member(String uid) =>
-    UserEntity(uid: uid, email: '$uid@drop.test', authProvider: 'password');
+UserEntity _member(String uid, {String? name}) => UserEntity(
+    uid: uid,
+    email: '$uid@drop.test',
+    displayName: name,
+    authProvider: 'password');
 
 WeeklyScheduleEntity _schedule(
     Map<ScheduleDay, Map<ScheduleShift, List<String>>> assignments) {
@@ -23,9 +26,12 @@ WeeklyScheduleEntity _schedule(
 void main() {
   Widget host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
-  testWidgets('shows assigned count and excludes broken references',
+  testWidgets('shows assigned people and excludes broken references',
       (tester) async {
-    final members = [_member('u1'), _member('u2')];
+    final members = [
+      _member('u1', name: 'Ahmed Maher'),
+      _member('u2', name: 'Omar Ali'),
+    ];
     final schedule = _schedule({
       ScheduleDay.sunday: {
         // Two real members + one orphan uid that no longer maps to a member.
@@ -39,17 +45,19 @@ void main() {
       onCellTap: (_, _) {},
     )));
 
-    // The orphan is not counted → the cell reads "2" people, never "3".
-    expect(find.text('2'), findsOneWidget);
-    expect(find.text('people'), findsOneWidget);
-    // The broken reference is flagged, never shown as a name/uid.
+    // The cell names the two real, resolvable employees (compact form).
+    expect(find.text('Ahmed M.'), findsOneWidget);
+    expect(find.text('Omar A.'), findsOneWidget);
+    // The orphan is excluded — never shown as a name/uid, only flagged.
     expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
     expect(find.textContaining('ghost'), findsNothing);
+    // Two real people → no "+N more" overflow line.
+    expect(find.textContaining('more'), findsNothing);
     // No staffing target / quota is ever rendered.
     expect(find.textContaining('of '), findsNothing);
   });
 
-  testWidgets('empty shifts read as Empty, not as a shortfall',
+  testWidgets('empty shifts read as "No one", not as a shortfall',
       (tester) async {
     await tester.pumpWidget(host(ScheduleGrid(
       schedule: _schedule(const {}),
@@ -58,7 +66,7 @@ void main() {
     )));
 
     // 14 slots (7 days x 2 shifts), all empty.
-    expect(find.text('Empty'), findsNWidgets(14));
+    expect(find.text('No one'), findsNWidgets(14));
   });
 
   testWidgets('tapping a cell reports its day and shift', (tester) async {
@@ -74,8 +82,8 @@ void main() {
       },
     )));
 
-    // First cell (Sunday morning) is the first "Empty" in document order.
-    await tester.tap(find.text('Empty').first);
+    // First cell (Sunday morning) is the first "No one" in document order.
+    await tester.tap(find.text('No one').first);
     await tester.pump();
 
     expect(tappedDay, ScheduleDay.sunday);
@@ -91,6 +99,6 @@ void main() {
     )));
 
     // Only the night row renders → 7 cells, not 14.
-    expect(find.text('Empty'), findsNWidgets(7));
+    expect(find.text('No one'), findsNWidgets(7));
   });
 }

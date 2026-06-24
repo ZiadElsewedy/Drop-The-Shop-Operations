@@ -11,8 +11,26 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-24 (Perf audit regression fixes — L1 offline admin stats + L3 task stream scope)
+**Last updated:** 2026-06-24 (Schedule grid premium redesign — faces + names per shift cell)
 **Version:** 1.0.0+1 · **Branch:** `feature/cache-layer` (DROP — monochrome enterprise UX)
+
+> **Schedule grid premium redesign (2026-06-24):** Reworked the admin + manager
+> weekly schedule grid (shared `ManagerScheduleView` → `ScheduleGrid` →
+> `ShiftCell`) from a bare assigned-**count** tile into a glanceable "who's on"
+> surface, on the same days-as-columns / shifts-as-rows model. A staffed cell now
+> shows an **avatar stack + names** ("Ahmed M." · "+N more") on a top-lit
+> elevated card; an empty cell is a **dashed** "No one" placeholder with a
+> person-add glyph; today keeps the white ring; orphan refs still flagged (never a
+> uid). The **shift rail** gained an icon tile + **time range** (brightness, not
+> colour, separates morning/night), and cells widened (86→128w · 78→122h) to fit
+> faces. The **coverage card** is now icon tile + "N of M shifts covered" + a
+> **% pill** + a monochrome **progress bar**, with a one-line tap/scroll hint
+> above the grid. **Strictly monochrome** — the source mockup's purple/gold/blue
+> and its "X open"/"X of N" **staffing-quota** framing were intentionally not
+> adopted (quotas remain a settled product rejection). Presentation-only: no
+> schema / rules / route / DI / cubit / freezed change; new `shortName` helper.
+> `flutter analyze` clean (0 issues); **157 tests pass** (`schedule_grid_test`
+> updated to the new cell — names/avatars + "No one" empty state).
 
 > **Perf-audit regression fixes (2026-06-24):** A validation/regression audit of
 > the Phase A–D work (analyzer clean, 157 tests pass on the current toolchain —

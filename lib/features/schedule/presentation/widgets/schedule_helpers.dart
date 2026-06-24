@@ -20,6 +20,18 @@ String nameForUid(String uid, List<UserEntity> members) {
   return u == null ? 'Unknown' : userDisplayName(u);
 }
 
+/// Compact name for dense surfaces (schedule cells): first name + last initial
+/// (e.g. `Ahmed M.`), falling back to the email local-part when there's no
+/// display name. Keeps shift cells readable without wrapping.
+String shortName(UserEntity u) {
+  final full = userDisplayName(u).trim();
+  final base = full.contains('@') ? full.split('@').first : full;
+  final parts = base.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return base;
+  if (parts.length == 1) return parts.first;
+  return '${parts.first} ${parts[1][0]}.';
+}
+
 /// Resolves a uid to its [UserEntity] from a list of branch [members], or null.
 UserEntity? userForUid(String uid, List<UserEntity> members) {
   for (final m in members) {

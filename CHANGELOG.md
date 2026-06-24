@@ -12,6 +12,37 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed (2026-06-24 — Schedule grid premium redesign: faces + names per shift)
+
+Visual/UX upgrade of the admin + manager weekly schedule grid (the shared
+`ManagerScheduleView` → `ScheduleGrid` → `ShiftCell`). Presentation-only — no
+schema / rules / route / DI / cubit / freezed change. `flutter analyze` clean
+(0 issues); **157 tests pass** (`schedule_grid_test.dart` updated to the new
+cell). Strictly monochrome (no chromatic accent introduced); the requested
+mockup's purple/gold/blue and its "X of N open" **staffing-quota** model were
+deliberately **not** adopted (quotas were a settled product rejection — coverage
+stays "has someone / empty").
+
+- **`ShiftCell` now shows _who_, not a number.** A staffed slot renders an
+  `AvatarStack` (real faces, initials fallback) + up to two compact names
+  (`shortName`: "Ahmed M.") + a "+N more" overflow, on a subtly top-lit elevated
+  card. An empty slot is a muted **dashed** placeholder (`_DashedBorderPainter`)
+  with a person-add glyph + "No one" (was a bare "—"/"Empty"). Today's column
+  keeps the solid white ring; a broken/orphan reference is still flagged with the
+  amber warning and never shown as a uid. `ShiftCell` API changed from a `count`
+  int to a `List<UserEntity> users`; the grid resolves the cell's valid uids to
+  members (`userForUid`) and passes them in.
+- **Premium shift rail.** Each shift row's rail gained a rounded icon tile
+  (morning = brighter white-wash sun · night = dim moon — brightness, not colour,
+  separates them) plus the shift **time range** (`08:30 – 16:30`). Cells widened
+  (86→128 w · 78→122 h) so faces + names fit; the grid still scrolls horizontally
+  with the pinned rail + day headers.
+- **Coverage summary upgraded** (`manager_schedule_view._coverageSummary`): icon
+  tile + "N of M shifts covered" + plain-language subtitle + a **% pill** and a
+  monochrome **coverage progress bar**. Added a one-line tap/scroll **hint** above
+  the grid.
+- New helper `shortName(UserEntity)` in `schedule_helpers.dart`.
+
 ### Fixed (2026-06-24 — Perf audit regression fixes: offline admin stats + task stream scope)
 
 Two highest-priority regressions from the Phase A–D validation audit. `flutter

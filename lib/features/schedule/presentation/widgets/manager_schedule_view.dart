@@ -299,8 +299,27 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
           ),
           const SizedBox(height: AppSpacing.md),
         ],
+        _gridHint(),
+        const SizedBox(height: AppSpacing.sm),
         // The grid scrolls horizontally inside its own viewport.
         SizedBox(height: grid.height, child: grid),
+      ],
+    );
+  }
+
+  /// One-line affordance hint — the grid scrolls sideways and each cell is
+  /// tappable; say so quietly rather than leaving it to be discovered.
+  Widget _gridHint() {
+    return Row(
+      children: [
+        const Icon(Icons.touch_app_outlined,
+            size: 14, color: AppColors.textTertiary),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text('Tap a shift to assign or manage staff · swipe for more days',
+              style: AppTypography.caption, maxLines: 1,
+              overflow: TextOverflow.ellipsis),
+        ),
       ],
     );
   }
@@ -322,27 +341,66 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
       }
     }
     final empty = total - filled;
+    final fraction = total == 0 ? 0.0 : filled / total;
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
+        gradient: AppColors.subtleGradient,
         color: AppColors.darkSurface,
         borderRadius: AppRadius.lgAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
-      child: Row(
+      child: Column(
         children: [
-          const Icon(Icons.calendar_month_rounded,
-              size: 20, color: AppColors.textSecondary),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Text(
-              empty == 0
-                  ? 'Every shift has someone assigned'
-                  : '$filled of $total shifts have someone',
-              style: AppTypography.label,
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.darkSurfaceElevated,
+                  borderRadius: AppRadius.mdAll,
+                  border: Border.all(color: AppColors.darkBorder),
+                ),
+                child: const Icon(Icons.calendar_month_rounded,
+                    size: 20, color: AppColors.textPrimary),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      empty == 0
+                          ? 'Every shift is covered'
+                          : '$filled of $total shifts covered',
+                      style: AppTypography.label,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      empty == 0
+                          ? 'Nice — the whole week is staffed'
+                          : '$empty ${empty == 1 ? 'shift needs' : 'shifts need'} someone',
+                      style: AppTypography.caption,
+                    ),
+                  ],
+                ),
+              ),
+              _summaryPill('${(fraction * 100).round()}%'),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          ClipRRect(
+            borderRadius: AppRadius.fullAll,
+            child: LinearProgressIndicator(
+              value: fraction,
+              minHeight: 6,
+              backgroundColor: AppColors.darkBg,
+              valueColor:
+                  const AlwaysStoppedAnimation<Color>(AppColors.primary),
             ),
           ),
-          if (empty > 0) _summaryPill('$empty empty'),
         ],
       ),
     );
@@ -350,15 +408,15 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
 
   Widget _summaryPill(String text) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: AppColors.darkSurfaceElevated,
         borderRadius: AppRadius.fullAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
       child: Text(text,
-          style: AppTypography.caption.copyWith(
-              color: AppColors.textSecondary, fontWeight: FontWeight.w600)),
+          style: AppTypography.labelSmall.copyWith(
+              color: AppColors.textPrimary, fontWeight: FontWeight.w700)),
     );
   }
 
