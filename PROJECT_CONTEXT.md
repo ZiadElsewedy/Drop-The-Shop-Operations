@@ -209,7 +209,19 @@ navigation: admin areas are admin-only, manager areas admit manager + admin
 (**admin ⊇ manager**), the employee home (`/`) is employee-only; anyone entering
 an area that isn't theirs is bounced to their own home. `/profile` & `/settings`
 are shared across roles. `SplashPage` calls `AuthCubit.restoreSession()` once on
-cold start and dispatches by approval + role. Because Firebase sign-ins don't
+cold start and dispatches by approval + role. The splash's minimum dwell is the
+**brand-animation length (1400 ms)** — `_initSession` does
+`Future.wait([restoreSession(), Future.delayed(1400ms)])` (the prior 2400 ms had
+~1 s of dead time after the animation). **Warm-start preload (Perf · Phase C):**
+the app-wide `BlocListener<AuthCubit>` in `main.dart` — which fires on
+`authenticated` for **both** cold-start restore **and** fresh login — preloads the
+home-critical cubits (`StatisticsCubit.load` + `TaskCubit.load`, **gated on
+`hasAppAccess`**) alongside the existing FCM-token + notification load, so the
+fetch overlaps the splash/route transition and Home paints with data, not
+skeletons. Fire-and-forget + concurrent (per-cubit error isolation); both loads
+are **idempotent** (Phase A), so Home's own `initState` `load()` calls then no-op
+— no duplicate reads. Templates / branches are **not** preloaded (lazy + Phase B
+cache). Because Firebase sign-ins don't
 know the role/approval, `AuthCubit` re-reads the Firestore user after
 email/Google/OTP sign-in so the emitted `authenticated` state carries the
 authoritative role/branch/approval. The **Pending Approval** screen uses
@@ -246,6 +258,12 @@ Firestore users/{uid}          FirebaseAuth
   (`UserModel`) and `profile` (`ProfileModel`). `ProfileModel` is back-compat:
   it falls back to the legacy `displayName`/`photoUrl` keys, and `editMap`
   keeps those legacy keys in sync on write.
+- **`ProfileCubit.loadProfile(uid)` is idempotent** — once a uid's profile is in
+  memory (loaded **or** updated via `save`, both stamp `_loadedUid`), a screen
+  revisit **skips the Firestore re-read and the skeleton flash** (this fixes the
+  "returning to Profile triggers a full reload"). An explicit retry passes
+  `forceRefresh`. The Profile page has no pull-to-refresh, so edits (which flow
+  back through `save`) are the only in-session mutation.
 
 ### Shift chain (Phase 2 — REMOVED in Phase 10)
 
@@ -295,9 +313,9 @@ Cloud Firestore  tasks/{taskId}   task_templates/{id}   Storage tasks/{id}/attac
   `TaskModel → TaskEntity`.
 - **Core workflow:** a manager/admin creates + assigns a task (optionally with a checklist + recurrence); the employee drives it via **`TaskCubit.completeAndSubmit`** — a single action that uploads proof + notes and advances the task directly to `waitingReview` (recording both `completed` and `waitingReview` activity entries in one write); a manager/admin reviews → `approved` | `rejected`; approval auto-spawns the next recurrence when `frequency != none`. Every transition appends an `ActivityEntry` to `task.activityLog`. Proof is uploaded **before** the status write inside `completeAndSubmit`, so a failed upload aborts the transition (task stays `started`, photo retained for retry) rather than silently submitting evidence-less work. The standalone `completeTask` use case was removed (dead since the two-step UX was eliminated); `submitForReview` + the `completed → waitingReview` transition remain only so any pre-existing `completed`-state task can still be advanced. `TaskType` (daily/special), `TaskStatus`, `TaskPriority`, and `RecurrenceFrequency` are enums in `core/enums`.
 - **Branch is never free text.** A manager's task takes their own `branchId`; an **admin picks an existing branch from a Firestore-backed dropdown** (`TaskCubit.branches()` → `BranchRepository`). This guarantees the task's `branchId` matches the employees' `users/{uid}.branchId`, so the Assign picker is always populated.
-- **Realtime lists.** `TaskCubit.load` subscribes to a **live Firestore snapshot stream** by role (admin: `watchAllTasks` · manager: `watchTasksByBranch` · employee: `watchEmployeeTasks`), so a newly assigned task or any status change appears **immediately** (backed by the offline cache). Mutations keep the list visible (`loaded(tasks, busy)`) and the stream reflects the result; on error the previous list is restored. Pull-to-refresh re-subscribes. The subscription is cancelled in `close()`.
+- **Realtime lists.** `TaskCubit.load` subscribes to a **live Firestore snapshot stream** by role (admin: `watchAllTasks` · manager: `watchTasksByBranch` · employee: `watchEmployeeTasks`), so a newly assigned task or any status change appears **immediately** (backed by the offline cache). Mutations keep the list visible (`loaded(tasks, busy)`) and the stream reflects the result; on error the previous list is restored. **`load` is idempotent** — calling it again for the same user while already streaming (and not in an error state) is a **no-op**: it does not re-subscribe or flash a skeleton, so revisiting a screen never reloads. Pull-to-refresh / `refresh()` pass `forceRefresh` to re-subscribe. The subscription is cancelled in `close()`.
 - **Every status transition is a single atomic `_updateTask` write** that sets the new `status`, its per-transition audit timestamp (`startedAt`/`submittedAt`/`approvedAt`/`rejectedAt`), and appends the `ActivityEntry` in one Firestore document write — there is no two-write pattern. The `_mutating` flag prevents concurrent writes. **Status transitions are validated in `TaskCubit._canTransition`** (invalid moves are blocked client-side); WHO may write is enforced in `firestore.rules` (`tasks/{taskId}`): admin all branches, manager own branch, employee own assigned tasks with **limited writes** (may advance status / add notes / proof but may not reassign, change branch, or approve/reject). Proof images upload to Storage `tasks/{taskId}/proof.jpg`.
-- **Checklist templates** (`task_templates/{id}`): reusable **checklists** ("Open Shop", "Close Shop") that **prefill** the task form *and generate the task's checklist*. Same `TaskCubit`/`TaskRepository` (no new cubit/DI). UI: two-step New Task chooser (Blank / From a template) + Manage Templates sheet (`task_template_sheets.dart`) with a **checklist editor**.
+- **Checklist templates** (`task_templates/{id}`): reusable **checklists** ("Open Shop", "Close Shop") that **prefill** the task form *and generate the task's checklist*. Same `TaskCubit`/`TaskRepository` (no new cubit/DI). UI: two-step New Task chooser (Blank / From a template) + Manage Templates sheet (`task_template_sheets.dart`) with a **checklist editor**. **Repository-level cache (Perf · Phase B):** `TaskRepositoryImpl.getTemplates({forceRefresh})` caches the (tiny, global) template list in memory (**20-min TTL**), invalidated on `createTemplate`/`deleteTemplate` — so the New-Task sheets (which read it 3× per session) hit Firestore at most once per window. `BroadcastTemplateRepositoryImpl` mirrors this exactly (20-min TTL; invalidated on create/update/setFavorite/incrementUsage/delete).
 - **Multi-assignee + checklist (Phase 9).** A task carries `assigneeIds[]` (replacing the single `assignedEmployeeId`, which `TaskModel` keeps as a synced **primary mirror** for backward-compatible rules/stats) and a `checklist` of `ChecklistItem`s. A task **cannot be completed until every required checklist item is done** (`TaskEntity.requiredChecklistComplete`); employees tick items via `TaskCubit.toggleChecklistItem`. `TaskCubit` builds a per-branch **user directory** (`TaskState.loaded.directory`) so cards render real avatars · names · roles.
 - **Recurring tasks (Workflow Upgrade).** `TaskEntity` carries an optional `RecurrenceConfig` (frequency/interval/weekday/hour/minute, `nextOccurrence()`). On task creation, the manager/admin picks a recurrence via the `_RecurrencePicker` chip row in the form sheet. When `TaskCubit.approveTask` succeeds and `task.recurrence?.frequency != none`, `_spawnNextRecurrence(source)` creates the next task (same content, checklist reset, deadline = `recurrence.nextOccurrence(now)`). Best-effort — a spawn failure never blocks the approval.
 - **Activity timeline (Workflow Upgrade).** Every status-changing `TaskCubit` action appends an `ActivityEntry` (actorId/actorName/status/at/note) to `task.activityLog[]` **inline**, inside the same single atomic `_updateTask` write that sets the new status (the standalone `_appendActivity` helper was removed in the single-write refactor). This is the spec's **event-based** timeline; `TaskDetailsScreen` and the admin recent-activity feed render it dynamically newest-first via the shared `TimelineTile` + `activity_format.dart` (actor, time-ago, optional note) — missing/optional steps and rework loops just work (no hardcoded sequence).
@@ -327,6 +345,13 @@ Firestore branches/{id}   Firestore users/{uid}     aggregates users/tasks/shift
   `BranchRepository(+Impl)`/`BranchRemoteDataSource`). "Delete" is a **soft
   delete** (`deletedAt` set; excluded from the default list). Admin-only writes
   per `firestore.rules` (`branches/{branchId}`); any signed-in user may read.
+  **Repository-level cache (Perf · Phase B):** `BranchRepositoryImpl` holds the
+  active branch list in memory (**10-min TTL**, `getBranches({forceRefresh})`),
+  shared across **all** callers since it's a single instance — `BranchCubit`,
+  `TaskCubit` (branch names + admin picker), `AdminUsersCubit`, `BroadcastCubit`.
+  Every write (`create`/`update`/`setBranchActive`/`deleteBranch`) **invalidates**
+  it; pull-to-refresh passes `forceRefresh`. The `includeDeleted` variant is never
+  cached. This is **not** a generic cache — just two private fields per repo.
 - **`admin`** owns user administration over `users/{uid}` via its own
   `UserAdminRemoteDataSource` (reusing the auth `UserModel`/`UserEntity`) — a
   third datasource on `users` alongside `auth` and `profile`. `AdminUsersCubit`
@@ -344,16 +369,33 @@ Firestore branches/{id}   Firestore users/{uid}     aggregates users/tasks/shift
 - **`statistics`** is a full vertical slice (`StatisticsEntity`/`StatisticsModel`/
   `StatisticsRepository(+Impl)`/`StatisticsRemoteDataSource`) + `StatisticsCubit`.
   `StatisticsCubit.load(user)` dispatches by role to `adminStats()` (global) /
-  `managerStats(branchId)` / `employeeStats(uid)`. The datasource fetches the
-  **branch-scoped** collections once (single-field `where` queries — automatic
-  indexes) and **counts client-side** (status/type/today breakdowns), avoiding
-  composite indexes; `count()` aggregate queries are a future optimization.
+  `managerStats(branchId)` / `employeeStats(uid)`. **`adminStats()` is the only
+  unscoped query, so it uses server-side `count()` aggregation** (employee /
+  pending / approved / waitingReview / rejected / total counts — no document
+  downloads) plus **bounded single-field reads** (managers-only, this-week-onward
+  schedules, today's rejections) instead of scanning all users/tasks/schedules;
+  `managerStats`/`employeeStats` are already branch/user-scoped so they keep the
+  fetch-once + **count-client-side** pattern. All filters are single-field
+  (automatic indexes — **no composite index**). **`StatisticsCubit` caches a
+  recent result (90 s) per role+user+branch key** and skips both the refetch and
+  the loading flash on a revisit; pull-to-refresh passes `forceRefresh`.
   The `AdminDashboardScreen` / `ManagerHomeScreen` consume it via the shared
   `StatGrid` widget; the **`EmployeeHomeScreen` (redesign v2)** reads
   `StatisticsCubit` only for **today's shift** (`currentShiftName` /
   `upcomingShiftName`) and computes its task breakdown + progress ring from the
   live `TaskCubit` list instead (the ground truth — `employeeStats` does not
   populate `activeTasks`).
+  **Rebuild scoping (Perf · Phase D):** `AdminDashboardScreen` does **not**
+  `context.watch` cubits at the top of `build()` (that rebuilt the whole screen on
+  every all-branches task emit). The ListView scaffold + static sections build
+  once; each data section subscribes via a scoped helper — `_StatsSection`
+  (`BlocBuilder<StatisticsCubit>`: greeting scope, metric grid) and
+  `_DynamicSection` (stats + a `BlocSelector<TaskCubit, int>` on the **overdue
+  count**: hero, Pending Actions) — so a task emit only rebuilds hero/Pending
+  Actions, and only when the overdue number actually moves. Every section's
+  `EntranceFade` is **keyed** (`ValueKey('admin-sec-…')`) so the entrance plays
+  once and never replays when the conditional "Pending approvals" section shifts
+  positions. The `_Hero` takes a pre-computed `overdue` int (its only task input).
 - **Notifications** (`core/services/notification_service.dart`, FCM): requests
   permission, persists the device token in `users/{uid}.fcmTokens` (an **array**,
   multi-device + refresh-aware, since Phase 2; the legacy single `fcmToken` is

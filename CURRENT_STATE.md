@@ -11,8 +11,91 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-23 (Stabilization pass — analyze clean, docs synced, NotificationType trimmed)
-**Version:** 1.0.0+1 · **Branch:** `feature/notification` (DROP — monochrome enterprise UX)
+**Last updated:** 2026-06-24 (Perf · Phase D — admin-dashboard + broadcast-feed rebuild scoping)
+**Version:** 1.0.0+1 · **Branch:** `feature/cache-layer` (DROP — monochrome enterprise UX)
+
+> **Performance · Phase D — two targeted UI rebuild fixes (2026-06-24):** A
+> rebuild/render audit found the app **already healthy** (scoped BlocBuilders,
+> `context.select`, keyed list items, no blur/`saveLayer`-heavy rendering) with
+> exactly **two** hotspots — fixed here; no broad refactor. **① Admin dashboard
+> (`admin_dashboard_screen`)** — removed the two top-level `context.watch`
+> (`StatisticsCubit` + `TaskCubit`) that rebuilt the *entire* screen on every
+> all-branches task emit. The ListView scaffold + static sections (Overview /
+> Quick actions / Manage headers + grids) now build **once**; data sections
+> subscribe via `_StatsSection` (`BlocBuilder<StatisticsCubit>` — greeting,
+> metric grid) and `_DynamicSection` (stats + `BlocSelector<TaskCubit, int>` on
+> the **overdue count** — hero, Pending Actions). So a task emit rebuilds only
+> hero + Pending Actions, and **only when overdue actually changes**. Every
+> section's `EntranceFade` is **keyed** (no replay when the conditional "Pending
+> approvals" section appears); `_Hero` now takes a pre-computed `overdue` int.
+> **② Broadcast feed (`communications_screen`)** — non-lazy `ListView` →
+> `ListView.builder`; cards **keyed by `broadcast.id`** (not index); the entrance
+> animation plays **once per id** (tracked in `_entered`) so a live-stream emit or
+> a scroll-recycle never replays it (removes feed flicker, scales to long
+> histories). Behaviour preserved exactly; no schema / rules / DI / freezed
+> change. ⚠️ Toolchain unchanged (Dart 3.10.4 < `^3.12.1`) — verify
+> `analyze`/`test` on a current SDK. **Performance work (Phases A–D) is
+> complete** pending on-device profiling.
+
+> **Performance · Phase C — warm startup (2026-06-24):** Make Home paint with
+> real data, not skeletons, with **no preload framework** and ~6 lines total.
+> **Audit headline:** the startup bottleneck was **not** reads — it was a
+> hardcoded **2400 ms artificial splash delay** (`splash_page._initSession`'s
+> `Future.delayed`), ~1 s of which was dead time after the 1400 ms brand
+> animation. **① Splash floor trimmed** 2400 → **1400 ms** (matches the
+> animation). **② Warm-start preload** — the existing app-wide
+> `BlocListener<AuthCubit>` in `main.dart` (fires on `authenticated` for **both**
+> cold-start restore **and** fresh login) now also calls `StatisticsCubit.load(u)`
+> + `TaskCubit.load(u)`, **gated on `u.hasAppAccess`**, fire-and-forget +
+> concurrent (per-cubit error isolation). The fetch overlaps the splash/route
+> transition; Phase A **idempotency** means Home's own `initState` loads then
+> no-op (no duplicate reads). **Not preloaded:** templates, branches, schedule,
+> pending queues (lazy / already-cached / screen-specific — preloading them would
+> be wasted reads). No new files / classes / schema / rules / DI / freezed change.
+> ⚠️ Toolchain unchanged (Dart 3.10.4 < `^3.12.1`) — verify `analyze`/`test` on a
+> current SDK. **Caching/perf work (Phases A–C) is complete** unless profiling
+> surfaces a new hotspot.
+
+> **Performance · Phase B — repository-level caches for branches + templates
+> (2026-06-24):** Lightweight in-memory caching for the two highest-ROI read
+> hotspots, **inside the existing repositories** — no generic cache framework, no
+> Hive/Isar/SharedPreferences, no `CacheService`/`CacheManager` classes. Same
+> private shape in each: `_cachedX` + `_xFetchedAt` + TTL + `forceRefresh` param +
+> `_invalidateX()` on every write. **① Branch cache** — `BranchRepositoryImpl`
+> caches the active branch list (**10-min TTL**); because the repo is a **single
+> shared instance**, this dedupes **all six** branch reads at once (`BranchCubit`,
+> `TaskCubit._loadBranchNames` + admin picker, `AdminUsersCubit`, `BroadcastCubit`)
+> with no call-site changes except `BranchCubit.load({forceRefresh})` for the
+> branch-mgmt pull-to-refresh. Invalidated on create/update/setActive/delete; the
+> `includeDeleted` variant is never cached. **② Template caches** —
+> `TaskRepositoryImpl.getTemplates` and `BroadcastTemplateRepositoryImpl.getTemplates`
+> cache the (tiny, full-collection) template lists (**20-min TTL**), invalidated on
+> every template write (task: create/delete; broadcast: create/update/setFavorite/
+> incrementUsage/delete). **Stale-data:** both template reads are unconstrained
+> full-collection queries (branch scoping is client-side), so the cached value is
+> global — safe to reuse across sessions; the manage-sheet delete re-reads and now
+> gets the invalidated (fresh) list. No schema / rules / route / DI / freezed
+> change. ⚠️ Toolchain unchanged — Dart 3.10.4 < `^3.12.1` here, so verify
+> `analyze`/`test` on a current SDK.
+
+> **Performance · Phase A — caching groundwork without a cache framework
+> (2026-06-24):** Surgical fixes to stop redundant Firestore reads + screen
+> reloads, deliberately *without* a generic cache service / Hive / Isar (a
+> dedicated cache layer is to be **reassessed after** measuring Phase A). **①
+> `ProfileCubit.loadProfile` idempotent** — a revisit for a uid already in memory
+> skips the re-read + skeleton (fixes the Profile "full reload"); `save` stamps
+> the same `_loadedUid`. **② `StatisticsCubit.load`** caches a recent result
+> (90 s, keyed role+uid+branch) and won't refetch or flash a skeleton on a
+> revisit. **③ `TaskCubit.load` idempotent** — no re-subscribe / skeleton when
+> already streaming the same user (errors still retry; `refresh()` forces). The
+> three dashboards' pull-to-refresh now pass `forceRefresh`. **④ `adminStats`
+> query** — the one unscoped aggregate stopped scanning **all** users/tasks/
+> schedules: now **server-side `count()` aggregation** for the pure counts +
+> **bounded single-field reads** (managers-only · this-week-onward schedules ·
+> today's rejections). Same numbers, all single-field (no composite index).
+> ⚠️ **`count()` needs cloud_firestore aggregation** (already on `^5.4.4`); the
+> local toolchain (Dart 3.10.4 < `^3.12.1`) **can't run `analyze`/`test` here** —
+> verify on a current SDK. No schema / rules / route / DI / freezed change.
 
 > **Stabilization pass (2026-06-23):** Trust-but-verify checkpoint before resuming
 > feature work. **Corrects stale doc claims** — the local SDK (**Flutter 3.44.2 /

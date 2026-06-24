@@ -99,7 +99,15 @@ class TaskCubit extends Cubit<TaskState> {
     return null;
   }
 
-  Future<void> load(UserEntity user) async {
+  Future<void> load(UserEntity user, {bool forceRefresh = false}) async {
+    // Already streaming this user's tasks — the live Firestore snapshot keeps
+    // the list fresh, so a screen revisit must not cancel + re-subscribe (a
+    // fresh server read) or flash a skeleton. Still re-load after an error so a
+    // revisit can recover; pull-to-refresh passes forceRefresh to re-subscribe.
+    final inError = state.maybeWhen(error: (_) => true, orElse: () => false);
+    if (!forceRefresh && !inError && _user?.uid == user.uid && _sub != null) {
+      return;
+    }
     if (_user?.uid != user.uid) {
       _directory.clear();
       _fetchedBranches.clear();
@@ -107,7 +115,10 @@ class TaskCubit extends Cubit<TaskState> {
     }
     _user = user;
     _loadBranchNames();
-    emit(const TaskState.loading());
+    // Only show the full-screen spinner when there's nothing to show yet.
+    final hasTasks =
+        state.maybeWhen(loaded: (t, _, _, _, _) => true, orElse: () => false);
+    if (!hasTasks) emit(const TaskState.loading());
     await _sub?.cancel();
     _sub = _streamFor(user).listen(
       (tasks) {
@@ -133,7 +144,7 @@ class TaskCubit extends Cubit<TaskState> {
 
   Future<void> refresh() async {
     final user = _user;
-    if (user != null) await load(user);
+    if (user != null) await load(user, forceRefresh: true);
   }
 
   Stream<List<TaskEntity>> _streamFor(UserEntity user) {

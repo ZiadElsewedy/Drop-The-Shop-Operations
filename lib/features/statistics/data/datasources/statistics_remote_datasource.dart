@@ -38,6 +38,11 @@ class StatisticsRemoteDataSourceImpl implements StatisticsRemoteDataSource {
   static int _count(List<_Doc> docs, bool Function(Map<String, dynamic>) test) =>
       docs.where((d) => test(d.data())).length;
 
+  /// Server-side count aggregation — returns a count without downloading any
+  /// documents (one read unit per ~1000 index entries instead of N doc reads).
+  static Future<int> _aggCount(Query<Map<String, dynamic>> query) async =>
+      (await query.count().get()).count ?? 0;
+
   static bool _isToday(dynamic ts, DateTime startOfToday) =>
       ts is Timestamp && !ts.toDate().isBefore(startOfToday);
 
@@ -62,23 +67,31 @@ class StatisticsRemoteDataSourceImpl implements StatisticsRemoteDataSource {
       final startToday = DateTime(now.year, now.month, now.day);
       final weekStart = ScheduleWeek.currentWeekStart();
 
+      // Branches are few (one doc per branch) and we need their ids for the
+      // cross-referenced coverage metrics below — read them in full.
       final branches = (await _branches.get())
           .docs
           .where((d) => d.data()['deletedAt'] == null)
           .toList();
-      final users = (await _users.get()).docs;
-      final tasks = (await _tasks.get()).docs;
-      final schedules = (await _schedules.get()).docs;
 
+      // Managers are few — read them (not all users) so we get both the count
+      // and their branchIds for `branchesWithoutManagers`.
+      final managers =
+          (await _users.where('role', isEqualTo: 'manager').get()).docs;
       final managerBranchIds = <String>{
-        for (final u in users)
-          if ((u.data()['role'] as String?) == 'manager' &&
-              (u.data()['branchId'] as String?) != null &&
-              (u.data()['branchId'] as String).isNotEmpty)
-            u.data()['branchId'] as String,
+        for (final m in managers)
+          if ((m.data()['branchId'] as String?)?.isNotEmpty ?? false)
+            m.data()['branchId'] as String,
       };
 
-      // Branches with a schedule published for the current week (coverage).
+      // Only this week's (and future) schedules — bounded by a single-field
+      // range (automatic index), then narrowed to the current week in-memory.
+      // Avoids scanning every schedule doc ever written.
+      final schedules = (await _schedules
+              .where('weekStart',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(weekStart))
+              .get())
+          .docs;
       final scheduledBranchIds = <String>{
         for (final s in schedules)
           if (_isCurrentWeek(s.data()['weekStart'], weekStart) &&
@@ -86,24 +99,46 @@ class StatisticsRemoteDataSourceImpl implements StatisticsRemoteDataSource {
             s.data()['branchId'] as String,
       };
 
+      // Only today's rejections — single-field range (automatic index); count
+      // the still-rejected ones in-memory (a re-worked task isn't 'rejected').
+      final rejectedToday = (await _tasks
+              .where('rejectedAt',
+                  isGreaterThanOrEqualTo: Timestamp.fromDate(startToday))
+              .get())
+          .docs;
+
+      // Pure counts via server-side aggregation — no document downloads. All
+      // are single-field filters (automatic indexes; no composite index).
+      final counts = await Future.wait([
+        _aggCount(_users.where('role', isEqualTo: 'employee')),
+        _aggCount(_users.where('approvalStatus', isEqualTo: 'pending')),
+        _aggCount(_tasks),
+        _aggCount(_tasks.where('status', isEqualTo: 'approved')),
+        _aggCount(_tasks.where('status', isEqualTo: 'waitingReview')),
+        _aggCount(_tasks.where('status', isEqualTo: 'rejected')),
+      ]);
+      final totalEmployees = counts[0];
+      final pendingApprovals = counts[1];
+      final totalTasks = counts[2];
+      final approvedTasks = counts[3];
+      final waitingReviews = counts[4];
+      final rejectedTasks = counts[5];
+
       return StatisticsModel(
         totalBranches: branches.length,
-        totalManagers: _count(users, (u) => u['role'] == 'manager'),
-        totalEmployees: _count(users, (u) => u['role'] == 'employee'),
-        pendingApprovals:
-            _count(users, (u) => u['approvalStatus'] == 'pending'),
+        totalManagers: managers.length,
+        totalEmployees: totalEmployees,
+        pendingApprovals: pendingApprovals,
         branchesWithoutManagers:
             branches.where((b) => !managerBranchIds.contains(b.id)).length,
         branchesWithSchedule:
             branches.where((b) => scheduledBranchIds.contains(b.id)).length,
-        activeTasks: _count(tasks, _isActive),
-        completedTasks: _count(tasks, (t) => t['status'] == 'approved'),
-        waitingReviews: _count(tasks, (t) => t['status'] == 'waitingReview'),
-        rejectedTasksToday: _count(
-            tasks,
-            (t) =>
-                t['status'] == 'rejected' &&
-                _isToday(t['rejectedAt'], startToday)),
+        // Active = everything not in a terminal state (matches `_isActive`).
+        activeTasks: totalTasks - approvedTasks - rejectedTasks,
+        completedTasks: approvedTasks,
+        waitingReviews: waitingReviews,
+        rejectedTasksToday:
+            rejectedToday.where((t) => t.data()['status'] == 'rejected').length,
       );
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to load statistics.');

@@ -21,10 +21,11 @@ class BranchCubit extends Cubit<BranchState> {
         orElse: () => false,
       );
 
-  Future<void> load() async {
+  Future<void> load({bool forceRefresh = false}) async {
     emit(const BranchState.loading());
     try {
-      emit(BranchState.loaded(await _repository.getBranches()));
+      emit(BranchState.loaded(
+          await _repository.getBranches(forceRefresh: forceRefresh)));
     } on Failure catch (e) {
       emit(BranchState.error(e.message));
     } catch (_) {

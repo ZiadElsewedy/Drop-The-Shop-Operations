@@ -31,15 +31,17 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  void _load() {
+  void _load({bool force = false}) {
     final user = context.currentUser;
-    if (user != null) context.read<StatisticsCubit>().load(user);
+    if (user != null) {
+      context.read<StatisticsCubit>().load(user, forceRefresh: force);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: () async => _load(),
+      onRefresh: () async => _load(force: true),
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.pagePadding),
         children: [

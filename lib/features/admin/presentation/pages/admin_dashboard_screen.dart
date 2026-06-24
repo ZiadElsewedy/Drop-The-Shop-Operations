@@ -22,8 +22,10 @@ import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
 import 'package:fbro/features/statistics/domain/entities/statistics_entity.dart';
 import 'package:fbro/features/statistics/presentation/cubit/statistics_cubit.dart';
+import 'package:fbro/features/statistics/presentation/cubit/statistics_state.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
+import 'package:fbro/features/task/presentation/cubit/task_state.dart';
 
 /// Admin Home — an operations **command center**. Pulls from three live sources
 /// (statistics · the task stream · pending users) so an admin instantly sees
@@ -50,15 +52,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     final user = context.currentUser;
     if (user == null) return;
-    context.read<StatisticsCubit>().load(user);
+    context.read<StatisticsCubit>().load(user, forceRefresh: force);
     // The all-branches task stream powers the Pending Actions + overdue counts.
-    final taskCubit = context.read<TaskCubit>();
-    final taskLoaded =
-        taskCubit.state.maybeWhen(loaded: (_, _, _, _, _) => true, orElse: () => false);
-    if (!taskLoaded) taskCubit.load(user);
+    // TaskCubit.load is now self-guarding (no-op if already streaming this user
+    // unless forced), so a revisit doesn't re-subscribe.
+    context.read<TaskCubit>().load(user, forceRefresh: force);
     // Capture cubits before awaiting so we don't touch context across the gap.
     final usersCubit = context.read<AdminUsersCubit>();
     final swapCubit = context.read<ShiftSwapCubit>();
@@ -74,69 +75,88 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final stats = context
-        .watch<StatisticsCubit>()
-        .state
-        .maybeWhen(loaded: (s) => s, orElse: () => null);
-    final taskState = context.watch<TaskCubit>().state;
-    final tasks = taskState.maybeWhen(
-        loaded: (t, _, _, _, _) => t, orElse: () => const <TaskEntity>[]);
-    final overdue = _overdueCount(tasks);
-    final reviews = stats?.waitingReviews ?? 0;
-    final openSwaps = _pendingSwaps.length;
-    final pendingActions = _pending.length + openSwaps + reviews + overdue;
+    // No top-level cubit subscription: the ListView scaffold + static sections
+    // build once. Each data-driven section subscribes to only what it needs via
+    // a scoped builder below, so a task-stream emit no longer rebuilds the whole
+    // screen. `_pending`/`_pendingSwaps` are local (setState on load only).
+    final name = context.currentUser?.displayName;
 
+    // Stable keys + a fixed per-section stagger so the entrance plays once and
+    // never replays when the conditional "Pending approvals" section appears and
+    // shifts the trailing sections' positions.
     var i = 0;
-    Widget staggered(Widget child) =>
-        EntranceFade(delay: staggerDelay(i++), child: child);
+    Widget sec(String id, Widget child) => EntranceFade(
+          key: ValueKey('admin-sec-$id'),
+          delay: staggerDelay(i++),
+          child: child,
+        );
 
     return RefreshIndicator(
-      onRefresh: () => _load(),
+      onRefresh: () => _load(force: true),
       child: ListView(
         padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, AppSpacing.sm,
             AppSpacing.pagePadding, AppSpacing.xxxl),
         children: [
-          staggered(_Greeting(stats: stats, name: context.currentUser?.displayName)),
+          // Stats-only (scope line) — rebuilds on stats, never on the task stream.
+          sec('greeting',
+              _StatsSection(builder: (s) => _Greeting(stats: s, name: name))),
           const SizedBox(height: AppSpacing.xl),
-          staggered(_Hero(stats: stats, tasks: tasks)),
+          // Stats + overdue: subscribes to the task stream via a BlocSelector on
+          // the overdue *count*, so an emit that doesn't move it rebuilds nothing.
+          sec(
+              'hero',
+              _DynamicSection(
+                  builder: (s, overdue) => _Hero(stats: s, overdue: overdue))),
           const SizedBox(height: AppSpacing.xl),
           // Always rendered — shows an all-clear state when empty, so the panel
           // never silently disappears.
-          staggered(AdminSectionHeader(
-            title: 'Pending Actions',
-            subtitle: pendingActions > 0
-                ? '$pendingActions awaiting you'
-                : "You're all caught up",
-          )),
-          staggered(PendingActions(
-            swaps: openSwaps,
-            approvals: _pending.length,
-            reviews: reviews,
-            overdue: overdue,
-            onSwaps: () => context.push(RouteNames.adminSchedule),
-            onApprovals: () => context.push(RouteNames.adminApprovals),
-            onReviews: () => context.push(RouteNames.adminTasks),
-            onOverdue: () => context.push(RouteNames.adminTasks),
-          )),
+          sec('pa-header', _DynamicSection(builder: (s, overdue) {
+            final pending = _pending.length +
+                _pendingSwaps.length +
+                (s?.waitingReviews ?? 0) +
+                overdue;
+            return AdminSectionHeader(
+              title: 'Pending Actions',
+              subtitle:
+                  pending > 0 ? '$pending awaiting you' : "You're all caught up",
+            );
+          })),
+          sec(
+              'pa',
+              _DynamicSection(
+                  builder: (s, overdue) => PendingActions(
+                        swaps: _pendingSwaps.length,
+                        approvals: _pending.length,
+                        reviews: s?.waitingReviews ?? 0,
+                        overdue: overdue,
+                        onSwaps: () => context.push(RouteNames.adminSchedule),
+                        onApprovals: () =>
+                            context.push(RouteNames.adminApprovals),
+                        onReviews: () => context.push(RouteNames.adminTasks),
+                        onOverdue: () => context.push(RouteNames.adminTasks),
+                      ))),
           const SizedBox(height: AppSpacing.xl),
-          staggered(const AdminSectionHeader(title: 'Overview')),
-          staggered(_metrics(stats)),
+          sec('overview-h', const AdminSectionHeader(title: 'Overview')),
+          // Stats-only (the metric grid has no task dependency).
+          sec('metrics', _StatsSection(builder: (s) => _metrics(s))),
           const SizedBox(height: AppSpacing.xl),
-          staggered(const AdminSectionHeader(title: 'Quick actions')),
-          staggered(_quickActions()),
+          sec('qa-h', const AdminSectionHeader(title: 'Quick actions')),
+          sec('qa', _quickActions()),
           if (_pending.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xl),
-            staggered(AdminSectionHeader(
-              title: 'Pending approvals',
-              subtitle: '${_pending.length} awaiting review',
-              actionLabel: 'Review all',
-              onAction: () => context.push(RouteNames.adminApprovals),
-            )),
-            staggered(_PendingList(users: _pending)),
+            sec(
+                'pending-h',
+                AdminSectionHeader(
+                  title: 'Pending approvals',
+                  subtitle: '${_pending.length} awaiting review',
+                  actionLabel: 'Review all',
+                  onAction: () => context.push(RouteNames.adminApprovals),
+                )),
+            sec('pending-list', _PendingList(users: _pending)),
           ],
           const SizedBox(height: AppSpacing.xl),
-          staggered(const AdminSectionHeader(title: 'Manage')),
-          staggered(_manage()),
+          sec('manage-h', const AdminSectionHeader(title: 'Manage')),
+          sec('manage', _manage()),
         ],
       ),
     );
@@ -267,6 +287,46 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 }
 
+// ─── Scoped rebuild helpers (P1) ────────────────────────────────────
+
+/// Rebuilds [builder] only when the dashboard **statistics** change — never on
+/// the task stream. Used for stats-only sections (greeting scope, metric grid).
+class _StatsSection extends StatelessWidget {
+  const _StatsSection({required this.builder});
+  final Widget Function(StatisticsEntity? stats) builder;
+
+  @override
+  Widget build(BuildContext context) =>
+      BlocBuilder<StatisticsCubit, StatisticsState>(
+        builder: (context, state) =>
+            builder(state.maybeWhen(loaded: (s) => s, orElse: () => null)),
+      );
+}
+
+/// Rebuilds [builder] on a statistics change, and on the task stream **only when
+/// the overdue count changes** — a `BlocSelector` over the derived `int`, not the
+/// whole task list, so a task emit that doesn't move the number rebuilds nothing.
+class _DynamicSection extends StatelessWidget {
+  const _DynamicSection({required this.builder});
+  final Widget Function(StatisticsEntity? stats, int overdue) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<StatisticsCubit, StatisticsState>(
+      builder: (context, statsState) {
+        final stats =
+            statsState.maybeWhen(loaded: (s) => s, orElse: () => null);
+        return BlocSelector<TaskCubit, TaskState, int>(
+          selector: (state) => _overdueCount(state.maybeWhen(
+              loaded: (t, _, _, _, _) => t,
+              orElse: () => const <TaskEntity>[])),
+          builder: (context, overdue) => builder(stats, overdue),
+        );
+      },
+    );
+  }
+}
+
 // ─── Greeting header ────────────────────────────────────────────────
 
 class _Greeting extends StatelessWidget {
@@ -332,16 +392,15 @@ class _Greeting extends StatelessWidget {
 // ─── Hero card ──────────────────────────────────────────────────────
 
 class _Hero extends StatelessWidget {
-  const _Hero({required this.stats, required this.tasks});
+  const _Hero({required this.stats, required this.overdue});
   final StatisticsEntity? stats;
-  final List<TaskEntity> tasks;
+  final int overdue;
 
   @override
   Widget build(BuildContext context) {
     final s = stats;
     final pending = s?.pendingApprovals ?? 0;
     final reviews = s?.waitingReviews ?? 0;
-    final overdue = _overdueCount(tasks);
     final active = s?.activeTasks ?? 0;
     final doneToday = s?.completedTasksToday ?? 0;
     final totalToday = doneToday + active;

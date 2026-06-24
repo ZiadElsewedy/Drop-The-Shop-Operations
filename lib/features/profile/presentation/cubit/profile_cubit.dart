@@ -32,11 +32,27 @@ class ProfileCubit extends Cubit<ProfileState> {
         saved: (s) => s.profile,
       );
 
-  Future<void> loadProfile(String uid) async {
-    emit(const ProfileState.loading());
+  /// The uid whose profile is currently held in memory (set only on a
+  /// successful load/save). Lets a screen revisit skip a redundant re-read.
+  String? _loadedUid;
+
+  /// Loads the profile for [uid]. The profile rarely changes within a session
+  /// and edits flow back through [save], so a screen revisit must not re-read
+  /// Firestore or flash a skeleton over data we already hold. Pull-to-refresh /
+  /// an explicit retry passes [forceRefresh] to bypass the guard.
+  Future<void> loadProfile(String uid, {bool forceRefresh = false}) async {
+    final current = _current;
+    // Already have this user's profile in memory — no refetch, no flicker.
+    if (!forceRefresh && _loadedUid == uid && current != null) return;
+    // Only show the skeleton when there's nothing to show; otherwise keep the
+    // current profile visible and refresh it in place.
+    if (current == null || _loadedUid != uid) {
+      emit(const ProfileState.loading());
+    }
     try {
       final profile = await _getProfile(uid);
       if (profile != null) {
+        _loadedUid = uid;
         emit(ProfileState.loaded(profile));
       } else {
         emit(const ProfileState.error('Profile not found.'));
@@ -121,6 +137,7 @@ class ProfileCubit extends Cubit<ProfileState> {
         profileImage: avatarUrl,
         coverImage: coverUrl,
       );
+      _loadedUid = uid;
       emit(ProfileState.saved(updated));
       emit(ProfileState.loaded(updated));
     } on AuthFailure catch (e) {

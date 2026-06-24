@@ -10,14 +10,36 @@ class BroadcastTemplateRepositoryImpl implements BroadcastTemplateRepository {
 
   BroadcastTemplateRepositoryImpl(this._remote);
 
+  // In-memory cache of the (tiny) broadcast-template collection — symmetric with
+  // the task-template cache: 20-minute TTL + invalidate after every write.
+  static const _templatesTtl = Duration(minutes: 20);
+  List<BroadcastTemplateEntity>? _cachedTemplates;
+  DateTime? _templatesFetchedAt;
+
+  bool get _templatesFresh =>
+      _cachedTemplates != null &&
+      _templatesFetchedAt != null &&
+      DateTime.now().difference(_templatesFetchedAt!) < _templatesTtl;
+
   @override
-  Future<List<BroadcastTemplateEntity>> getTemplates() async {
+  Future<List<BroadcastTemplateEntity>> getTemplates({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _templatesFresh) return _cachedTemplates!;
     try {
       final models = await _remote.getTemplates();
-      return models.map((m) => m.toEntity()).toList();
+      final list = models.map((m) => m.toEntity()).toList();
+      _cachedTemplates = list;
+      _templatesFetchedAt = DateTime.now();
+      return list;
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
+  }
+
+  void _invalidateTemplates() {
+    _cachedTemplates = null;
+    _templatesFetchedAt = null;
   }
 
   @override
@@ -25,6 +47,7 @@ class BroadcastTemplateRepositoryImpl implements BroadcastTemplateRepository {
     try {
       final created =
           await _remote.create(BroadcastTemplateModel.fromEntity(template));
+      _invalidateTemplates();
       return created.toEntity();
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
@@ -35,6 +58,7 @@ class BroadcastTemplateRepositoryImpl implements BroadcastTemplateRepository {
   Future<void> update(BroadcastTemplateEntity template) async {
     try {
       await _remote.update(BroadcastTemplateModel.fromEntity(template));
+      _invalidateTemplates();
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
@@ -44,6 +68,7 @@ class BroadcastTemplateRepositoryImpl implements BroadcastTemplateRepository {
   Future<void> setFavorite(String id, bool favorite) async {
     try {
       await _remote.setFavorite(id, favorite);
+      _invalidateTemplates();
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
@@ -53,6 +78,7 @@ class BroadcastTemplateRepositoryImpl implements BroadcastTemplateRepository {
   Future<void> incrementUsage(String id) async {
     try {
       await _remote.incrementUsage(id);
+      _invalidateTemplates();
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
@@ -62,6 +88,7 @@ class BroadcastTemplateRepositoryImpl implements BroadcastTemplateRepository {
   Future<void> delete(String id) async {
     try {
       await _remote.delete(id);
+      _invalidateTemplates();
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

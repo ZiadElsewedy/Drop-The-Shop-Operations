@@ -5,7 +5,9 @@ import 'package:fbro/features/communications/domain/entities/broadcast_template_
 /// `task_templates`): admin reads/writes any (global or branch); a manager
 /// reads/writes their own branch's templates; employees have no access.
 abstract class BroadcastTemplateRepository {
-  Future<List<BroadcastTemplateEntity>> getTemplates();
+  /// All broadcast templates. Cached in memory for a short TTL; [forceRefresh]
+  /// bypasses it, and any template write invalidates it.
+  Future<List<BroadcastTemplateEntity>> getTemplates({bool forceRefresh = false});
   Future<BroadcastTemplateEntity> create(BroadcastTemplateEntity template);
   Future<void> update(BroadcastTemplateEntity template);
   Future<void> setFavorite(String id, bool favorite);

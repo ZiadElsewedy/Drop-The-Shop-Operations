@@ -35,6 +35,11 @@ class CommunicationsScreen extends StatefulWidget {
 class _CommunicationsScreenState extends State<CommunicationsScreen> {
   bool _showArchived = false;
 
+  /// Broadcast ids whose entrance animation has already played. Lets the feed
+  /// animate each card **once** (on first appearance) and never again — so a live
+  /// stream emit or a ListView.builder recycle on scroll doesn't replay it.
+  final Set<String> _entered = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -174,24 +179,36 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
     if (broadcasts.isEmpty) return _emptyState();
     return RefreshIndicator(
       onRefresh: _refresh,
-      child: ListView(
+      child: ListView.builder(
+        // Lazy: only on-screen cards are built (was a non-lazy ListView that
+        // built the whole history up front).
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.pagePadding,
           AppSpacing.md,
           AppSpacing.pagePadding,
           AppSpacing.xxxl * 2,
         ),
-        children: [
-          for (var i = 0; i < broadcasts.length; i++)
-            EntranceFade(
-              delay: staggerDelay(i),
-              child: BroadcastCard(
-                broadcast: broadcasts[i],
-                onTap: () => _openDetail(broadcasts[i]),
-                onAction: (a) => _onAction(broadcasts[i], a),
-              ),
-            ),
-        ],
+        itemCount: broadcasts.length,
+        itemBuilder: (context, i) {
+          final b = broadcasts[i];
+          // Key by broadcast id (not index) so a stream update that reorders /
+          // inserts reuses each card's element instead of shuffling state.
+          final card = BroadcastCard(
+            key: ValueKey(b.id),
+            broadcast: b,
+            onTap: () => _openDetail(b),
+            onAction: (a) => _onAction(b, a),
+          );
+          // Play the entrance exactly once per broadcast. Already-seen cards
+          // render bare, so neither a live emit nor a scroll-recycle replays it.
+          if (_entered.contains(b.id)) return card;
+          _entered.add(b.id);
+          return EntranceFade(
+            key: ValueKey('enter-${b.id}'),
+            delay: staggerDelay(i),
+            child: card,
+          );
+        },
       ),
     );
   }

@@ -105,6 +105,18 @@ class App extends StatelessWidget {
             authenticated: (u) {
               AppDependencies.notificationService.registerToken(u.uid);
               AppDependencies.notificationCubit.load(u.uid);
+              // Phase C warm-start: preload the home-critical cubits the moment
+              // the session is known (cold-start restore OR fresh login), so the
+              // fetch overlaps the splash/route transition and Home paints with
+              // real data instead of skeletons. Fire-and-forget + concurrent for
+              // per-cubit error isolation; both loads are idempotent (Phase A),
+              // so Home's own initState calls then no-op (no double fetch).
+              // Gated on access — a pending user (confined to /pending-approval)
+              // triggers zero home reads.
+              if (u.hasAppAccess) {
+                AppDependencies.statisticsCubit.load(u);
+                AppDependencies.taskCubit.load(u);
+              }
             },
             unauthenticated: () {
               AppDependencies.notificationService.forgetUser();

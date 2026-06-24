@@ -64,7 +64,9 @@ abstract class TaskRepository {
 
   // ─── Task templates (reusable blueprints) ──────────────────────
   /// All task templates (manager/admin). Branch scoping is applied by the cubit.
-  Future<List<TaskTemplateEntity>> getTemplates();
+  /// Cached in memory for a short TTL; [forceRefresh] bypasses it, and any
+  /// template write invalidates it.
+  Future<List<TaskTemplateEntity>> getTemplates({bool forceRefresh = false});
 
   /// Creates a template and returns it with its generated id.
   Future<TaskTemplateEntity> createTemplate(TaskTemplateEntity template);

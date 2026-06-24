@@ -142,14 +142,37 @@ class TaskRepositoryImpl implements TaskRepository {
   }
 
   // ─── Task templates ────────────────────────────────────────────
+  // In-memory cache of the (tiny) template collection — read repeatedly when the
+  // New-Task sheets open. Templates are global + change rarely, so a 20-minute
+  // TTL + invalidate-on-write keeps the sheets off Firestore without staleness.
+  static const _templatesTtl = Duration(minutes: 20);
+  List<TaskTemplateEntity>? _cachedTemplates;
+  DateTime? _templatesFetchedAt;
+
+  bool get _templatesFresh =>
+      _cachedTemplates != null &&
+      _templatesFetchedAt != null &&
+      DateTime.now().difference(_templatesFetchedAt!) < _templatesTtl;
+
   @override
-  Future<List<TaskTemplateEntity>> getTemplates() async {
+  Future<List<TaskTemplateEntity>> getTemplates({
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh && _templatesFresh) return _cachedTemplates!;
     try {
       final models = await _remote.getTemplates();
-      return models.map((m) => m.toEntity()).toList();
+      final list = models.map((m) => m.toEntity()).toList();
+      _cachedTemplates = list;
+      _templatesFetchedAt = DateTime.now();
+      return list;
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
+  }
+
+  void _invalidateTemplates() {
+    _cachedTemplates = null;
+    _templatesFetchedAt = null;
   }
 
   @override
@@ -157,6 +180,7 @@ class TaskRepositoryImpl implements TaskRepository {
     try {
       final created =
           await _remote.createTemplate(TaskTemplateModel.fromEntity(template));
+      _invalidateTemplates();
       return created.toEntity();
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
@@ -167,6 +191,7 @@ class TaskRepositoryImpl implements TaskRepository {
   Future<void> deleteTemplate(String templateId) async {
     try {
       await _remote.deleteTemplate(templateId);
+      _invalidateTemplates();
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

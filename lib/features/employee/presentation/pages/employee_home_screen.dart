@@ -50,11 +50,11 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
-  void _load() {
+  void _load({bool force = false}) {
     final user = context.currentUser;
     if (user != null) {
-      context.read<StatisticsCubit>().load(user);
-      context.read<TaskCubit>().load(user);
+      context.read<StatisticsCubit>().load(user, forceRefresh: force);
+      context.read<TaskCubit>().load(user, forceRefresh: force);
     }
   }
 
@@ -73,7 +73,7 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
         state.whenOrNull(error: (m) => context.showError(m));
       },
       child: RefreshIndicator(
-        onRefresh: () async => _load(),
+        onRefresh: () async => _load(force: true),
         color: AppColors.primary,
         backgroundColor: AppColors.darkSurface,
         child: ListView(

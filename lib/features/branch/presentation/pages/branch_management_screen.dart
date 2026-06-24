@@ -72,7 +72,7 @@ class _BranchManagementScreenState extends State<BranchManagementScreen> {
   }
 
   Future<void> _refresh() async {
-    await context.read<BranchCubit>().load();
+    await context.read<BranchCubit>().load(forceRefresh: true);
     await _loadStaff();
   }
 

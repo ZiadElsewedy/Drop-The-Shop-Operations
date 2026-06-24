@@ -54,7 +54,11 @@ class _SplashPageState extends State<SplashPage>
   Future<void> _initSession() async {
     await Future.wait([
       AppDependencies.authCubit.restoreSession(),
-      Future.delayed(const Duration(milliseconds: 2400)),
+      // Minimum splash time = the brand animation length (was an arbitrary
+      // 2400ms, ~1s of dead time after the 1400ms animation finished). Home data
+      // is preloaded during this window (main.dart AuthCubit listener), so Home
+      // paints instantly once the splash clears.
+      Future.delayed(const Duration(milliseconds: 1400)),
     ]);
     if (!mounted) return;
 

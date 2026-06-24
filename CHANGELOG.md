@@ -12,6 +12,158 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed (2026-06-24 — Performance · Phase D: admin-dashboard + broadcast-feed rebuild scoping)
+
+Two targeted UI-rebuild fixes from the rebuild/render audit (which found the app
+otherwise healthy — scoped builders, `context.select`, keyed lists, no
+blur/`saveLayer` rendering). **Scope limited to two screens; no broad refactor.**
+Behaviour preserved exactly. No schema / rules / route / DI / freezed change. ⚠️
+Local toolchain (Dart 3.10.4 < `^3.12.1`) **can't run `analyze`/`test` here** —
+verify on a current SDK.
+
+- **P1 — Admin dashboard (`admin_dashboard_screen.dart`).** Removed the two
+  top-level `context.watch` (`StatisticsCubit` + `TaskCubit`) that rebuilt the
+  **entire** dashboard (≈12 sections / ≈16 cards) on every all-branches task-stream
+  emit. The `ListView` scaffold + static sections (Overview / Quick actions /
+  Manage headers + grids) now build **once**. Data sections subscribe via two new
+  private helpers:
+  - `_StatsSection` — `BlocBuilder<StatisticsCubit>`; used by the greeting scope
+    line + the metric grid (no task dependency → never rebuilt by the task stream).
+  - `_DynamicSection` — `BlocBuilder<StatisticsCubit>` + a
+    `BlocSelector<TaskCubit, TaskState, int>` over the **overdue count**; used by
+    the hero + Pending Actions header + Pending Actions. A task emit that doesn't
+    move the overdue number rebuilds nothing.
+  - `_Hero` now takes a pre-computed `overdue` int (its only task input) instead
+    of the task list.
+  - Every section's `EntranceFade` is **keyed** (`ValueKey('admin-sec-…')`), so the
+    entrance plays once and never replays when the conditional "Pending approvals"
+    section appears and shifts the trailing sections.
+- **P2 — Broadcast feed (`communications_screen.dart`).** Non-lazy `ListView` →
+  **`ListView.builder`** (off-screen cards no longer built). Each `BroadcastCard`
+  is **keyed by `broadcast.id`** (not index), so a stream reorder/insert reuses
+  elements instead of shuffling. The `EntranceFade` now plays **once per broadcast
+  id** (tracked in a `_entered` set) — so neither a live-stream emit nor a
+  `ListView.builder` scroll-recycle replays it (removes the feed flicker; scales to
+  long histories).
+- **Estimated rebuild reduction:** admin home goes from a full-tree rebuild on
+  *every* task emit to rebuilding only hero + Pending Actions, and only when the
+  overdue count changes (often zero rebuilds for emits like the post-load
+  directory/branch-name fills). Broadcast feed stops rebuilding/re-animating the
+  whole visible list on each stream tick.
+- **Behavioural risks (low):** (a) the broadcast entrance now fires as cards scroll
+  into view (once each) rather than all at load — the initial viewport cascade is
+  unchanged; (b) `_entered` is populated inside `itemBuilder` (a benign build-phase
+  `Set.add`, no `setState`); (c) `_DynamicSection`'s selector recomputes
+  `_overdueCount` per task emit (O(n), cheap) to detect change. Not touched: P3
+  (generic `ListView.builder` migrations elsewhere).
+
+### Changed (2026-06-24 — Performance · Phase C: warm-start preload + splash floor trim)
+
+Improve perceived startup so Home paints with real data instead of skeletons —
+with **no preload framework / no new files / no storage deps**, ~6 lines total.
+The audit found the real startup bottleneck was **not** Firestore reads but a
+hardcoded **2400 ms artificial splash delay**, ~1 s of it dead time after the
+1400 ms brand animation. No schema / rules / route / DI / freezed change. ⚠️ Local
+toolchain (Dart 3.10.4 < `^3.12.1`) **can't run `analyze`/`test` here** — verify
+on a current SDK.
+
+- **Splash floor trimmed** (`splash_page.dart`) — `_initSession`'s
+  `Future.delayed(2400ms)` → **1400 ms** (matches the brand animation length),
+  removing ~1 s of dead time before navigation. Auth restore (1 read) finishes
+  well within it.
+- **Warm-start preload** (`main.dart`) — the existing app-wide
+  `BlocListener<AuthCubit>` (fires on `authenticated` for **both** cold-start
+  restore and fresh login; already loads the FCM token + notifications) now also
+  calls `StatisticsCubit.load(u)` + `TaskCubit.load(u)`, **gated on
+  `u.hasAppAccess`** so a pending user triggers zero home reads. The fetch
+  overlaps the splash + route transition, so Home renders data immediately.
+- **Fire-and-forget + concurrent** — not `Future.wait`, not awaited: independent
+  reads run in parallel (negligible Firebase load) with **per-cubit error
+  isolation** (one failing can't break the others or the splash). Off the paint
+  path.
+- **No redundant reads** — both preloads are **idempotent** (Phase A:
+  `StatisticsCubit` TTL+key guard, `TaskCubit` same-user no-op), so Home's own
+  `initState` `load()` calls become no-ops. The listener and the screen can both
+  call `load()` with only one actual fetch.
+- **Deliberately not preloaded:** templates (lazy — only on compose/create;
+  Phase B cache), branches (warmed indirectly by `TaskCubit._loadBranchNames` +
+  Phase B cache), schedule / pending-approval / swap queues (screen-specific).
+  Preloading them would be wasted reads users may never need.
+
+### Added (2026-06-24 — Performance · Phase B: repository-level branch + template caches)
+
+Lightweight in-memory caching for the two highest-ROI remaining read hotspots,
+**inside the existing repositories** — deliberately **no** generic cache
+framework, **no** Hive/Isar/SharedPreferences, **no** `CacheService`/
+`CacheManager`/`TtlCache` classes. Each cache is the same minimal shape: a
+private `_cachedX` + `_xFetchedAt`, a TTL const, an optional `forceRefresh`
+param on the read, and a `_invalidateX()` called after every write. No schema /
+rules / route / DI / freezed change. ⚠️ Local toolchain (Dart 3.10.4 <
+`^3.12.1`) **can't run `analyze`/`test` here** — verify on a current SDK.
+
+- **Branch cache (`BranchRepositoryImpl`).** Caches the active (non-deleted)
+  branch list with a **10-minute TTL**. Because the repository is a **single
+  shared instance** (DI), this dedupes **all six** branch-read paths at once with
+  **no call-site changes**: `BranchCubit`, `TaskCubit._loadBranchNames`,
+  `TaskCubit.branches` (admin picker), `AdminUsersCubit.branches`,
+  `BroadcastCubit.branches`. `getBranches({includeDeleted, forceRefresh})` —
+  `includeDeleted` (admin-rare, unused) is never cached; `forceRefresh` bypasses.
+  Invalidated after `createBranch`/`updateBranch`/`setBranchActive`/`deleteBranch`.
+- **`BranchCubit.load({forceRefresh})`** threads the flag so the branch-management
+  **pull-to-refresh** (`_refresh`) still does a real fetch; `_mutate` re-reads
+  after the (already-invalidated) write, so a created/edited/deleted branch shows
+  immediately everywhere.
+- **Task-template cache (`TaskRepositoryImpl`).** `getTemplates({forceRefresh})`
+  caches the (tiny, global) template collection with a **20-minute TTL**,
+  invalidated on `createTemplate`/`deleteTemplate`. The New-Task chooser + Manage
+  Templates sheet read it 3× per session → now ≤1 Firestore read per window; the
+  manage sheet's delete re-read gets the invalidated (fresh) list.
+- **Broadcast-template cache (`BroadcastTemplateRepositoryImpl`).** Symmetric —
+  **20-minute TTL**, invalidated after **all five** writes (`create`/`update`/
+  `setFavorite`/`incrementUsage`/`delete`).
+- **No stale-data risk:** both template reads are unconstrained full-collection
+  queries (branch scoping is applied client-side in the cubit), so the cached
+  value is global rather than a per-user slice — safe to reuse across sessions,
+  bounded by the TTL and cleared by every mutation.
+
+### Refactored + Fixed (2026-06-24 — Performance · Phase A: reload/refetch guards + adminStats query)
+
+First slice of the performance work — **surgical** fixes to kill redundant
+Firestore reads and screen reloads, deliberately **without** a generic cache
+service / Hive / Isar (a dedicated cache layer is to be **reassessed after**
+this). Scope was limited to `ProfileCubit`, `StatisticsCubit`, `TaskCubit`, and
+the `adminStats` query. No schema / rules / route / DI / freezed change. ⚠️ The
+local toolchain (Dart 3.10.4 < the project's `^3.12.1`) **can't run
+`analyze`/`test` here** — verify on a current SDK.
+
+- **`ProfileCubit.loadProfile(uid, {forceRefresh})` is idempotent.** It tracks
+  `_loadedUid` (stamped on a successful load **and** on `save`) and **returns
+  early** when that uid's profile is already in memory — no Firestore re-read, no
+  skeleton. It only emits `loading()` when there's nothing to show. **Fixes the
+  "returning to Profile triggers a full reload."**
+- **`StatisticsCubit.load(user, {forceRefresh})` caches the last result.** Keyed
+  by `role:uid:branch` with a 90 s freshness window; a revisit inside the window
+  is a **no-op** (skips the expensive aggregate) and never flashes a skeleton over
+  existing numbers. Pull-to-refresh passes `forceRefresh`.
+- **`TaskCubit.load(user, {forceRefresh})` is idempotent.** When already streaming
+  the same user (and not in an error state) it **no longer cancels + re-subscribes
+  the snapshot stream** (a fresh server read) or emits `loading()` — so revisiting
+  any task screen doesn't reload. Errors still retry on revisit; `refresh()` now
+  passes `forceRefresh` to re-subscribe.
+- **Dashboards** — `employee_home` / `manager_home` / `admin_dashboard`
+  `_load({force})` thread `forceRefresh` so **pull-to-refresh** still does a real
+  fetch; the admin dashboard's redundant local "already loaded?" task guard was
+  removed (the cubit guards it now).
+- **`adminStats` query optimized** — the only unscoped statistics query stopped
+  downloading **all** users + **all** tasks + **all** schedules. Now: **server-side
+  `count()` aggregation** (`_aggCount`) for `totalEmployees` / `pendingApprovals` /
+  total / approved / waitingReview / rejected, plus **bounded single-field reads**
+  for the cross-referenced metrics (managers-only for `branchesWithoutManagers`;
+  `weekStart >= currentWeek` for `branchesWithSchedule`; `rejectedAt >= today` for
+  `rejectedTasksToday`). `activeTasks = total − approved − rejected`. **Identical
+  numbers**, all single-field filters (automatic indexes — **no composite index**).
+  `managerStats`/`employeeStats` are already branch/user-scoped and unchanged.
+
 ### Removed (2026-06-24 — Simplification pass · slice 4b: remove Priority + Delivery, derive delivery from category)
 
 Decision B (part 2) — deleted the manual **Priority** and **Delivery-channel**
