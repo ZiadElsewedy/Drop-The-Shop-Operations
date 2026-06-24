@@ -30,6 +30,14 @@ mixin _$NotificationEntity {
 
   /// When the recipient read it; null while unread.
   DateTime? get readAt => throw _privateConstructorUsedError;
+
+  /// When the recipient archived it (hidden from the default inbox, kept for
+  /// history); null = in the inbox.
+  DateTime? get archivedAt => throw _privateConstructorUsedError;
+
+  /// When the recipient pinned it (kept at the top of the inbox); null = not
+  /// pinned.
+  DateTime? get pinnedAt => throw _privateConstructorUsedError;
   Map<String, dynamic> get payload => throw _privateConstructorUsedError;
 
   /// Create a copy of NotificationEntity
@@ -55,6 +63,8 @@ abstract class $NotificationEntityCopyWith<$Res> {
     String body,
     DateTime createdAt,
     DateTime? readAt,
+    DateTime? archivedAt,
+    DateTime? pinnedAt,
     Map<String, dynamic> payload,
   });
 }
@@ -82,6 +92,8 @@ class _$NotificationEntityCopyWithImpl<$Res, $Val extends NotificationEntity>
     Object? body = null,
     Object? createdAt = null,
     Object? readAt = freezed,
+    Object? archivedAt = freezed,
+    Object? pinnedAt = freezed,
     Object? payload = null,
   }) {
     return _then(
@@ -118,6 +130,14 @@ class _$NotificationEntityCopyWithImpl<$Res, $Val extends NotificationEntity>
                 ? _value.readAt
                 : readAt // ignore: cast_nullable_to_non_nullable
                       as DateTime?,
+            archivedAt: freezed == archivedAt
+                ? _value.archivedAt
+                : archivedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            pinnedAt: freezed == pinnedAt
+                ? _value.pinnedAt
+                : pinnedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
             payload: null == payload
                 ? _value.payload
                 : payload // ignore: cast_nullable_to_non_nullable
@@ -146,6 +166,8 @@ abstract class _$$NotificationEntityImplCopyWith<$Res>
     String body,
     DateTime createdAt,
     DateTime? readAt,
+    DateTime? archivedAt,
+    DateTime? pinnedAt,
     Map<String, dynamic> payload,
   });
 }
@@ -172,6 +194,8 @@ class __$$NotificationEntityImplCopyWithImpl<$Res>
     Object? body = null,
     Object? createdAt = null,
     Object? readAt = freezed,
+    Object? archivedAt = freezed,
+    Object? pinnedAt = freezed,
     Object? payload = null,
   }) {
     return _then(
@@ -208,6 +232,14 @@ class __$$NotificationEntityImplCopyWithImpl<$Res>
             ? _value.readAt
             : readAt // ignore: cast_nullable_to_non_nullable
                   as DateTime?,
+        archivedAt: freezed == archivedAt
+            ? _value.archivedAt
+            : archivedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
+        pinnedAt: freezed == pinnedAt
+            ? _value.pinnedAt
+            : pinnedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
         payload: null == payload
             ? _value._payload
             : payload // ignore: cast_nullable_to_non_nullable
@@ -229,6 +261,8 @@ class _$NotificationEntityImpl extends _NotificationEntity {
     required this.body,
     required this.createdAt,
     this.readAt,
+    this.archivedAt,
+    this.pinnedAt,
     final Map<String, dynamic> payload = const <String, dynamic>{},
   }) : _payload = payload,
        super._();
@@ -254,6 +288,16 @@ class _$NotificationEntityImpl extends _NotificationEntity {
   /// When the recipient read it; null while unread.
   @override
   final DateTime? readAt;
+
+  /// When the recipient archived it (hidden from the default inbox, kept for
+  /// history); null = in the inbox.
+  @override
+  final DateTime? archivedAt;
+
+  /// When the recipient pinned it (kept at the top of the inbox); null = not
+  /// pinned.
+  @override
+  final DateTime? pinnedAt;
   final Map<String, dynamic> _payload;
   @override
   @JsonKey()
@@ -265,7 +309,7 @@ class _$NotificationEntityImpl extends _NotificationEntity {
 
   @override
   String toString() {
-    return 'NotificationEntity(id: $id, recipientUid: $recipientUid, senderUid: $senderUid, type: $type, title: $title, body: $body, createdAt: $createdAt, readAt: $readAt, payload: $payload)';
+    return 'NotificationEntity(id: $id, recipientUid: $recipientUid, senderUid: $senderUid, type: $type, title: $title, body: $body, createdAt: $createdAt, readAt: $readAt, archivedAt: $archivedAt, pinnedAt: $pinnedAt, payload: $payload)';
   }
 
   @override
@@ -284,6 +328,10 @@ class _$NotificationEntityImpl extends _NotificationEntity {
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.readAt, readAt) || other.readAt == readAt) &&
+            (identical(other.archivedAt, archivedAt) ||
+                other.archivedAt == archivedAt) &&
+            (identical(other.pinnedAt, pinnedAt) ||
+                other.pinnedAt == pinnedAt) &&
             const DeepCollectionEquality().equals(other._payload, _payload));
   }
 
@@ -298,6 +346,8 @@ class _$NotificationEntityImpl extends _NotificationEntity {
     body,
     createdAt,
     readAt,
+    archivedAt,
+    pinnedAt,
     const DeepCollectionEquality().hash(_payload),
   );
 
@@ -323,6 +373,8 @@ abstract class _NotificationEntity extends NotificationEntity {
     required final String body,
     required final DateTime createdAt,
     final DateTime? readAt,
+    final DateTime? archivedAt,
+    final DateTime? pinnedAt,
     final Map<String, dynamic> payload,
   }) = _$NotificationEntityImpl;
   const _NotificationEntity._() : super._();
@@ -348,6 +400,16 @@ abstract class _NotificationEntity extends NotificationEntity {
   /// When the recipient read it; null while unread.
   @override
   DateTime? get readAt;
+
+  /// When the recipient archived it (hidden from the default inbox, kept for
+  /// history); null = in the inbox.
+  @override
+  DateTime? get archivedAt;
+
+  /// When the recipient pinned it (kept at the top of the inbox); null = not
+  /// pinned.
+  @override
+  DateTime? get pinnedAt;
   @override
   Map<String, dynamic> get payload;
 

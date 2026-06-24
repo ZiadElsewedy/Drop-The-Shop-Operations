@@ -10,4 +10,11 @@ class AppConstants {
   static const String shiftSwapsCollection = 'shift_swaps';
   static const String broadcastsCollection = 'broadcasts';
   static const String notificationsCollection = 'notifications';
+
+  // ─── Communications Center — Phase 2 ──────────────────────────
+  static const String broadcastTemplatesCollection = 'broadcastTemplates';
+  static const String broadcastSchedulesCollection = 'broadcastSchedules';
+  static const String reminderConfigCollection = 'reminderConfig';
+  static const String savedAudiencesCollection = 'savedAudiences';
+  static const String taskRemindersCollection = 'taskReminders';
 }

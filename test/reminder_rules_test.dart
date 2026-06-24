@@ -1,0 +1,105 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:fbro/features/task/domain/reminder_rules.dart';
+
+/// Phase 2 Commit 5 — the pure task-reminder decision logic (mirrored by the
+/// `runTaskReminders` Cloud Function).
+void main() {
+  // A neutral "now" well outside quiet hours (12:00).
+  final now = DateTime(2026, 6, 22, 12);
+
+  group('ReminderRules.dueKind — which kind fires', () {
+    test('due24h when 24h..1h out; due1h when ≤1h; overdue when past', () {
+      expect(
+          ReminderRules.dueKind(
+              deadline: now.add(const Duration(hours: 20)), now: now),
+          'due24h');
+      expect(
+          ReminderRules.dueKind(
+              deadline: now.add(const Duration(minutes: 40)), now: now),
+          'due1h');
+      expect(
+          ReminderRules.dueKind(
+              deadline: now.subtract(const Duration(hours: 2)), now: now),
+          'overdue');
+    });
+
+    test('nothing when more than 24h out', () {
+      expect(
+          ReminderRules.dueKind(
+              deadline: now.add(const Duration(days: 3)), now: now),
+          isNull);
+    });
+  });
+
+  group('ReminderRules.dueKind — anti-spam', () {
+    test('only escalates forward (no resend / no going back)', () {
+      // Already sent due24h: at ≤1h send due1h, but never re-send due24h.
+      expect(
+        ReminderRules.dueKind(
+            deadline: now.add(const Duration(minutes: 30)),
+            now: now,
+            lastKind: 'due24h'),
+        'due1h',
+      );
+      expect(
+        ReminderRules.dueKind(
+            deadline: now.add(const Duration(hours: 20)),
+            now: now,
+            lastKind: 'due24h'),
+        isNull, // would be due24h again — suppressed
+      );
+      // After overdue sent, nothing escalates further.
+      expect(
+        ReminderRules.dueKind(
+            deadline: now.subtract(const Duration(hours: 1)),
+            now: now,
+            lastKind: 'overdue'),
+        isNull,
+      );
+    });
+
+    test('maxReminders cap and disabled flag suppress everything', () {
+      expect(
+        ReminderRules.dueKind(
+            deadline: now.subtract(const Duration(hours: 1)),
+            now: now,
+            reminderCount: 3,
+            maxReminders: 3),
+        isNull,
+      );
+      expect(
+        ReminderRules.dueKind(
+            deadline: now.subtract(const Duration(hours: 1)),
+            now: now,
+            enabled: false),
+        isNull,
+      );
+    });
+
+    test('quiet hours suppress reminders', () {
+      final quietNow = DateTime(2026, 6, 22, 23); // 23:00, inside 22→7
+      expect(
+        ReminderRules.dueKind(
+            deadline: quietNow.subtract(const Duration(hours: 1)),
+            now: quietNow),
+        isNull,
+      );
+    });
+  });
+
+  group('ReminderRules helpers', () {
+    test('inQuietHours wraps midnight; zero-length window never quiet', () {
+      expect(ReminderRules.inQuietHours(23, 22, 7), isTrue);
+      expect(ReminderRules.inQuietHours(3, 22, 7), isTrue);
+      expect(ReminderRules.inQuietHours(12, 22, 7), isFalse);
+      expect(ReminderRules.inQuietHours(7, 22, 7), isFalse); // exact end
+      expect(ReminderRules.inQuietHours(5, 9, 9), isFalse); // zero-length
+    });
+
+    test('typeFor maps overdue → taskOverdue, else taskReminder', () {
+      expect(ReminderRules.typeFor('overdue'), 'taskOverdue');
+      expect(ReminderRules.typeFor('due1h'), 'taskReminder');
+      expect(ReminderRules.typeFor('due24h'), 'taskReminder');
+    });
+  });
+}

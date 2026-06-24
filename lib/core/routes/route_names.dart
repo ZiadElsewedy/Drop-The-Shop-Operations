@@ -35,6 +35,15 @@ class RouteNames {
   static const String managerTasks = '/manager/tasks';
   static const String myTasks = '/my-tasks';
 
+  /// The single-task deep-link pattern (`/task/:taskId`) — a task notification
+  /// opens the exact task here, for every role. Outside the role-area guards: a
+  /// user only reaches it via a task they were notified about, and Firestore
+  /// rules enforce read access.
+  static const String taskDetailPattern = '/task/:taskId';
+
+  /// The concrete task-detail path for [taskId].
+  static String taskDetail(String taskId) => '/task/$taskId';
+
   // ─── Weekly schedule (Phase 7) ──────────────────────────────
   // Admin/manager schedule screens live under their role area so the existing
   // `_isAdminArea` / `_isManagerArea` guards cover them; the employee schedule
@@ -49,6 +58,8 @@ class RouteNames {
   // roles share it.
   static const String communications = '/communications';
   static const String communicationsCompose = '/communications/compose';
+  static const String communicationsTemplates = '/communications/templates';
+  static const String communicationsSchedules = '/communications/schedules';
 
   /// The broadcast-detail route pattern (`/communications/:broadcastId`).
   static const String communicationsDetailPattern =

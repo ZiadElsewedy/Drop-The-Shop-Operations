@@ -34,7 +34,8 @@ class BroadcastEntity with _$BroadcastEntity {
     String? branchId,
     /// The individual recipient when [audience] is [BroadcastAudience.user].
     String? targetUserId,
-    /// Notification category (drives client-side routing/grouping of the push).
+    /// Notification category (announcement / reminder / emergency) — the single
+    /// dial; it derives delivery (push/inbox + FCM priority) on send.
     @Default('general') String category,
     /// How many users the send engine resolved as recipients (set by the
     /// function on send; null on an unsent/legacy doc).
@@ -42,6 +43,9 @@ class BroadcastEntity with _$BroadcastEntity {
     /// How many devices the push was actually delivered to (set by the function
     /// after the FCM multicast completes; null until then / legacy).
     int? deliveredCount,
+    /// When this broadcast was archived (hidden from the default feed but kept
+    /// for history). Null = active.
+    DateTime? archivedAt,
     DateTime? createdAt,
   }) = _BroadcastEntity;
 
@@ -50,4 +54,16 @@ class BroadcastEntity with _$BroadcastEntity {
 
   /// Whether this is a direct message to one individual.
   bool get isDirect => audience == BroadcastAudience.user;
+
+  /// Whether this broadcast is archived (kept for history, off the default feed).
+  bool get isArchived => archivedAt != null;
+
+  /// Whether this is live in the default feed (not archived).
+  bool get isActive => archivedAt == null;
+
+  /// Recipients the push could not be delivered to (recipients − delivered);
+  /// null until both counts are known.
+  int? get failedCount => (recipientCount != null && deliveredCount != null)
+      ? (recipientCount! - deliveredCount!).clamp(0, recipientCount!)
+      : null;
 }

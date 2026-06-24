@@ -90,9 +90,46 @@ void main() {
       expect(m.type, NotificationType.taskAssigned);
     });
 
+    test('archivedAt / pinnedAt round-trip + getters (Phase 2)', () {
+      final at = DateTime(2026, 6, 22, 10);
+      final map = NotificationModel.fromEntity(NotificationEntity(
+        id: 'n1',
+        recipientUid: 'u1',
+        type: NotificationType.taskAssigned,
+        title: 'x',
+        body: 'y',
+        createdAt: at,
+        archivedAt: at,
+        pinnedAt: at,
+      )).toMap();
+
+      expect(map['archivedAt'], isA<Timestamp>());
+      expect(map['pinnedAt'], isA<Timestamp>());
+
+      final e = NotificationModel.fromMap({
+        'recipientUid': 'u1',
+        'type': 'taskAssigned',
+        'title': 'x',
+        'body': 'y',
+        'createdAt': Timestamp.fromDate(at),
+        'archivedAt': Timestamp.fromDate(at),
+        'pinnedAt': Timestamp.fromDate(at),
+      }).toEntity();
+      expect(e.isArchived, isTrue);
+      expect(e.isPinned, isTrue);
+
+      // Legacy doc → neither archived nor pinned.
+      final legacy = NotificationModel.fromMap(const {
+        'recipientUid': 'u1',
+        'type': 'taskAssigned',
+        'title': 'x',
+        'body': 'y',
+      }).toEntity();
+      expect(legacy.isArchived, isFalse);
+      expect(legacy.isPinned, isFalse);
+    });
+
     test('NotificationType.fromBroadcastCategory maps categories', () {
-      expect(NotificationType.fromBroadcastCategory('alert'),
-          NotificationType.broadcastAlert);
       expect(NotificationType.fromBroadcastCategory('reminder'),
           NotificationType.broadcastReminder);
       expect(NotificationType.fromBroadcastCategory('emergency'),

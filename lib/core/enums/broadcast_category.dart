@@ -6,7 +6,6 @@
 /// lives in the presentation layer (`communications_format.dart`).
 enum BroadcastCategory {
   announcement,
-  alert,
   reminder,
   emergency;
 
@@ -18,13 +17,29 @@ enum BroadcastCategory {
 
   /// Whether this category should read with an attention colour (status-only
   /// colour, per the monochrome design language).
-  bool get isUrgent =>
-      this == BroadcastCategory.alert || this == BroadcastCategory.emergency;
+  bool get isUrgent => this == BroadcastCategory.emergency;
+
+  // ── Delivery is derived from the category (2026-06-24) — there is no separate
+  // priority / channel dial. Announcement = quiet inbox-only; reminder + emergency
+  // push; emergency rides at high FCM priority. The Cloud Function mirrors this.
+
+  /// Whether a send of this category fires an FCM push (announcement is
+  /// inbox-only). Mirrored by the `dispatchBroadcast` Cloud Function.
+  bool get sendsPush => this != BroadcastCategory.announcement;
+
+  /// Whether the push rides at **high** FCM priority — emergency only.
+  bool get isHighPriority => this == BroadcastCategory.emergency;
+
+  /// A short delivery summary for the composer preview.
+  String get deliverySummary => switch (this) {
+        BroadcastCategory.announcement => 'Inbox only',
+        BroadcastCategory.reminder => 'Push + Inbox',
+        BroadcastCategory.emergency => 'Push + Inbox · High priority',
+      };
 
   /// Parses the stored string; unknown / missing (incl. the legacy `'general'`
-  /// default) → [announcement].
+  /// and the retired `'alert'` value) → [announcement].
   static BroadcastCategory fromString(String? raw) => switch (raw) {
-        'alert' => BroadcastCategory.alert,
         'reminder' => BroadcastCategory.reminder,
         'emergency' => BroadcastCategory.emergency,
         _ => BroadcastCategory.announcement,

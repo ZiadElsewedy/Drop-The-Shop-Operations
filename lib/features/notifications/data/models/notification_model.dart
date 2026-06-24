@@ -20,6 +20,8 @@ class NotificationModel {
   final String body;
   final DateTime? createdAt;
   final DateTime? readAt;
+  final DateTime? archivedAt;
+  final DateTime? pinnedAt;
   final Map<String, dynamic> payload;
 
   const NotificationModel({
@@ -31,6 +33,8 @@ class NotificationModel {
     required this.body,
     this.createdAt,
     this.readAt,
+    this.archivedAt,
+    this.pinnedAt,
     this.payload = const {},
   });
 
@@ -45,6 +49,8 @@ class NotificationModel {
         body: map['body'] as String? ?? '',
         createdAt: map.date('createdAt'),
         readAt: map.date('readAt'),
+        archivedAt: map.date('archivedAt'),
+        pinnedAt: map.date('pinnedAt'),
         payload: _payloadFromMap(map['payload']),
       );
 
@@ -57,6 +63,8 @@ class NotificationModel {
         body: e.body,
         createdAt: e.createdAt,
         readAt: e.readAt,
+        archivedAt: e.archivedAt,
+        pinnedAt: e.pinnedAt,
         payload: e.payload,
       );
 
@@ -70,6 +78,8 @@ class NotificationModel {
         'title': title,
         'body': body,
         'readAt': readAt == null ? null : Timestamp.fromDate(readAt!),
+        'archivedAt': archivedAt == null ? null : Timestamp.fromDate(archivedAt!),
+        'pinnedAt': pinnedAt == null ? null : Timestamp.fromDate(pinnedAt!),
         'payload': payload,
       };
 
@@ -83,6 +93,8 @@ class NotificationModel {
         // A doc with a still-pending server timestamp reads as "just now".
         createdAt: createdAt ?? DateTime.now(),
         readAt: readAt,
+        archivedAt: archivedAt,
+        pinnedAt: pinnedAt,
         payload: payload,
       );
 

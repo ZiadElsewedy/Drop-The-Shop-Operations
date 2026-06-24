@@ -22,6 +22,11 @@ class BroadcastModel {
   /// Mirrored by the Cloud Function (`functions/index.js`).
   static const String directBranchMarker = '__direct__';
 
+  /// `branchId` marker for a hand-picked multi-recipient (`custom`) broadcast.
+  /// Like [directBranchMarker], it keeps the doc out of every branch/all feed;
+  /// the chosen recipients read it via the `targetUserIds` array.
+  static const String customBranchMarker = '__custom__';
+
   final String id;
   final String title;
   final String message;
@@ -40,6 +45,7 @@ class BroadcastModel {
   final String category;
   final int? recipientCount;
   final int? deliveredCount;
+  final DateTime? archivedAt;
   final DateTime? createdAt;
 
   const BroadcastModel({
@@ -55,6 +61,7 @@ class BroadcastModel {
     this.category = 'general',
     this.recipientCount,
     this.deliveredCount,
+    this.archivedAt,
     this.createdAt,
   });
 
@@ -72,6 +79,7 @@ class BroadcastModel {
         category: map['category'] as String? ?? 'general',
         recipientCount: (map['recipientCount'] as num?)?.toInt(),
         deliveredCount: (map['deliveredCount'] as num?)?.toInt(),
+        archivedAt: map.date('archivedAt'),
         createdAt: map.date('createdAt'),
       );
 
@@ -88,6 +96,7 @@ class BroadcastModel {
         category: e.category,
         recipientCount: e.recipientCount,
         deliveredCount: e.deliveredCount,
+        archivedAt: e.archivedAt,
         createdAt: e.createdAt,
       );
 
@@ -99,6 +108,8 @@ class BroadcastModel {
         return '';
       case BroadcastAudience.user:
         return directBranchMarker;
+      case BroadcastAudience.custom:
+        return customBranchMarker;
       case BroadcastAudience.branch:
         return e.branchId ?? '';
     }
@@ -149,6 +160,7 @@ class BroadcastModel {
         category: category,
         recipientCount: recipientCount ?? this.recipientCount,
         deliveredCount: deliveredCount ?? this.deliveredCount,
+        archivedAt: archivedAt,
         createdAt: createdAt,
       );
 
@@ -160,15 +172,19 @@ class BroadcastModel {
         senderName: senderName,
         senderRole: senderRole,
         audience: audience,
-        // The persisted markers ('' for all, directBranchMarker for a DM) map
-        // back to a null entity branchId; a real branch id is preserved.
-        branchId: (branchId.isEmpty || branchId == directBranchMarker)
+        // The persisted markers ('' for all, directBranchMarker for a DM,
+        // customBranchMarker for a custom send) map back to a null entity
+        // branchId; a real branch id is preserved.
+        branchId: (branchId.isEmpty ||
+                branchId == directBranchMarker ||
+                branchId == customBranchMarker)
             ? null
             : branchId,
         targetUserId: targetUserId.isEmpty ? null : targetUserId,
         category: category,
         recipientCount: recipientCount,
         deliveredCount: deliveredCount,
+        archivedAt: archivedAt,
         createdAt: createdAt,
       );
 }

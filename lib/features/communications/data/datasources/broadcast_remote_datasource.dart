@@ -10,13 +10,25 @@ abstract class BroadcastRemoteDataSource {
   /// Sends a broadcast through the **callable `sendBroadcast` Cloud Function**
   /// (the authoritative engine: validates permissions, resolves recipients,
   /// persists the doc, pushes the notification). Returns the model carrying the
-  /// generated id + the resolved recipient count.
-  Future<BroadcastModel> sendBroadcast(BroadcastModel broadcast);
+  /// generated id + the resolved recipient count. [targetUserIds] is the
+  /// recipient list for a `custom` send; [roleFilter] restricts a branch/all
+  /// send to one role.
+  Future<BroadcastModel> sendBroadcast(
+    BroadcastModel broadcast, {
+    List<String> targetUserIds,
+    String roleFilter,
+  });
 
   /// [branchId] null → all broadcasts (admin). Set → that branch's broadcasts
   /// plus all-branches ones (the `''` sentinel). Direct messages never appear
   /// here (they use the [BroadcastModel.directBranchMarker]).
   Stream<List<BroadcastModel>> watchBroadcasts({String? branchId});
+
+  /// Archives / unarchives a broadcast (sets / clears `archivedAt`). A
+  /// field-restricted client write — the `broadcasts` rule permits an admin /
+  /// owning-branch manager to touch **only** the lifecycle fields, never content
+  /// or delivery stats.
+  Future<void> setArchived(String id, bool archived);
 }
 
 class BroadcastRemoteDataSourceImpl implements BroadcastRemoteDataSource {
@@ -29,12 +41,19 @@ class BroadcastRemoteDataSourceImpl implements BroadcastRemoteDataSource {
       _firestore.collection(AppConstants.broadcastsCollection);
 
   @override
-  Future<BroadcastModel> sendBroadcast(BroadcastModel broadcast) async {
+  Future<BroadcastModel> sendBroadcast(
+    BroadcastModel broadcast, {
+    List<String> targetUserIds = const [],
+    String roleFilter = '',
+  }) async {
     try {
       final callable = _functions.httpsCallable('sendBroadcast');
-      final result = await callable.call<Map<String, dynamic>>(
-        broadcast.toCallablePayload(),
-      );
+      final payload = {
+        ...broadcast.toCallablePayload(),
+        'targetUserIds': targetUserIds,
+        'roleFilter': roleFilter,
+      };
+      final result = await callable.call<Map<String, dynamic>>(payload);
       final data = result.data;
       return broadcast.copyWith(
         id: data['broadcastId'] as String? ?? '',
@@ -76,6 +95,18 @@ class BroadcastRemoteDataSourceImpl implements BroadcastRemoteDataSource {
             'later.';
       default:
         return 'Couldn’t send the broadcast right now. Please try again.';
+    }
+  }
+
+  @override
+  Future<void> setArchived(String id, bool archived) async {
+    try {
+      await _broadcasts.doc(id).set(
+        {'archivedAt': archived ? FieldValue.serverTimestamp() : null},
+        SetOptions(merge: true),
+      );
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to update the broadcast.');
     }
   }
 

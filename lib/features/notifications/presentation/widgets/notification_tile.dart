@@ -7,10 +7,15 @@ import 'package:fbro/features/notifications/domain/entities/notification_entity.
 
 /// A single notification in the inbox — icon (tinted by type), title, body,
 /// time-ago, and an unread dot. Strictly monochrome; semantic colour only for
-/// the rework / rejected / approved / emergency accents (matching the task
-/// badges). Tapping marks it read + deep-links.
+/// the rework / rejected / approved / emergency / overdue accents. Tapping marks
+/// it read + deep-links. Deliberately display-only (2026-06-23 simplification):
+/// no per-tile menu / pin — the inbox uses swipe-to-delete instead.
 class NotificationTile extends StatelessWidget {
-  const NotificationTile({super.key, required this.notification, this.onTap});
+  const NotificationTile({
+    super.key,
+    required this.notification,
+    this.onTap,
+  });
 
   final NotificationEntity notification;
   final VoidCallback? onTap;
@@ -105,16 +110,16 @@ class NotificationTile extends StatelessWidget {
         return Icons.check_circle_outline_rounded;
       case NotificationType.taskRejected:
         return Icons.cancel_outlined;
+      case NotificationType.taskReminder:
+        return Icons.alarm_rounded;
+      case NotificationType.taskOverdue:
+        return Icons.running_with_errors_rounded;
       case NotificationType.broadcastEmergency:
         return Icons.warning_amber_rounded;
-      case NotificationType.broadcastAlert:
-        return Icons.notification_important_outlined;
       case NotificationType.broadcastReminder:
         return Icons.alarm_outlined;
       case NotificationType.broadcastAnnouncement:
         return Icons.campaign_outlined;
-      default:
-        return Icons.notifications_none_rounded;
     }
   }
 
@@ -123,10 +128,11 @@ class NotificationTile extends StatelessWidget {
       case NotificationType.taskApproved:
         return AppColors.success;
       case NotificationType.taskRejected:
+      case NotificationType.taskOverdue:
       case NotificationType.broadcastEmergency:
         return AppColors.error;
       case NotificationType.taskRework:
-      case NotificationType.broadcastAlert:
+      case NotificationType.taskReminder:
         return AppColors.warning;
       default:
         return AppColors.primary;

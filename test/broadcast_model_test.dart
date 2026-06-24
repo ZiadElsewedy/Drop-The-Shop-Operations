@@ -171,12 +171,12 @@ void main() {
         'senderName': 'n',
         'audience': 'branch',
         'branchId': 'b1',
-        'category': 'alert',
+        'category': 'reminder',
         'recipientCount': 24,
         'deliveredCount': 21,
       }).toEntity();
 
-      expect(entity.category, 'alert');
+      expect(entity.category, 'reminder');
       expect(entity.recipientCount, 24);
       expect(entity.deliveredCount, 21);
     });

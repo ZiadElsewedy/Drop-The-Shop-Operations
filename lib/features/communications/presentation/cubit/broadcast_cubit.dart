@@ -93,6 +93,10 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     String? targetUserId,
     String? targetUserBranchId,
     String category = 'general',
+    /// Recipient list for a [BroadcastAudience.custom] send.
+    List<String> targetUserIds = const [],
+    /// Restricts a branch/all send to one role (''/`all` = everyone).
+    String roleFilter = '',
   }) async {
     if (_sending) return null;
 
@@ -128,6 +132,10 @@ class BroadcastCubit extends Cubit<BroadcastState> {
       _emitError('Pick a recipient.');
       return null;
     }
+    if (audience == BroadcastAudience.custom && targetUserIds.isEmpty) {
+      _emitError('Pick at least one recipient.');
+      return null;
+    }
 
     final broadcast = BroadcastEntity(
       id: '',
@@ -145,7 +153,12 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     final prev = _broadcasts;
     emit(BroadcastState.loaded(prev, sending: true));
     try {
-      final sent = await _sendBroadcast(broadcast);
+      final sent = await _sendBroadcast(
+        broadcast,
+        targetUserIds:
+            audience == BroadcastAudience.custom ? targetUserIds : const [],
+        roleFilter: roleFilter,
+      );
       // Keep the feed visible; the stream emits the new broadcast (branch/all).
       emit(BroadcastState.loaded(_broadcasts));
       return sent.recipientCount ?? 0;
@@ -155,6 +168,38 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     } catch (_) {
       _emitError('Could not send the broadcast. Please try again.');
       return null;
+    }
+  }
+
+  /// Re-sends an existing broadcast as a fresh one (Repeat Now), reusing its
+  /// audience / category / priority / channel. Returns the new recipient count,
+  /// or null on failure. A manager repeating a direct message targets the same
+  /// in-branch recipient, so [targetUserBranchId] defaults to the sender's branch.
+  Future<int?> repeatNow({
+    required UserEntity sender,
+    required BroadcastEntity source,
+  }) =>
+      send(
+        sender: sender,
+        title: source.title,
+        message: source.message,
+        audience: source.audience,
+        branchId: source.branchId,
+        targetUserId: source.targetUserId,
+        targetUserBranchId:
+            sender.role.isManager ? sender.branchId : null,
+        category: source.category,
+      );
+
+  /// Archives ([archived] true) / unarchives a broadcast. The feed stream
+  /// re-emits with the updated flag; an error keeps the current feed visible.
+  Future<void> setArchived(String id, bool archived) async {
+    try {
+      await _repository.setArchived(id, archived);
+    } on Failure catch (e) {
+      _emitError(e.message);
+    } catch (_) {
+      _emitError('Could not update the broadcast. Please try again.');
     }
   }
 

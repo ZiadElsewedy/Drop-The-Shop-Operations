@@ -30,8 +30,10 @@ class NotificationRepositoryImpl implements NotificationRepository {
   }
 
   @override
-  Stream<List<NotificationEntity>> watch(String uid) =>
-      _remote.watch(uid).map((models) {
+  Stream<List<NotificationEntity>> watch(String uid, {int limit = 30}) =>
+      _remote.watch(uid, limit: limit).map((models) {
+        // Server already orders newest-first; the defensive client sort keeps the
+        // order correct when the offline cache serves an unordered partial.
         final list = models.map((m) => m.toEntity()).toList()
           ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
         return list;
@@ -50,6 +52,33 @@ class NotificationRepositoryImpl implements NotificationRepository {
   Future<void> markAllRead(String uid) async {
     try {
       await _remote.markAllRead(uid);
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    try {
+      await _remote.delete(id);
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> setArchived(String id, bool archived) async {
+    try {
+      await _remote.setArchived(id, archived);
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> setPinned(String id, bool pinned) async {
+    try {
+      await _remote.setPinned(id, pinned);
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

@@ -56,16 +56,21 @@ void main() async {
       }
     }
     ..onMessageTap = (data) {
-      // Notification tapped (from background or cold start). Open the in-app
-      // inbox (a shared route for every role); the router redirects to the
-      // right place if the session isn't ready, and each tile deep-links from
-      // there. Log the payload for diagnostics.
+      // Notification tapped (from background or cold start). A task push opens
+      // the exact task; everything else opens the in-app inbox (a shared route
+      // for every role). The router redirects to the right place if the session
+      // isn't ready. Log the payload for diagnostics.
       developer.log(
         'Notification tapped — type=${data['type']} task=${data['taskId']} '
         'broadcast=${data['broadcastId']} route=${data['route']}',
         name: 'fcm',
       );
-      _router.go(RouteNames.notifications);
+      final taskId = data['taskId'];
+      if (data['route'] == 'task_details' && taskId != null && taskId.isNotEmpty) {
+        _router.push(RouteNames.taskDetail(taskId));
+      } else {
+        _router.go(RouteNames.notifications);
+      }
     }
     ..init();
 
@@ -89,6 +94,8 @@ class App extends StatelessWidget {
         BlocProvider.value(value: AppDependencies.shiftSwapCubit),
         BlocProvider.value(value: AppDependencies.branchOperationsCubit),
         BlocProvider.value(value: AppDependencies.broadcastCubit),
+        BlocProvider.value(value: AppDependencies.broadcastTemplateCubit),
+        BlocProvider.value(value: AppDependencies.broadcastScheduleCubit),
         BlocProvider.value(value: AppDependencies.notificationCubit),
       ],
       // Register / clear the FCM token as the auth session changes.

@@ -232,11 +232,78 @@ service cloud.firestore {
     match /broadcasts/{broadcastId} {
       allow read: if isAdmin()
         || resource.data.get('targetUserId', '') == request.auth.uid
+        || request.auth.uid in resource.data.get('targetUserIds', [])
         || (resource.data.get('targetUserId', '') == ''
+            && resource.data.get('targetUserIds', []).size() == 0
             && (resource.data.get('branchId', '') == ''
                 || resource.data.get('branchId', '') == selfBranch()));
 
+      // Content + delivery stats are owned by the `sendBroadcast` Cloud Function
+      // (Admin SDK, bypasses rules). Clients may flip ONLY `archivedAt` (archive
+      // / unarchive) — and only an admin, the owning-branch manager, or the
+      // original sender. The field-diff freezes every other field, so delivery
+      // stats / recipients can never be forged client-side.
+      allow update: if request.resource.data
+              .diff(resource.data).affectedKeys()
+              .hasOnly(['archivedAt'])
+        && (isAdmin()
+            || resource.data.get('senderId', '') == request.auth.uid
+            || canReachBranch(resource.data.get('branchId', '')));
+
+      allow create, delete: if false;
+    }
+
+    // ── Broadcast templates (Communications Center — Phase 2 Commit 2) ──
+    // Reusable broadcast blueprints (mirrors `task_templates`). A template
+    // carries a `branchId` (owning branch) or '' for a GLOBAL template
+    // (admin-made, usable by every branch). Employees never need templates.
+    //   read   — any admin or manager (branch filtering is client-side).
+    //   create — admin (any/global), OR an own-branch manager.
+    //   update/delete — admin, OR the owning-branch manager.
+    match /broadcastTemplates/{templateId} {
+      allow read: if isAdmin() || isManager();
+      allow create: if isAdmin()
+        || (isManager()
+            && request.resource.data.get('branchId', '') == selfBranch());
+      allow update, delete: if isAdmin()
+        || (isManager() && resource.data.get('branchId', '') == selfBranch());
+    }
+
+    // ── Broadcast schedules (Communications Center — Phase 2 Commit 4) ──
+    // Scheduled / recurring broadcasts. The `runBroadcastSchedules` Cloud
+    // Function fires + advances them via the Admin SDK (bypasses these rules);
+    // clients only manage their own.
+    //   read   — admin, OR the creator (`senderId`).
+    //   create — the creator themself; a manager only for their own branch.
+    //   update/delete — admin, OR the creator (pause/resume/edit/cancel).
+    match /broadcastSchedules/{scheduleId} {
+      allow read: if isAdmin()
+        || resource.data.get('senderId', '') == request.auth.uid;
+      allow create: if isSignedIn()
+        && request.resource.data.get('senderId', '') == request.auth.uid
+        && (isAdmin()
+            || (isManager()
+                && (request.resource.data.get('branchId', '') == selfBranch()
+                    || request.resource.data.get('branchId', '') == '')));
+      allow update, delete: if isAdmin()
+        || resource.data.get('senderId', '') == request.auth.uid;
+    }
+
+    // ── Task reminders ledger (Communications Center — Phase 2 Commit 5) ──
+    // Per-task anti-spam bookkeeping written ONLY by the `runTaskReminders` Cloud
+    // Function (Admin SDK, bypasses rules). Clients never write it; an admin may
+    // read it for diagnostics.
+    match /taskReminders/{taskId} {
+      allow read: if isAdmin();
       allow create, update, delete: if false;
+    }
+
+    // ── Reminder config (Communications Center — Phase 2 Commit 5) ──
+    // Org-wide reminder rules (enabled · quiet hours · max reminders), read by the
+    // scheduler. Admin-managed; any admin/manager may read.
+    match /reminderConfig/{id} {
+      allow read: if isAdmin() || isManager();
+      allow write: if isAdmin();
     }
 
     // ── Notifications (Notification System Phase 1) ────────────────

@@ -34,7 +34,8 @@ mixin _$BroadcastEntity {
   /// The individual recipient when [audience] is [BroadcastAudience.user].
   String? get targetUserId => throw _privateConstructorUsedError;
 
-  /// Notification category (drives client-side routing/grouping of the push).
+  /// Notification category (announcement / reminder / emergency) — the single
+  /// dial; it derives delivery (push/inbox + FCM priority) on send.
   String get category => throw _privateConstructorUsedError;
 
   /// How many users the send engine resolved as recipients (set by the
@@ -44,6 +45,10 @@ mixin _$BroadcastEntity {
   /// How many devices the push was actually delivered to (set by the function
   /// after the FCM multicast completes; null until then / legacy).
   int? get deliveredCount => throw _privateConstructorUsedError;
+
+  /// When this broadcast was archived (hidden from the default feed but kept
+  /// for history). Null = active.
+  DateTime? get archivedAt => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
 
   /// Create a copy of BroadcastEntity
@@ -73,6 +78,7 @@ abstract class $BroadcastEntityCopyWith<$Res> {
     String category,
     int? recipientCount,
     int? deliveredCount,
+    DateTime? archivedAt,
     DateTime? createdAt,
   });
 }
@@ -104,6 +110,7 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
     Object? category = null,
     Object? recipientCount = freezed,
     Object? deliveredCount = freezed,
+    Object? archivedAt = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(
@@ -156,6 +163,10 @@ class _$BroadcastEntityCopyWithImpl<$Res, $Val extends BroadcastEntity>
                 ? _value.deliveredCount
                 : deliveredCount // ignore: cast_nullable_to_non_nullable
                       as int?,
+            archivedAt: freezed == archivedAt
+                ? _value.archivedAt
+                : archivedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
             createdAt: freezed == createdAt
                 ? _value.createdAt
                 : createdAt // ignore: cast_nullable_to_non_nullable
@@ -188,6 +199,7 @@ abstract class _$$BroadcastEntityImplCopyWith<$Res>
     String category,
     int? recipientCount,
     int? deliveredCount,
+    DateTime? archivedAt,
     DateTime? createdAt,
   });
 }
@@ -218,6 +230,7 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
     Object? category = null,
     Object? recipientCount = freezed,
     Object? deliveredCount = freezed,
+    Object? archivedAt = freezed,
     Object? createdAt = freezed,
   }) {
     return _then(
@@ -270,6 +283,10 @@ class __$$BroadcastEntityImplCopyWithImpl<$Res>
             ? _value.deliveredCount
             : deliveredCount // ignore: cast_nullable_to_non_nullable
                   as int?,
+        archivedAt: freezed == archivedAt
+            ? _value.archivedAt
+            : archivedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
         createdAt: freezed == createdAt
             ? _value.createdAt
             : createdAt // ignore: cast_nullable_to_non_nullable
@@ -295,6 +312,7 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
     this.category = 'general',
     this.recipientCount,
     this.deliveredCount,
+    this.archivedAt,
     this.createdAt,
   }) : super._();
 
@@ -326,7 +344,8 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
   @override
   final String? targetUserId;
 
-  /// Notification category (drives client-side routing/grouping of the push).
+  /// Notification category (announcement / reminder / emergency) — the single
+  /// dial; it derives delivery (push/inbox + FCM priority) on send.
   @override
   @JsonKey()
   final String category;
@@ -340,12 +359,17 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
   /// after the FCM multicast completes; null until then / legacy).
   @override
   final int? deliveredCount;
+
+  /// When this broadcast was archived (hidden from the default feed but kept
+  /// for history). Null = active.
+  @override
+  final DateTime? archivedAt;
   @override
   final DateTime? createdAt;
 
   @override
   String toString() {
-    return 'BroadcastEntity(id: $id, title: $title, message: $message, senderId: $senderId, senderName: $senderName, senderRole: $senderRole, audience: $audience, branchId: $branchId, targetUserId: $targetUserId, category: $category, recipientCount: $recipientCount, deliveredCount: $deliveredCount, createdAt: $createdAt)';
+    return 'BroadcastEntity(id: $id, title: $title, message: $message, senderId: $senderId, senderName: $senderName, senderRole: $senderRole, audience: $audience, branchId: $branchId, targetUserId: $targetUserId, category: $category, recipientCount: $recipientCount, deliveredCount: $deliveredCount, archivedAt: $archivedAt, createdAt: $createdAt)';
   }
 
   @override
@@ -374,6 +398,8 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
                 other.recipientCount == recipientCount) &&
             (identical(other.deliveredCount, deliveredCount) ||
                 other.deliveredCount == deliveredCount) &&
+            (identical(other.archivedAt, archivedAt) ||
+                other.archivedAt == archivedAt) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt));
   }
@@ -393,6 +419,7 @@ class _$BroadcastEntityImpl extends _BroadcastEntity {
     category,
     recipientCount,
     deliveredCount,
+    archivedAt,
     createdAt,
   );
 
@@ -422,6 +449,7 @@ abstract class _BroadcastEntity extends BroadcastEntity {
     final String category,
     final int? recipientCount,
     final int? deliveredCount,
+    final DateTime? archivedAt,
     final DateTime? createdAt,
   }) = _$BroadcastEntityImpl;
   const _BroadcastEntity._() : super._();
@@ -452,7 +480,8 @@ abstract class _BroadcastEntity extends BroadcastEntity {
   @override
   String? get targetUserId;
 
-  /// Notification category (drives client-side routing/grouping of the push).
+  /// Notification category (announcement / reminder / emergency) — the single
+  /// dial; it derives delivery (push/inbox + FCM priority) on send.
   @override
   String get category;
 
@@ -465,6 +494,11 @@ abstract class _BroadcastEntity extends BroadcastEntity {
   /// after the FCM multicast completes; null until then / legacy).
   @override
   int? get deliveredCount;
+
+  /// When this broadcast was archived (hidden from the default feed but kept
+  /// for history). Null = active.
+  @override
+  DateTime? get archivedAt;
   @override
   DateTime? get createdAt;
 

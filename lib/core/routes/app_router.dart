@@ -13,6 +13,7 @@ import 'package:fbro/features/manager/presentation/pages/manager_shell.dart';
 import 'package:fbro/features/employee/presentation/pages/employee_shell.dart';
 import 'package:fbro/features/task/presentation/pages/task_management_screen.dart';
 import 'package:fbro/features/task/presentation/pages/my_tasks_screen.dart';
+import 'package:fbro/features/task/presentation/pages/task_detail_loader_screen.dart';
 import 'package:fbro/features/operations/presentation/pages/manager_operations_screen.dart';
 import 'package:fbro/features/schedule/presentation/pages/schedule_management_screen.dart';
 import 'package:fbro/features/schedule/presentation/pages/branch_schedule_screen.dart';
@@ -30,6 +31,8 @@ import 'package:fbro/features/communications/domain/entities/broadcast_entity.da
 import 'package:fbro/features/communications/presentation/pages/communications_screen.dart';
 import 'package:fbro/features/communications/presentation/pages/compose_broadcast_screen.dart';
 import 'package:fbro/features/communications/presentation/pages/broadcast_detail_screen.dart';
+import 'package:fbro/features/communications/presentation/pages/broadcast_templates_screen.dart';
+import 'package:fbro/features/communications/presentation/pages/broadcast_schedules_screen.dart';
 import 'package:fbro/features/notifications/presentation/pages/notifications_screen.dart';
 import 'route_names.dart';
 
@@ -177,6 +180,14 @@ GoRouter createRouter(AuthCubit authCubit) {
           const MyTasksScreen(),
         ),
       ),
+      // Exact-task deep-link (every role) — a task notification lands here.
+      GoRoute(
+        path: RouteNames.taskDetailPattern,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          TaskDetailLoaderScreen(taskId: state.pathParameters['taskId'] ?? ''),
+        ),
+      ),
       // ─── Weekly schedule (Phase 7) ─────────────────────────────
       // Guarded like tasks: /admin/schedule is admin-only, /manager/schedule
       // admits manager + admin; /my-schedule is self-scoped (own branch).
@@ -253,7 +264,24 @@ GoRouter createRouter(AuthCubit authCubit) {
         path: RouteNames.communicationsCompose,
         pageBuilder: (context, state) => _slideTransition(
           state,
-          const ComposeBroadcastScreen(),
+          ComposeBroadcastScreen(
+            prefill:
+                state.extra is BroadcastEntity ? state.extra as BroadcastEntity : null,
+          ),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.communicationsTemplates,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          BroadcastTemplatesScreen(pickMode: state.extra == 'pick'),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.communicationsSchedules,
+        pageBuilder: (context, state) => _slideTransition(
+          state,
+          const BroadcastSchedulesScreen(),
         ),
       ),
       GoRoute(

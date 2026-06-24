@@ -1,48 +1,31 @@
-/// The operational push-notification events DROP THE SHOP sends.
+/// The operational push-notification events DROP sends.
 /// These are the agreed `type` values for the FCM **data** payload and the
 /// `notifications/{id}.type` field — the contract shared by the client triggers
-/// (`NotifyTaskEvent`), the `sendBroadcast` Cloud Function, and the in-app inbox.
+/// (`NotifyTaskEvent`), the `sendBroadcast` / `runTaskReminders` Cloud Functions,
+/// and the in-app inbox.
 ///
-/// **Notification System Phase 1** activated the task + broadcast events:
-/// [taskAssigned] · [taskRework] · [taskSubmitted] · [taskApproved] ·
-/// [taskRejected], and the broadcast group ([broadcastAnnouncement] /
-/// [broadcastAlert] / [broadcastReminder] / [broadcastEmergency]). The remaining
-/// values stay as the contract for later phases (schedule / swaps / admin) — they
-/// have no server trigger yet.
+/// **Every value here has a live producer.** Earlier revisions carried ~16
+/// "reserved" schedule / swap / admin types that nothing ever wrote; they were
+/// trimmed (2026-06-23 stabilization pass) to keep the surface honest. When a
+/// later phase wires a real producer (a client trigger or a Cloud Function),
+/// add the value back here **and** mirror it in the producer — not before.
+///
+/// Inbox grouping is by name prefix (`task*` → Tasks, `broadcast*` → Broadcasts),
+/// so a new type should keep that naming convention.
 enum NotificationType {
-  // ── Task events (Notification System Phase 1) ──
+  // ── Task lifecycle (client `NotifyTaskEvent` via TaskCubit) ──
   taskAssigned,
   taskRework,
   taskSubmitted,
   taskApproved,
   taskRejected,
-  // ── Broadcast events (Communications Center → Notification System Phase 1) ──
+  // ── Task reminders (`runTaskReminders` Cloud Function) ──
+  taskReminder,
+  taskOverdue,
+  // ── Broadcast events (`sendBroadcast` / `dispatchBroadcast` Cloud Function) ──
   broadcastAnnouncement,
-  broadcastAlert,
   broadcastReminder,
-  broadcastEmergency,
-  // ── Employee (contract — later phases) ──
-  shiftChanged,
-  managerNote,
-  // ── Employee · weekly schedule + swaps (Phase 7) ──
-  tomorrowShiftReminder,
-  swapApproved,
-  swapRejected,
-  // ── Manager ──
-  taskWaitingReview,
-  employeeCompletedTask,
-  newEmployeePendingApproval,
-  shiftWithoutEmployees,
-  // ── Manager · shift swaps (Phase 7) ──
-  newSwapRequest,
-  swapPendingApproval,
-  // ── Admin ──
-  newEmployeeRegistration,
-  branchWithoutManager,
-  manyRejectedTasks,
-  branchWithoutActiveEmployees,
-  // ── Admin · weekly schedule (Phase 7) ──
-  branchWithoutSchedule;
+  broadcastEmergency;
 
   String get value => name;
 
@@ -59,8 +42,6 @@ enum NotificationType {
   /// `sendBroadcast` Cloud Function's `categoryToType`.
   static NotificationType fromBroadcastCategory(String? category) {
     switch (category) {
-      case 'alert':
-        return broadcastAlert;
       case 'reminder':
         return broadcastReminder;
       case 'emergency':

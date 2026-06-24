@@ -29,11 +29,19 @@ class NotificationEntity with _$NotificationEntity {
     required DateTime createdAt,
     /// When the recipient read it; null while unread.
     DateTime? readAt,
+    /// When the recipient archived it (hidden from the default inbox, kept for
+    /// history); null = in the inbox.
+    DateTime? archivedAt,
+    /// When the recipient pinned it (kept at the top of the inbox); null = not
+    /// pinned.
+    DateTime? pinnedAt,
     @Default(<String, dynamic>{}) Map<String, dynamic> payload,
   }) = _NotificationEntity;
 
   bool get isRead => readAt != null;
   bool get isUnread => readAt == null;
+  bool get isArchived => archivedAt != null;
+  bool get isPinned => pinnedAt != null;
 
   // ─── Typed payload reads ───────────────────────────────────────
   String? get taskId => payload['taskId'] as String?;

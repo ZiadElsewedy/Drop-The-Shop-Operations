@@ -7,7 +7,13 @@ import 'package:fbro/features/communications/domain/entities/broadcast_entity.da
 abstract class BroadcastRepository {
   /// Persists a broadcast and returns it with its generated id. The audience /
   /// branch targeting carried on [broadcast] decides who can read it.
-  Future<BroadcastEntity> sendBroadcast(BroadcastEntity broadcast);
+  /// [targetUserIds] is the recipient list for a `custom` send; [roleFilter]
+  /// (''/`all` = none) restricts a branch/all send to one role.
+  Future<BroadcastEntity> sendBroadcast(
+    BroadcastEntity broadcast, {
+    List<String> targetUserIds,
+    String roleFilter,
+  });
 
   /// Realtime stream of broadcasts, newest first.
   ///
@@ -15,4 +21,8 @@ abstract class BroadcastRepository {
   /// - [branchId] set → a branch member's feed: that branch's broadcasts plus
   ///   all-branches broadcasts.
   Stream<List<BroadcastEntity>> watchBroadcasts({String? branchId});
+
+  /// Archives ([archived] true) / unarchives a broadcast.
+  Future<void> setArchived(String id, bool archived);
+
 }

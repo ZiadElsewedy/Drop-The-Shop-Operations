@@ -21,15 +21,31 @@ class NotificationCubit extends Cubit<NotificationState> {
     required this._markRead,
   }) : super(const NotificationState.initial());
 
+  /// How many notifications each page loads.
+  static const int pageSize = 30;
+
   StreamSubscription<List<NotificationEntity>>? _sub;
   String? _uid;
   bool _hasSnapshot = false;
 
+  /// The current growing-window size (grows by [pageSize] on each [loadMore]).
+  int _limit = pageSize;
+
+  /// Size of the last snapshot — used to infer whether more pages exist.
+  int _lastCount = 0;
+
+  /// Completes when the next snapshot after a [loadMore] arrives.
+  Completer<void>? _pageCompleter;
+
   List<NotificationEntity> get _items =>
       state.maybeWhen(loaded: (n) => n, orElse: () => const []);
 
-  /// Unread notifications in the current feed.
-  int get unreadCount => _items.where((n) => n.isUnread).length;
+  /// Unread, non-archived notifications in the current feed (drives the badge).
+  int get unreadCount =>
+      _items.where((n) => n.isUnread && !n.isArchived).length;
+
+  /// Whether another page likely exists (the last window came back full).
+  bool get hasMore => _lastCount >= _limit;
 
   /// Subscribes to [uid]'s live notification feed. A no-op if already watching
   /// the same user.
@@ -37,17 +53,41 @@ class NotificationCubit extends Cubit<NotificationState> {
     if (_uid == uid && _sub != null) return;
     _uid = uid;
     _hasSnapshot = false;
+    _limit = pageSize;
     emit(const NotificationState.loading());
+    await _subscribe();
+  }
+
+  /// Grows the window by one page (infinite pagination). Resolves when the next
+  /// snapshot arrives (or immediately if there is nothing more to load).
+  Future<void> loadMore() async {
+    if (_uid == null || !hasMore) return;
+    _limit += pageSize;
+    final completer = Completer<void>();
+    _pageCompleter = completer;
+    await _subscribe();
+    return completer.future;
+  }
+
+  /// (Re)subscribes to the feed at the current [_limit].
+  Future<void> _subscribe() async {
+    final uid = _uid;
+    if (uid == null) return;
     await _sub?.cancel();
-    _sub = _repository.watch(uid).listen(
+    _sub = _repository.watch(uid, limit: _limit).listen(
       (items) {
         _hasSnapshot = true;
+        _lastCount = items.length;
         emit(NotificationState.loaded(items));
+        _pageCompleter?.complete();
+        _pageCompleter = null;
       },
       onError: (Object e, StackTrace st) {
         developer.log('Notification feed stream error',
             name: 'notifications', error: e, stackTrace: st);
         if (!_hasSnapshot) emit(NotificationState.error(_message(e)));
+        _pageCompleter?.complete();
+        _pageCompleter = null;
       },
     );
   }
@@ -58,6 +98,8 @@ class NotificationCubit extends Cubit<NotificationState> {
     _sub = null;
     _uid = null;
     _hasSnapshot = false;
+    _limit = pageSize;
+    _lastCount = 0;
     emit(const NotificationState.initial());
   }
 
@@ -78,6 +120,36 @@ class NotificationCubit extends Cubit<NotificationState> {
       await _repository.markAllRead(uid);
     } catch (e, st) {
       developer.log('markAllRead failed',
+          name: 'notifications', error: e, stackTrace: st);
+    }
+  }
+
+  /// Permanently deletes one notification. The stream re-emits without it.
+  Future<void> delete(String id) async {
+    try {
+      await _repository.delete(id);
+    } catch (e, st) {
+      developer.log('delete failed',
+          name: 'notifications', error: e, stackTrace: st);
+    }
+  }
+
+  /// Archives ([archived] true) / unarchives one notification.
+  Future<void> setArchived(String id, bool archived) async {
+    try {
+      await _repository.setArchived(id, archived);
+    } catch (e, st) {
+      developer.log('setArchived failed',
+          name: 'notifications', error: e, stackTrace: st);
+    }
+  }
+
+  /// Pins ([pinned] true) / unpins one notification.
+  Future<void> setPinned(String id, bool pinned) async {
+    try {
+      await _repository.setPinned(id, pinned);
+    } catch (e, st) {
+      developer.log('setPinned failed',
           name: 'notifications', error: e, stackTrace: st);
     }
   }

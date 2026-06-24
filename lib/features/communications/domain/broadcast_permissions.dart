@@ -26,15 +26,24 @@ class BroadcastPermissions {
         return true;
       case UserRole.manager:
         return audience == BroadcastAudience.branch ||
-            audience == BroadcastAudience.user;
+            audience == BroadcastAudience.user ||
+            audience == BroadcastAudience.custom;
       case UserRole.employee:
         return false;
     }
   }
 
-  /// The audiences [role] may choose, in display order.
+  /// The user-**selectable** audiences for [role], in display order. `custom`
+  /// (multi-recipient) is **derived** by the composer (a multi-pick under the
+  /// individual picker), not a separate chip, so it is excluded here.
+  static const List<BroadcastAudience> _selectable = [
+    BroadcastAudience.allBranches,
+    BroadcastAudience.branch,
+    BroadcastAudience.user,
+  ];
+
   static List<BroadcastAudience> allowedAudiences(UserRole role) =>
-      BroadcastAudience.values.where((a) => canSend(role, a)).toList();
+      _selectable.where((a) => canSend(role, a)).toList();
 
   /// Whether [role] may send any broadcast at all.
   static bool canBroadcast(UserRole role) => allowedAudiences(role).isNotEmpty;
@@ -69,6 +78,8 @@ class BroadcastPermissions {
           (targetUserBranchId ?? '').trim() != own) {
         return 'Managers can only message users inside their own branch.';
       }
+      // `custom` recipients are picked from the manager's own branch in the
+      // composer; the function re-validates every recipient's branch server-side.
     }
     return null;
   }
