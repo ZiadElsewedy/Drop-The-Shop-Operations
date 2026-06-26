@@ -11,8 +11,18 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-26 (Admin-editable contact details + notification delivery diagnosis)
+**Last updated:** 2026-06-27 (Branch identity in tasks: cover banner + logo chip)
 **Version:** 1.0.0+1 · **Branch:** `enhancement/ui-refactor` (DROP — monochrome premium UX)
+
+> **Branch identity in tasks (2026-06-27):** Tasks now carry their **branch media**
+> so they feel cohesive with the rest of the app. **Task Details** leads with a slim
+> 16:6 **cover banner** (`_BranchBanner` — branch cover photo + dark scrim +
+> `BranchAvatar` logo + name/location) when the branch has a `coverUrl`; **task cards**
+> show the branch **logo** in the branch chip (`TaskCard.branchLogoUrl`, resolved by
+> `ManagerTaskCard` from the app-wide `BranchCubit` directory). Reuses §8 branch media
+> + the Operations branch-hero pattern; no schema/rules/DI change. **Only shows for
+> branches with uploaded media** (Admin → Branches → edit → Branch media) — others
+> render as before. `flutter analyze` clean; **217 tests pass**. No deploy needed.
 
 > **Admin contact details + notification diagnosis (2026-06-26):** **(1) Admin "Edit
 > Info":** admins can record/edit a person's contact info **anytime after creation** —

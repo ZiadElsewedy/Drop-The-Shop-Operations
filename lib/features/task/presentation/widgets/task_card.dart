@@ -5,6 +5,7 @@ import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/widgets/branch_avatar.dart';
 import 'package:fbro/core/widgets/premium_button.dart';
 import 'package:fbro/core/widgets/status_badge.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
@@ -42,6 +43,7 @@ class TaskCard extends StatelessWidget {
     this.actions = const [],
     this.onAssigneesTap,
     this.branchName,
+    this.branchLogoUrl,
   });
 
   final TaskEntity task;
@@ -56,6 +58,11 @@ class TaskCard extends StatelessWidget {
   /// Resolved branch name for the branch chip (null hides it).
   final String? branchName;
 
+  /// Resolved branch logo URL — when present, the branch chip leads with the
+  /// branch's actual logo (its identity) instead of the generic store glyph, so
+  /// each task reads as belonging to its branch. Null/empty → the glyph.
+  final String? branchLogoUrl;
+
   @override
   Widget build(BuildContext context) {
     final description = task.description ?? '';
@@ -65,10 +72,7 @@ class TaskCard extends StatelessWidget {
 
     final chips = <Widget>[
       if ((branchName ?? '').isNotEmpty)
-        _MetaChip(
-          icon: Icons.store_mall_directory_outlined,
-          label: branchName!,
-        ),
+        _BranchChip(name: branchName!, logoUrl: branchLogoUrl),
       if (task.deadline != null)
         _MetaChip(
           icon: overdue ? Icons.event_busy_outlined : Icons.event_outlined,
@@ -327,6 +331,49 @@ class _MetaChip extends StatelessWidget {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: AppTypography.caption.copyWith(color: color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The branch signal chip — like [_MetaChip] but it leads with the branch's
+/// actual **logo** ([BranchAvatar]) when one is uploaded, so a task visibly
+/// belongs to its branch (falls back to the store glyph / initials otherwise).
+class _BranchChip extends StatelessWidget {
+  const _BranchChip({required this.name, this.logoUrl});
+  final String name;
+  final String? logoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLogo = (logoUrl ?? '').isNotEmpty;
+    return Container(
+      padding: EdgeInsets.fromLTRB(hasLogo ? 4 : 9, hasLogo ? 4 : 5, 9, hasLogo ? 4 : 5),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasLogo)
+            BranchAvatar(logoUrl: logoUrl, name: name, size: 18, radius: 5)
+          else
+            const Icon(Icons.store_mall_directory_outlined,
+                size: 13, color: AppColors.textSecondary),
+          const SizedBox(width: 5),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 180),
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style:
+                  AppTypography.caption.copyWith(color: AppColors.textSecondary),
             ),
           ),
         ],

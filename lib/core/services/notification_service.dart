@@ -38,7 +38,15 @@ class NotificationService {
   /// never throws (FCM is unsupported on some platforms).
   Future<void> init() async {
     try {
-      await _messaging.requestPermission(alert: true, badge: true, sound: true);
+      final settings = await _messaging.requestPermission(
+          alert: true, badge: true, sound: true);
+      // DIAGNOSTIC (temporary): surface whether the OS granted notification
+      // permission — a denied/notDetermined status means no system push will
+      // ever show. Check this in `flutter logs` / logcat / Xcode console.
+      developer.log(
+        'permission status = ${settings.authorizationStatus}',
+        name: 'fcm',
+      );
 
       // Foreground messages — suppressed if intended for a different account.
       FirebaseMessaging.onMessage.listen((message) {
@@ -73,8 +81,17 @@ class NotificationService {
     _uid = uid;
     try {
       final token = await _messaging.getToken();
+      // DIAGNOSTIC (temporary): did the device obtain an FCM token at all? A
+      // null token = the device can't register (iOS without APNs/entitlement,
+      // missing Play Services, permission denied). A non-null token that never
+      // reaches Firestore points at the write (see _rotateToken below).
+      developer.log(
+        'registerToken uid=$uid token=${token == null ? "NULL" : "…${token.substring(token.length - 8)}"}',
+        name: 'fcm',
+      );
       if (token != null) await _rotateToken(uid, token);
-    } catch (_) {
+    } catch (e) {
+      developer.log('registerToken FAILED: $e', name: 'fcm');
       // Best-effort; push is non-critical to app function.
     }
   }
@@ -156,7 +173,14 @@ class NotificationService {
         }, SetOptions(merge: true));
       }
       _currentToken = token;
-    } catch (_) {
+      // DIAGNOSTIC (temporary): the token write to users/{uid}.fcmTokens
+      // succeeded — the recipient is now registered for push.
+      developer.log('token written to users/$uid (push registered)', name: 'fcm');
+    } catch (e) {
+      // DIAGNOSTIC (temporary): a PERMISSION_DENIED here means firestore.rules
+      // rejected the self-write of fcmTokens — the device stays unregistered and
+      // every send to this user reports "0 delivered / failed".
+      developer.log('token write FAILED for users/$uid: $e', name: 'fcm');
       // Non-fatal.
     }
   }

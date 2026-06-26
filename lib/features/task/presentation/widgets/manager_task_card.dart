@@ -4,6 +4,7 @@ import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/widgets/app_dialog.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:fbro/features/branch/presentation/cubit/branch_cubit.dart';
 import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 import 'package:fbro/features/task/presentation/pages/task_details_screen.dart';
@@ -82,6 +83,10 @@ class ManagerTaskCard extends StatelessWidget {
           task: task,
           directory: directory,
           branchName: cubit.branchNames[task.branchId ?? ''],
+          // Branch identity (logo) from the app-wide branch directory (§8b) so
+          // the card chip shows the real branch logo when one is uploaded.
+          branchLogoUrl:
+              context.watch<BranchCubit>().branchById(task.branchId)?.logoUrl,
           onAssigneesTap: locked
               ? null
               : () => showAssignSheet(context: context, cubit: cubit, task: task),

@@ -12,6 +12,32 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-06-27 — Branch identity in tasks: cover banner + logo chip)
+
+Surface each branch's **media** (logo + cover) on task surfaces so a task visibly
+belongs to its branch — extending the §8 branch media + the §8b app-wide
+`BranchCubit` directory into the task feature (no new schema / rules / DI). Strictly
+monochrome; reuses the Operations branch-hero cover pattern + the shared
+`BranchAvatar`. `flutter analyze` clean; **217 tests pass**. **No deploy needed.**
+
+- **Task Details — branch cover banner.** `task_details_screen` resolves the task's
+  branch via `context.watch<BranchCubit>().branchById(task.branchId)` and, when the
+  branch has an uploaded **`coverUrl`**, leads the details body with a slim 16:6
+  `_BranchBanner` — the cover photo behind a dark scrim with the branch `BranchAvatar`
+  (logo) + name + location overlaid. Hidden when the branch has no cover (no empty
+  placeholder). The recently de-flashed `_StatusHeader` is untouched (the banner is
+  additive, above it).
+- **Task card — branch logo chip.** `TaskCard` gains an optional `branchLogoUrl`; the
+  branch signal chip now leads with the branch's actual **logo** (`BranchAvatar`,
+  18px) when one is uploaded, falling back to the store glyph otherwise (new
+  `_BranchChip`). `ManagerTaskCard` resolves it from the app-wide `BranchCubit`
+  directory (`branchById(task.branchId)?.logoUrl`). `TaskCard` itself stays
+  provider-free (the value is threaded in), so the existing `task_card_layout_test`
+  is unaffected.
+- **Requires branch media:** the banner/logo only appear for branches that have a
+  cover/logo uploaded (Admin → Branches → edit → Branch media). Branches without
+  media render exactly as before (store glyph + name).
+
 ### Added + Diagnosed (2026-06-26 — Admin-editable user contact details + notification delivery diagnosis)
 
 Two owner requests. **(1)** Admins can now record/edit more information about a

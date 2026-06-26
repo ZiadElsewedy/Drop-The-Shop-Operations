@@ -331,6 +331,16 @@ async function dispatchBroadcast(params) {
       response.responses.forEach((r, idx) => {
         if (r.success) return;
         const code = r.error && r.error.code;
+        // DIAGNOSTIC: surface the EXACT per-token failure reason (FCM discards it
+        // otherwise) — e.g. `messaging/third-party-auth-error` = iOS APNs key not
+        // configured; `messaging/registration-token-not-registered` = stale token.
+        logger.warn("broadcast token send failed", {
+          broadcastId: broadcastRef.id,
+          owner: tokenOwner.get(batch[idx]),
+          tokenSuffix: String(batch[idx]).slice(-10),
+          code,
+          message: r.error && r.error.message,
+        });
         if (isDeadTokenError(code)) {
           const badToken = batch[idx];
           const owner = tokenOwner.get(badToken);
@@ -997,12 +1007,24 @@ exports.onNotificationCreated = onDocumentCreated(
 
     // Push (chunked) + prune dead tokens.
     const removals = [];
+    let successCount = 0;
+    let failureCount = 0;
     for (let i = 0; i < tokens.length; i += MULTICAST_CHUNK) {
       const batch = tokens.slice(i, i + MULTICAST_CHUNK);
       const response = await messaging.sendEachForMulticast({ ...message, tokens: batch });
+      successCount += response.successCount;
+      failureCount += response.failureCount;
       response.responses.forEach((r, idx) => {
         if (r.success) return;
         const code = r.error && r.error.code;
+        // DIAGNOSTIC: the EXACT per-token failure reason (FCM discards it). See
+        // the broadcast path for the common codes (APNs / stale-token).
+        logger.warn("task notification token send failed", {
+          recipientUid,
+          tokenSuffix: String(batch[idx]).slice(-10),
+          code,
+          message: r.error && r.error.message,
+        });
         if (isDeadTokenError(code)) removals.push(batch[idx]);
       });
     }
@@ -1014,10 +1036,14 @@ exports.onNotificationCreated = onDocumentCreated(
         .catch(() => {});
     }
 
+    // Log REAL delivery, not just the attempt count. `tokenCount` alone (the old
+    // log) made a 0-delivered push look healthy.
     logger.info("notification pushed", {
       type: n.type,
       recipientUid,
       tokenCount: tokens.length,
+      successCount,
+      failureCount,
     });
   },
 );

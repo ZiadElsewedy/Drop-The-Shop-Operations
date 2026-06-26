@@ -11,8 +11,11 @@ import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_dialog.dart';
 import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
+import 'package:fbro/core/widgets/branch_avatar.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
+import 'package:fbro/features/branch/presentation/cubit/branch_cubit.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:fbro/features/task/domain/entities/activity_entry.dart';
@@ -135,6 +138,9 @@ class _DetailsView extends StatelessWidget {
     final isAdmin = role?.isAdmin ?? false;
     // An approved task is a locked, reviewed record — no Assign / Edit.
     final isLocked = task.status == TaskStatus.approved;
+    // Branch identity from the app-wide directory (§8b) — drives the cover
+    // banner + logo. Watched so it fills in once the directory preloads.
+    final branch = context.watch<BranchCubit>().branchById(task.branchId);
 
     return Scaffold(
       backgroundColor: AppColors.darkBg,
@@ -199,6 +205,15 @@ class _DetailsView extends StatelessWidget {
           AppSpacing.xxxl,
         ),
         children: [
+          // ── Branch cover banner (identity) ──────────────────────
+          // When the task's branch has an uploaded cover photo, lead with it so
+          // the task visibly belongs to its branch (reuses the §8 branch media +
+          // the §8b app-wide BranchCubit directory). Hidden when there's no cover.
+          if (branch?.coverUrl != null && branch!.coverUrl!.isNotEmpty) ...[
+            _BranchBanner(branch: branch),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+
           // ── Status + meta header ────────────────────────────────
           _StatusHeader(
             task: task,
@@ -366,6 +381,90 @@ class _DetailsView extends StatelessWidget {
 /// with a hairline border and a whisper of depth. No breathing pulse, no glow,
 /// no gradient (the status pill carries the state; it still cross-fades on a
 /// status change, which is a one-shot transition, not a pulse).
+/// A slim branch **cover** banner for the task details header — the branch's
+/// uploaded cover photo (dark scrim for legibility) with its logo + name
+/// overlaid. Reuses the §8 branch media + the Operations branch-hero pattern,
+/// scaled down to a header strip so the task reads as belonging to its branch.
+class _BranchBanner extends StatelessWidget {
+  const _BranchBanner({required this.branch});
+  final BranchEntity branch;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        borderRadius: AppRadius.cardAll,
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: AspectRatio(
+        aspectRatio: 16 / 6,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              branch.coverUrl!,
+              fit: BoxFit.cover,
+              cacheWidth: 1200,
+              errorBuilder: (_, _, _) =>
+                  const ColoredBox(color: AppColors.darkSurface),
+            ),
+            // Dark scrim (stronger at the bottom, where the label sits).
+            const DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x40000000), Color(0xCC000000)],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  BranchAvatar(
+                      logoUrl: branch.logoUrl,
+                      name: branch.name,
+                      size: 34,
+                      radius: 9),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          branch.name,
+                          style: AppTypography.label.copyWith(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if ((branch.location ?? '').isNotEmpty)
+                          Text(
+                            branch.location!,
+                            style: AppTypography.caption
+                                .copyWith(color: AppColors.textSecondary),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _StatusHeader extends StatelessWidget {
   const _StatusHeader({required this.task, this.branchName});
   final TaskEntity task;
