@@ -139,6 +139,24 @@ class ScheduleRepositoryImpl implements ScheduleRepository {
   }
 
   @override
+  Stream<List<ShiftSwapEntity>> watchEmployeeSwaps(String uid) =>
+      _remote.watchEmployeeSwaps(uid).map(_toEntities).handleError(_streamError);
+
+  @override
+  Stream<List<ShiftSwapEntity>> watchBranchSwaps(String branchId) =>
+      _remote.watchBranchSwaps(branchId).map(_toEntities).handleError(_streamError);
+
+  @override
+  Stream<List<ShiftSwapEntity>> watchAllSwaps() =>
+      _remote.watchAllSwaps().map(_toEntities).handleError(_streamError);
+
+  List<ShiftSwapEntity> _toEntities(List<ShiftSwapModel> models) =>
+      models.map((m) => m.toEntity()).toList();
+
+  Never _streamError(Object e, StackTrace st) =>
+      throw ServerFailure(e is Failure ? e.message : 'Failed to load swap requests.');
+
+  @override
   Future<ShiftSwapEntity> createSwap(ShiftSwapEntity swap) async {
     try {
       final created = await _remote.createSwap(ShiftSwapModel.fromEntity(swap));

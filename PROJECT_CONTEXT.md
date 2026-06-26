@@ -417,9 +417,13 @@ Firestore branches/{id}   Firestore users/{uid}     aggregates users/tasks/shift
   every all-branches task emit). The ListView scaffold + static sections build
   once; each data section subscribes via a scoped helper — `_StatsSection`
   (`BlocBuilder<StatisticsCubit>`: greeting scope, metric grid) and
-  `_DynamicSection` (stats + a `BlocSelector<TaskCubit, int>` on the **overdue
-  count**: hero, Pending Actions) — so a task emit only rebuilds hero/Pending
-  Actions, and only when the overdue number actually moves. Every section's
+  `_DynamicSection` (stats + a `BlocSelector<TaskCubit, ({int overdue, int
+  reviews})>` on the **overdue + waiting-review counts**: hero, Pending Actions) —
+  so a task emit only rebuilds hero/Pending Actions, and only when one of those
+  numbers actually moves. **Both counts are derived from the LIVE task stream**
+  (`_overdueCount`/`_reviewCount`), **not** the TTL-cached `StatisticsCubit`
+  (which isn't invalidated on a mutation) — so completing a review drops the
+  Pending Actions queue + hero instantly (2026-06-26 fix). Every section's
   `EntranceFade` is **keyed** (`ValueKey('admin-sec-…')`) so the entrance plays
   once and never replays when the conditional "Pending approvals" section shifts
   positions. The `_Hero` takes a pre-computed `overdue` int (its only task input).
@@ -445,8 +449,8 @@ BranchScheduleScreen (manager, tabs)   ScheduleManagementScreen (admin)   MySche
   └─ ManagerScheduleView (shared editor) ─┘   + SwapListView / showSwapRequestSheet      (presentation/pages + widgets)
         ↓  context.read<ScheduleCubit>() / context.read<ShiftSwapCubit>()  (both app-wide in main.dart)
 ScheduleCubit (+ ScheduleState)        ShiftSwapCubit (+ ShiftSwapState)              (presentation/cubit)
-  load/create/assign/remove,             loadMine/loadBranch, requestSwap,
-  week + branch navigation               coworkerApprove/reject/managerApprove
+  load/create/assign/remove,             loadMine/loadBranch/loadAll (LIVE streams),
+  week + branch navigation               requestSwap·coworkerApprove/reject·managerApprove
         ↓  (repo-direct; ScheduleCubit also uses auth GetUsersByBranch for members)
 ScheduleRepository (abstract)                                                          (domain/repositories)
         ↓   AppDependencies.scheduleCubit / shiftSwapCubit  (composed in injection.dart)
@@ -500,7 +504,15 @@ Cloud Firestore  weekly_schedules/{branchId_yyyy-MM-dd}    shift_swaps/{id}    f
   holds `NotifySwapEvent` + `GetUsersByBranch` (DI). Guards: requester≠target ·
   future shift (`SwapEligibility`) · target-slot-exists · no duplicate pending.
   The flow order is validated in `ShiftSwapCubit`; `firestore.rules` enforce who
-  may write.
+  may write. **Realtime (2026-06-26):** `ShiftSwapCubit` is **stream-based** —
+  `loadMine`/`loadBranch`/`loadAll` subscribe to live Firestore snapshot streams
+  (`ScheduleRepository.watchEmployeeSwaps` — merges the requester+target queries —
+  `watchBranchSwaps`/`watchAllSwaps`), scope-guarded + cancel-on-close; mutations
+  no longer refetch (the stream reflects them). So an incoming swap appears on the
+  coworker's Home instantly and the **admin Home swap count is live**
+  (`admin_dashboard_screen._PendingSection` selects the unresolved count). The
+  one-shot `getEmployeeSwaps/getBranchSwaps/getAllSwaps` + `pendingSwaps()` remain
+  for snapshot callers.
   `BranchScheduleScreen` carries a `BlocListener` that refreshes `ScheduleCubit`
   whenever a swap action settles, so an approved swap updates the Schedule tab
   with no manual refresh (Phase 8). **A swap may only be requested for an upcoming
@@ -708,7 +720,7 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Broadcast feed (Firestore read)**       | `lib/features/communications/data/datasources/broadcast_remote_datasource.dart` `watchBroadcasts` (`broadcasts/{id}`; admin `orderBy(createdAt)`, branch `where('branchId', whereIn:[branch,''])` client-sorted; DMs excluded via the `'__direct__'` marker) → `BroadcastCubit.load({branchId})` |
 | **Broadcast repository / use case / state** | `domain/repositories/broadcast_repository.dart` (+impl) · `domain/usecases/send_broadcast.dart` (`SendBroadcast`) · `presentation/cubit/broadcast_cubit.dart` + `broadcast_state.dart` |
 | **Broadcast DI wiring / provider**        | `lib/core/di/injection.dart` (`broadcastCubit`; datasource takes `FirebaseFirestore` + `FirebaseFunctions`) + `main.dart` provider + `AppConstants.broadcastsCollection` + `firestore.rules` (`broadcasts/{id}` — **client writes denied**, function-owned) |
-| **FCM device token storage (multi-device)** | `lib/core/services/notification_service.dart` — `registerToken`/`_rotateToken` (`users/{uid}.fcmTokens` `arrayUnion`, refresh-aware), `forgetUser` (`arrayRemove` on sign-out). Read server-side by `functions/index.js`. Wired in `main.dart` (`AuthCubit` listener) |
+| **FCM device token storage (multi-device)** | `lib/core/services/notification_service.dart` — `registerToken`/`_rotateToken` (`users/{uid}.fcmTokens` `arrayUnion`, refresh-aware), `forgetUser` (`arrayRemove`). Read server-side by `functions/index.js`. Registered via `main.dart` (`AuthCubit` listener). **Token removal runs PRE-sign-out (2026-06-26):** `AuthCubit.signOut()`'s `onPreSignOut` hook (DI → `forgetUser`) drops the token **while still authenticated** — the post-sign-out listener write is permission-denied. Server `claimFcmToken` reconciles force-kill/offline logouts (exclusive ownership; no cross-account leak) |
 | **FCM receive handling (fg/bg/tap)**      | `lib/core/services/notification_service.dart` (`onMessage` → `onForeground`; `onMessageOpenedApp` + `getInitialMessage` → `onMessageTap`) + `lib/main.dart` (background top-level handler, foreground snackbar via `_messengerKey`, tap → `_router.go(home)` + log `broadcastId`) |
 | **Communications Center UI (feed/compose/detail)** | `lib/features/communications/presentation/pages/` (`communications_screen.dart` feed + FAB · `compose_broadcast_screen.dart` role-gated form · `broadcast_detail_screen.dart`) + `widgets/broadcast_card.dart` + `presentation/communications_format.dart` (time/audience/category formatting). Card render tested in `test/broadcast_card_test.dart` |
 | **Communications routes / entry point**   | `route_names.dart` (`communications` `/communications` · `communicationsCompose` `/communications/compose` · `communicationsDetailPattern` `/communications/:broadcastId` + `communicationsDetail(id)`) + `app_router.dart` (3 routes, declared compose-before-detail; `_isCommunicationsArea` guard — admin + manager, employees bounced) + `role_scaffold.dart` (campaign icon, admin/manager only) |

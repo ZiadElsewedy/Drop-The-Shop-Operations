@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbro/core/enums/notification_type.dart';
 import 'package:fbro/core/enums/schedule_day.dart';
@@ -11,14 +13,15 @@ import 'package:fbro/features/schedule/domain/repositories/schedule_repository.d
 import 'package:fbro/features/schedule/domain/swap_eligibility.dart';
 import 'shift_swap_state.dart';
 
-/// Drives the shift-swap workflow (Phase 7). An employee requests a swap on one
-/// of their slots; the target coworker approves; the branch manager approves —
-/// which rewrites the schedule. The list shown depends on the view: an employee
-/// sees swaps involving them ([loadMine]); a manager sees their branch's queue
-/// ([loadBranch]). Calls [ScheduleRepository] directly (no use-case layer).
-/// Which slice of swaps the cubit is showing: the signed-in employee's own
-/// ([mine]), one branch's queue ([branch], manager), or every branch ([all],
-/// admin).
+/// Drives the shift-swap workflow (Phase 7, **realtime** since 2026-06-26). An
+/// employee requests a swap on one of their slots; the target coworker approves;
+/// the branch manager approves — which rewrites the schedule (via the
+/// `approveSwap` Cloud Function). The cubit **subscribes to a live Firestore
+/// stream** scoped to the view: an employee sees swaps involving them
+/// ([loadMine]); a manager sees their branch's queue ([loadBranch]); an admin
+/// every branch ([loadAll]). So an accept / reject / approve reflects on every
+/// open surface instantly — no manual refresh. Calls [ScheduleRepository]
+/// directly (no use-case layer).
 enum SwapScope { mine, branch, all }
 
 class ShiftSwapCubit extends Cubit<ShiftSwapState> {
@@ -26,44 +29,88 @@ class ShiftSwapCubit extends Cubit<ShiftSwapState> {
   final NotifySwapEvent _notifySwap;
   final GetUsersByBranch _getUsersByBranch;
 
-  /// Reload context — drives which fetch [_load]/[_mutate] re-run.
+  /// Subscription context — which slice of swaps is being streamed.
   SwapScope _scope = SwapScope.mine;
   String _key = '';
+
+  StreamSubscription<List<ShiftSwapEntity>>? _sub;
+
+  /// Identity of the active subscription (`scope:key`) — the idempotency guard.
+  String? _subKey;
+
+  /// Last streamed list + in-flight flag, preserved across a mutation's emits.
+  List<ShiftSwapEntity> _latest = const [];
+  bool _busy = false;
 
   ShiftSwapCubit(this._repository, this._notifySwap, this._getUsersByBranch)
       : super(const ShiftSwapState.initial());
 
-  List<ShiftSwapEntity> get _swaps =>
-      state.maybeWhen(loaded: (s, _) => s, orElse: () => const []);
-
-  bool get _busy => state.maybeWhen(
-        loaded: (_, busy) => busy,
-        loading: () => true,
-        orElse: () => false,
-      );
+  String _scopeKey(SwapScope s, String k) => '${s.name}:$k';
 
   /// Employee view — swaps where [uid] is requester or target.
-  Future<void> loadMine(String uid) async {
-    _scope = SwapScope.mine;
-    _key = uid;
-    await _load();
-  }
+  Future<void> loadMine(String uid, {bool force = false}) =>
+      _subscribe(SwapScope.mine, uid, force);
 
   /// Manager view — the branch's swap queue.
-  Future<void> loadBranch(String branchId) async {
-    _scope = SwapScope.branch;
-    _key = branchId;
-    await _load();
-  }
+  Future<void> loadBranch(String branchId, {bool force = false}) =>
+      _subscribe(SwapScope.branch, branchId, force);
 
   /// Admin view — every branch's swap queue.
-  Future<void> loadAll() async {
-    _scope = SwapScope.all;
-    _key = '';
-    await _load();
+  Future<void> loadAll({bool force = false}) =>
+      _subscribe(SwapScope.all, '', force);
+
+  /// Re-subscribe the current scope (pull-to-refresh / error retry).
+  Future<void> refresh() => _subscribe(_scope, _key, true);
+
+  /// True when there's nothing to stream — an empty key for the mine/branch
+  /// scopes (the all scope needs no key).
+  bool _noTarget(SwapScope scope, String key) =>
+      scope != SwapScope.all && key.isEmpty;
+
+  Future<void> _subscribe(SwapScope scope, String key, bool force) async {
+    final newKey = _scopeKey(scope, key);
+    final errored = state.maybeWhen(error: (_) => true, orElse: () => false);
+    // Idempotent: already streaming this exact scope (and not in an error state)
+    // → no-op, so revisiting a screen never re-subscribes or flashes a skeleton.
+    if (!force && _subKey == newKey && _sub != null && !errored) return;
+
+    _scope = scope;
+    _key = key;
+    _subKey = newKey;
+
+    await _sub?.cancel();
+    _sub = null;
+
+    if (_noTarget(scope, key)) {
+      _latest = const [];
+      _busy = false;
+      emit(const ShiftSwapState.loaded([]));
+      return;
+    }
+
+    emit(const ShiftSwapState.loading());
+    _sub = _streamFor(scope, key).listen(
+      (swaps) {
+        _latest = swaps;
+        emit(ShiftSwapState.loaded(swaps, busy: _busy));
+      },
+      onError: (Object e) {
+        emit(ShiftSwapState.error(
+            e is Failure ? e.message : 'Failed to load swap requests.'));
+      },
+    );
   }
 
-  Future<void> refresh() => _load();
+  Stream<List<ShiftSwapEntity>> _streamFor(SwapScope scope, String key) {
+    switch (scope) {
+      case SwapScope.mine:
+        return _repository.watchEmployeeSwaps(key);
+      case SwapScope.branch:
+        return _repository.watchBranchSwaps(key);
+      case SwapScope.all:
+        return _repository.watchAllSwaps();
+    }
+  }
 
   // ── Employee actions ───────────────────────────────────────────
   Future<void> requestSwap({
@@ -83,8 +130,8 @@ class ShiftSwapCubit extends Cubit<ShiftSwapState> {
       return;
     }
     // Guard: one open request at a time (no simultaneous pending swaps).
-    final hasOpen = _swaps.any(
-        (s) => s.requesterId == requesterId && !s.status.isResolved);
+    final hasOpen = _latest
+        .any((s) => s.requesterId == requesterId && !s.status.isResolved);
     if (hasOpen) {
       _reject('You already have a pending swap request. '
           'Resolve it before requesting another.');
@@ -119,8 +166,8 @@ class ShiftSwapCubit extends Cubit<ShiftSwapState> {
   }
 
   /// One-shot fetch of every **open** swap request (not resolved), across all
-  /// branches — used by the Admin Home "Pending Actions" panel for at-a-glance
-  /// operational visibility. Does not emit (mirrors `AdminUsersCubit.pendingUsers`).
+  /// branches — a non-emitting helper kept for callers that want a snapshot count
+  /// without subscribing (the live admin surfaces use [loadAll] + the stream).
   Future<List<ShiftSwapEntity>> pendingSwaps() async {
     try {
       final all = await _repository.getAllSwaps();
@@ -188,56 +235,33 @@ class ShiftSwapCubit extends Cubit<ShiftSwapState> {
   }
 
   // ── Internals ──────────────────────────────────────────────────
-  Future<List<ShiftSwapEntity>> _fetch() {
-    switch (_scope) {
-      case SwapScope.mine:
-        return _repository.getEmployeeSwaps(_key);
-      case SwapScope.branch:
-        return _repository.getBranchSwaps(_key);
-      case SwapScope.all:
-        return _repository.getAllSwaps();
-    }
-  }
-
-  /// True when there's nothing to fetch — an empty key for the mine/branch
-  /// scopes (the all scope needs no key).
-  bool get _noTarget => _scope != SwapScope.all && _key.isEmpty;
-
-  Future<void> _load() async {
-    if (_noTarget) {
-      emit(const ShiftSwapState.loaded([]));
-      return;
-    }
-    emit(const ShiftSwapState.loading());
-    try {
-      emit(ShiftSwapState.loaded(await _fetch()));
-    } on Failure catch (e) {
-      emit(ShiftSwapState.error(e.message));
-    } catch (_) {
-      emit(const ShiftSwapState.error('Failed to load swap requests.'));
-    }
-  }
-
   /// Emits a one-shot error (for the snackbar listener) then restores the list.
   void _reject(String message) {
-    final prev = _swaps;
     emit(ShiftSwapState.error(message));
-    emit(ShiftSwapState.loaded(prev));
+    emit(ShiftSwapState.loaded(_latest, busy: _busy));
   }
 
+  /// Runs a write [action]; the live stream reflects the result (no refetch).
+  /// [_busy] gates concurrent writes + drives the inline progress bar.
   Future<void> _mutate(Future<void> Function() action) async {
-    if (_busy || _noTarget) return;
-    final prev = _swaps;
-    emit(ShiftSwapState.loaded(prev, busy: true));
+    if (_busy) return;
+    _busy = true;
+    emit(ShiftSwapState.loaded(_latest, busy: true));
     try {
       await action();
-      emit(ShiftSwapState.loaded(await _fetch()));
     } on Failure catch (e) {
       emit(ShiftSwapState.error(e.message));
-      emit(ShiftSwapState.loaded(prev));
     } catch (_) {
       emit(const ShiftSwapState.error('Something went wrong. Please try again.'));
-      emit(ShiftSwapState.loaded(prev));
+    } finally {
+      _busy = false;
+      emit(ShiftSwapState.loaded(_latest, busy: false));
     }
+  }
+
+  @override
+  Future<void> close() {
+    _sub?.cancel();
+    return super.close();
   }
 }

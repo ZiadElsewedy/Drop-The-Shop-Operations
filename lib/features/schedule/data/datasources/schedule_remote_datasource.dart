@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -38,6 +39,14 @@ abstract class ScheduleRemoteDataSource {
   Future<List<ShiftSwapModel>> getBranchSwaps(String branchId);
   Future<List<ShiftSwapModel>> getEmployeeSwaps(String uid);
   Future<List<ShiftSwapModel>> getAllSwaps();
+
+  /// Realtime swap streams (newest first). [watchEmployeeSwaps] merges the
+  /// requester + target queries (Firestore has no cross-field OR); the branch /
+  /// all streams are a single snapshot query.
+  Stream<List<ShiftSwapModel>> watchEmployeeSwaps(String uid);
+  Stream<List<ShiftSwapModel>> watchBranchSwaps(String branchId);
+  Stream<List<ShiftSwapModel>> watchAllSwaps();
+
   Future<ShiftSwapModel> createSwap(ShiftSwapModel swap);
   Future<void> updateSwapStatus({
     required String swapId,
@@ -196,6 +205,68 @@ class ScheduleRemoteDataSourceImpl implements ScheduleRemoteDataSource {
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to load swap requests.');
     }
+  }
+
+  @override
+  Stream<List<ShiftSwapModel>> watchBranchSwaps(String branchId) {
+    return _swaps
+        .where('branchId', isEqualTo: branchId)
+        .snapshots()
+        .map((snap) => _sortSwaps(
+            snap.docs.map((d) => ShiftSwapModel.fromMap(d.data(), id: d.id))));
+  }
+
+  @override
+  Stream<List<ShiftSwapModel>> watchAllSwaps() {
+    return _swaps.snapshots().map((snap) => _sortSwaps(
+        snap.docs.map((d) => ShiftSwapModel.fromMap(d.data(), id: d.id))));
+  }
+
+  @override
+  Stream<List<ShiftSwapModel>> watchEmployeeSwaps(String uid) {
+    // Firestore has no cross-field OR on snapshots, so we run the requester +
+    // target queries and merge their latest results by id. A single broadcast
+    // controller fans the union out; both inner subscriptions are cancelled when
+    // the consumer cancels (the cubit, on close / re-subscribe).
+    final reqStream = _swaps.where('requesterId', isEqualTo: uid).snapshots();
+    final tgtStream = _swaps.where('targetId', isEqualTo: uid).snapshots();
+
+    late final StreamController<List<ShiftSwapModel>> controller;
+    StreamSubscription? reqSub;
+    StreamSubscription? tgtSub;
+    var reqMap = <String, ShiftSwapModel>{};
+    var tgtMap = <String, ShiftSwapModel>{};
+    var reqReady = false;
+    var tgtReady = false;
+
+    void emitUnion() {
+      if (!reqReady && !tgtReady) return;
+      final byId = <String, ShiftSwapModel>{...reqMap, ...tgtMap};
+      controller.add(_sortSwaps(byId.values));
+    }
+
+    Map<String, ShiftSwapModel> toMap(QuerySnapshot<Map<String, dynamic>> s) =>
+        {for (final d in s.docs) d.id: ShiftSwapModel.fromMap(d.data(), id: d.id)};
+
+    controller = StreamController<List<ShiftSwapModel>>(
+      onListen: () {
+        reqSub = reqStream.listen((s) {
+          reqMap = toMap(s);
+          reqReady = true;
+          emitUnion();
+        }, onError: controller.addError);
+        tgtSub = tgtStream.listen((s) {
+          tgtMap = toMap(s);
+          tgtReady = true;
+          emitUnion();
+        }, onError: controller.addError);
+      },
+      onCancel: () async {
+        await reqSub?.cancel();
+        await tgtSub?.cancel();
+      },
+    );
+    return controller.stream;
   }
 
   @override

@@ -285,6 +285,19 @@ async function dispatchBroadcast(params) {
       },
     };
 
+    if (tokens.length === 0) {
+      // Recipients exist but none has a registered device token — they still get
+      // the in-app inbox entry, just no push. Logged so a "didn't reach all"
+      // report can be diagnosed (token persistence vs. the send itself).
+      logger.info("broadcast push: recipients have no registered device tokens", {
+        broadcastId: broadcastRef.id,
+        recipientCount,
+      });
+    }
+    // A push / messaging-API failure must NOT fail a send whose broadcast doc +
+    // inbox notifications already succeeded (recipients still got the in-app
+    // entry). Isolate it: log it and keep the partial delivered count.
+    try {
     for (let i = 0; i < tokens.length; i += MULTICAST_CHUNK) {
       const batch = tokens.slice(i, i + MULTICAST_CHUNK);
       const response = await messaging.sendEachForMulticast({ ...message, tokens: batch });
@@ -313,6 +326,14 @@ async function dispatchBroadcast(params) {
             .catch(() => {}),
         ),
       );
+    }
+    } catch (err) {
+      logger.error("broadcast push failed (inbox delivery already succeeded)", {
+        broadcastId: broadcastRef.id,
+        tokenCount: tokens.length,
+        deliveredCount,
+        error: String(err),
+      });
     }
   }
 

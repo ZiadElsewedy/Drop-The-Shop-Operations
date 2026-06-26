@@ -876,6 +876,9 @@ class _ActivityTimeline extends StatelessWidget {
           actor: directory[entry.actorId],
           attachmentSummary: media.isEmpty ? null : attachmentSummary(media),
           isLast: i == 0,
+          // The newest entry (rendered first) is the task's CURRENT state — the
+          // V2 timeline gives it prominent emphasis.
+          isHead: i == log.length - 1,
           onTap: _isSubmission(entry.status)
               ? () => showSubmissionDetailsSheet(
                     context: context,
@@ -902,6 +905,7 @@ class _EventCard extends StatelessWidget {
     required this.actor,
     required this.attachmentSummary,
     required this.isLast,
+    required this.isHead,
     required this.onTap,
   });
 
@@ -909,6 +913,10 @@ class _EventCard extends StatelessWidget {
   final UserEntity? actor;
   final String? attachmentSummary;
   final bool isLast;
+
+  /// The most recent event — the task's current state. Drives the prominent
+  /// "current step" treatment (larger node, accent ring + glow, CURRENT pill).
+  final bool isHead;
   final VoidCallback? onTap;
 
   String get _actorName =>
@@ -930,23 +938,57 @@ class _EventCard extends StatelessWidget {
     final card = Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: AppColors.darkSurfaceElevated,
+        // The current step reads as an accent-tinted, glowing surface; older
+        // steps recede onto the flat elevated surface (premium hierarchy).
+        color: isHead ? color.withAlpha(20) : AppColors.darkSurfaceElevated,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.darkBorder),
+        border: Border.all(
+          color: isHead ? color.withAlpha(110) : AppColors.darkBorder,
+          width: isHead ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isHead ? color.withAlpha(34) : Colors.black.withAlpha(46),
+            blurRadius: isHead ? 18 : 7,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Title + timestamp (+ chevron when the card opens a detail surface)
+          // Title + (CURRENT pill on the head) + timestamp + chevron.
           Row(
             children: [
               Expanded(
                 child: Text(
                   activityTitle(entry.status),
-                  style: AppTypography.label.copyWith(color: color, fontSize: 13),
+                  style: AppTypography.label.copyWith(
+                    color: color,
+                    fontSize: isHead ? 14 : 13,
+                    fontWeight: isHead ? FontWeight.w700 : FontWeight.w600,
+                  ),
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              if (isHead) ...[
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: color.withAlpha(38),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: color.withAlpha(120)),
+                  ),
+                  child: Text('CURRENT',
+                      style: AppTypography.caption.copyWith(
+                        color: color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 9,
+                        letterSpacing: 0.5,
+                      )),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+              ],
               Text(relativeTime(entry.at), style: AppTypography.caption),
               if (onTap != null) ...[
                 const SizedBox(width: 2),
@@ -987,44 +1029,71 @@ class _EventCard extends StatelessWidget {
               ],
             ),
           ],
-          // Truncated note preview
+          // Note preview — in a subtle callout surface.
           if (note.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              '“$note”',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textSecondary, height: 1.4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.darkSurface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: Text(
+                '“$note”',
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption
+                    .copyWith(color: AppColors.textSecondary, height: 1.4),
+              ),
             ),
           ],
         ],
       ),
     );
 
+    // The connecting spine below the head is accent-tinted at the top, fading to
+    // the neutral border — a clear "you are here, this is the history below" read.
+    final lineTop = isHead ? color.withAlpha(130) : AppColors.darkBorder;
+
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Spine ──────────────────────────────────────────────
+          // ── Spine: prominent node for the current step ─────────
           Column(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: isHead ? 34 : 26,
+                height: isHead ? 34 : 26,
                 decoration: BoxDecoration(
-                  color: color.withAlpha(28),
+                  color: color.withAlpha(isHead ? 45 : 26),
                   shape: BoxShape.circle,
-                  border: Border.all(color: color.withAlpha(90)),
+                  border: Border.all(
+                    color: color.withAlpha(isHead ? 165 : 85),
+                    width: isHead ? 2 : 1,
+                  ),
+                  boxShadow: isHead
+                      ? [BoxShadow(color: color.withAlpha(70), blurRadius: 12)]
+                      : null,
                 ),
-                child: Icon(activityIcon(entry.status), size: 15, color: color),
+                child: Icon(activityIcon(entry.status),
+                    size: isHead ? 18 : 14, color: color),
               ),
               if (!isLast)
                 Expanded(
                   child: Container(
-                    width: 1.5,
+                    width: 2,
                     margin: const EdgeInsets.symmetric(vertical: 4),
-                    color: AppColors.darkBorder,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [lineTop, AppColors.darkBorder],
+                      ),
+                    ),
                   ),
                 ),
             ],

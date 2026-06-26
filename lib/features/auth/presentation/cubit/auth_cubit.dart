@@ -34,6 +34,12 @@ class AuthCubit extends Cubit<AuthState> {
   final ChangePassword _changePassword;
   final DeleteAccount _deleteAccount;
 
+  /// Hook run **before** Firebase sign-out, while the session is still
+  /// authenticated — used to drop this device's FCM token from the user's doc
+  /// (a write that would be permission-denied once signed out). Wired in DI to
+  /// [NotificationService.forgetUser].
+  final Future<void> Function()? _onPreSignOut;
+
   StreamSubscription? _authSub;
   StreamSubscription? _userWatchSub;
 
@@ -56,7 +62,9 @@ class AuthCubit extends Cubit<AuthState> {
     required this._checkEmailVerified,
     required this._changePassword,
     required this._deleteAccount,
-  }) : super(const AuthState.initial());
+    Future<void> Function()? onPreSignOut,
+  })  : _onPreSignOut = onPreSignOut,
+        super(const AuthState.initial());
 
   /// Called once from SplashPage on cold start.
   Future<void> restoreSession() async {
@@ -295,6 +303,17 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   Future<void> signOut() async {
+    // Drop this device's FCM token FIRST, while still authenticated — the
+    // post-sign-out `unauthenticated` listener can't, because once Firebase Auth
+    // is cleared the `users/{uid}` write is permission-denied (rules require
+    // `isOwner`). Without this, the token lingered on the signed-out account and
+    // the next user on this device could receive the previous user's pushes. The
+    // server `claimFcmToken` remains the backstop for force-kill / offline cases.
+    try {
+      await _onPreSignOut?.call();
+    } catch (_) {
+      // Best-effort — a token-cleanup failure must not block sign-out.
+    }
     try {
       await _signOut();
     } catch (_) {

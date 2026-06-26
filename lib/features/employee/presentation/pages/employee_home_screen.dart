@@ -14,7 +14,11 @@ import 'package:fbro/core/widgets/app_glass_card.dart';
 import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/premium_button.dart';
 import 'package:fbro/core/widgets/skeleton.dart';
+import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
+import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
+import 'package:fbro/features/schedule/presentation/cubit/shift_swap_state.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/statistics/domain/entities/statistics_entity.dart';
 import 'package:fbro/features/statistics/presentation/cubit/statistics_cubit.dart';
@@ -58,6 +62,10 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     if (user != null) {
       context.read<StatisticsCubit>().load(user, forceRefresh: force);
       context.read<TaskCubit>().load(user, forceRefresh: force);
+      // Surface this employee's swap requests right here on Home — both the ones
+      // a coworker is waiting on them to accept/reject, and their own in-flight
+      // requests. (Previously only reachable inside Schedule → Swaps.)
+      context.read<ShiftSwapCubit>().loadMine(user.uid);
     }
   }
 
@@ -68,13 +76,23 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
     );
     final now = DateTime.now();
 
-    return BlocListener<TaskCubit, TaskState>(
-      // Only surface task errors while Home is the visible route — otherwise the
-      // Task Details screen (pushed on top) already shows them.
-      listener: (context, state) {
-        if (ModalRoute.of(context)?.isCurrent != true) return;
-        state.whenOrNull(error: (m) => context.showError(m));
-      },
+    return MultiBlocListener(
+      // Only surface errors while Home is the visible route — otherwise a pushed
+      // screen (Task Details) already shows them.
+      listeners: [
+        BlocListener<TaskCubit, TaskState>(
+          listener: (context, state) {
+            if (ModalRoute.of(context)?.isCurrent != true) return;
+            state.whenOrNull(error: (m) => context.showError(m));
+          },
+        ),
+        BlocListener<ShiftSwapCubit, ShiftSwapState>(
+          listener: (context, state) {
+            if (ModalRoute.of(context)?.isCurrent != true) return;
+            state.whenOrNull(error: (m) => context.showError(m));
+          },
+        ),
+      ],
       child: RefreshIndicator(
         onRefresh: () async => _load(force: true),
         color: AppColors.primary,
@@ -84,6 +102,15 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             EntranceFade(child: _GreetingSection(user: user, now: now)),
+
+            // Swap requests — surfaced prominently (only appears when there's one
+            // needing this employee's action or one of their own in flight).
+            if (user != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.pagePadding),
+                child: _SwapRequestsSection(uid: user.uid),
+              ),
 
             Padding(
               padding: const EdgeInsets.symmetric(
@@ -1498,6 +1525,274 @@ class _AllDoneCard extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         _ViewAllRow(label: 'Open all tasks', emphasized: true),
       ],
+    );
+  }
+}
+
+// ─── Shift swap requests (surfaced on Home) ──────────────────────────
+
+/// Shows the employee's relevant shift swaps right on Home: requests a coworker
+/// is waiting on them to **Accept / Reject**, and their own in-flight requests
+/// (status + Cancel). Renders nothing when there are none, so Home stays clean.
+class _SwapRequestsSection extends StatelessWidget {
+  const _SwapRequestsSection({required this.uid});
+  final String uid;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocBuilder<ShiftSwapCubit, ShiftSwapState>(
+      builder: (context, state) {
+        final swaps = state.maybeWhen(
+          loaded: (s, _) => s,
+          orElse: () => const <ShiftSwapEntity>[],
+        );
+        // Needs THIS user's action (a coworker asked them to trade).
+        final incoming =
+            swaps.where((s) => s.targetId == uid && s.status.isPending).toList();
+        // Their own requests still in flight (waiting on coworker or manager).
+        final outgoing = swaps
+            .where((s) => s.requesterId == uid && !s.status.isResolved)
+            .toList();
+        if (incoming.isEmpty && outgoing.isEmpty) return const SizedBox.shrink();
+
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _SectionRow(
+                label: 'Shift swaps',
+                count: incoming.length + outgoing.length,
+                icon: Icons.swap_horiz_rounded,
+                color: incoming.isNotEmpty ? AppColors.warning : null,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              for (var i = 0; i < incoming.length; i++)
+                EntranceFade(
+                  delay: Duration(milliseconds: i * 50),
+                  child: _IncomingSwapCard(swap: incoming[i], uid: uid),
+                ),
+              for (var i = 0; i < outgoing.length; i++)
+                EntranceFade(
+                  delay: Duration(milliseconds: (incoming.length + i) * 50),
+                  child: _OutgoingSwapCard(swap: outgoing[i]),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A swap a coworker is waiting on this employee to accept/reject.
+class _IncomingSwapCard extends StatelessWidget {
+  const _IncomingSwapCard({required this.swap, required this.uid});
+  final ShiftSwapEntity swap;
+  final String uid;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<ShiftSwapCubit>();
+    final requester = swap.requesterName ?? 'A coworker';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppGlassCard(
+        glow: AppColors.warning,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                UserAvatar(name: requester, size: 38),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(requester,
+                          style: AppTypography.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text('${swap.day.label} · wants to swap shifts',
+                          style: AppTypography.caption,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                const _MiniPill(label: 'Needs you', color: AppColors.warning),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // You give your current (opposite) shift, you get theirs.
+            _HomeExchangeStrip(
+              giveLabel: swap.shift.opposite.label,
+              getLabel: swap.shift.label,
+            ),
+            if ((swap.note ?? '').isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(swap.note!,
+                  style: AppTypography.caption
+                      .copyWith(fontStyle: FontStyle.italic)),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                PremiumButton(
+                  label: 'Accept',
+                  icon: Icons.check_rounded,
+                  style: PremiumButtonStyle.filled,
+                  onPressed: () => cubit.coworkerApprove(swap),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                PremiumButton(
+                  label: 'Decline',
+                  icon: Icons.close_rounded,
+                  tone: AppColors.error,
+                  onPressed: () => cubit.reject(swap, actorId: uid),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The employee's own in-flight swap request — shows its stage + Cancel.
+class _OutgoingSwapCard extends StatelessWidget {
+  const _OutgoingSwapCard({required this.swap});
+  final ShiftSwapEntity swap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cubit = context.read<ShiftSwapCubit>();
+    final awaitingManager = swap.status.isEmployeeApproved;
+    final accent = awaitingManager ? AppColors.success : AppColors.warning;
+    final detail = awaitingManager
+        ? 'Accepted — awaiting manager approval'
+        : 'Waiting for ${swap.targetName ?? 'your coworker'} to accept';
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: AppGlassCard(
+        glow: awaitingManager ? AppColors.success : null,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: AppColors.darkSurfaceElevated,
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: const Icon(Icons.swap_horiz_rounded,
+                      size: 18, color: AppColors.textSecondary),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Your swap request', style: AppTypography.label),
+                      const SizedBox(height: 2),
+                      Text(detail,
+                          style: AppTypography.caption,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+                _MiniPill(label: swap.status.label, color: accent),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerRight,
+              child: PremiumButton(
+                label: 'Cancel request',
+                icon: Icons.undo_rounded,
+                style: PremiumButtonStyle.ghost,
+                tone: AppColors.textSecondary,
+                onPressed: () => cubit.cancelSwap(swap),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "You give X  ⇄  You get Y" — makes the trade unmistakable on the home card.
+class _HomeExchangeStrip extends StatelessWidget {
+  const _HomeExchangeStrip({required this.giveLabel, required this.getLabel});
+  final String giveLabel;
+  final String getLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: AppRadius.cardAll,
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _slot('You give', giveLabel, false)),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            child: Icon(Icons.swap_horiz_rounded,
+                size: 16, color: AppColors.textSecondary),
+          ),
+          Expanded(child: _slot('You get', getLabel, true)),
+        ],
+      ),
+    );
+  }
+
+  Widget _slot(String caption, String shift, bool alignEnd) => Column(
+        crossAxisAlignment:
+            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          Text(caption.toUpperCase(),
+              style: AppTypography.caption.copyWith(
+                  color: AppColors.textTertiary,
+                  fontSize: 9,
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 2),
+          Text(shift,
+              style: AppTypography.labelSmall
+                  .copyWith(fontWeight: FontWeight.w700)),
+        ],
+      );
+}
+
+class _MiniPill extends StatelessWidget {
+  const _MiniPill({required this.label, required this.color});
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withAlpha(30),
+        borderRadius: BorderRadius.circular(AppRadius.full),
+        border: Border.all(color: color.withAlpha(90)),
+      ),
+      child: Text(label,
+          style: AppTypography.caption.copyWith(
+              color: color, fontWeight: FontWeight.w700, fontSize: 10)),
     );
   }
 }

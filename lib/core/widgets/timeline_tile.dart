@@ -46,14 +46,23 @@ class TimelineTile extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Timeline spine: dot + (unless last) the connecting line.
+          // Timeline spine: a haloed status dot + (unless last) the spine line.
           Column(
             children: [
               Container(
-                width: 8,
-                height: 8,
-                margin: const EdgeInsets.only(top: 6),
-                decoration: BoxDecoration(shape: BoxShape.circle, color: dot),
+                width: 14,
+                height: 14,
+                margin: const EdgeInsets.only(top: 4),
+                decoration:
+                    BoxDecoration(shape: BoxShape.circle, color: dot.withAlpha(40)),
+                child: Center(
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration:
+                        BoxDecoration(shape: BoxShape.circle, color: dot),
+                  ),
+                ),
               ),
               if (!isLast)
                 Expanded(
@@ -93,11 +102,21 @@ class TimelineTile extends StatelessWidget {
                     Text(subtitle!, style: AppTypography.bodySmall),
                   ],
                   if (note != null && note!.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      note!,
-                      style: AppTypography.caption.copyWith(
-                          color: AppColors.textSecondary, height: 1.4),
+                    const SizedBox(height: 6),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.darkSurface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AppColors.darkBorder),
+                      ),
+                      child: Text(
+                        note!,
+                        style: AppTypography.caption.copyWith(
+                            color: AppColors.textSecondary, height: 1.4),
+                      ),
                     ),
                   ],
                 ],

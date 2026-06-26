@@ -20,8 +20,8 @@ import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
 import 'package:fbro/features/admin/presentation/widgets/pending_actions.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
-import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
+import 'package:fbro/features/schedule/presentation/cubit/shift_swap_state.dart';
 import 'package:fbro/features/statistics/domain/entities/statistics_entity.dart';
 import 'package:fbro/features/statistics/presentation/cubit/statistics_cubit.dart';
 import 'package:fbro/features/statistics/presentation/cubit/statistics_state.dart';
@@ -46,7 +46,6 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   List<UserEntity> _pending = const [];
-  List<ShiftSwapEntity> _pendingSwaps = const [];
 
   @override
   void initState() {
@@ -62,17 +61,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // TaskCubit.load is now self-guarding (no-op if already streaming this user
     // unless forced), so a revisit doesn't re-subscribe.
     context.read<TaskCubit>().load(user, forceRefresh: force);
-    // Capture cubits before awaiting so we don't touch context across the gap.
-    final usersCubit = context.read<AdminUsersCubit>();
-    final swapCubit = context.read<ShiftSwapCubit>();
-    final pending = await usersCubit.pendingUsers();
-    final swaps = await swapCubit.pendingSwaps();
-    if (mounted) {
-      setState(() {
-        _pending = pending;
-        _pendingSwaps = swaps;
-      });
-    }
+    // Pending swaps now stream live (scope = all branches), so the Pending
+    // Actions swap count updates the instant a swap settles — no refresh.
+    context.read<ShiftSwapCubit>().loadAll(force: force);
+    final pending = await context.read<AdminUsersCubit>().pendingUsers();
+    if (mounted) setState(() => _pending = pending);
   }
 
   @override
@@ -80,7 +73,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // No top-level cubit subscription: the ListView scaffold + static sections
     // build once. Each data-driven section subscribes to only what it needs via
     // a scoped builder below, so a task-stream emit no longer rebuilds the whole
-    // screen. `_pending`/`_pendingSwaps` are local (setState on load only).
+    // screen. `_pending` is local (setState on load); swaps stream live.
     final name = context.currentUser?.displayName;
 
     // Stable keys + a fixed per-section stagger so the entrance plays once and
@@ -108,15 +101,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           sec(
               'hero',
               _DynamicSection(
-                  builder: (s, overdue) => _Hero(stats: s, overdue: overdue))),
+                  builder: (s, overdue, reviews) =>
+                      _Hero(stats: s, overdue: overdue, reviews: reviews))),
           const SizedBox(height: AppSpacing.xl),
           // Always rendered — shows an all-clear state when empty, so the panel
           // never silently disappears.
-          sec('pa-header', _DynamicSection(builder: (s, overdue) {
-            final pending = _pending.length +
-                _pendingSwaps.length +
-                (s?.waitingReviews ?? 0) +
-                overdue;
+          sec('pa-header', _PendingSection(builder: (s, overdue, reviews, swaps) {
+            final pending = _pending.length + swaps + reviews + overdue;
             return AdminSectionHeader(
               title: 'Pending Actions',
               subtitle:
@@ -125,11 +116,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           })),
           sec(
               'pa',
-              _DynamicSection(
-                  builder: (s, overdue) => PendingActions(
-                        swaps: _pendingSwaps.length,
+              _PendingSection(
+                  builder: (s, overdue, reviews, swaps) => PendingActions(
+                        swaps: swaps,
                         approvals: _pending.length,
-                        reviews: s?.waitingReviews ?? 0,
+                        reviews: reviews,
                         overdue: overdue,
                         onSwaps: () => context.push(RouteNames.adminSchedule),
                         onApprovals: () =>
@@ -310,7 +301,8 @@ class _StatsSection extends StatelessWidget {
 /// whole task list, so a task emit that doesn't move the number rebuilds nothing.
 class _DynamicSection extends StatelessWidget {
   const _DynamicSection({required this.builder});
-  final Widget Function(StatisticsEntity? stats, int overdue) builder;
+  final Widget Function(StatisticsEntity? stats, int overdue, int reviews)
+      builder;
 
   @override
   Widget build(BuildContext context) {
@@ -318,13 +310,45 @@ class _DynamicSection extends StatelessWidget {
       builder: (context, statsState) {
         final stats =
             statsState.maybeWhen(loaded: (s) => s, orElse: () => null);
-        return BlocSelector<TaskCubit, TaskState, int>(
-          selector: (state) => _overdueCount(state.maybeWhen(
-              loaded: (t, _, _, _, _) => t,
-              orElse: () => const <TaskEntity>[])),
-          builder: (context, overdue) => builder(stats, overdue),
+        // Both counts come from the LIVE task stream (not the TTL-cached stats),
+        // so reviewing/finishing a task updates Pending Actions + the hero
+        // immediately. The record selector still rebuilds only when one of the
+        // two numbers actually moves.
+        return BlocSelector<TaskCubit, TaskState, ({int overdue, int reviews})>(
+          selector: (state) {
+            final tasks = state.maybeWhen(
+                loaded: (t, _, _, _, _) => t,
+                orElse: () => const <TaskEntity>[]);
+            return (overdue: _overdueCount(tasks), reviews: _reviewCount(tasks));
+          },
+          builder: (context, c) => builder(stats, c.overdue, c.reviews),
         );
       },
+    );
+  }
+}
+
+/// Like [_DynamicSection] but also threads the **live unresolved swap count**
+/// from `ShiftSwapCubit` (scope = all branches) — so Pending Actions' swap row
+/// updates the instant a swap is approved/rejected, with no refresh. Rebuilds
+/// only when the swap count, overdue or review numbers actually move.
+class _PendingSection extends StatelessWidget {
+  const _PendingSection({required this.builder});
+  final Widget Function(
+      StatisticsEntity? stats, int overdue, int reviews, int swaps) builder;
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocSelector<ShiftSwapCubit, ShiftSwapState, int>(
+      selector: (state) => state.maybeWhen(
+        loaded: (swaps, _) =>
+            swaps.where((s) => !s.status.isResolved).length,
+        orElse: () => 0,
+      ),
+      builder: (context, swaps) => _DynamicSection(
+        builder: (stats, overdue, reviews) =>
+            builder(stats, overdue, reviews, swaps),
+      ),
     );
   }
 }
@@ -394,15 +418,17 @@ class _Greeting extends StatelessWidget {
 // ─── Hero card ──────────────────────────────────────────────────────
 
 class _Hero extends StatelessWidget {
-  const _Hero({required this.stats, required this.overdue});
+  const _Hero({required this.stats, required this.overdue, required this.reviews});
   final StatisticsEntity? stats;
   final int overdue;
+
+  /// Live count of tasks awaiting review (from the task stream, not stats).
+  final int reviews;
 
   @override
   Widget build(BuildContext context) {
     final s = stats;
     final pending = s?.pendingApprovals ?? 0;
-    final reviews = s?.waitingReviews ?? 0;
     final active = s?.activeTasks ?? 0;
     final doneToday = s?.completedTasksToday ?? 0;
     final totalToday = doneToday + active;
@@ -624,4 +650,10 @@ int _overdueCount(List<TaskEntity> tasks) {
     return open && d.isBefore(now);
   }).length;
 }
+
+/// Count of tasks awaiting review — derived from the **live** task stream, not
+/// the TTL-cached `StatisticsCubit` (which isn't invalidated on a mutation), so
+/// the Pending Actions queue + hero drop the instant a review completes.
+int _reviewCount(List<TaskEntity> tasks) =>
+    tasks.where((t) => t.status == TaskStatus.waitingReview).length;
 

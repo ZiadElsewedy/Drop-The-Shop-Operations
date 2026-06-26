@@ -12,6 +12,87 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed + Changed (2026-06-26 — Token-leak audit · realtime swaps · activity timeline V2)
+
+A deeper notification-security audit + the realtime/UX follow-ups. `node --check`
+valid; all changed Dart parse-checked. ⚠️ Run `flutter analyze`/`test` on a current
+SDK. No deploy needed (the server `claimFcmToken`/`approveSwap` are already in the
+deploy set — ensure they're deployed).
+
+- **FCM cross-account leak — root cause found + fixed.** Multi-account device audit
+  (A logs in → logout → B logs in): `forgetUser()` ran from the **post**-sign-out
+  `unauthenticated` listener, so its `users/{uid}.fcmTokens arrayRemove` executed
+  **after** Firebase Auth was cleared → **permission-denied** (rules require
+  `isOwner`) and silently swallowed. So the client **never** removed the token on
+  logout; the token lingered on account A and the system relied entirely on the
+  server `claimFcmToken`. Fix: `AuthCubit.signOut()` now runs a **pre-sign-out
+  hook** (`onPreSignOut`, wired in DI to `NotificationService.forgetUser`) that
+  drops the token **while still authenticated**, so the write succeeds. Layered
+  guarantee: (1) normal logout removes the token client-side; (2) force-kill /
+  offline logout is reconciled by **`claimFcmToken`** (re-audited — correct +
+  loop-safe) when the next user registers the same token. Token ownership can no
+  longer drift across accounts.
+- **`ShiftSwapCubit` is now stream-based (realtime).** New Firestore snapshot
+  streams `watchEmployeeSwaps` (merges the requester + target queries),
+  `watchBranchSwaps`, `watchAllSwaps` (datasource + repo). The cubit **subscribes**
+  per scope (mine / branch / all) — idempotent guard, cancel on close — instead of
+  fetch + manual refetch; mutations no longer refetch (the stream reflects them).
+  So a coworker's **incoming swap appears on their Home instantly**, accept/reject/
+  approve propagate in realtime to every open surface, and the **admin Home swap
+  count is live** (`_PendingSection` selects the unresolved count from the stream;
+  the one-shot `pendingSwaps()` is retired from Home). Better matches DROP as a
+  realtime ops platform.
+- **Task activity timeline V2.** Redesigned `_EventCard` (Task Details): the **most
+  recent event is the CURRENT step** — a larger accent node with a glow ring + a
+  "CURRENT" pill + an accent-tinted, shadowed card; older steps recede onto the
+  flat surface. The connecting spine is **accent-tinted at the head, fading to the
+  neutral border** (clear progression), and notes render in a callout surface.
+  Stronger hierarchy + richer depth, still strictly monochrome + status accents.
+
+### Fixed (2026-06-26 — Audit pass: swap surfacing · admin review reactivity · broadcast resilience · UI polish)
+
+Four surgical fixes from a focused audit. `node --check functions/index.js` valid;
+changed Dart parse-checked (`dart format`). ⚠️ Run `flutter analyze`/`flutter test`
+on a current SDK; the broadcast fix needs `firebase deploy --only functions`.
+
+- **Issue 1 — Swaps surfaced on Home (coworker accept/reject).** Root cause:
+  swap requests only existed inside **Schedule → Swaps**, so a coworker never saw
+  the request on their home page (the actions worked, but were unreachable). The
+  **employee home** ([employee_home_screen.dart](lib/features/employee/presentation/pages/employee_home_screen.dart))
+  now loads `ShiftSwapCubit.loadMine` and shows a prominent **Shift swaps** section:
+  **incoming** requests get **Accept / Decline** (with a clear "you give ⇄ you get"
+  strip), **outgoing** requests show their stage (waiting on coworker → awaiting
+  manager) + **Cancel**. Accept → `coworkerApprove` (→ manager queue); the live
+  cubit refetch makes the card reflect each transition immediately. A
+  `ShiftSwapCubit` error listener surfaces failures. (Admin home already surfaces
+  swaps via Pending Actions.)
+- **Issue 2 — Admin review queue didn't refresh after a review.** Root cause: the
+  Pending Actions / hero **review count came from `StatisticsCubit`**
+  (`s.waitingReviews`), which is **TTL-cached (90s) and not invalidated on a
+  mutation** — and the `_DynamicSection` `BlocSelector` was keyed only on the
+  **overdue** count, so a review (which doesn't change overdue) didn't even
+  rebuild. Fix: the selector now derives **both** `overdue` **and** `reviews` from
+  the **live task stream** (`_reviewCount`), so finishing a review drops the queue
+  + hero instantly. ([admin_dashboard_screen.dart](lib/features/admin/presentation/pages/admin_dashboard_screen.dart))
+- **Issue 3 — Broadcast sends could fail after partial success.** Root cause: in
+  `dispatchBroadcast` the **FCM push loop was not error-isolated** — a transient
+  messaging/API error threw out of the function **after** the broadcast doc + every
+  recipient's inbox notification had been written, so the callable returned an
+  error and the sender saw "failed" even though delivery to the inbox succeeded.
+  Fix: the push is wrapped in try/catch (best-effort, like the inbox writes) and
+  keeps the partial `deliveredCount`; added diagnostic logging — a
+  **"recipients have no registered device tokens"** info log and a structured
+  **push-failed** error log — so a "didn't reach all" report is diagnosable from
+  Firebase logs (token persistence vs. send). Audited the rest end-to-end:
+  targeting filters (allBranches/branch/user/custom + role + sender self-exclude),
+  token persistence (`_rotateToken`), dead-token cleanup, and the `notifications`
+  read rule are all correct. ([functions/index.js](functions/index.js))
+- **Issue 4 — Premium UI polish.** Shared `TimelineTile` (task activity timeline +
+  admin activity feed) gains a **haloed status dot** + a **callout surface** for
+  notes (review reasons). The new Home swap cards use `AppGlassCard` + status glow,
+  the ⇄ exchange strip, and `PremiumButton` actions — consistent with the swap
+  system's premium language.
+
 ### Added + Changed (2026-06-26 — Shift Swap hardening: server-authoritative atomic exchange + premium UX)
 
 Hardened the (already employee-to-employee exchange) shift-swap system and gave it

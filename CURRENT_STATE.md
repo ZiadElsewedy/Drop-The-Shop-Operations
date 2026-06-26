@@ -11,8 +11,44 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-26 (Shift Swap hardening — server-authoritative atomic exchange + premium UX)
+**Last updated:** 2026-06-26 (Token-leak audit · realtime swaps · activity timeline V2)
 **Version:** 1.0.0+1 · **Branch:** `enhancement/ui-refactor` (DROP — monochrome premium UX)
+
+> **Token-leak audit · realtime swaps · timeline V2 (2026-06-26):** **(1) FCM
+> cross-account leak fixed.** Multi-account device audit (A→logout→B same device)
+> found `forgetUser()` ran **after** Firebase sign-out, so its `fcmTokens` write was
+> **permission-denied** (silently) — the client never removed the token on logout,
+> leaving the server `claimFcmToken` as the only guard. Now `AuthCubit.signOut()`
+> runs a **pre-sign-out hook** (`onPreSignOut` → `NotificationService.forgetUser`,
+> wired in DI) that drops the token **while still authenticated**. Two-layer
+> guarantee: client removal on normal logout + `claimFcmToken` (re-audited, correct/
+> loop-safe) reclaiming on the next register for force-kill/offline. **No token
+> ownership drift.** **(2) `ShiftSwapCubit` is stream-based** — new
+> `watchEmployeeSwaps`/`watchBranchSwaps`/`watchAllSwaps` Firestore streams
+> (datasource+repo); the cubit subscribes per scope (idempotent, cancel-on-close),
+> mutations no longer refetch. Coworker swap requests appear on Home in realtime;
+> the **admin Home swap count is live** (`_PendingSection`). **(3) Activity timeline
+> V2** — `_EventCard` gives the current (newest) step a larger glowing accent node +
+> "CURRENT" pill + tinted card; spine fades accent→border; note callouts. `node
+> --check` valid; changed Dart parse-checked. ⚠️ Run `analyze`/`test` on 3.12.2;
+> ensure `claimFcmToken` + `approveSwap` are deployed (no new functions this pass).
+
+> **Audit pass (2026-06-26):** Four surgical fixes. **(1) Swaps on Home:** the
+> employee home now loads `ShiftSwapCubit.loadMine` + shows a prominent **Shift
+> swaps** section (incoming → Accept/Decline with a "you give ⇄ you get" strip;
+> outgoing → stage + Cancel), so a coworker sees & acts on a request without digging
+> into Schedule. **(2) Admin review reactivity:** the Pending Actions / hero review
+> count was sourced from the **TTL-cached `StatisticsCubit`** (stale after a
+> review); now derived from the **live task stream** (`_DynamicSection` selects
+> `(overdue, reviews)`), so completing a review updates the queue instantly.
+> **(3) Broadcast resilience:** `dispatchBroadcast`'s FCM push wasn't error-isolated
+> — a transient send error failed the callable **after** the doc + inbox writes;
+> now wrapped best-effort with diagnostic logging (no-token info log + push-failed
+> error log). End-to-end broadcast audit (targeting, token persistence, dead-token
+> cleanup, rules) otherwise clean. **(4) UI polish:** `TimelineTile` haloed dot +
+> note callout; premium Home swap cards. `node --check` valid; changed Dart
+> parse-checked. ⚠️ Run `flutter analyze`/`test` on 3.12.2; **deploy** `functions`
+> for the broadcast fix.
 
 > **Shift Swap hardening (2026-06-26):** The employee-to-employee exchange (built
 > 2026-06-25) is now **server-authoritative + atomic** and has a premium swap UX.

@@ -52,6 +52,13 @@ abstract class ScheduleRepository {
   /// Every branch's swap requests — admin only (powers the Admin Home overview).
   Future<List<ShiftSwapEntity>> getAllSwaps();
 
+  /// Realtime swap streams (newest first) — the live source behind employee /
+  /// manager / admin pending-swap surfaces, so an accept/reject/approve reflects
+  /// instantly without a manual refresh.
+  Stream<List<ShiftSwapEntity>> watchEmployeeSwaps(String uid);
+  Stream<List<ShiftSwapEntity>> watchBranchSwaps(String branchId);
+  Stream<List<ShiftSwapEntity>> watchAllSwaps();
+
   /// Creates a swap request (status pending).
   Future<ShiftSwapEntity> createSwap(ShiftSwapEntity swap);
 

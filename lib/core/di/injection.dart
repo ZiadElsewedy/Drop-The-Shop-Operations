@@ -168,6 +168,11 @@ class AppDependencies {
       checkEmailVerified: CheckEmailVerified(authRepository),
       changePassword: ChangePassword(authRepository),
       deleteAccount: DeleteAccount(authRepository),
+      // Drop this device's FCM token before Firebase sign-out (while still
+      // authenticated), so the signed-out account stops receiving this device's
+      // pushes. `notificationService` is a `late final` static assigned later in
+      // init(); the closure is invoked only at sign-out, long after it's set.
+      onPreSignOut: () => notificationService.forgetUser(),
     );
 
     profileCubit = ProfileCubit(
