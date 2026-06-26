@@ -37,6 +37,8 @@ class ProfileRepositoryImpl implements ProfileRepository {
     DateTime? birthDate,
     String? profileImage,
     String? coverImage,
+    String? emergencyContact,
+    String? address,
   }) async {
     try {
       await _profileRemote.updateProfile(
@@ -52,6 +54,8 @@ class ProfileRepositoryImpl implements ProfileRepository {
         birthDate: birthDate,
         profileImage: profileImage,
         coverImage: coverImage,
+        emergencyContact: emergencyContact,
+        address: address,
       );
 
       // Keep the Firebase Auth profile in sync so the auth session / Home

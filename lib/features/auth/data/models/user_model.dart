@@ -1,7 +1,6 @@
 import 'package:fbro/core/extensions/firestore_extensions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/core/enums/approval_status.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 
 class UserModel {
@@ -19,8 +18,11 @@ class UserModel {
   final bool isActive;
   final String? assignedShift;
   final String? position;
-  // ─── Approval (account activation) ──────────────────────────
-  final ApprovalStatus approvalStatus;
+  // ─── Account provisioning (admin-created) ───────────────────
+  final bool mustChangePassword;
+  final bool isProfileCompleted;
+  final String employmentStatus;
+  final String? createdBy;
 
   const UserModel({
     required this.uid,
@@ -36,7 +38,10 @@ class UserModel {
     this.isActive = true,
     this.assignedShift,
     this.position,
-    this.approvalStatus = ApprovalStatus.approved,
+    this.mustChangePassword = false,
+    this.isProfileCompleted = true,
+    this.employmentStatus = 'active',
+    this.createdBy,
   });
 
   factory UserModel.fromFirebaseUser(User user, {String authProvider = 'unknown'}) =>
@@ -64,17 +69,21 @@ class UserModel {
         isActive: entity.isActive,
         assignedShift: entity.assignedShift,
         position: entity.position,
-        approvalStatus: entity.approvalStatus,
+        mustChangePassword: entity.mustChangePassword,
+        isProfileCompleted: entity.isProfileCompleted,
+        employmentStatus: entity.employmentStatus,
+        createdBy: entity.createdBy,
       );
 
   factory UserModel.fromMap(Map<String, dynamic> map) => UserModel(
-        // Defensive: a malformed / partial user doc (e.g. a phone-auth account
-        // with no email, or a doc seeded out-of-band in the console) must never
-        // crash a whole user-list load (schedule team, assignee picker, admin
-        // lists). Degrade to empty strings like every other model does.
+        // Defensive: a malformed / partial user doc must never crash a whole
+        // user-list load (schedule team, assignee picker, admin lists). Degrade
+        // to empty strings like every other model does.
         uid: map['uid'] as String? ?? '',
         email: map['email'] as String? ?? '',
-        displayName: map['displayName'] as String?,
+        // `name` maps to displayName (canonical), falling back to the legacy
+        // profile `fullName` key the same doc carries.
+        displayName: (map['displayName'] as String?) ?? (map['fullName'] as String?),
         photoUrl: map['photoUrl'] as String?,
         phoneNumber: map['phoneNumber'] as String?,
         authProvider: map['authProvider'] as String? ?? 'unknown',
@@ -85,14 +94,20 @@ class UserModel {
         isActive: map['isActive'] as bool? ?? true,
         assignedShift: map['assignedShift'] as String?,
         position: map['position'] as String?,
-        approvalStatus: ApprovalStatus.fromString(map['approvalStatus'] as String?),
+        // Legacy / pre-migration docs lack these → default to NOT forced
+        // (mustChangePassword false, isProfileCompleted true) so they're never
+        // trapped in the onboarding flow.
+        mustChangePassword: map['mustChangePassword'] as bool? ?? false,
+        isProfileCompleted: map['isProfileCompleted'] as bool? ?? true,
+        employmentStatus: map['employmentStatus'] as String? ?? 'active',
+        createdBy: map['createdBy'] as String?,
       );
 
-  /// Identity/auth fields written on every sign-in (merge). The privileged
-  /// fields (`role`, `branchId`, `isActive`, `assignedShift`, `approvalStatus`)
-  /// are intentionally EXCLUDED here so a routine re-login can never overwrite an
-  /// admin-assigned role/branch or re-pend an approved account. Those are seeded
-  /// once on first document creation — see [UserRemoteDataSourceImpl.saveUser].
+  /// Identity/auth fields only. The privileged + provisioning fields (`role`,
+  /// `branchId`, `isActive`, `assignedShift`, `position`, `employmentStatus`,
+  /// `createdBy`, `mustChangePassword`, `isProfileCompleted`) are intentionally
+  /// EXCLUDED so a routine write can never overwrite admin-assigned values. Those
+  /// are seeded once, server-side, by the `createUserAccount` Cloud Function.
   Map<String, dynamic> toMap() => {
         'uid': uid,
         'email': email,
@@ -117,6 +132,9 @@ class UserModel {
         isActive: isActive,
         assignedShift: assignedShift,
         position: position,
-        approvalStatus: approvalStatus,
+        mustChangePassword: mustChangePassword,
+        isProfileCompleted: isProfileCompleted,
+        employmentStatus: employmentStatus,
+        createdBy: createdBy,
       );
 }

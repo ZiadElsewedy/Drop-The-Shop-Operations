@@ -29,34 +29,31 @@ service cloud.firestore {
     }
 
     // ── Users ──────────────────────────────────────────────────────
-    // Self: read own doc + limited self-update (cannot touch privileged fields,
-    //   but may write non-privileged fields like the FCM token).
-    // Branch members: read users in their OWN branch — their team. Managers see
-    //   their team; employees (Phase 7) see the coworkers on their shift + their
-    //   manager (the weekly schedule stores uids, resolved to names here). Read
-    //   only — only an admin writes user accounts.
-    // Admin: read/write everything — approvals, promotions, branch moves,
-    //   (de)activation. **Account approval is admin-only (Phase 6).**
+    // DROP is ADMIN-PROVISIONED — there is no public registration. Accounts are
+    // created server-side by the `createUserAccount` Cloud Function (Admin SDK,
+    // which bypasses these rules), so clients can NEVER create a user document.
+    // Self: read own doc + limited self-update (profile fields + the first-login
+    //   flags; all privileged fields stay frozen).
+    // Branch members: read users in their OWN branch — their team (managers their
+    //   team; employees their shift coworkers + manager, resolved from the weekly
+    //   schedule's uids). Read-only — only an admin writes accounts.
+    // Admin: read/write everything — role, branch, (de)activation, position,
+    //   employment status, password-reset flag.
     match /users/{uid} {
       allow read: if isOwner(uid)
         || isAdmin()
         || (selfBranch() != ''
             && resource.data.get('branchId', '') == selfBranch());
 
-      // Self-registration only — always as a PENDING, INACTIVE employee. A new
-      // account cannot use the app until an ADMIN approves it (update below).
-      // Promotion to manager/admin, branch assignment and activation are never
-      // self-service.
-      allow create: if isOwner(uid)
-        && request.resource.data.get('role', 'employee') == 'employee'
-        && request.resource.data.get('isActive', false) == false
-        && request.resource.data.get('approvalStatus', 'pending') == 'pending';
+      // No client may create a user document — the only creation path is the
+      // admin-only `createUserAccount` Cloud Function (Admin SDK).
+      allow create: if false;
 
-      // Admin: full control — approve/reject, promote, move branch, (de)activate,
-      //   set job position (drives shift-swap role compatibility).
-      // Self: profile-only updates — all privileged fields stay frozen (role,
-      //   isActive, branchId, assignedShift, approvalStatus, position). Non-
-      //   privileged fields (profile data, fcmToken) are free to change.
+      // Admin: full control.
+      // Self: profile fields + the first-login flags (mustChangePassword,
+      //   isProfileCompleted) + non-privileged fields (fcmToken). All PRIVILEGED
+      //   fields stay frozen: role, isActive, branchId, assignedShift, position,
+      //   employmentStatus, createdBy.
       // Managers do NOT write user docs (they manage branch operations only).
       allow update: if isAdmin()
         || (isOwner(uid)
@@ -70,8 +67,10 @@ service cloud.firestore {
                  == resource.data.get('assignedShift', '')
             && request.resource.data.get('position', '')
                  == resource.data.get('position', '')
-            && request.resource.data.get('approvalStatus', 'approved')
-                 == resource.data.get('approvalStatus', 'approved'));
+            && request.resource.data.get('employmentStatus', 'active')
+                 == resource.data.get('employmentStatus', 'active')
+            && request.resource.data.get('createdBy', '')
+                 == resource.data.get('createdBy', ''));
 
       // Deactivate via isActive (an admin update), never a hard delete; document
       // cleanup on account removal belongs to a Cloud Function.

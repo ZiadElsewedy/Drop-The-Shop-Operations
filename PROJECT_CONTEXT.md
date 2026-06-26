@@ -19,10 +19,15 @@
 
 **FBRO** is a Flutter app built on Firebase for **role-based branch / shift
 operations** (admin · manager · employee) — it is **not a social network**. It
-currently ships a complete authentication system with an **account-approval
-gate** (new sign-ups start *pending* and can't use the app until a
-manager/admin approves them), a role system with role-based navigation + route
-guards (Phase 1), a production-ready user profile module, account settings, a
+ships an **admin-provisioned** authentication system (2026-06-26 redesign): **no
+public registration** — only an admin creates accounts (via the secure
+`createUserAccount` Cloud Function), and every new account is forced through a
+**first-login flow** (change the admin-issued temp password → complete profile →
+home). The auth surface is **Splash · Login · Forgot Password · Force Password
+Change · Profile Completion** (registration / OTP / Google / email-verification /
+pending-approval were all removed). Plus a role system with role-based navigation
++ route guards (Phase 1), a production-ready user profile module, account
+settings, a
 **full operations task workflow** (Phase 3–4 + Stabilization + Phase 9 + Workflow
 Upgrade): managers/admins create + assign tasks (with optional checklist,
 recurrence, and branch picker); employees execute them (start → complete with
@@ -30,7 +35,8 @@ checklist + notes + proof image → submit); managers/admins review (approve / r
 with approval auto-spawning the next recurring instance; every status transition
 is recorded in an embedded **activity timeline**; full-screen **Task Details**
 accessible by all roles; an **admin management module** (Phase 5): branch CRUD,
-manager / employee management, **admin-only** pending-user approval, and branch
+manager / employee management, **admin-only account provisioning** (Create
+Account → the `createUserAccount` Cloud Function) + reset, and branch
 assignment; **operational dashboards + a Firebase Cloud Messaging foundation**
 (Phase 6): live role-scoped statistics (admin / manager / employee) and device-token
 registration for push; and a **weekly schedule + shift-swap system** (Phase 7):
@@ -46,8 +52,9 @@ the role chrome.
 > (branches · shifts · tasks · employee activity · approvals). It is **not** a
 > social app, ERP, or analytics engine.
 
-> There is **no marketing / Welcome page** — FBRO is an internal tool, so the
-> unauthenticated landing screen is **Login** (with Register one tap away).
+> There is **no marketing / Welcome page** and **no registration** — FBRO is an
+> internal, admin-provisioned tool, so the unauthenticated landing screen is
+> **Login** only (accounts are created by an admin).
 
 > ⚠️ Some legacy social fields (follower / post counters) linger in the profile
 > schema from an earlier iteration. They are **unused** and slated for removal —
@@ -109,7 +116,7 @@ lib/
 │   ├── theme/                # app_colors / typography / spacing / radius / app_theme
 │   └── widgets/              # app_snackbar, app_dialog (showConfirmDialog), app_card, app_empty_state, status_badge (+`.task` = the task-status chip; `taskStatusColor` = the single status→colour source), drop_logo, skeleton, list_skeleton, role_scaffold (bottom-nav chrome), app_bottom_nav (AppBottomNav + AppNavItem), user_avatar (+AvatarStack), app_motion (EntranceFade), animated_count (AnimatedCount — the single reusable animated counter: count-up on appear, tween on change; used by dashboard metrics/hero + review counts), live_list_item (LiveListItem — keyed realtime-list item: enters once + optional new-arrival highlight, preserves scroll, no AnimatedList/diff), app_search_field, glass_container (GlassContainer — the shared premium surface, now with an optional semantic `glow`), dashboard_metric_card (DashboardMetricCard), action_card (ActionCard), admin_section_header (AdminSectionHeader), timeline_tile (TimelineTile) · **Premium component system (Slice 2):** app_glass_card (AppGlassCard — premium card mapping task status → subtle glow; thin wrapper over GlassContainer), metric_pill (MetricPill — compact `[icon] value · label`), premium_button (PremiumButton — canonical compact inline action button, distinct from the 56px form AppButton), branch_avatar (BranchAvatar — branch logo · else initials · else store glyph, §8) · **Brand primitives (§9a):** drop_wordmark (DropWordmark — typographic DROP logotype, complements the PNG DropLogo), drop_empty_state (DropEmptyState — brand-led empty state), drop_loading_state (DropLoadingState — pulsing-logo loader) · **§9b rollout helpers:** drop_auth_mark (DropAuthMark — auth lockup: DropLogo + "DROP Operations System" tagline; on login/register), brand_watermark (BrandWatermark — clipped ≤0.05-opacity corner wordmark for hero cards; on Admin Home hero). Rolled out: DropEmptyState → task/notification/branch empties; DropLoadingState → schedule full-page loaders
 └── features/
-    ├── auth/                 # Sign-in/up, phone OTP, Google, email verify, password, role, approval
+    ├── auth/                 # Admin-provisioned: email sign-in, forgot/force password change, profile completion, role (no signup/OTP/Google/approval)
     ├── profile/              # View + edit profile, image uploads, username checks
     ├── task/                 # Task feature — data/domain + use cases + TaskCubit + functional role screens (Phase 3–4); realtime streams + templates (Stabilization); Phase 9 — multi-assignee + checklist + redesigned cards; Workflow Upgrade — RecurrenceConfig + ActivityEntry + TaskDetailsScreen + MyTasksScreen redesign; presentation/activity_format.dart (shared timeline label/colour/time helpers); Premium task UX slice (2026-06-25) — admin/manager reference images (`TaskEntity.referenceAttachments`, reused `AttachmentPickerField`) + a redesigned, **de-flashed** signal-driven `TaskCard` (flat `TaskSurface` primitive — no glow/gradient/pulse; status pill · High-only priority · branch/due/refs chips · thin checklist bar)
     ├── branch/               # Branch feature — data/domain + BranchCubit + branch management (Phase 5)
@@ -155,80 +162,78 @@ datasource, repository, use case, and cubit by hand (no DI package). The two
 app-wide cubits (`AuthCubit`, `ProfileCubit`) are provided at the root via
 `MultiBlocProvider` in [main.dart](lib/main.dart).
 
-### Authentication chain
+### Authentication chain (ADMIN-PROVISIONED — no public registration, 2026-06-26)
 
 ```
-LoginPage / RegisterPage / PhoneOtpPage                  (presentation/pages)
-EmailVerificationPage / PendingApprovalPage
+SplashPage · LoginPage · ForgotPasswordPage              (presentation/pages)
+ForcePasswordChangePage · ProfileCompletionPage
         ↓  context.read<AuthCubit>()
 AuthCubit                                                (presentation/cubit)
-        ↓  calls one use case per action
-SignInWithEmail · RegisterWithEmail · SignInWithGoogle
-VerifyPhoneNumber · SignInWithOtp · ForgotPassword
-SendEmailVerification · CheckEmailVerified · ChangePassword
-DeleteAccount · SaveUser · GetUser · SignOut             (domain/usecases)
+        ↓  calls one use case per action (+ flag writes via the repo)
+SignInWithEmail · ForgotPassword · ChangePassword
+GetUser · SignOut                                        (domain/usecases)
         ↓  every use case wraps one AuthRepository method
 AuthRepository (abstract)                                (domain/repositories)
         ↓
 AuthRepositoryImpl                                       (data/repositories)
         ↓                          ↓
 AuthRemoteDataSource          UserRemoteDataSource        (data/datasources)
-  (FirebaseAuth, Google)        (Firestore users/{uid})
+  (FirebaseAuth: email only)    (Firestore users/{uid})
         ↓                          ↓
    FirebaseAuth               Cloud Firestore
 ```
 
+- **DROP is admin-provisioned — there is NO public registration, Google
+  sign-in, or phone/OTP.** Accounts are created server-side by the
+  **`createUserAccount`** Cloud Function (Admin SDK); the client only signs in
+  with email/password, resets/changes the password, and writes the two
+  first-login flags. `AuthRepository` exposes `signInWithEmail`, `signOut`,
+  `getUser`, `getUsersByBranch`, `watchUser`, `sendPasswordResetEmail`,
+  `changePassword`, and the self-flag setters `setMustChangePassword` /
+  `setProfileCompleted`.
 - `AuthRepositoryImpl` holds **two** datasources: `AuthRemoteDataSource`
-  (Firebase Auth + Google) and `UserRemoteDataSource` (the `users/{uid}`
-  Firestore document). It maps `UserModel ⇄ UserEntity` at the boundary.
+  (Firebase Auth, email only) and `UserRemoteDataSource` (the `users/{uid}`
+  doc — reads/streams + the flag writes). It maps `UserModel ⇄ UserEntity`.
 - Datasources throw `AuthException`; the repository catches and rethrows as
   `AuthFailure`; the cubit catches `AuthFailure` and emits `AuthState.error`.
+- `AuthState` cases: initial / loading(AuthAction) / authenticated(UserEntity) /
+  unauthenticated / passwordResetSent / passwordChanged / error. `AuthAction` =
+  {emailSignIn, forgotPassword, changePassword}.
 
-### Routing & session chain
+### Routing & session chain (first-login gate)
 
 ```
 AuthCubit.stream
         ↓
 _AuthStateNotifier (ChangeNotifier)   ← refreshListenable
         ↓
-GoRouter.redirect                     ← auth guard + APPROVAL gate + ROLE guard
+GoRouter.redirect                     ← first-login gate + ROLE guard
         ↓
-splash → login/register/... → pending-approval → role shell  (/ employee · /admin · /manager)
+splash → login/forgot → force-password-change → complete-profile → role shell
 ```
 
 `createRouter(AuthCubit)` ([core/routes/app_router.dart](lib/core/routes/app_router.dart))
-re-evaluates its `redirect` whenever `AuthCubit` emits, routing unauthenticated
-users to the auth flow (landing = **Login**), `awaitingEmailVerification` users
-to the verification page, and authenticated users onward. Before role dispatch,
-the redirect applies the **approval gate**: an authenticated user whose account
-is not approved/active (`user.hasAppAccess == false`) is confined to the
-**Pending Approval** screen (`/pending-approval`) — sign-out is the only way off
-it. Approved users go to **their role shell** (`RouteNames.homeForRole(user.role)`
-→ `/` employee, `/admin`, `/manager`). The redirect also **role-guards** every
-navigation: admin areas are admin-only, manager areas admit manager + admin
-(**admin ⊇ manager**), the employee home (`/`) is employee-only; anyone entering
-an area that isn't theirs is bounced to their own home. `/profile` & `/settings`
-are shared across roles. `SplashPage` calls `AuthCubit.restoreSession()` once on
-cold start and dispatches by approval + role. The splash's minimum dwell is the
-**brand-animation length (1400 ms)** — `_initSession` does
-`Future.wait([restoreSession(), Future.delayed(1400ms)])` (the prior 2400 ms had
-~1 s of dead time after the animation). **Warm-start preload (Perf · Phase C):**
-the app-wide `BlocListener<AuthCubit>` in `main.dart` — which fires on
-`authenticated` for **both** cold-start restore **and** fresh login — preloads the
-home-critical cubits (`StatisticsCubit.load` + `TaskCubit.load`, **gated on
-`hasAppAccess`**) alongside the existing FCM-token + notification load, so the
-fetch overlaps the splash/route transition and Home paints with data, not
-skeletons. Fire-and-forget + concurrent (per-cubit error isolation); both loads
-are **idempotent** (Phase A), so Home's own `initState` `load()` calls then no-op
-— no duplicate reads. Templates / branches are **not** preloaded (lazy + Phase B
-cache). Because Firebase sign-ins don't
-know the role/approval, `AuthCubit` re-reads the Firestore user after
-email/Google/OTP sign-in so the emitted `authenticated` state carries the
-authoritative role/branch/approval. The **Pending Approval** screen uses
-`AuthCubit.watchCurrentUser()` — a **real-time** `users/{uid}` snapshot listener
-(`AuthRepository.watchUser`) — so an admin's approval redirects the user to their
-role shell instantly (no polling; a manual `refreshUser()` button remains a
-fallback).
+re-evaluates its `redirect` whenever `AuthCubit` emits. **First-login gate** (in
+order, before role dispatch): `user.mustChangePassword` → **Force Password Change**
+(`/force-password-change`); else `!user.isProfileCompleted` → **Profile Completion**
+(`/complete-profile`); else the **role shell** (`RouteNames.homeForRole(user.role)`
+→ `/` employee, `/admin`, `/manager`). A **deactivated** account never reaches the
+router as authenticated — `AuthCubit` signs it out at login (and on a mid-session
+deactivate via `watchCurrentUser`) and surfaces "This account has been disabled".
+The redirect **only** bounces an *explicitly* `unauthenticated` session to Login
+(transient loading/passwordChanged/error states do **not** redirect — so an
+in-flight forced change never flickers the user out). It still **role-guards**
+every navigation: admin areas admin-only, manager areas admit manager + admin
+(**admin ⊇ manager**), the employee home (`/`) employee-only; `/profile` &
+`/settings` are shared. `SplashPage` calls `AuthCubit.restoreSession()` on cold
+start and dispatches via the same gate (`_destinationFor`); minimum dwell is the
+**brand-animation length (1400 ms)**. **Warm-start preload (Perf · Phase C):** the
+app-wide `BlocListener<AuthCubit>` in `main.dart` preloads the home-critical cubits
+on `authenticated` (gated on `hasAppAccess` = `isActive`). Because a Firebase
+sign-in doesn't know the role/flags, `AuthCubit` re-reads the Firestore user after
+sign-in (`_withStoredProfile`) so the emitted `authenticated` state carries the
+authoritative role/branch + first-login flags. The first-login screens flip their
+flag then call `refreshUser()`, so the router advances automatically.
 
 ### Profile chain
 
@@ -382,14 +387,20 @@ Firestore branches/{id}   Firestore users/{uid}     aggregates users/tasks/shift
 - **`admin`** owns user administration over `users/{uid}` via its own
   `UserAdminRemoteDataSource` (reusing the auth `UserModel`/`UserEntity`) — a
   third datasource on `users` alongside `auth` and `profile`. `AdminUsersCubit`
-  loads a slice by `AdminUserFilter` (pending / managers / employees) and
-  performs approve/reject, (de)activate, change-branch, change-role, and
-  **promote-to-manager**. **Account approval is admin-only** (Phase 6) — managers
-  no longer write user docs.
-- **Manager creation:** with no Cloud Functions/Admin SDK (client can't create
-  Auth accounts without signing the admin out), a "manager" is an existing
-  approved user **promoted** to `role: manager` (then assigned a branch) — there
-  is no admin-creates-account flow.
+  loads a slice by `AdminUserFilter` (**managers / employees** — the `pending`
+  slice was removed) and performs (de)activate, change-branch, change-role,
+  change-position, change-employment-status, **promote-to-manager**, **reset
+  account**, and **create account**. Managers never write user docs.
+- **Account provisioning (2026-06-26):** an admin **creates accounts** directly
+  via **`CreateAccountScreen`** (Admin → User Management → Create Account) →
+  `AdminUsersCubit.createAccount` → `UserAdminRemoteDataSource.createAccount` →
+  the admin-only **`createUserAccount`** Cloud Function (Admin SDK creates the
+  Auth user — the admin stays signed in — then seeds the `users/{uid}` doc with
+  role/branch/shift/position + `mustChangePassword:true` + `isProfileCompleted:
+  false` + `createdBy`). **`adminResetPassword`** issues a new temp password +
+  re-forces a change. The earlier "promote an existing user (no Admin SDK)"
+  constraint is obsolete — direct creation is the path now (promote-to-manager
+  remains for existing employees).
 
 ### Statistics + notifications (Phase 6)
 

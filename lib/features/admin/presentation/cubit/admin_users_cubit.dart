@@ -7,17 +7,18 @@ import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
 import 'package:fbro/features/branch/domain/repositories/branch_repository.dart';
 import 'admin_users_state.dart';
 
-/// Which slice of users a screen is showing.
-enum AdminUserFilter { pending, managers, employees }
+/// Which slice of users a screen is showing. (Public registration / pending
+/// approval was removed — accounts are admin-provisioned, so there is no
+/// `pending` slice anymore.)
+enum AdminUserFilter { managers, employees }
 
-/// Admin user management (Phase 5) — backs the Pending Approvals, Managers and
-/// Employees screens. Calls the repositories directly (no use-case layer in the
-/// admin module). Also exposes [branches]/[promotableEmployees] for the pickers.
+/// Admin user management — backs the Managers + Employees screens and the
+/// Create Account flow. Calls the repositories directly (no use-case layer).
 class AdminUsersCubit extends Cubit<AdminUsersState> {
   final UserAdminRepository _users;
   final BranchRepository _branches;
 
-  AdminUserFilter _filter = AdminUserFilter.pending;
+  AdminUserFilter _filter = AdminUserFilter.employees;
 
   AdminUsersCubit(this._users, this._branches)
       : super(const AdminUsersState.initial());
@@ -47,8 +48,6 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
 
   Future<List<UserEntity>> _fetch(AdminUserFilter filter) {
     switch (filter) {
-      case AdminUserFilter.pending:
-        return _users.getPendingUsers();
       case AdminUserFilter.managers:
         return _users.getUsersByRole(UserRole.manager);
       case AdminUserFilter.employees:
@@ -56,15 +55,37 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
     }
   }
 
+  // ─── Provisioning ──────────────────────────────────────────────
+  /// Create a brand-new account through the secure backend. Returns the new uid
+  /// on success; throws a [Failure] on error (the screen surfaces it). Does not
+  /// disturb the shared list state — the management screens pull-to-refresh.
+  Future<String> createAccount({
+    required String name,
+    required String email,
+    required String temporaryPassword,
+    required UserRole role,
+    String? branchId,
+    String? assignedShift,
+    String? position,
+  }) =>
+      _users.createAccount(
+        name: name,
+        email: email,
+        temporaryPassword: temporaryPassword,
+        role: role,
+        branchId: branchId,
+        assignedShift: assignedShift,
+        position: position,
+      );
+
+  /// Reset an account: new temp password + re-force a password change.
+  Future<void> resetAccount(UserEntity user, String temporaryPassword) =>
+      _mutate(() => _users.resetPassword(
+            uid: user.uid,
+            temporaryPassword: temporaryPassword,
+          ));
+
   // ─── Actions ───────────────────────────────────────────────────
-  Future<void> approve(UserEntity user,
-          {required UserRole role, String? branchId}) =>
-      _mutate(() =>
-          _users.approveUser(uid: user.uid, role: role, branchId: branchId));
-
-  Future<void> reject(UserEntity user) =>
-      _mutate(() => _users.rejectUser(user.uid));
-
   Future<void> setActive(UserEntity user, bool isActive) =>
       _mutate(() => _users.setUserActive(user.uid, isActive));
 
@@ -75,14 +96,15 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
   Future<void> changePosition(UserEntity user, String? position) =>
       _mutate(() => _users.changeUserPosition(user.uid, position));
 
+  /// Set the HR employment label (active / suspended / terminated).
+  Future<void> changeEmploymentStatus(UserEntity user, String status) =>
+      _mutate(() => _users.changeUserEmploymentStatus(user.uid, status));
+
   Future<void> changeRole(UserEntity user, UserRole role) =>
       _mutate(() => _users.changeUserRole(user.uid, role));
 
-  /// Promote an employee to manager (the no-Auth-account-creation path: managers
-  /// are promoted from existing approved users). Pass [branchId] to move them to a
-  /// branch; when omitted the employee's **existing** branch is preserved — so a
-  /// promoted manager is never left branch-less (which would block all branch
-  /// schedule/task management). Admins can still reassign from the manager list.
+  /// Promote an existing employee to manager. Pass [branchId] to move them to a
+  /// branch; when omitted the employee's existing branch is preserved.
   Future<void> promoteToManager(UserEntity user, {String? branchId}) =>
       _mutate(() async {
         await _users.changeUserRole(user.uid, UserRole.manager);
@@ -101,11 +123,11 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
     }
   }
 
-  /// Approved employees that can be promoted to manager.
+  /// Active employees that can be promoted to manager.
   Future<List<UserEntity>> promotableEmployees() async {
     try {
       final list = await _users.getUsersByRole(UserRole.employee);
-      return list.where((u) => u.isApproved).toList();
+      return list.where((u) => u.isActive).toList();
     } catch (_) {
       return const [];
     }
@@ -116,17 +138,6 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
   Future<List<UserEntity>> usersWithRole(UserRole role) async {
     try {
       return await _users.getUsersByRole(role);
-    } catch (_) {
-      return const [];
-    }
-  }
-
-  /// Read-only fetch of users awaiting approval (does not touch the list state)
-  /// — used by the Admin Home "Pending approvals" section, which must not
-  /// override whatever slice another screen has loaded into the shared cubit.
-  Future<List<UserEntity>> pendingUsers() async {
-    try {
-      return await _users.getPendingUsers();
     } catch (_) {
       return const [];
     }

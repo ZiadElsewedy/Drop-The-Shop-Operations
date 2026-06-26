@@ -3,11 +3,9 @@ import 'package:go_router/go_router.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/auth/presentation/pages/splash_page.dart';
 import 'package:fbro/features/auth/presentation/pages/login_page.dart';
-import 'package:fbro/features/auth/presentation/pages/register_page.dart';
-import 'package:fbro/features/auth/presentation/pages/phone_otp_page.dart';
 import 'package:fbro/features/auth/presentation/pages/forgot_password_page.dart';
-import 'package:fbro/features/auth/presentation/pages/email_verification_page.dart';
-import 'package:fbro/features/auth/presentation/pages/pending_approval_page.dart';
+import 'package:fbro/features/auth/presentation/pages/force_password_change_page.dart';
+import 'package:fbro/features/auth/presentation/pages/profile_completion_page.dart';
 import 'package:fbro/features/admin/presentation/pages/admin_shell.dart';
 import 'package:fbro/features/manager/presentation/pages/manager_shell.dart';
 import 'package:fbro/features/employee/presentation/pages/employee_shell.dart';
@@ -23,7 +21,7 @@ import 'package:fbro/features/branch/presentation/pages/branch_management_screen
 import 'package:fbro/features/admin/presentation/pages/manager_management_screen.dart';
 import 'package:fbro/features/admin/presentation/pages/employee_management_screen.dart';
 import 'package:fbro/features/admin/presentation/pages/admin_analytics_screen.dart';
-import 'package:fbro/features/admin/presentation/pages/pending_approvals_screen.dart';
+import 'package:fbro/features/admin/presentation/pages/create_account_screen.dart';
 import 'package:fbro/features/profile/presentation/pages/profile_page.dart';
 import 'package:fbro/features/profile/presentation/pages/edit_profile_page.dart';
 import 'package:fbro/features/settings/presentation/pages/settings_page.dart';
@@ -52,41 +50,29 @@ GoRouter createRouter(AuthCubit authCubit) {
         authenticated: (u) => u,
         orElse: () => null,
       );
-      final isAuthenticated = user != null;
 
-      final isAwaitingVerification = authState.maybeWhen(
-        awaitingEmailVerification: (_) => true,
-        orElse: () => false,
-      );
+      final isOnAuthFlow =
+          loc == RouteNames.login || loc == RouteNames.forgotPassword;
 
-      final isOnAuthFlow = loc == RouteNames.login ||
-          loc == RouteNames.register ||
-          loc == RouteNames.phone ||
-          loc == RouteNames.forgotPassword;
-
-      if (isAwaitingVerification && loc != RouteNames.emailVerification) {
-        // go_router redirect doesn't support extra — navigation is handled by
-        // the BlocListener in each auth page and SplashPage instead.
-        return RouteNames.emailVerification;
-      }
-
-      if (isAuthenticated) {
-        // Approval gate (checked before role dispatch). DROP is an internal ops
-        // system: an authenticated account that hasn't been approved — or has
-        // been deactivated — is confined to the Pending Approval screen until a
-        // manager/admin approves it. Sign-out is the only way off the screen.
-        if (!user.hasAppAccess) {
-          return loc == RouteNames.pendingApproval
+      if (user != null) {
+        // ── First-login gate (admin-provisioned accounts) ──
+        // 1) Force the admin-issued temp password to be changed.
+        if (user.mustChangePassword) {
+          return loc == RouteNames.forcePasswordChange
               ? null
-              : RouteNames.pendingApproval;
+              : RouteNames.forcePasswordChange;
+        }
+        // 2) Then require profile completion.
+        if (!user.isProfileCompleted) {
+          return loc == RouteNames.profileCompletion
+              ? null
+              : RouteNames.profileCompletion;
         }
 
         final roleHome = RouteNames.homeForRole(user.role);
 
         // Role guard. Admin ⊇ manager: admin areas are admin-only, but manager
-        // areas admit admins too (admin can do everything a manager can). The
-        // employee home (/) is employee-only. Anyone landing in an area that
-        // isn't theirs (incl. manual URL hacking) is bounced to their own home.
+        // areas admit admins too. The employee home (/) is employee-only.
         // Shared routes (/profile, /settings) stay open to all roles.
         if (_isAdminArea(loc) && !user.role.isAdmin) return roleHome;
         if (_isManagerArea(loc) && !(user.role.isManager || user.role.isAdmin)) {
@@ -100,21 +86,26 @@ GoRouter createRouter(AuthCubit authCubit) {
           return roleHome;
         }
 
-        // Approved users never see the auth flow / verification / pending
-        // screens → bounce them to their role home.
+        // A fully onboarded user never sees the auth / onboarding screens.
         if (isOnAuthFlow ||
-            loc == RouteNames.emailVerification ||
-            loc == RouteNames.pendingApproval) {
+            loc == RouteNames.forcePasswordChange ||
+            loc == RouteNames.profileCompletion) {
           return roleHome;
         }
 
         return null;
       }
 
-      // Unauthenticated → confine to the auth flow; the landing screen is Login
-      // (the old social Welcome page has been removed).
-      if (!isAwaitingVerification && !isOnAuthFlow) {
-        if (loc != RouteNames.splash) return RouteNames.login;
+      // Only an EXPLICITLY unauthenticated session is bounced to Login —
+      // transient cubit states (loading / passwordChanged / passwordResetSent /
+      // error / initial) must NOT redirect, so an in-flight action (e.g. the
+      // forced password change) never flickers the user out to Login.
+      final isUnauthenticated = authState.maybeWhen(
+        unauthenticated: () => true,
+        orElse: () => false,
+      );
+      if (isUnauthenticated && !isOnAuthFlow) {
+        return RouteNames.login;
       }
 
       return null;
@@ -124,13 +115,6 @@ GoRouter createRouter(AuthCubit authCubit) {
         path: RouteNames.splash,
         pageBuilder: (context, state) => const NoTransitionPage(
           child: SplashPage(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.pendingApproval,
-        pageBuilder: (context, state) => _fadeTransition(
-          state,
-          const PendingApprovalPage(),
         ),
       ),
       GoRoute(
@@ -252,10 +236,10 @@ GoRouter createRouter(AuthCubit authCubit) {
         ),
       ),
       GoRoute(
-        path: RouteNames.adminApprovals,
+        path: RouteNames.adminCreateAccount,
         pageBuilder: (context, state) => _slideTransition(
           state,
-          const PendingApprovalsScreen(),
+          const CreateAccountScreen(),
         ),
       ),
       // ─── Communications Center (Phase 3) ───────────────────────
@@ -313,31 +297,25 @@ GoRouter createRouter(AuthCubit authCubit) {
         ),
       ),
       GoRoute(
-        path: RouteNames.register,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const RegisterPage(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.phone,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const PhoneOtpPage(),
-        ),
-      ),
-      GoRoute(
         path: RouteNames.forgotPassword,
         pageBuilder: (context, state) => _slideTransition(
           state,
           const ForgotPasswordPage(),
         ),
       ),
+      // ─── First-login flow (admin-provisioned accounts) ─────────
       GoRoute(
-        path: RouteNames.emailVerification,
+        path: RouteNames.forcePasswordChange,
         pageBuilder: (context, state) => _fadeTransition(
           state,
-          const EmailVerificationPage(),
+          const ForcePasswordChangePage(),
+        ),
+      ),
+      GoRoute(
+        path: RouteNames.profileCompletion,
+        pageBuilder: (context, state) => _fadeTransition(
+          state,
+          const ProfileCompletionPage(),
         ),
       ),
       // In-app notification inbox — shared by every role (not under /admin or

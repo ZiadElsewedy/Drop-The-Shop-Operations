@@ -12,8 +12,7 @@ import 'package:fbro/features/schedule/presentation/widgets/schedule_helpers.dar
 /// single employee presentation across the shift sheet, the assign picker, and
 /// the resolve flow.
 ///
-/// The status dot reflects account health: green = active & approved, amber =
-/// pending approval or deactivated.
+/// The status dot reflects account health: green = active, amber = deactivated.
 class EmployeeRow extends StatelessWidget {
   const EmployeeRow({
     super.key,
@@ -99,7 +98,7 @@ class EmployeeRow extends StatelessWidget {
   }
 
   Color _statusColor(UserEntity u) =>
-      (u.isActive && u.isApproved) ? AppColors.success : AppColors.warning;
+      u.isActive ? AppColors.success : AppColors.warning;
 }
 
 class _StatusDot extends StatelessWidget {

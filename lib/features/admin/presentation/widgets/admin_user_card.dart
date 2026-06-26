@@ -90,13 +90,11 @@ class AdminUserCard extends StatelessWidget {
                 label: user.isActive ? 'active' : 'inactive',
                 color: statusColor,
               ),
-              if (!user.approvalStatus.isApproved)
+              if (user.mustChangePassword)
                 _Chip(
-                  icon: Icons.hourglass_top_rounded,
-                  label: user.approvalStatus.value,
-                  color: user.approvalStatus.isRejected
-                      ? AppColors.error
-                      : AppColors.warning,
+                  icon: Icons.lock_clock_rounded,
+                  label: 'pending first login',
+                  color: AppColors.warning,
                 ),
             ],
           ),

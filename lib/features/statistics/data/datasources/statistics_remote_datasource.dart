@@ -124,26 +124,25 @@ class StatisticsRemoteDataSourceImpl implements StatisticsRemoteDataSource {
 
       // Pure counts via server-side aggregation — no document downloads. All
       // are single-field filters (automatic indexes; no composite index).
+      // (The old user-approval `pendingApprovals` count was removed — DROP is
+      // admin-provisioned, so there is no approval queue.)
       final counts = await Future.wait([
         _aggCount(_users.where('role', isEqualTo: 'employee')),
-        _aggCount(_users.where('approvalStatus', isEqualTo: 'pending')),
         _aggCount(_tasks),
         _aggCount(_tasks.where('status', isEqualTo: 'approved')),
         _aggCount(_tasks.where('status', isEqualTo: 'waitingReview')),
         _aggCount(_tasks.where('status', isEqualTo: 'rejected')),
       ]);
       final totalEmployees = counts[0];
-      final pendingApprovals = counts[1];
-      final totalTasks = counts[2];
-      final approvedTasks = counts[3];
-      final waitingReviews = counts[4];
-      final rejectedTasks = counts[5];
+      final totalTasks = counts[1];
+      final approvedTasks = counts[2];
+      final waitingReviews = counts[3];
+      final rejectedTasks = counts[4];
 
       return StatisticsModel(
         totalBranches: branches.length,
         totalManagers: managers.length,
         totalEmployees: totalEmployees,
-        pendingApprovals: pendingApprovals,
         branchesWithoutManagers:
             branches.where((b) => !managerBranchIds.contains(b.id)).length,
         branchesWithSchedule:

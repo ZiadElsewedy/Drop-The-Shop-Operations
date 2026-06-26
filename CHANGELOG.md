@@ -12,6 +12,85 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed + Removed + Added (2026-06-26 — Auth & account provisioning redesign: admin-only accounts)
+
+**Core business change: DROP no longer allows public registration — only an admin
+creates accounts.** The entire authentication + provisioning system was migrated
+to an admin-provisioned model across every layer (data model, backend, security
+rules, routing, AuthCubit, admin module, auth UI). ⚠️ This env's Flutter is
+**3.10.4 / Dart 3.10.4** (< the project's `^3.12.1`), so `build_runner` / `analyze`
+/ `test` can't run here — the freezed files for `UserEntity` + `AuthState` were
+**hand-edited**; run `dart run build_runner build --delete-conflicting-outputs`,
+`flutter analyze`, `flutter test` on a current SDK (3.12.2). `node --check
+functions/index.js` valid; all changed Dart parse-checked (`dart format`).
+⚠️ **Deploy required before client cutover:** `firebase deploy --only
+functions,firestore:rules` — until the new functions + rules are live, account
+creation + the `create: if false` lockdown aren't in effect.
+
+- **Removed (completely):** public registration / signup, phone-OTP sign-in,
+  Google sign-in, email-verification gating, and the approval / pending-approval
+  flow. Deleted: `register_page` · `phone_otp_page` · `email_verification_page` ·
+  `pending_approval_page` · `otp_input` · `pending_approvals_screen` · the
+  `approval_status` enum · use cases {`register_with_email`, `sign_in_with_google`,
+  `verify_phone_number`, `sign_in_with_otp`, `send_email_verification`,
+  `check_email_verified`, `save_user`, `delete_account`} · the `google_sign_in`
+  dependency. `AuthState` dropped `otpSent` + `awaitingEmailVerification`;
+  `AuthAction` is now {emailSignIn, forgotPassword, changePassword}.
+- **Data model (`users/{uid}`):** `UserEntity`/`UserModel` gained
+  `mustChangePassword` (default false), `isProfileCompleted` (default true),
+  `employmentStatus` (HR label, default `active`), `createdBy`. Removed
+  `approvalStatus` + `isApproved`; `hasAppAccess` is now simply `isActive` (the
+  single access gate). Legacy docs default to NOT forced so no one is trapped.
+  `name` maps to the existing `displayName` (mirrored to profile `fullName`).
+- **Backend (`functions/index.js`):** two admin-only callables —
+  **`createUserAccount`** (Admin SDK creates the Auth user — without signing the
+  admin out — then seeds the `users/{uid}` doc with role/branch/shift/position +
+  `mustChangePassword:true` + `isProfileCompleted:false` + `createdBy`;
+  email-already-exists → `already-exists`; rolls back the orphaned Auth user if
+  the Firestore seed fails) and **`adminResetPassword`** (new temp password +
+  re-force a change). Both validate the caller is an admin.
+- **Firestore rules:** `users` `create: if false` (server-side Admin SDK is the
+  ONLY creation path); the self-update rule freezes all privileged fields (role,
+  isActive, branchId, assignedShift, position, **employmentStatus**, **createdBy**)
+  and allows only profile fields + the two first-login flags. Dropped every
+  `approvalStatus` reference.
+- **Routing:** new gate `unauthenticated → Login`, `mustChangePassword → Force
+  Password Change`, `!isProfileCompleted → Profile Completion`, else role home.
+  The redirect now only bounces an **explicitly** unauthenticated session to
+  Login, so a transient cubit state (e.g. the in-flight forced change) never
+  flickers the user out. New routes `/force-password-change`, `/complete-profile`,
+  `/admin/users/create`; removed `/register`, `/phone`, `/email-verification`,
+  `/pending-approval`, `/admin/approvals`.
+- **AuthCubit:** trimmed to email/password + reset + change; a **deactivated
+  account is blocked at login + signed out** with "This account has been disabled
+  — contact your administrator." New `forcePasswordChange` (change → clear
+  `mustChangePassword` → refresh) and `completeProfile` (set `isProfileCompleted`
+  → refresh); `watchCurrentUser` also force-signs-out on a mid-session deactivate.
+- **Auth UI (premium, strictly monochrome — no indigo, per the locked design
+  ruling):** Login redesigned (centered `DropAuthMark`, soft monochrome gradient,
+  smooth focus, beautiful CTA; **no** signup / Google / phone affordances + an
+  "Accounts are created by your administrator" note). New **Force Password
+  Change** + **Profile Completion** (phone / emergency contact / birth date /
+  address required, profile photo optional) screens. Settings dropped Verify Email
+  + Delete Account (lifecycle is admin-owned).
+- **Admin → User Management → Create Account:** new `CreateAccountScreen` (Full
+  Name · Email · Temporary Password · Role · Branch · Assigned Shift · Position →
+  the `createUserAccount` callable; shows the temp credentials to hand off),
+  reached from the Employees FAB + the Admin Home "Create Account" quick action.
+  `AdminUsersCubit`/`UserAdminRepository`/datasource dropped approve/reject/
+  pending; added `createAccount`/`resetAccount`/`changeEmploymentStatus`. Admin
+  user card/sheets/employee details drop approval, add **Reset account** +
+  Employment status; the Admin Home "Pending approvals" panel + `PendingActions`'
+  approvals queue were removed.
+- **Statistics:** dropped the user-approval `pendingApprovals` query (the field is
+  retained as an always-0 deprecated remnant to avoid a codegen churn).
+- **Profile:** `emergencyContact` + `address` threaded through the write path
+  (`editMap`/`updateProfile`/`ProfileCubit.save`) for onboarding; stored on
+  `users/{uid}`.
+- **Tests:** `user_model_test` covers the new provisioning fields +
+  `displayName`/`fullName` fallback; `pending_actions_widget_test` updated to the
+  approval-free panel.
+
 ### Added (2026-06-26 — FCM token ownership: layered defense-in-depth)
 
 Hardened notification routing into a **three-layer** defense so no push can reach

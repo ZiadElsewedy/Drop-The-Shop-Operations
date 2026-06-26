@@ -1,6 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/core/enums/approval_status.dart';
 
 part 'user_entity.freezed.dart';
 
@@ -22,26 +21,34 @@ class UserEntity with _$UserEntity {
     @Default(UserRole.employee) UserRole role,
     /// Store branch the user belongs to. Assigned by an admin; null until then.
     String? branchId,
-    /// Soft-disable flag: a user can be deactivated without deletion.
+    /// Soft-disable flag: an admin can deactivate a user without deletion. This is
+    /// the SINGLE access gate — a deactivated account is blocked at login.
     @Default(true) bool isActive,
-    /// Shift assigned to the user (used from Phase 2 onward); null until then.
+    /// Shift assigned to the user; null until an admin sets it.
     String? assignedShift,
     /// Job position / role title within the branch (e.g. "Cashier",
     /// "Supervisor"). Optional — null means unspecified. Drives shift-swap role
     /// compatibility when a branch enables `SwapPolicy.restrictToSamePosition`
     /// (an unset position stays compatible with everyone).
     String? position,
-    // ─── Approval (account activation) ──────────────────────────
-    /// Where the account sits in the approval lifecycle. New self-registrations
-    /// start [ApprovalStatus.pending]; a manager/admin approves them. Defaults to
-    /// [ApprovalStatus.approved] so legacy documents are never locked out.
-    @Default(ApprovalStatus.approved) ApprovalStatus approvalStatus,
+    // ─── Account provisioning (admin-created, no self-registration) ─────
+    /// True until the user changes the admin-issued temporary password. While
+    /// set, the router confines them to the Force Password Change screen.
+    @Default(false) bool mustChangePassword,
+    /// True once the user has filled their onboarding profile. While false, the
+    /// router confines them to the Profile Completion screen. Defaults true so
+    /// legacy / pre-migration documents are never trapped in onboarding.
+    @Default(true) bool isProfileCompleted,
+    /// HR employment label (`active` / `suspended` / `terminated`). A record
+    /// field shown/edited in admin — it does NOT gate access (that's [isActive]).
+    @Default('active') String employmentStatus,
+    /// The admin uid that provisioned this account (audit). Null for accounts
+    /// created out of band (e.g. the bootstrapped first admin).
+    String? createdBy,
   }) = _UserEntity;
 
-  /// Whether the account has been approved by a manager/admin.
-  bool get isApproved => approvalStatus.isApproved;
-
-  /// Whether the user may enter the app: approved **and** active. Unapproved or
-  /// deactivated users are confined to the Pending Approval screen by the router.
-  bool get hasAppAccess => isApproved && isActive;
+  /// Whether the user may enter the app. DROP is admin-provisioned: the only
+  /// access gate is [isActive] — a deactivated account is blocked at login and
+  /// signed out. (`employmentStatus` is an HR label, not a gate.)
+  bool get hasAppAccess => isActive;
 }

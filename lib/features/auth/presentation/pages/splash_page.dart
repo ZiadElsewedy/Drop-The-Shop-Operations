@@ -5,6 +5,7 @@ import 'package:fbro/core/routes/route_names.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/drop_logo.dart';
+import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 
 class SplashPage extends StatefulWidget {
   const SplashPage({super.key});
@@ -65,18 +66,22 @@ class _SplashPageState extends State<SplashPage>
     AppDependencies.authCubit.state.when(
       initial: () => context.go(RouteNames.login),
       loading: (_) => context.go(RouteNames.login),
-      authenticated: (user) => context.go(
-        user.hasAppAccess
-            ? RouteNames.homeForRole(user.role)
-            : RouteNames.pendingApproval,
-      ),
+      authenticated: (user) => context.go(_destinationFor(user)),
       unauthenticated: () => context.go(RouteNames.login),
-      otpSent: (_) => context.go(RouteNames.login),
-      awaitingEmailVerification: (_) => context.go(RouteNames.emailVerification),
       passwordResetSent: () => context.go(RouteNames.login),
       passwordChanged: () => context.go(RouteNames.login),
       error: (_) => context.go(RouteNames.login),
     );
+  }
+
+  /// First-login gate, mirroring the router redirect: force password change →
+  /// profile completion → role home. A deactivated account (the cubit signs it
+  /// out) falls back to Login.
+  String _destinationFor(UserEntity user) {
+    if (!user.isActive) return RouteNames.login;
+    if (user.mustChangePassword) return RouteNames.forcePasswordChange;
+    if (!user.isProfileCompleted) return RouteNames.profileCompletion;
+    return RouteNames.homeForRole(user.role);
   }
 
   @override

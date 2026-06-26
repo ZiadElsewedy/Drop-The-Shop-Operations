@@ -2,37 +2,26 @@ import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fbro/core/errors/failures.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_in_with_email.dart';
-import 'package:fbro/features/auth/domain/usecases/register_with_email.dart';
-import 'package:fbro/features/auth/domain/usecases/verify_phone_number.dart';
-import 'package:fbro/features/auth/domain/usecases/sign_in_with_otp.dart';
-import 'package:fbro/features/auth/domain/usecases/sign_in_with_google.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_out.dart';
-import 'package:fbro/features/auth/domain/usecases/save_user.dart';
 import 'package:fbro/features/auth/domain/usecases/get_user.dart';
 import 'package:fbro/features/auth/domain/usecases/forgot_password.dart';
-import 'package:fbro/features/auth/domain/usecases/send_email_verification.dart';
-import 'package:fbro/features/auth/domain/usecases/check_email_verified.dart';
 import 'package:fbro/features/auth/domain/usecases/change_password.dart';
-import 'package:fbro/features/auth/domain/usecases/delete_account.dart';
 import 'package:fbro/features/auth/domain/repositories/auth_repository.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'auth_state.dart';
 
+/// Shown when a signed-in account has been deactivated by an admin. DROP is
+/// admin-provisioned: access is gated solely by `isActive`.
+const String _disabledMessage =
+    'This account has been disabled. Contact your administrator.';
+
 class AuthCubit extends Cubit<AuthState> {
   final AuthRepository _repository;
   final SignInWithEmail _signInWithEmail;
-  final RegisterWithEmail _registerWithEmail;
-  final VerifyPhoneNumber _verifyPhoneNumber;
-  final SignInWithOtp _signInWithOtp;
-  final SignInWithGoogle _signInWithGoogle;
   final SignOut _signOut;
-  final SaveUser _saveUser;
   final GetUser _getUser;
   final ForgotPassword _forgotPassword;
-  final SendEmailVerification _sendEmailVerification;
-  final CheckEmailVerified _checkEmailVerified;
   final ChangePassword _changePassword;
-  final DeleteAccount _deleteAccount;
 
   /// Hook run **before** Firebase sign-out, while the session is still
   /// authenticated — used to drop this device's FCM token from the user's doc
@@ -43,27 +32,24 @@ class AuthCubit extends Cubit<AuthState> {
   StreamSubscription? _authSub;
   StreamSubscription? _userWatchSub;
 
-  /// True while any auth action is in flight. Used to reject duplicate taps
-  /// and concurrent requests (e.g. tapping Sign In then Google rapidly).
+  /// True while any auth action is in flight. Used to reject duplicate taps.
   bool get _busy => state.maybeWhen(loading: (_) => true, orElse: () => false);
 
   AuthCubit({
-    required this._repository,
-    required this._signInWithEmail,
-    required this._registerWithEmail,
-    required this._verifyPhoneNumber,
-    required this._signInWithOtp,
-    required this._signInWithGoogle,
-    required this._signOut,
-    required this._saveUser,
-    required this._getUser,
-    required this._forgotPassword,
-    required this._sendEmailVerification,
-    required this._checkEmailVerified,
-    required this._changePassword,
-    required this._deleteAccount,
+    required AuthRepository repository,
+    required SignInWithEmail signInWithEmail,
+    required SignOut signOut,
+    required GetUser getUser,
+    required ForgotPassword forgotPassword,
+    required ChangePassword changePassword,
     Future<void> Function()? onPreSignOut,
-  })  : _onPreSignOut = onPreSignOut,
+  })  : _repository = repository,
+        _signInWithEmail = signInWithEmail,
+        _signOut = signOut,
+        _getUser = getUser,
+        _forgotPassword = forgotPassword,
+        _changePassword = changePassword,
+        _onPreSignOut = onPreSignOut,
         super(const AuthState.initial());
 
   /// Called once from SplashPage on cold start.
@@ -73,10 +59,11 @@ class AuthCubit extends Cubit<AuthState> {
       emit(const AuthState.unauthenticated());
     } else {
       try {
-        final firestoreUser = await _getUser(firebaseUser.uid);
-        final user = firestoreUser ?? firebaseUser;
-        if (user.authProvider == 'email' && !user.isEmailVerified) {
-          emit(AuthState.awaitingEmailVerification(user));
+        final user = await _withStoredProfile(firebaseUser);
+        if (!user.isActive) {
+          // Deactivated mid-session / since last login → block + sign out.
+          await _signOut();
+          emit(const AuthState.unauthenticated());
         } else {
           emit(AuthState.authenticated(user));
         }
@@ -87,11 +74,11 @@ class AuthCubit extends Cubit<AuthState> {
     _listenToAuthChanges();
   }
 
-  /// Firebase-derived sign-ins (email/Google/OTP) only know the Auth profile,
-  /// which has no role. Re-read the Firestore document so the emitted
-  /// [AuthState.authenticated] carries the authoritative role/branch and the
-  /// router can dispatch to the correct role shell. Falls back to the Firebase
-  /// user if the read fails.
+  /// Firebase sign-in only knows the Auth profile (no role/flags). Re-read the
+  /// Firestore document so the emitted [AuthState.authenticated] carries the
+  /// authoritative role/branch + provisioning flags (mustChangePassword /
+  /// isProfileCompleted) and the router can dispatch correctly. Falls back to the
+  /// Firebase user if the read fails.
   Future<UserEntity> _withStoredProfile(UserEntity fallback) async {
     try {
       final stored = await _getUser(fallback.uid);
@@ -102,35 +89,40 @@ class AuthCubit extends Cubit<AuthState> {
   }
 
   /// Re-reads the current user's Firestore document and re-emits
-  /// [AuthState.authenticated] so the router re-evaluates access. Used by the
-  /// Pending Approval screen to detect when a manager/admin has approved the
-  /// account (`approvalStatus` → approved, `isActive` → true) and let the user
-  /// through to their role shell without forcing a sign-out / sign-in.
+  /// [AuthState.authenticated] so the router re-evaluates access. Used after the
+  /// first-login flows (force password change / profile completion) clear a flag.
   Future<void> refreshUser() async {
     final firebaseUser = _repository.currentUser;
     if (firebaseUser == null) {
       emit(const AuthState.unauthenticated());
       return;
     }
-    emit(AuthState.authenticated(await _withStoredProfile(firebaseUser)));
+    final user = await _withStoredProfile(firebaseUser);
+    if (!user.isActive) {
+      await _signOut();
+      emit(const AuthState.unauthenticated());
+    } else {
+      emit(AuthState.authenticated(user));
+    }
   }
 
-  /// Live-watches the signed-in user's Firestore document and re-emits
-  /// [AuthState.authenticated] on every change — the real-time replacement for
-  /// polling on the Pending Approval screen: the instant an admin approves the
-  /// account (`approvalStatus` → approved, `isActive` → true), the router
-  /// redirects to the role shell with no re-login. Idempotent; pair with
-  /// [stopWatchingUser]. Backed by Firestore's offline cache, so it also serves
-  /// the last-known doc when offline.
+  /// Live-watches the signed-in user's document and re-emits on every change. An
+  /// admin deactivating the account mid-session signs the user out instantly.
   void watchCurrentUser() {
     final firebaseUser = _repository.currentUser;
     if (firebaseUser == null) return;
     _userWatchSub?.cancel();
     _userWatchSub = _repository.watchUser(firebaseUser.uid).listen(
-      (user) {
-        if (user != null) emit(AuthState.authenticated(user));
+      (user) async {
+        if (user == null) return;
+        if (!user.isActive) {
+          await _signOut();
+          emit(const AuthState.unauthenticated());
+        } else {
+          emit(AuthState.authenticated(user));
+        }
       },
-      onError: (_) {/* transient; the manual refresh button remains available */},
+      onError: (_) {/* transient */},
     );
   }
 
@@ -145,8 +137,7 @@ class AuthCubit extends Cubit<AuthState> {
       if (user == null) {
         emit(const AuthState.unauthenticated());
       }
-      // Positive auth events are handled explicitly per action to avoid
-      // overwriting richer states (e.g. awaitingEmailVerification).
+      // Positive auth events are handled explicitly per action.
     });
   }
 
@@ -154,77 +145,15 @@ class AuthCubit extends Cubit<AuthState> {
     if (_busy) return;
     emit(const AuthState.loading(AuthAction.emailSignIn));
     try {
-      final user = await _signInWithEmail(email: email, password: password);
-      if (!user.isEmailVerified) {
-        emit(AuthState.awaitingEmailVerification(user));
-      } else {
-        emit(AuthState.authenticated(await _withStoredProfile(user)));
+      final signedIn = await _signInWithEmail(email: email, password: password);
+      final user = await _withStoredProfile(signedIn);
+      if (!user.isActive) {
+        // Deactivated account: never enter the app — sign out + surface why.
+        await _signOut();
+        emit(const AuthState.error(_disabledMessage));
+        return;
       }
-    } on AuthFailure catch (e) {
-      emit(AuthState.error(e.message));
-    }
-  }
-
-  Future<void> registerWithEmail(
-    String email,
-    String password, {
-    String? displayName,
-  }) async {
-    if (_busy) return;
-    emit(const AuthState.loading(AuthAction.register));
-    try {
-      var user = await _registerWithEmail(email: email, password: password);
-      if (displayName != null && displayName.trim().isNotEmpty) {
-        await _repository.updateDisplayName(displayName.trim());
-        user = await _repository.reloadUser();
-      }
-      await _saveUser(user);
-      await _sendEmailVerification();
-      emit(AuthState.awaitingEmailVerification(user));
-    } on AuthFailure catch (e) {
-      emit(AuthState.error(e.message));
-    }
-  }
-
-  Future<void> signInWithGoogle() async {
-    if (_busy) return;
-    emit(const AuthState.loading(AuthAction.google));
-    try {
-      final user = await _signInWithGoogle();
-      await _saveUser(user);
-      emit(AuthState.authenticated(await _withStoredProfile(user)));
-    } on AuthFailure catch (e) {
-      emit(AuthState.error(e.message));
-    }
-  }
-
-  Future<void> verifyPhone(String phoneNumber) async {
-    if (_busy) return;
-    emit(const AuthState.loading(AuthAction.phoneVerify));
-    try {
-      await _verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        onCodeSent: (verificationId) => emit(AuthState.otpSent(verificationId)),
-        onFailed: (error) => emit(AuthState.error(error)),
-        onAutoVerified: (user) => emit(AuthState.authenticated(user)),
-      );
-    } on AuthFailure catch (e) {
-      emit(AuthState.error(e.message));
-    } catch (_) {
-      emit(const AuthState.error('Phone verification failed. Please try again.'));
-    }
-  }
-
-  Future<void> verifyOtp(String verificationId, String smsCode) async {
-    if (_busy) return;
-    emit(const AuthState.loading(AuthAction.otpVerify));
-    try {
-      final user = await _signInWithOtp(
-        verificationId: verificationId,
-        smsCode: smsCode,
-      );
-      await _saveUser(user);
-      emit(AuthState.authenticated(await _withStoredProfile(user)));
+      emit(AuthState.authenticated(user));
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));
     }
@@ -241,28 +170,8 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  Future<void> sendEmailVerification() async {
-    try {
-      await _sendEmailVerification();
-    } on AuthFailure catch (e) {
-      emit(AuthState.error(e.message));
-    }
-  }
-
-  Future<void> checkEmailVerified() async {
-    try {
-      final user = await _checkEmailVerified();
-      if (user.isEmailVerified) {
-        await _saveUser(user);
-        emit(AuthState.authenticated(await _withStoredProfile(user)));
-      } else {
-        emit(AuthState.awaitingEmailVerification(user));
-      }
-    } on AuthFailure catch (e) {
-      emit(AuthState.error(e.message));
-    }
-  }
-
+  /// Settings → Change Password (a voluntary change). Emits [passwordChanged] on
+  /// success so the settings page can confirm + pop.
   Future<void> changePassword({
     required String currentPassword,
     required String newPassword,
@@ -280,23 +189,44 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  Future<void> deleteAccount({
-    String? currentPassword,
-    String? accessToken,
+  /// First-login forced change: the user replaces the admin-issued temp
+  /// password. On success the `mustChangePassword` flag is cleared and the
+  /// session re-emitted as authenticated, so the router advances the user to
+  /// Profile Completion (or Home).
+  Future<void> forcePasswordChange({
+    required String currentPassword,
+    required String newPassword,
   }) async {
     if (_busy) return;
-    emit(const AuthState.loading(AuthAction.deleteAccount));
-    try {
-      // Note: deleting the Firestore user document must happen *before* the
-      // Firebase account is removed — once the account is gone the user is
-      // signed out and security rules would reject the write. Proper cleanup
-      // of the document belongs in a Cloud Function (auth.user().onDelete);
-      // here we simply remove the auth account.
-      await _deleteAccount(
-        currentPassword: currentPassword,
-        accessToken: accessToken,
-      );
+    final uid = _repository.currentUser?.uid;
+    if (uid == null) {
       emit(const AuthState.unauthenticated());
+      return;
+    }
+    emit(const AuthState.loading(AuthAction.changePassword));
+    try {
+      await _changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
+      await _repository.setMustChangePassword(uid, false);
+      await refreshUser();
+    } on AuthFailure catch (e) {
+      emit(AuthState.error(e.message));
+    }
+  }
+
+  /// Marks onboarding complete (after the profile fields were saved) and
+  /// re-emits the session so the router advances the user to Home.
+  Future<void> completeProfile() async {
+    final uid = _repository.currentUser?.uid;
+    if (uid == null) {
+      emit(const AuthState.unauthenticated());
+      return;
+    }
+    try {
+      await _repository.setProfileCompleted(uid, true);
+      await refreshUser();
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));
     }
@@ -304,21 +234,13 @@ class AuthCubit extends Cubit<AuthState> {
 
   Future<void> signOut() async {
     // Drop this device's FCM token FIRST, while still authenticated — the
-    // post-sign-out `unauthenticated` listener can't, because once Firebase Auth
-    // is cleared the `users/{uid}` write is permission-denied (rules require
-    // `isOwner`). Without this, the token lingered on the signed-out account and
-    // the next user on this device could receive the previous user's pushes. The
-    // server `claimFcmToken` remains the backstop for force-kill / offline cases.
+    // post-sign-out listener can't (rules require `isOwner`).
     try {
       await _onPreSignOut?.call();
-    } catch (_) {
-      // Best-effort — a token-cleanup failure must not block sign-out.
-    }
+    } catch (_) {/* best-effort */}
     try {
       await _signOut();
-    } catch (_) {
-      // Sign-out failure should not block the local session from clearing.
-    }
+    } catch (_) {/* don't block clearing the local session */}
     emit(const AuthState.unauthenticated());
   }
 

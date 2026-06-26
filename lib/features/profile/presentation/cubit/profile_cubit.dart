@@ -82,6 +82,8 @@ class ProfileCubit extends Cubit<ProfileState> {
     DateTime? birthDate,
     File? avatarFile,
     File? coverFile,
+    String? emergencyContact,
+    String? address,
   }) async {
     final current = _current;
     if (current == null) return;
@@ -136,6 +138,8 @@ class ProfileCubit extends Cubit<ProfileState> {
         birthDate: birthDate,
         profileImage: avatarUrl,
         coverImage: coverUrl,
+        emergencyContact: emergencyContact,
+        address: address,
       );
       _loadedUid = uid;
       emit(ProfileState.saved(updated));

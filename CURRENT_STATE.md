@@ -11,8 +11,35 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-26 (FCM token ownership — layered defense-in-depth)
+**Last updated:** 2026-06-26 (Auth & account provisioning redesign — admin-only accounts)
 **Version:** 1.0.0+1 · **Branch:** `enhancement/ui-refactor` (DROP — monochrome premium UX)
+
+> **Auth & account provisioning redesign — admin-only accounts (2026-06-26):**
+> **Core business change: no public registration — only an admin creates
+> accounts.** **Removed completely:** signup/registration, phone-OTP, Google
+> sign-in, email-verification gating, and the approval/pending-approval flow (+
+> their pages, use cases, the `approval_status` enum, and the `google_sign_in`
+> dependency). **Auth surface is now Splash · Login · Forgot Password · Force
+> Password Change · Profile Completion.** **Data model** (`users/{uid}`):
+> `UserEntity`/`UserModel` gained `mustChangePassword` / `isProfileCompleted` /
+> `employmentStatus` / `createdBy`; dropped `approvalStatus`; `hasAppAccess` is
+> now just `isActive`. **Backend:** two admin-only callables —
+> `createUserAccount` (Admin SDK: Auth user + Firestore doc, admin stays signed
+> in) and `adminResetPassword`. **Rules:** `users` `create: if false` (server-only
+> creation), self-update freezes role/branch/shift/position/employmentStatus/
+> createdBy. **Routing:** `unauthenticated → Login`, `mustChangePassword → Force
+> Password Change`, `!isProfileCompleted → Profile Completion`, else role home; a
+> deactivated account is **blocked at login + signed out**. **UI (premium, strictly
+> monochrome — no indigo, per the locked ruling):** Login redesigned (no signup/
+> Google/phone); new Force Password Change + Profile Completion (phone/emergency
+> contact/birth date/address required, photo optional); Admin → User Management →
+> **Create Account** screen + Reset Account. `node --check` valid; all changed Dart
+> parse-checked. ⚠️ This env's Flutter is **3.10.4 < `^3.12.1`** — run `build_runner`
+> (UserEntity + AuthState freezed hand-edited) + `analyze` + `test` on 3.12.2.
+> ⚠️ **Deploy required:** `firebase deploy --only functions,firestore:rules`
+> (`createUserAccount` + `adminResetPassword` + the user-create lockdown) — until
+> then account creation fails (callables missing) and self-registration isn't
+> closed. Sequence the client cutover with the deploy.
 
 > **FCM token ownership — defense-in-depth (2026-06-26):** Three layers ensure a
 > push can never reach the wrong account (crashes / interrupted logout /

@@ -6,13 +6,16 @@ class RouteNames {
   static const String splash = '/splash';
   static const String home = '/';
   static const String login = '/login';
-  static const String register = '/register';
-  static const String phone = '/phone';
   static const String forgotPassword = '/forgot-password';
-  static const String emailVerification = '/email-verification';
 
-  /// Holding screen for authenticated-but-not-yet-approved accounts.
-  static const String pendingApproval = '/pending-approval';
+  /// First-login forced password change (admin-issued temp password). The router
+  /// confines a user with `mustChangePassword == true` here.
+  static const String forcePasswordChange = '/force-password-change';
+
+  /// First-login profile completion. The router confines a user with
+  /// `isProfileCompleted == false` here (after any forced password change).
+  static const String profileCompletion = '/complete-profile';
+
   static const String profile = '/profile';
   static const String editProfile = '/profile/edit';
   static const String settings = '/settings';
@@ -79,7 +82,9 @@ class RouteNames {
   static const String adminManagers = '/admin/managers';
   static const String adminEmployees = '/admin/employees';
   static const String adminAnalytics = '/admin/analytics';
-  static const String adminApprovals = '/admin/approvals';
+
+  /// Admin → User Management → Create Account (admin-only provisioning form).
+  static const String adminCreateAccount = '/admin/users/create';
 
   /// The landing route for a given role, used by the router redirect and the
   /// splash screen to dispatch each user to their own shell.

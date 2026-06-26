@@ -22,6 +22,8 @@ abstract class ProfileRemoteDataSource {
     DateTime? birthDate,
     String? profileImage,
     String? coverImage,
+    String? emergencyContact,
+    String? address,
   });
 
   /// Uploads [file] to Storage and returns its download URL.
@@ -69,6 +71,8 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
     DateTime? birthDate,
     String? profileImage,
     String? coverImage,
+    String? emergencyContact,
+    String? address,
   }) async {
     try {
       final map = ProfileModel.editMap(
@@ -83,6 +87,8 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
         birthDate: birthDate,
         profileImage: profileImage,
         coverImage: coverImage,
+        emergencyContact: emergencyContact,
+        address: address,
       );
       await _users.doc(uid).set(map, SetOptions(merge: true));
     } on FirebaseException catch (e) {

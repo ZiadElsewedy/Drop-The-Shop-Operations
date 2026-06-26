@@ -14,11 +14,7 @@ import 'package:fbro/core/widgets/app_motion.dart';
 import 'package:fbro/core/widgets/dashboard_metric_card.dart';
 import 'package:fbro/core/widgets/brand_watermark.dart';
 import 'package:fbro/core/widgets/glass_container.dart';
-import 'package:fbro/core/widgets/status_badge.dart';
-import 'package:fbro/core/widgets/user_avatar.dart';
-import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
 import 'package:fbro/features/admin/presentation/widgets/pending_actions.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
 import 'package:fbro/features/schedule/presentation/cubit/shift_swap_state.dart';
@@ -29,9 +25,9 @@ import 'package:fbro/features/task/domain/entities/task_entity.dart';
 import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
 import 'package:fbro/features/task/presentation/cubit/task_state.dart';
 
-/// Admin Home — an operations **command center**. Pulls from three live sources
-/// (statistics · the task stream · pending users) so an admin instantly sees
-/// branch health, workforce, pending approvals, active tasks and operational
+/// Admin Home — an operations **command center**. Pulls from live sources
+/// (statistics · the task stream · shift swaps) so an admin instantly sees
+/// branch health, workforce, tasks waiting review, overdue work and operational
 /// issues, then reaches any critical action in one tap.
 ///
 /// Composition over a monolith: every visual is a shared component
@@ -45,8 +41,6 @@ class AdminDashboardScreen extends StatefulWidget {
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  List<UserEntity> _pending = const [];
-
   @override
   void initState() {
     super.initState();
@@ -64,8 +58,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     // Pending swaps now stream live (scope = all branches), so the Pending
     // Actions swap count updates the instant a swap settles — no refresh.
     context.read<ShiftSwapCubit>().loadAll(force: force);
-    final pending = await context.read<AdminUsersCubit>().pendingUsers();
-    if (mounted) setState(() => _pending = pending);
   }
 
   @override
@@ -107,7 +99,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           // Always rendered — shows an all-clear state when empty, so the panel
           // never silently disappears.
           sec('pa-header', _PendingSection(builder: (s, overdue, reviews, swaps) {
-            final pending = _pending.length + swaps + reviews + overdue;
+            final pending = swaps + reviews + overdue;
             return AdminSectionHeader(
               title: 'Pending Actions',
               subtitle:
@@ -119,12 +111,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               _PendingSection(
                   builder: (s, overdue, reviews, swaps) => PendingActions(
                         swaps: swaps,
-                        approvals: _pending.length,
                         reviews: reviews,
                         overdue: overdue,
                         onSwaps: () => context.push(RouteNames.adminSchedule),
-                        onApprovals: () =>
-                            context.push(RouteNames.adminApprovals),
                         onReviews: () => context.push(RouteNames.adminReview),
                         onOverdue: () => context.push(RouteNames.adminTasks),
                       ))),
@@ -135,18 +124,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           const SizedBox(height: AppSpacing.xl),
           sec('qa-h', const AdminSectionHeader(title: 'Quick actions')),
           sec('qa', _quickActions()),
-          if (_pending.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.xl),
-            sec(
-                'pending-h',
-                AdminSectionHeader(
-                  title: 'Pending approvals',
-                  subtitle: '${_pending.length} awaiting review',
-                  actionLabel: 'Review all',
-                  onAction: () => context.push(RouteNames.adminApprovals),
-                )),
-            sec('pending-list', _PendingList(users: _pending)),
-          ],
           const SizedBox(height: AppSpacing.xl),
           sec('manage-h', const AdminSectionHeader(title: 'Manage')),
           sec('manage', _manage()),
@@ -207,8 +184,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ),
       ActionCard(
         icon: Icons.person_add_alt_1_outlined,
-        title: 'Add Manager',
-        onTap: () => context.push(RouteNames.adminManagers),
+        title: 'Create Account',
+        onTap: () => context.push(RouteNames.adminCreateAccount),
       ),
       ActionCard(
         icon: Icons.assignment_add,
@@ -216,9 +193,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         onTap: () => context.push(RouteNames.adminTasks),
       ),
       ActionCard(
-        icon: Icons.how_to_reg_outlined,
-        title: 'Approve Employee',
-        onTap: () => context.push(RouteNames.adminApprovals),
+        icon: Icons.supervisor_account_outlined,
+        title: 'Add Manager',
+        onTap: () => context.push(RouteNames.adminManagers),
       ),
     ]);
   }
@@ -428,7 +405,6 @@ class _Hero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = stats;
-    final pending = s?.pendingApprovals ?? 0;
     final active = s?.activeTasks ?? 0;
     final doneToday = s?.completedTasksToday ?? 0;
     final totalToday = doneToday + active;
@@ -439,17 +415,7 @@ class _Hero extends StatelessWidget {
     final bool highlight;
     final IconData icon;
 
-    if (pending > 0) {
-      title = 'Pending approvals';
-      value = '$pending';
-      summary =
-          '$pending ${pending == 1 ? 'person is' : 'people are'} waiting for account approval.';
-      cta = 'Review approvals';
-      route = RouteNames.adminApprovals;
-      accent = AppColors.warning;
-      highlight = true;
-      icon = Icons.how_to_reg_rounded;
-    } else if (reviews > 0) {
+    if (reviews > 0) {
       title = 'Tasks awaiting review';
       value = '$reviews';
       summary =
@@ -473,7 +439,7 @@ class _Hero extends StatelessWidget {
       title = 'All clear';
       value = '$active';
       summary =
-          'No approvals or reviews waiting. $active active ${active == 1 ? 'task' : 'tasks'} in progress.';
+          'No reviews or overdue tasks waiting. $active active ${active == 1 ? 'task' : 'tasks'} in progress.';
       cta = 'View tasks';
       route = RouteNames.adminTasks;
       accent = AppColors.success;
@@ -565,71 +531,6 @@ class _Hero extends StatelessWidget {
           ),
         ],
         ),
-      ),
-    );
-  }
-}
-
-// ─── Pending approvals list ─────────────────────────────────────────
-
-class _PendingList extends StatelessWidget {
-  const _PendingList({required this.users});
-  final List<UserEntity> users;
-
-  @override
-  Widget build(BuildContext context) {
-    final shown = users.take(3).toList();
-    return GlassContainer(
-      onTap: () => context.push(RouteNames.adminApprovals),
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-      child: Column(
-        children: [
-          for (var i = 0; i < shown.length; i++) ...[
-            if (i > 0)
-              const Divider(color: AppColors.darkBorder, height: 1),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-              child: Row(
-                children: [
-                  UserAvatar.fromUser(shown[i], size: 38),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          (shown[i].displayName?.isNotEmpty ?? false)
-                              ? shown[i].displayName!
-                              : shown[i].email,
-                          style: AppTypography.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(shown[i].email,
-                            style: AppTypography.caption,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  StatusBadge(label: 'Pending', color: AppColors.warning),
-                ],
-              ),
-            ),
-          ],
-          if (users.length > shown.length)
-            Padding(
-              padding: const EdgeInsets.only(
-                  top: AppSpacing.xs, bottom: AppSpacing.sm),
-              child: Text(
-                '+${users.length - shown.length} more awaiting approval',
-                style: AppTypography.caption,
-              ),
-            ),
-        ],
       ),
     );
   }

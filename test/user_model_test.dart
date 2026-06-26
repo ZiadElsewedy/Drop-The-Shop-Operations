@@ -23,9 +23,13 @@ void main() {
       final model = UserModel.fromMap(const {});
       expect(model.uid, '');
       expect(model.email, '');
-      // Safe role/approval defaults still apply so access can never escalate.
+      // Safe role default still applies so access can never escalate.
       expect(model.role, UserRole.employee);
       expect(model.isActive, isTrue);
+      // Provisioning flags default to NOT forced so legacy docs aren't trapped.
+      expect(model.mustChangePassword, isFalse);
+      expect(model.isProfileCompleted, isTrue);
+      expect(model.employmentStatus, 'active');
     });
 
     test('a well-formed doc still maps every field', () {
@@ -36,7 +40,6 @@ void main() {
         'role': 'manager',
         'branchId': 'branch-1',
         'isActive': true,
-        'approvalStatus': 'approved',
         'position': 'Cashier',
       });
       expect(model.uid, 'u1');
@@ -47,6 +50,42 @@ void main() {
       // Job position (drives shift-swap role compatibility) round-trips.
       expect(model.position, 'Cashier');
       expect(model.toEntity().position, 'Cashier');
+    });
+
+    test('an admin-provisioned doc maps the first-login + audit fields', () {
+      final model = UserModel.fromMap({
+        'uid': 'u2',
+        'email': 'new@b.com',
+        'displayName': 'New Hire',
+        'role': 'employee',
+        'branchId': 'branch-2',
+        'assignedShift': 'morning',
+        'position': 'Stockist',
+        'isActive': true,
+        'mustChangePassword': true,
+        'isProfileCompleted': false,
+        'employmentStatus': 'active',
+        'createdBy': 'admin-1',
+      });
+      expect(model.mustChangePassword, isTrue);
+      expect(model.isProfileCompleted, isFalse);
+      expect(model.employmentStatus, 'active');
+      expect(model.createdBy, 'admin-1');
+      // Access is gated solely by isActive now.
+      final entity = model.toEntity();
+      expect(entity.hasAppAccess, isTrue);
+      expect(entity.mustChangePassword, isTrue);
+      expect(entity.isProfileCompleted, isFalse);
+      expect(entity.createdBy, 'admin-1');
+    });
+
+    test('name falls back to the legacy profile fullName key', () {
+      final model = UserModel.fromMap({
+        'uid': 'u3',
+        'email': 'c@b.com',
+        'fullName': 'Legacy Name',
+      });
+      expect(model.displayName, 'Legacy Name');
     });
   });
 }

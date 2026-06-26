@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
@@ -10,12 +9,19 @@ import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
 import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
 
-Future<void> showApproveSheet({
+Future<void> showResetAccountSheet({
   required BuildContext context,
   required AdminUsersCubit cubit,
   required UserEntity user,
 }) =>
-    _sheet(context, _ApproveSheet(cubit: cubit, user: user));
+    _sheet(context, _ResetAccountSheet(cubit: cubit, user: user));
+
+Future<void> showEmploymentStatusSheet({
+  required BuildContext context,
+  required AdminUsersCubit cubit,
+  required UserEntity user,
+}) =>
+    _sheet(context, _EmploymentStatusSheet(cubit: cubit, user: user));
 
 Future<void> showAssignBranchSheet({
   required BuildContext context,
@@ -139,18 +145,30 @@ class _BranchSelectorState extends State<_BranchSelector> {
   }
 }
 
-// ─── Approve ─────────────────────────────────────────────────────
-class _ApproveSheet extends StatefulWidget {
-  const _ApproveSheet({required this.cubit, required this.user});
+// ─── Reset account (new temp password + re-force change) ─────────
+class _ResetAccountSheet extends StatefulWidget {
+  const _ResetAccountSheet({required this.cubit, required this.user});
   final AdminUsersCubit cubit;
   final UserEntity user;
   @override
-  State<_ApproveSheet> createState() => _ApproveSheetState();
+  State<_ResetAccountSheet> createState() => _ResetAccountSheetState();
 }
 
-class _ApproveSheetState extends State<_ApproveSheet> {
-  UserRole _role = UserRole.employee;
-  late String? _branchId = widget.user.branchId;
+class _ResetAccountSheetState extends State<_ResetAccountSheet> {
+  final _password = TextEditingController();
+
+  @override
+  void dispose() {
+    _password.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final value = _password.text.trim();
+    if (value.length < 6) return;
+    widget.cubit.resetAccount(widget.user, value);
+    Navigator.of(context).pop();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -159,87 +177,70 @@ class _ApproveSheetState extends State<_ApproveSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _Title('Approve user'),
-          Text(widget.user.email, style: AppTypography.bodySmall),
-          const SizedBox(height: AppSpacing.lg),
-          Text('Role', style: AppTypography.caption),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              _RolePill(
-                label: 'Employee',
-                selected: _role == UserRole.employee,
-                onTap: () => setState(() => _role = UserRole.employee),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              _RolePill(
-                label: 'Manager',
-                selected: _role == UserRole.manager,
-                onTap: () => setState(() => _role = UserRole.manager),
-              ),
-            ],
+          const _Title('Reset account'),
+          Text(
+            'Set a new temporary password for ${widget.user.email}. They will be '
+            'forced to change it on next sign-in.',
+            style: AppTypography.caption,
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('Branch', style: AppTypography.caption),
-          _BranchSelector(
-            cubit: widget.cubit,
-            selected: _branchId,
-            onChanged: (v) => setState(() => _branchId = v),
+          AppTextField(
+            controller: _password,
+            label: 'Temporary password',
+            hint: 'At least 6 characters',
+            prefixIcon: Icons.lock_reset_rounded,
           ),
-          const SizedBox(height: AppSpacing.lg),
-          AppButton(
-            label: 'Approve',
-            icon: const Icon(Icons.check_circle_outline_rounded,
-                size: 20, color: AppColors.textDark),
-            onPressed: () {
-              widget.cubit
-                  .approve(widget.user, role: _role, branchId: _branchId);
-              Navigator.of(context).pop();
-            },
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppButton.secondary(
-            label: 'Reject',
-            onPressed: () {
-              widget.cubit.reject(widget.user);
-              Navigator.of(context).pop();
-            },
-          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(label: 'Reset account', onPressed: _save),
         ],
       ),
     );
   }
 }
 
-class _RolePill extends StatelessWidget {
-  const _RolePill(
-      {required this.label, required this.selected, required this.onTap});
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
+// ─── Employment status (HR label) ────────────────────────────────
+class _EmploymentStatusSheet extends StatelessWidget {
+  const _EmploymentStatusSheet({required this.cubit, required this.user});
+  final AdminUsersCubit cubit;
+  final UserEntity user;
+
+  static const _options = ['active', 'suspended', 'terminated'];
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : AppColors.darkSurfaceElevated,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-                color: selected ? AppColors.primary : AppColors.darkBorder),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: AppTypography.label.copyWith(
-              color: selected ? AppColors.textDark : AppColors.textPrimary,
-            ),
-          ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _Title('Employment status'),
+        Text(
+          'An HR record label. It does not block access on its own — use '
+          'Deactivate to revoke sign-in.',
+          style: AppTypography.caption,
         ),
-      ),
+        const SizedBox(height: AppSpacing.md),
+        for (final s in _options)
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(
+              user.employmentStatus == s
+                  ? Icons.radio_button_checked_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              color: user.employmentStatus == s
+                  ? AppColors.primary
+                  : AppColors.textTertiary,
+              size: 20,
+            ),
+            title: Text(
+              '${s[0].toUpperCase()}${s.substring(1)}',
+              style: AppTypography.label,
+            ),
+            onTap: () {
+              cubit.changeEmploymentStatus(user, s);
+              Navigator.of(context).pop();
+            },
+          ),
+      ],
     );
   }
 }
@@ -379,8 +380,8 @@ class _PromoteManagerSheetState extends State<_PromoteManagerSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _Title('Add manager'),
-        Text('Promote an approved employee to manager. Their current branch is '
+        const _Title('Promote to manager'),
+        Text('Promote an existing employee to manager. Their current branch is '
             'kept — reassign it from the manager list if needed.',
             style: AppTypography.caption),
         const SizedBox(height: AppSpacing.md),
@@ -397,7 +398,7 @@ class _PromoteManagerSheetState extends State<_PromoteManagerSheet> {
             if (employees.isEmpty) {
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                child: Text('No approved employees to promote.',
+                child: Text('No employees to promote.',
                     style: AppTypography.bodySmall),
               );
             }

@@ -66,6 +66,8 @@ class ProfileModel {
     DateTime? birthDate,
     String? profileImage,
     String? coverImage,
+    String? emergencyContact,
+    String? address,
   }) {
     final map = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
     if (fullName != null) {
@@ -85,6 +87,9 @@ class ProfileModel {
       map['photoUrl'] = profileImage; // legacy sync
     }
     if (coverImage != null) map['coverImage'] = coverImage;
+    // Onboarding fields (Profile Completion). Stored on users/{uid}.
+    if (emergencyContact != null) map['emergencyContact'] = emergencyContact;
+    if (address != null) map['address'] = address;
     return map;
   }
 }

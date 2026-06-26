@@ -5,39 +5,35 @@ import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/app_glass_card.dart';
 import 'package:fbro/core/widgets/metric_pill.dart';
 
-/// Admin Home **Pending Actions** panel (spec §1) — a consolidated, actionable
-/// queue of everything waiting on the admin: shift-swap requests, employee
-/// approvals, tasks waiting review, and overdue tasks. Each non-empty queue is a
-/// tappable row that jumps straight to where it's resolved.
+/// Admin Home **Pending Actions** panel — a consolidated, actionable queue of
+/// everything waiting on the admin: shift-swap requests, tasks waiting review,
+/// and overdue tasks. Each non-empty queue is a tappable row that jumps straight
+/// to where it's resolved. (Employee approvals were removed — DROP is
+/// admin-provisioned, so there is no approval queue.)
 ///
 /// Presentational only (counts + callbacks) so it renders in widget tests with no
 /// cubits/router. **Always rendered** by the dashboard — when everything is clear
-/// it shows an explicit "all caught up" state rather than vanishing (the earlier
-/// `if (count > 0)` gate made the section look like it didn't exist).
+/// it shows an explicit "all caught up" state rather than vanishing.
 class PendingActions extends StatelessWidget {
   const PendingActions({
     super.key,
     required this.swaps,
-    required this.approvals,
     required this.reviews,
     required this.overdue,
     required this.onSwaps,
-    required this.onApprovals,
     required this.onReviews,
     required this.onOverdue,
   });
 
   final int swaps;
-  final int approvals;
   final int reviews;
   final int overdue;
   final VoidCallback onSwaps;
-  final VoidCallback onApprovals;
   final VoidCallback onReviews;
   final VoidCallback onOverdue;
 
   /// Total items needing attention — also drives the section subtitle.
-  int get total => swaps + approvals + reviews + overdue;
+  int get total => swaps + reviews + overdue;
 
   @override
   Widget build(BuildContext context) {
@@ -49,16 +45,6 @@ class PendingActions extends StatelessWidget {
           detail: 'Review shift swaps',
           accent: AppColors.warning,
           onTap: onSwaps,
-        ),
-      if (approvals > 0)
-        _ActionRow(
-          icon: Icons.how_to_reg_rounded,
-          label: approvals == 1
-              ? '1 Employee Approval'
-              : '$approvals Employee Approvals',
-          detail: 'Approve new accounts',
-          accent: AppColors.warning,
-          onTap: onApprovals,
         ),
       if (reviews > 0)
         _ActionRow(
@@ -119,13 +105,6 @@ class PendingActions extends StatelessWidget {
           value: '$reviews',
           label: reviews == 1 ? 'review' : 'reviews',
           icon: Icons.rate_review_rounded,
-          tone: AppColors.warning,
-        ),
-      if (approvals > 0)
-        MetricPill(
-          value: '$approvals',
-          label: 'approvals',
-          icon: Icons.how_to_reg_rounded,
           tone: AppColors.warning,
         ),
       if (swaps > 0)

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:fbro/core/extensions/context_extensions.dart';
+import 'package:fbro/core/routes/route_names.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
@@ -113,6 +115,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             onPressed: () => context.read<AdminUsersCubit>().refresh(),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push(RouteNames.adminCreateAccount),
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.textDark,
+        icon: const Icon(Icons.person_add_alt_1_rounded),
+        label: Text('Create account',
+            style: AppTypography.label.copyWith(color: AppColors.textDark)),
       ),
       body: BlocConsumer<AdminUsersCubit, AdminUsersState>(
         listener: (context, state) =>
@@ -273,6 +283,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             showSetPositionSheet(context: context, cubit: cubit, user: user),
       ),
       AdminActionButton(
+        label: 'Reset',
+        icon: Icons.lock_reset_rounded,
+        onPressed: () =>
+            showResetAccountSheet(context: context, cubit: cubit, user: user),
+      ),
+      AdminActionButton(
         label: user.isActive ? 'Deactivate' : 'Activate',
         icon: user.isActive
             ? Icons.block_rounded
@@ -308,8 +324,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     ? 'Unassigned'
                     : (_branchNames[user.branchId] ?? user.branchId!)),
             _detail('Status', user.isActive ? 'Active' : 'Inactive'),
-            _detail('Approval', user.approvalStatus.value),
-            _detail('Sign-in', user.authProvider),
+            _detail('Employment', user.employmentStatus),
+            if (user.mustChangePassword)
+              _detail('First login', 'Pending password change'),
+            if (!user.isProfileCompleted)
+              _detail('Onboarding', 'Profile not completed'),
           ],
         ),
         actions: [

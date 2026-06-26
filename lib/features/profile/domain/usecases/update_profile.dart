@@ -18,6 +18,8 @@ class UpdateProfile {
     DateTime? birthDate,
     String? profileImage,
     String? coverImage,
+    String? emergencyContact,
+    String? address,
   }) =>
       _repository.updateProfile(
         uid: uid,
@@ -32,5 +34,7 @@ class UpdateProfile {
         birthDate: birthDate,
         profileImage: profileImage,
         coverImage: coverImage,
+        emergencyContact: emergencyContact,
+        address: address,
       );
 }

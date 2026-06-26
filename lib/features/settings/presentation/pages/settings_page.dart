@@ -32,7 +32,6 @@ class SettingsPage extends StatelessWidget {
             authenticated: (u) => u,
             orElse: () => null,
           );
-          final isEmailProvider = user?.authProvider == 'email';
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.pagePadding),
@@ -53,44 +52,17 @@ class SettingsPage extends StatelessWidget {
                       isFirst: true,
                       onTap: () => context.push(RouteNames.profile),
                     ),
-                    if (isEmailProvider)
-                      _SettingsRow(
-                        icon: Icons.lock_outline_rounded,
-                        label: 'Change Password',
-                        onTap: () => context.push(RouteNames.changePassword),
-                      ),
-                    if (isEmailProvider && user?.isEmailVerified == false)
-                      _SettingsRow(
-                        icon: Icons.mark_email_unread_outlined,
-                        label: 'Verify Email',
-                        subtitle: 'Your email is not yet verified',
-                        subtitleColor: AppColors.warning,
-                        onTap: () => context.push(RouteNames.emailVerification),
-                      ),
+                    // Every DROP account is email/password (admin-provisioned).
+                    _SettingsRow(
+                      icon: Icons.lock_outline_rounded,
+                      label: 'Change Password',
+                      onTap: () => context.push(RouteNames.changePassword),
+                    ),
                     _SettingsRow(
                       icon: Icons.logout_rounded,
                       label: 'Sign Out',
                       isLast: true,
                       onTap: () => context.read<AuthCubit>().signOut(),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: AppSpacing.xxl),
-
-                // ── Security ──
-                _SectionHeader(label: 'Security'),
-                const SizedBox(height: AppSpacing.md),
-                _SettingsGroup(
-                  children: [
-                    _SettingsRow(
-                      icon: Icons.delete_outline_rounded,
-                      label: 'Delete Account',
-                      labelColor: AppColors.error,
-                      iconColor: AppColors.error,
-                      isFirst: true,
-                      isLast: true,
-                      onTap: () => _confirmDeleteAccount(context, isEmailProvider),
                     ),
                   ],
                 ),
@@ -111,19 +83,6 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  void _confirmDeleteAccount(BuildContext context, bool isEmailProvider) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => _DeleteAccountDialog(
-        isEmailProvider: isEmailProvider,
-        onConfirm: ({required String? password}) {
-          context.read<AuthCubit>().deleteAccount(
-                currentPassword: password,
-              );
-        },
-      ),
-    );
-  }
 }
 
 class _SectionHeader extends StatelessWidget {
@@ -289,93 +248,6 @@ class _VersionRowState extends State<_VersionRow> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _DeleteAccountDialog extends StatefulWidget {
-  final bool isEmailProvider;
-  final void Function({required String? password}) onConfirm;
-
-  const _DeleteAccountDialog({
-    required this.isEmailProvider,
-    required this.onConfirm,
-  });
-
-  @override
-  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
-}
-
-class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
-  final _passwordController = TextEditingController();
-
-  @override
-  void dispose() {
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: AppColors.darkSurface,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.cardAll),
-      title: Text('Delete Account', style: AppTypography.h3),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'This action is permanent and cannot be undone. All your data will be deleted.',
-            style: AppTypography.body,
-          ),
-          if (widget.isEmailProvider) ...[
-            const SizedBox(height: AppSpacing.lg),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              style: AppTypography.body
-                  .copyWith(color: AppColors.textPrimary),
-              decoration: InputDecoration(
-                labelText: 'Confirm your password',
-                labelStyle:
-                    AppTypography.caption,
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: AppRadius.mdAll,
-                  borderSide:
-                      const BorderSide(color: AppColors.darkBorder),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: AppRadius.mdAll,
-                  borderSide:
-                      const BorderSide(color: AppColors.error),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text('Cancel',
-              style: AppTypography.label
-                  .copyWith(color: AppColors.textSecondary)),
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-            widget.onConfirm(
-              password: widget.isEmailProvider
-                  ? _passwordController.text
-                  : null,
-            );
-          },
-          child: Text('Delete',
-              style:
-                  AppTypography.label.copyWith(color: AppColors.error)),
-        ),
-      ],
     );
   }
 }

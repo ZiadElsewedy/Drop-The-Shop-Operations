@@ -1,4 +1,3 @@
-import 'package:fbro/core/enums/approval_status.dart';
 import 'package:fbro/core/enums/user_role.dart';
 import 'package:fbro/core/errors/exceptions.dart';
 import 'package:fbro/core/errors/failures.dart';
@@ -32,33 +31,36 @@ class UserAdminRepositoryImpl implements UserAdminRepository {
   }
 
   @override
-  Future<List<UserEntity>> getPendingUsers() async {
+  Future<String> createAccount({
+    required String name,
+    required String email,
+    required String temporaryPassword,
+    required UserRole role,
+    String? branchId,
+    String? assignedShift,
+    String? position,
+  }) async {
     try {
-      final models = await _remote.getPendingUsers();
-      return models.map((m) => m.toEntity()).toList();
+      return await _remote.createAccount(
+        name: name,
+        email: email,
+        password: temporaryPassword,
+        role: role.value,
+        branchId: branchId,
+        assignedShift: assignedShift,
+        position: position,
+      );
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
   }
 
   @override
-  Future<void> approveUser({
+  Future<void> resetPassword({
     required String uid,
-    required UserRole role,
-    String? branchId,
+    required String temporaryPassword,
   }) =>
-      _run(() => _remote.updateUser(uid, {
-            'approvalStatus': ApprovalStatus.approved.value,
-            'isActive': true,
-            'role': role.value,
-            'branchId': branchId,
-          }));
-
-  @override
-  Future<void> rejectUser(String uid) => _run(() => _remote.updateUser(uid, {
-        'approvalStatus': ApprovalStatus.rejected.value,
-        'isActive': false,
-      }));
+      _run(() => _remote.resetPassword(uid: uid, tempPassword: temporaryPassword));
 
   @override
   Future<void> setUserActive(String uid, bool isActive) =>
@@ -75,6 +77,10 @@ class UserAdminRepositoryImpl implements UserAdminRepository {
   @override
   Future<void> changeUserPosition(String uid, String? position) =>
       _run(() => _remote.updateUser(uid, {'position': position}));
+
+  @override
+  Future<void> changeUserEmploymentStatus(String uid, String status) =>
+      _run(() => _remote.updateUser(uid, {'employmentStatus': status}));
 
   Future<void> _run(Future<void> Function() action) async {
     try {

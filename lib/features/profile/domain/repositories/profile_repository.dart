@@ -21,6 +21,8 @@ abstract class ProfileRepository {
     DateTime? birthDate,
     String? profileImage,
     String? coverImage,
+    String? emergencyContact,
+    String? address,
   });
 
   Future<String> uploadProfileImage(String uid, File file,

@@ -79,8 +79,8 @@ class _AdminAnalyticsScreenState extends State<AdminAnalyticsScreen> {
           StatItem('Managers', '${s.totalManagers}',
               Icons.supervisor_account_outlined),
           StatItem('Employees', '${s.totalEmployees}', Icons.groups_outlined),
-          StatItem('Pending approvals', '${s.pendingApprovals}',
-              Icons.how_to_reg_outlined),
+          StatItem('Unstaffed branches', '${s.branchesWithoutManagers}',
+              Icons.report_gmailerrorred_outlined),
         ]),
         const SizedBox(height: AppSpacing.xl),
         _section('Tasks', [

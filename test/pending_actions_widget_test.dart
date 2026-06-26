@@ -4,7 +4,8 @@ import 'package:fbro/features/admin/presentation/widgets/pending_actions.dart';
 
 /// Renders the Admin Home Pending Actions panel headlessly to prove it actually
 /// shows up (the earlier `if (count > 0)` gate made it vanish on empty data) and
-/// that each queue row is tappable and routes through its callback.
+/// that each queue row is tappable and routes through its callback. (Employee
+/// approvals were removed — DROP is admin-provisioned, so there's no queue.)
 void main() {
   Widget host(PendingActions p) =>
       MaterialApp(home: Scaffold(body: SingleChildScrollView(child: p)));
@@ -13,17 +14,14 @@ void main() {
       (tester) async {
     await tester.pumpWidget(host(PendingActions(
       swaps: 2,
-      approvals: 1,
       reviews: 3,
       overdue: 0,
       onSwaps: () {},
-      onApprovals: () {},
       onReviews: () {},
       onOverdue: () {},
     )));
 
     expect(find.text('2 Swap Requests'), findsOneWidget);
-    expect(find.text('1 Employee Approval'), findsOneWidget); // singular
     expect(find.text('3 Tasks Waiting Review'), findsOneWidget);
     // overdue == 0 → no row
     expect(find.textContaining('Overdue'), findsNothing);
@@ -33,11 +31,9 @@ void main() {
     var swapsTapped = false;
     await tester.pumpWidget(host(PendingActions(
       swaps: 1,
-      approvals: 0,
       reviews: 0,
       overdue: 0,
       onSwaps: () => swapsTapped = true,
-      onApprovals: () {},
       onReviews: () {},
       onOverdue: () {},
     )));
@@ -51,11 +47,9 @@ void main() {
       (tester) async {
     await tester.pumpWidget(host(PendingActions(
       swaps: 0,
-      approvals: 0,
       reviews: 0,
       overdue: 0,
       onSwaps: () {},
-      onApprovals: () {},
       onReviews: () {},
       onOverdue: () {},
     )));

@@ -36,6 +36,7 @@ admin.initializeApp();
 
 const db = admin.firestore();
 const messaging = admin.messaging();
+const auth = admin.auth();
 
 const USERS = "users";
 const BROADCASTS = "broadcasts";
@@ -462,6 +463,160 @@ exports.sendBroadcast = onCall(async (request) => {
   });
 
   return { success: true, ...result };
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// createUserAccount — the secure account-provisioning path (admin-only).
+//
+// DROP no longer allows public registration: only an admin creates accounts.
+// This callable creates the Firebase Auth user with the Admin SDK (which does
+// NOT sign the calling admin out, unlike the client createUserWithEmailAndPassword)
+// and seeds the `users/{uid}` document with the role/branch/shift/position plus
+// the first-login flags (mustChangePassword + isProfileCompleted:false). Firestore
+// rules deny ALL client creates of user docs, so this is the only creation path.
+const VALID_ROLES = ["admin", "manager", "employee"];
+
+exports.createUserAccount = onCall(async (request) => {
+  const callerAuth = request.auth;
+  if (!callerAuth) {
+    throw new HttpsError("unauthenticated", "Please sign in.");
+  }
+
+  // ── Only an admin may provision accounts ──
+  const callerSnap = await db.collection(USERS).doc(callerAuth.uid).get();
+  const caller = callerSnap.exists ? callerSnap.data() || {} : {};
+  if ((caller.role || "employee") !== "admin") {
+    throw new HttpsError("permission-denied", "Only an admin can create accounts.");
+  }
+
+  const data = request.data || {};
+  const name = String(data.name || "").trim();
+  const email = String(data.email || "").trim().toLowerCase();
+  const password = String(data.password || "");
+  const role = String(data.role || "").trim();
+  const branchId = String(data.branchId || "").trim();
+  const assignedShift = String(data.assignedShift || "").trim();
+  const position = String(data.position || "").trim();
+
+  // ── Validation ──
+  if (!name) throw new HttpsError("invalid-argument", "A full name is required.");
+  if (!email || !email.includes("@")) {
+    throw new HttpsError("invalid-argument", "A valid email is required.");
+  }
+  if (password.length < 6) {
+    throw new HttpsError("invalid-argument", "The temporary password must be at least 6 characters.");
+  }
+  if (!VALID_ROLES.includes(role)) {
+    throw new HttpsError("invalid-argument", "Pick a valid role.");
+  }
+  // A manager / employee must belong to a branch; an admin may be global.
+  if ((role === "manager" || role === "employee") && !branchId) {
+    throw new HttpsError("invalid-argument", "Pick a branch for this account.");
+  }
+
+  // ── Create the Auth user (does NOT affect the admin's own session) ──
+  let userRecord;
+  try {
+    userRecord = await auth.createUser({
+      email,
+      password,
+      displayName: name,
+    });
+  } catch (err) {
+    if (err && err.code === "auth/email-already-exists") {
+      throw new HttpsError("already-exists", "An account already exists with this email.");
+    }
+    if (err && err.code === "auth/invalid-email") {
+      throw new HttpsError("invalid-argument", "The email address is not valid.");
+    }
+    if (err && err.code === "auth/invalid-password") {
+      throw new HttpsError("invalid-argument", "The temporary password is too weak.");
+    }
+    logger.error("createUserAccount: auth.createUser failed", { error: String(err) });
+    throw new HttpsError("internal", "Could not create the account. Please try again.");
+  }
+
+  // ── Seed the Firestore user document ──
+  try {
+    await db.collection(USERS).doc(userRecord.uid).set({
+      uid: userRecord.uid,
+      email,
+      // `name` maps to displayName (canonical) mirrored to the profile fullName.
+      displayName: name,
+      fullName: name,
+      authProvider: "admin-created",
+      role,
+      branchId: branchId || null,
+      assignedShift: assignedShift || null,
+      position: position || null,
+      isActive: true,
+      employmentStatus: "active",
+      mustChangePassword: true,
+      isProfileCompleted: false,
+      isEmailVerified: false,
+      // Empty profile-schema seeds (filled during Profile Completion).
+      username: "",
+      bio: "",
+      profileImage: "",
+      coverImage: "",
+      createdBy: callerAuth.uid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    // Roll back the orphaned Auth user so a retry with the same email works.
+    await auth.deleteUser(userRecord.uid).catch(() => {});
+    logger.error("createUserAccount: firestore seed failed", { error: String(err) });
+    throw new HttpsError("internal", "Could not finish creating the account. Please try again.");
+  }
+
+  logger.info("account created", { uid: userRecord.uid, role, by: callerAuth.uid });
+  return { success: true, uid: userRecord.uid };
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// adminResetPassword — admin-only account reset: set a new temporary password
+// (Admin SDK) and re-force a password change on next login. Satisfies the spec's
+// "reset employee accounts" without exposing Auth credentials to the client.
+exports.adminResetPassword = onCall(async (request) => {
+  const callerAuth = request.auth;
+  if (!callerAuth) {
+    throw new HttpsError("unauthenticated", "Please sign in.");
+  }
+  const callerSnap = await db.collection(USERS).doc(callerAuth.uid).get();
+  const caller = callerSnap.exists ? callerSnap.data() || {} : {};
+  if ((caller.role || "employee") !== "admin") {
+    throw new HttpsError("permission-denied", "Only an admin can reset accounts.");
+  }
+
+  const data = request.data || {};
+  const uid = String(data.uid || "").trim();
+  const tempPassword = String(data.tempPassword || "");
+  if (!uid) throw new HttpsError("invalid-argument", "Missing the account to reset.");
+  if (tempPassword.length < 6) {
+    throw new HttpsError("invalid-argument", "The temporary password must be at least 6 characters.");
+  }
+
+  try {
+    await auth.updateUser(uid, { password: tempPassword });
+  } catch (err) {
+    if (err && err.code === "auth/user-not-found") {
+      throw new HttpsError("not-found", "That account no longer exists.");
+    }
+    logger.error("adminResetPassword: updateUser failed", { error: String(err) });
+    throw new HttpsError("internal", "Could not reset the account. Please try again.");
+  }
+
+  await db.collection(USERS).doc(uid).set(
+    {
+      mustChangePassword: true,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  logger.info("account reset", { uid, by: callerAuth.uid });
+  return { success: true };
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

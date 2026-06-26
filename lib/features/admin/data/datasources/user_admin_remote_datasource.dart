@@ -1,23 +1,44 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:fbro/core/constants/app_constants.dart';
 import 'package:fbro/core/errors/exceptions.dart';
 import 'package:fbro/features/auth/data/models/user_model.dart';
 
 /// Admin-side access to the `users` collection (reuses the auth [UserModel]).
-/// All operations here require an admin caller (enforced by `firestore.rules`).
+/// Reads + field updates require an admin caller (enforced by `firestore.rules`).
+/// Account PROVISIONING (creating an Auth user / resetting a password) is done
+/// server-side by admin-only Cloud Functions — clients never create Auth users.
 abstract class UserAdminRemoteDataSource {
   Future<List<UserModel>> getAllUsers();
   Future<List<UserModel>> getUsersByRole(String role);
-  Future<List<UserModel>> getPendingUsers();
 
   /// Admin field update on `users/{uid}` ([data] is merged + `updatedAt` set).
   Future<void> updateUser(String uid, Map<String, dynamic> data);
+
+  /// Provisions a brand-new account via the admin-only `createUserAccount` Cloud
+  /// Function (Firebase Admin SDK creates the Auth user + the Firestore doc;
+  /// the admin is NOT signed out). Returns the new uid.
+  Future<String> createAccount({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    String? branchId,
+    String? assignedShift,
+    String? position,
+  });
+
+  /// Resets an account: sets a new temporary password (Admin SDK) and forces a
+  /// password change on next login, via the admin-only `adminResetPassword`
+  /// Cloud Function.
+  Future<void> resetPassword({required String uid, required String tempPassword});
 }
 
 class UserAdminRemoteDataSourceImpl implements UserAdminRemoteDataSource {
   final FirebaseFirestore _firestore;
+  final FirebaseFunctions _functions;
 
-  UserAdminRemoteDataSourceImpl(this._firestore);
+  UserAdminRemoteDataSourceImpl(this._firestore, this._functions);
 
   CollectionReference<Map<String, dynamic>> get _users =>
       _firestore.collection(AppConstants.usersCollection);
@@ -46,16 +67,6 @@ class UserAdminRemoteDataSourceImpl implements UserAdminRemoteDataSource {
   }
 
   @override
-  Future<List<UserModel>> getPendingUsers() async {
-    try {
-      return _map(
-          await _users.where('approvalStatus', isEqualTo: 'pending').get());
-    } on FirebaseException catch (e) {
-      throw ServerException(e.message ?? 'Failed to load pending users.');
-    }
-  }
-
-  @override
   Future<void> updateUser(String uid, Map<String, dynamic> data) async {
     try {
       await _users.doc(uid).set({
@@ -64,6 +75,53 @@ class UserAdminRemoteDataSourceImpl implements UserAdminRemoteDataSource {
       }, SetOptions(merge: true));
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to update user.');
+    }
+  }
+
+  @override
+  Future<String> createAccount({
+    required String name,
+    required String email,
+    required String password,
+    required String role,
+    String? branchId,
+    String? assignedShift,
+    String? position,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('createUserAccount');
+      final result = await callable.call<Map<String, dynamic>>({
+        'name': name,
+        'email': email,
+        'password': password,
+        'role': role,
+        'branchId': branchId ?? '',
+        'assignedShift': assignedShift ?? '',
+        'position': position ?? '',
+      });
+      final uid = (result.data['uid'] ?? '').toString();
+      if (uid.isEmpty) {
+        throw const ServerException('Account creation did not return a user.');
+      }
+      return uid;
+    } on FirebaseFunctionsException catch (e) {
+      throw ServerException(e.message ?? 'Failed to create account.');
+    }
+  }
+
+  @override
+  Future<void> resetPassword({
+    required String uid,
+    required String tempPassword,
+  }) async {
+    try {
+      final callable = _functions.httpsCallable('adminResetPassword');
+      await callable.call<Map<String, dynamic>>({
+        'uid': uid,
+        'tempPassword': tempPassword,
+      });
+    } on FirebaseFunctionsException catch (e) {
+      throw ServerException(e.message ?? 'Failed to reset the account.');
     }
   }
 }

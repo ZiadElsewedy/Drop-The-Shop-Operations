@@ -9,18 +9,10 @@ import 'package:fbro/features/auth/data/datasources/user_remote_datasource.dart'
 import 'package:fbro/features/auth/data/repositories/auth_repository_impl.dart';
 import 'package:fbro/features/auth/domain/repositories/auth_repository.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_in_with_email.dart';
-import 'package:fbro/features/auth/domain/usecases/register_with_email.dart';
-import 'package:fbro/features/auth/domain/usecases/verify_phone_number.dart';
-import 'package:fbro/features/auth/domain/usecases/sign_in_with_otp.dart';
-import 'package:fbro/features/auth/domain/usecases/sign_in_with_google.dart';
 import 'package:fbro/features/auth/domain/usecases/sign_out.dart';
-import 'package:fbro/features/auth/domain/usecases/save_user.dart';
 import 'package:fbro/features/auth/domain/usecases/get_user.dart';
 import 'package:fbro/features/auth/domain/usecases/forgot_password.dart';
-import 'package:fbro/features/auth/domain/usecases/send_email_verification.dart';
-import 'package:fbro/features/auth/domain/usecases/check_email_verified.dart';
 import 'package:fbro/features/auth/domain/usecases/change_password.dart';
-import 'package:fbro/features/auth/domain/usecases/delete_account.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:fbro/features/profile/data/datasources/profile_remote_datasource.dart';
 import 'package:fbro/features/profile/data/repositories/profile_repository_impl.dart';
@@ -156,18 +148,10 @@ class AppDependencies {
     authCubit = AuthCubit(
       repository: authRepository,
       signInWithEmail: SignInWithEmail(authRepository),
-      registerWithEmail: RegisterWithEmail(authRepository),
-      verifyPhoneNumber: VerifyPhoneNumber(authRepository),
-      signInWithOtp: SignInWithOtp(authRepository),
-      signInWithGoogle: SignInWithGoogle(authRepository),
       signOut: SignOut(authRepository),
-      saveUser: SaveUser(authRepository),
       getUser: GetUser(authRepository),
       forgotPassword: ForgotPassword(authRepository),
-      sendEmailVerification: SendEmailVerification(authRepository),
-      checkEmailVerified: CheckEmailVerified(authRepository),
       changePassword: ChangePassword(authRepository),
-      deleteAccount: DeleteAccount(authRepository),
       // Drop this device's FCM token before Firebase sign-out (while still
       // authenticated), so the signed-out account stops receiving this device's
       // pushes. `notificationService` is a `late final` static assigned later in
@@ -196,8 +180,12 @@ class AppDependencies {
     );
 
     // ─── Admin module (Phase 5) ───────────────────────────────
-    final userAdminRemoteDataSource =
-        UserAdminRemoteDataSourceImpl(FirebaseFirestore.instance);
+    // Account provisioning (create / reset password) goes through admin-only
+    // Cloud Functions (Admin SDK), so the datasource also takes FirebaseFunctions.
+    final userAdminRemoteDataSource = UserAdminRemoteDataSourceImpl(
+      FirebaseFirestore.instance,
+      FirebaseFunctions.instance,
+    );
     final UserAdminRepository userAdminRepository =
         UserAdminRepositoryImpl(userAdminRemoteDataSource);
 

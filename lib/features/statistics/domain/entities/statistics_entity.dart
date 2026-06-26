@@ -13,6 +13,8 @@ class StatisticsEntity with _$StatisticsEntity {
     @Default(0) int totalBranches,
     @Default(0) int totalManagers,
     @Default(0) int totalEmployees,
+    /// Deprecated — DROP is admin-provisioned (no approval queue). Always 0; kept
+    /// only to avoid a codegen churn, slated for removal on the next build_runner.
     @Default(0) int pendingApprovals,
     @Default(0) int branchesWithoutManagers,
     /// Branches with a weekly schedule published for the current week (Phase 7

@@ -4,10 +4,9 @@ import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
 import 'package:fbro/core/widgets/drop_logo.dart';
 
-/// The auth-flow brand lockup (§9b): the DROP mark + the "DROP Operations System"
-/// tagline. Shared by login / register / OTP so the auth brand header lives in
-/// **one** place (no per-page logo duplication). Left-aligned to match the auth
-/// forms; strictly monochrome.
+/// The auth-flow brand lockup: the DROP mark + the "DROP Operations System"
+/// tagline. Used on the Login screen so the auth brand header lives in **one**
+/// place (no per-page logo duplication). Strictly monochrome.
 class DropAuthMark extends StatelessWidget {
   const DropAuthMark({super.key, this.logoHeight = 52});
 

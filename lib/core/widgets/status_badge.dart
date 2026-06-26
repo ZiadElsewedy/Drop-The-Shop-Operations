@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/enums/approval_status.dart';
 import 'package:fbro/core/enums/swap_status.dart';
 import 'package:fbro/core/enums/task_status.dart';
 import 'package:fbro/core/theme/app_colors.dart';
@@ -9,9 +8,9 @@ import 'package:fbro/core/theme/app_typography.dart';
 /// Rejected / Completed / Active … indicator. Background + border are tinted in
 /// the status colour (the look the task card already used).
 ///
-/// Use a typed factory (`StatusBadge.task(...)`, `.approval(...)`, `.swap(...)`,
-/// `.active(...)`) so the colour + label mapping lives in exactly one place, or
-/// the default constructor for an ad-hoc label/colour.
+/// Use a typed factory (`StatusBadge.task(...)`, `.swap(...)`, `.active(...)`) so
+/// the colour + label mapping lives in exactly one place, or the default
+/// constructor for an ad-hoc label/colour.
 class StatusBadge extends StatelessWidget {
   const StatusBadge({super.key, required this.label, required this.color});
 
@@ -20,15 +19,6 @@ class StatusBadge extends StatelessWidget {
 
   factory StatusBadge.task(TaskStatus status) =>
       StatusBadge(label: _taskLabel(status), color: _taskColor(status));
-
-  factory StatusBadge.approval(ApprovalStatus status) => StatusBadge(
-        label: _capitalize(status.value),
-        color: status.isRejected
-            ? AppColors.error
-            : status.isApproved
-                ? AppColors.success
-                : AppColors.warning,
-      );
 
   factory StatusBadge.swap(SwapStatus status) =>
       StatusBadge(label: _swapLabel(status), color: _swapColor(status));
@@ -118,6 +108,3 @@ String _swapLabel(SwapStatus s) {
       return 'Cancelled';
   }
 }
-
-String _capitalize(String s) =>
-    s.isEmpty ? s : '${s[0].toUpperCase()}${s.substring(1)}';
