@@ -8,7 +8,7 @@ import 'package:fbro/features/communications/domain/entities/broadcast_entity.da
 import 'package:fbro/features/communications/presentation/communications_format.dart';
 
 /// The per-item action menu on a broadcast feed card.
-enum BroadcastCardAction { open, repeatNow, archive, unarchive }
+enum BroadcastCardAction { open, repeatNow, archive, unarchive, delete }
 
 /// A single broadcast in the Communications Center history feed (Phase 2) —
 /// title, category, message preview, sender, time, delivery summary

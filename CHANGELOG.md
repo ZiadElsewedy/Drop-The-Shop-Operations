@@ -12,6 +12,35 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed (2026-06-27 — iOS keyboard stuck in the broadcast template sheet)
+
+The Communications Center **template editor** (`_TemplateEditor`, a modal bottom
+sheet with title + multiline message fields) had no way to dismiss the iOS keyboard
+— a multiline field shows no "Done" key and tapping outside doesn't unfocus by
+default, so the keyboard felt stuck and the sheet was hard to close. Added three
+standard affordances: **tap anywhere outside a field** (`GestureDetector` →
+`FocusScope.unfocus`), **drag-to-dismiss** (`ListView.keyboardDismissBehavior:
+onDrag`), and an explicit **close (✕) button** in the header (drops the keyboard
+then pops the sheet). Presentation-only; `flutter analyze` clean. No deploy needed.
+
+### Added (2026-06-27 — Broadcast/notification dispatch diagnostics: per-token FCM errors)
+
+Follow-up to the `sendBroadcast` audit. The push paths **discarded the per-token FCM
+error** (only used it to prune dead tokens), and `onNotificationCreated` logged
+`tokenCount` (the *attempt* count) as `"notification pushed"` — which made a
+0-delivered push look healthy and hid *why* `deliveredCount` was 0. Added per-token
+failure logging to **both** paths (`dispatchBroadcast` + `onNotificationCreated`)
+surfacing the exact `code`/`message` (e.g. `messaging/third-party-auth-error` = iOS
+APNs key not configured; `messaging/registration-token-not-registered` = stale
+token), plus real `successCount`/`failureCount` on the task path. **Audit verdict:**
+recipient query (`where isActive == true` / branch / single / `getAll`), sender
+self-exclusion (implicit audiences only), token field (`fcmTokens` array + legacy
+`fcmToken`), and flattening are all **correct** — `deliveredCount: 0` with stored
+tokens means FCM **rejects them at send time** (then the dead-token pruning, which
+also fires on `messaging/invalid-argument`, empties the array → later sends log "no
+registered device tokens"). `node --check` valid. ⚠️ **Deploy** `firebase deploy
+--only functions` to activate the logging, then one test send reveals the exact code.
+
 ### Added (2026-06-27 — Branch identity in tasks: cover banner + logo chip)
 
 Surface each branch's **media** (logo + cover) on task surfaces so a task visibly

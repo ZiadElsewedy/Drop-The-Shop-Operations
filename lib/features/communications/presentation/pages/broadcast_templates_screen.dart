@@ -407,8 +407,16 @@ class _TemplateEditorState extends State<_TemplateEditor> {
         minChildSize: 0.5,
         maxChildSize: 0.95,
         expand: false,
-        builder: (context, controller) => ListView(
+        // Tap anywhere outside a field to dismiss the iOS keyboard (it has no
+        // "Done" key for a multiline field, and tapping outside doesn't unfocus
+        // by default — this is what made the keyboard feel "stuck").
+        builder: (context, controller) => GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: ListView(
           controller: controller,
+          // Dragging the sheet content also lowers the keyboard.
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding,
               AppSpacing.md, AppSpacing.pagePadding, AppSpacing.xl),
           children: [
@@ -422,8 +430,24 @@ class _TemplateEditorState extends State<_TemplateEditor> {
                     borderRadius: BorderRadius.circular(2)),
               ),
             ),
-            Text(widget.isEdit ? 'Edit template' : 'New template',
-                style: AppTypography.h3),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(widget.isEdit ? 'Edit template' : 'New template',
+                      style: AppTypography.h3),
+                ),
+                // Always-available exit: drops the keyboard, then closes the sheet.
+                IconButton(
+                  icon: const Icon(Icons.close_rounded,
+                      color: AppColors.textSecondary),
+                  tooltip: 'Close',
+                  onPressed: () {
+                    FocusScope.of(context).unfocus();
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ),
             const SizedBox(height: AppSpacing.lg),
             _label('Title'),
             AppTextField(controller: _title, label: 'Template title'),
@@ -463,6 +487,7 @@ class _TemplateEditorState extends State<_TemplateEditor> {
               onPressed: _canSave ? _save : null,
             ),
           ],
+          ),
         ),
       ),
     );
