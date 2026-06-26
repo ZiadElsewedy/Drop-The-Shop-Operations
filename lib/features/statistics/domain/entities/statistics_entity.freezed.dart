@@ -21,6 +21,9 @@ mixin _$StatisticsEntity {
   int get totalBranches => throw _privateConstructorUsedError;
   int get totalManagers => throw _privateConstructorUsedError;
   int get totalEmployees => throw _privateConstructorUsedError;
+
+  /// Deprecated — DROP is admin-provisioned (no approval queue). Always 0; kept
+  /// only to avoid a codegen churn, slated for removal on the next build_runner.
   int get pendingApprovals => throw _privateConstructorUsedError;
   int get branchesWithoutManagers => throw _privateConstructorUsedError;
 
@@ -436,6 +439,9 @@ class _$StatisticsEntityImpl implements _StatisticsEntity {
   @override
   @JsonKey()
   final int totalEmployees;
+
+  /// Deprecated — DROP is admin-provisioned (no approval queue). Always 0; kept
+  /// only to avoid a codegen churn, slated for removal on the next build_runner.
   @override
   @JsonKey()
   final int pendingApprovals;
@@ -639,6 +645,9 @@ abstract class _StatisticsEntity implements StatisticsEntity {
   int get totalManagers;
   @override
   int get totalEmployees;
+
+  /// Deprecated — DROP is admin-provisioned (no approval queue). Always 0; kept
+  /// only to avoid a codegen churn, slated for removal on the next build_runner.
   @override
   int get pendingApprovals;
   @override

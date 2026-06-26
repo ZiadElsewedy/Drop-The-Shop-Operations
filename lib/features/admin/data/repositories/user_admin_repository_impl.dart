@@ -79,6 +79,24 @@ class UserAdminRepositoryImpl implements UserAdminRepository {
       _run(() => _remote.updateUser(uid, {'position': position}));
 
   @override
+  Future<void> updateUserDetails(
+    String uid, {
+    String? displayName,
+    String? phoneNumber,
+    String? address,
+    String? emergencyContact,
+  }) =>
+      _run(() => _remote.updateUser(uid, {
+            // `fullName` mirrors `displayName` (the same doc carries both keys;
+            // the profile feature reads `fullName`).
+            'displayName': ?displayName,
+            'fullName': ?displayName,
+            'phoneNumber': ?phoneNumber,
+            'address': ?address,
+            'emergencyContact': ?emergencyContact,
+          }));
+
+  @override
   Future<void> changeUserEmploymentStatus(String uid, String status) =>
       _run(() => _remote.updateUser(uid, {'employmentStatus': status}));
 

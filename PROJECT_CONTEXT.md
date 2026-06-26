@@ -389,8 +389,19 @@ Firestore branches/{id}   Firestore users/{uid}     aggregates users/tasks/shift
   third datasource on `users` alongside `auth` and `profile`. `AdminUsersCubit`
   loads a slice by `AdminUserFilter` (**managers / employees** — the `pending`
   slice was removed) and performs (de)activate, change-branch, change-role,
-  change-position, change-employment-status, **promote-to-manager**, **reset
-  account**, and **create account**. Managers never write user docs.
+  change-position, change-employment-status, **edit contact details**,
+  **promote-to-manager**, **reset account**, and **create account**. Managers
+  never write user docs.
+  **Edit contact details (2026-06-26):** `UserAdminRepository.updateUserDetails` /
+  `AdminUsersCubit.updateDetails` let an admin record/correct a person's
+  **non-privileged** info — `displayName` (mirrored to legacy `fullName`),
+  `phoneNumber`, **`address`**, **`emergencyContact`** (the latter two are new
+  `UserEntity`/`UserModel` fields) — **anytime after creation** via the
+  `showEditDetailsSheet` "Edit Info" action on the Employees + Managers lists. It
+  reuses the generic `updateUser` merge write (only non-null fields sent); the
+  admin branch of the `users` update rule already allows it (no rule change), and
+  these fields are NOT frozen by the self-update rule (so profile onboarding still
+  writes them too).
 - **Account provisioning (2026-06-26):** an admin **creates accounts** directly
   via **`CreateAccountScreen`** (Admin → User Management → Create Account) →
   `AdminUsersCubit.createAccount` → `UserAdminRemoteDataSource.createAccount` →

@@ -36,7 +36,9 @@ mixin _$BranchEntity {
   /// Soft-delete marker; null while the branch is live.
   DateTime? get deletedAt => throw _privateConstructorUsedError;
 
-  /// Optional branch-level shift-swap rules; null = permissive.
+  /// Optional branch-level shift-swap rules (role compatibility, rest hours).
+  /// Null = [SwapPolicy.permissive] (any role can swap, no rest rule). Stored
+  /// as a nested map under `swapPolicy`.
   SwapPolicy? get swapPolicy => throw _privateConstructorUsedError;
 
   /// Create a copy of BranchEntity
@@ -281,7 +283,9 @@ class _$BranchEntityImpl extends _BranchEntity {
   @override
   final DateTime? deletedAt;
 
-  /// Optional branch-level shift-swap rules; null = permissive.
+  /// Optional branch-level shift-swap rules (role compatibility, rest hours).
+  /// Null = [SwapPolicy.permissive] (any role can swap, no rest rule). Stored
+  /// as a nested map under `swapPolicy`.
   @override
   final SwapPolicy? swapPolicy;
 
@@ -381,7 +385,9 @@ abstract class _BranchEntity extends BranchEntity {
   @override
   DateTime? get deletedAt;
 
-  /// Optional branch-level shift-swap rules; null = permissive.
+  /// Optional branch-level shift-swap rules (role compatibility, rest hours).
+  /// Null = [SwapPolicy.permissive] (any role can swap, no rest rule). Stored
+  /// as a nested map under `swapPolicy`.
   @override
   SwapPolicy? get swapPolicy;
 

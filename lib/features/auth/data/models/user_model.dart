@@ -9,6 +9,8 @@ class UserModel {
   final String? displayName;
   final String? photoUrl;
   final String? phoneNumber;
+  final String? address;
+  final String? emergencyContact;
   final String authProvider;
   final bool isEmailVerified;
   final DateTime? createdAt;
@@ -31,6 +33,8 @@ class UserModel {
     this.displayName,
     this.photoUrl,
     this.phoneNumber,
+    this.address,
+    this.emergencyContact,
     this.isEmailVerified = false,
     this.createdAt,
     this.role = UserRole.employee,
@@ -61,6 +65,8 @@ class UserModel {
         displayName: entity.displayName,
         photoUrl: entity.photoUrl,
         phoneNumber: entity.phoneNumber,
+        address: entity.address,
+        emergencyContact: entity.emergencyContact,
         authProvider: entity.authProvider,
         isEmailVerified: entity.isEmailVerified,
         createdAt: entity.createdAt,
@@ -86,6 +92,8 @@ class UserModel {
         displayName: (map['displayName'] as String?) ?? (map['fullName'] as String?),
         photoUrl: map['photoUrl'] as String?,
         phoneNumber: map['phoneNumber'] as String?,
+        address: map['address'] as String?,
+        emergencyContact: map['emergencyContact'] as String?,
         authProvider: map['authProvider'] as String? ?? 'unknown',
         isEmailVerified: map['isEmailVerified'] as bool? ?? false,
         createdAt: map.date('createdAt'),
@@ -114,6 +122,8 @@ class UserModel {
         'displayName': displayName,
         'photoUrl': photoUrl,
         'phoneNumber': phoneNumber,
+        'address': address,
+        'emergencyContact': emergencyContact,
         'authProvider': authProvider,
         'isEmailVerified': isEmailVerified,
       };
@@ -124,6 +134,8 @@ class UserModel {
         displayName: displayName,
         photoUrl: photoUrl,
         phoneNumber: phoneNumber,
+        address: address,
+        emergencyContact: emergencyContact,
         authProvider: authProvider,
         isEmailVerified: isEmailVerified,
         createdAt: createdAt,

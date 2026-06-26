@@ -34,7 +34,11 @@ mixin _$TaskEntity {
   /// Checklist the employee must work through (generated from a template).
   List<ChecklistItem> get checklist => throw _privateConstructorUsedError;
 
-  /// Reference images attached by the manager/admin when creating/editing.
+  /// Reference images attached by the manager/admin when creating/editing the
+  /// task — "what good looks like" / context the employee sees **before** doing
+  /// the work. Distinct from employee *proof* media, which lives on the
+  /// submission [ActivityEntry] (and the legacy [proofImageUrl]). Stored in
+  /// Storage at `tasks/{id}/attachments/{attId}.<ext>` like all task media.
   List<TaskAttachment> get referenceAttachments =>
       throw _privateConstructorUsedError;
 
@@ -639,10 +643,18 @@ class _$TaskEntityImpl extends _TaskEntity {
     return EqualUnmodifiableListView(_checklist);
   }
 
-  /// Reference images attached by the manager/admin when creating/editing.
+  /// Reference images attached by the manager/admin when creating/editing the
+  /// task — "what good looks like" / context the employee sees **before** doing
+  /// the work. Distinct from employee *proof* media, which lives on the
+  /// submission [ActivityEntry] (and the legacy [proofImageUrl]). Stored in
+  /// Storage at `tasks/{id}/attachments/{attId}.<ext>` like all task media.
   final List<TaskAttachment> _referenceAttachments;
 
-  /// Reference images attached by the manager/admin when creating/editing.
+  /// Reference images attached by the manager/admin when creating/editing the
+  /// task — "what good looks like" / context the employee sees **before** doing
+  /// the work. Distinct from employee *proof* media, which lives on the
+  /// submission [ActivityEntry] (and the legacy [proofImageUrl]). Stored in
+  /// Storage at `tasks/{id}/attachments/{attId}.<ext>` like all task media.
   @override
   @JsonKey()
   List<TaskAttachment> get referenceAttachments {
@@ -921,7 +933,11 @@ abstract class _TaskEntity extends TaskEntity {
   @override
   List<ChecklistItem> get checklist;
 
-  /// Reference images attached by the manager/admin when creating/editing.
+  /// Reference images attached by the manager/admin when creating/editing the
+  /// task — "what good looks like" / context the employee sees **before** doing
+  /// the work. Distinct from employee *proof* media, which lives on the
+  /// submission [ActivityEntry] (and the legacy [proofImageUrl]). Stored in
+  /// Storage at `tasks/{id}/attachments/{attId}.<ext>` like all task media.
   @override
   List<TaskAttachment> get referenceAttachments;
 

@@ -43,6 +43,13 @@ Future<void> showSetPositionSheet({
 }) =>
     _sheet(context, _SetPositionSheet(cubit: cubit, user: user));
 
+Future<void> showEditDetailsSheet({
+  required BuildContext context,
+  required AdminUsersCubit cubit,
+  required UserEntity user,
+}) =>
+    _sheet(context, _EditDetailsSheet(cubit: cubit, user: user));
+
 Future<void> _sheet(BuildContext context, Widget child) => showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -356,6 +363,94 @@ class _SetPositionSheetState extends State<_SetPositionSheet> {
           ),
           const SizedBox(height: AppSpacing.xl),
           AppButton(label: 'Save', onPressed: _save),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Edit contact details (name / phone / address / emergency) ───
+class _EditDetailsSheet extends StatefulWidget {
+  const _EditDetailsSheet({required this.cubit, required this.user});
+  final AdminUsersCubit cubit;
+  final UserEntity user;
+  @override
+  State<_EditDetailsSheet> createState() => _EditDetailsSheetState();
+}
+
+class _EditDetailsSheetState extends State<_EditDetailsSheet> {
+  late final _name =
+      TextEditingController(text: widget.user.displayName ?? '');
+  late final _phone =
+      TextEditingController(text: widget.user.phoneNumber ?? '');
+  late final _address = TextEditingController(text: widget.user.address ?? '');
+  late final _emergency =
+      TextEditingController(text: widget.user.emergencyContact ?? '');
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _address.dispose();
+    _emergency.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    widget.cubit.updateDetails(
+      widget.user,
+      displayName: _name.text.trim(),
+      phoneNumber: _phone.text.trim(),
+      address: _address.text.trim(),
+      emergencyContact: _emergency.text.trim(),
+    );
+    Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const _Title('Edit details'),
+          Text(
+            'Contact information for ${widget.user.email}. Editable anytime — '
+            'leave a field empty to clear it.',
+            style: AppTypography.caption,
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          AppTextField(
+            controller: _name,
+            label: 'Full name',
+            hint: 'e.g. Ahmed Hassan',
+            prefixIcon: Icons.person_outline_rounded,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: _phone,
+            label: 'Phone number',
+            hint: 'e.g. +20 100 000 0000',
+            keyboardType: TextInputType.phone,
+            prefixIcon: Icons.phone_outlined,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: _address,
+            label: 'Address',
+            hint: 'Street, city',
+            prefixIcon: Icons.home_outlined,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppTextField(
+            controller: _emergency,
+            label: 'Emergency contact',
+            hint: 'Name · phone',
+            prefixIcon: Icons.emergency_outlined,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          AppButton(label: 'Save details', onPressed: _save),
         ],
       ),
     );

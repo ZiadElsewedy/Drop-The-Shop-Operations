@@ -14,6 +14,12 @@ class UserEntity with _$UserEntity {
     String? displayName,
     String? photoUrl,
     String? phoneNumber,
+    /// Home / mailing address. Optional contact detail an admin can fill in or
+    /// edit at any time (also collected during profile onboarding).
+    String? address,
+    /// Emergency contact (name/phone). Optional contact detail an admin can fill
+    /// in or edit at any time (also collected during profile onboarding).
+    String? emergencyContact,
     @Default(false) bool isEmailVerified,
     DateTime? createdAt,
     // ─── Roles & foundation (Phase 1) ───────────────────────────

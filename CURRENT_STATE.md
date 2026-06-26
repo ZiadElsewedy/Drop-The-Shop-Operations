@@ -11,8 +11,36 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-26 (Auth & account provisioning redesign — admin-only accounts)
+**Last updated:** 2026-06-26 (Admin-editable contact details + notification delivery diagnosis)
 **Version:** 1.0.0+1 · **Branch:** `enhancement/ui-refactor` (DROP — monochrome premium UX)
+
+> **Admin contact details + notification diagnosis (2026-06-26):** **(1) Admin "Edit
+> Info":** admins can record/edit a person's contact info **anytime after creation** —
+> new `UserEntity`/`UserModel` `address` + `emergencyContact` (phoneNumber already
+> existed), `UserAdminRepository.updateUserDetails` + `AdminUsersCubit.updateDetails`,
+> a new `showEditDetailsSheet` (Full name · Phone · Address · Emergency), wired as an
+> **Edit Info** action on the Employees **and** Managers lists; the employee Details
+> dialog surfaces them. No rule change (admin already writes any `users/{uid}` field;
+> the fields are non-privileged). **(2) Notifications — server is HEALTHY**, the fault
+> is platform config: **iOS is the blocker**. ✅ **Bundle-id mismatch RESOLVED** —
+> the iOS bundle id was changed `com.ziadelsewedy.fbro` → **`com.example.fbro`** in
+> `ios/Runner.xcodeproj/project.pbxproj` (all 3 Runner configs), so the app now
+> matches the existing `GoogleService-Info.plist` + `firebase_options.dart` + Android
+> (one Firebase iOS app, no plist swap). **Still owner to-dos (Xcode/Apple, not
+> code):** **no `Runner.entitlements`/`aps-environment`** (iOS can't get a push token
+> until the Push capability is added) + **no APNs key uploaded**. **Android is
+> configured**; residual misses are the Android-13 runtime permission grant or a
+> recipient with no token. `flutter analyze` clean; **217 tests pass** (+5). **No
+> deploy needed.**
+>
+> **📋 iOS push action checklist (owner, in Xcode/Apple — bundle id already done):**
+> (a) ~~reconcile bundle id~~ ✅ done (now `com.example.fbro`). (b) Xcode → Runner
+> target → Signing & Capabilities → **+ Capability → Push Notifications** (creates
+> `Runner.entitlements` + `aps-environment`) and **+ Background Modes → Remote
+> notifications**. (c) Apple Developer → Keys → create an **APNs Auth Key (.p8)** →
+> Firebase Console → Project Settings → Cloud Messaging → upload it under the iOS app
+> (`com.example.fbro`). (d) Test on a **real device** (the iOS Simulator can't receive
+> push). After (b), `pod install` + a clean rebuild.
 
 > **Auth & account provisioning redesign — admin-only accounts (2026-06-26):**
 > **Core business change: no public registration — only an admin creates

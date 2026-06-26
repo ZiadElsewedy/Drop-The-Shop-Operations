@@ -87,5 +87,26 @@ void main() {
       });
       expect(model.displayName, 'Legacy Name');
     });
+
+    test('admin-editable contact details (phone/address/emergency) round-trip',
+        () {
+      final model = UserModel.fromMap({
+        'uid': 'u4',
+        'email': 'd@b.com',
+        'phoneNumber': '+201000000000',
+        'address': '12 Tahrir St, Cairo',
+        'emergencyContact': 'Mona · +201111111111',
+      });
+      expect(model.phoneNumber, '+201000000000');
+      expect(model.address, '12 Tahrir St, Cairo');
+      expect(model.emergencyContact, 'Mona · +201111111111');
+      final entity = model.toEntity();
+      expect(entity.address, '12 Tahrir St, Cairo');
+      expect(entity.emergencyContact, 'Mona · +201111111111');
+      // Survives the entity → model → map round-trip.
+      final map = UserModel.fromEntity(entity).toMap();
+      expect(map['address'], '12 Tahrir St, Cairo');
+      expect(map['emergencyContact'], 'Mona · +201111111111');
+    });
   });
 }

@@ -96,6 +96,23 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
   Future<void> changePosition(UserEntity user, String? position) =>
       _mutate(() => _users.changeUserPosition(user.uid, position));
 
+  /// Edit the user's contact details (name / phone / address / emergency
+  /// contact). Only non-null fields are written.
+  Future<void> updateDetails(
+    UserEntity user, {
+    String? displayName,
+    String? phoneNumber,
+    String? address,
+    String? emergencyContact,
+  }) =>
+      _mutate(() => _users.updateUserDetails(
+            user.uid,
+            displayName: displayName,
+            phoneNumber: phoneNumber,
+            address: address,
+            emergencyContact: emergencyContact,
+          ));
+
   /// Set the HR employment label (active / suspended / terminated).
   Future<void> changeEmploymentStatus(UserEntity user, String status) =>
       _mutate(() => _users.changeUserEmploymentStatus(user.uid, status));

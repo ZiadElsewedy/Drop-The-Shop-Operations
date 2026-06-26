@@ -12,6 +12,50 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added + Diagnosed (2026-06-26 — Admin-editable user contact details + notification delivery diagnosis)
+
+Two owner requests. **(1)** Admins can now record/edit more information about a
+person **at any time after account creation** (not forced at provisioning). **(2)**
+Diagnosed why push notifications "fail / nothing received" — the **server side is
+healthy** (all 9 Cloud Functions deployed; `onNotificationCreated` logs successful
+pushes today), so the fault is **client/platform config**, dominated by iOS. `flutter
+analyze` clean (no new issues); **217 tests pass** (+5: `user_model` contact
+round-trip + `user_admin_update_details` merge-map coverage). No Cloud Function /
+rules change; **no deploy needed** for these changes.
+
+- **Admin "Edit Info" (contact details).** New `UserEntity`/`UserModel` fields
+  **`address`** + **`emergencyContact`** (`phoneNumber` already existed; freezed
+  regenerated). New `UserAdminRepository.updateUserDetails(uid, {displayName,
+  phoneNumber, address, emergencyContact})` → the existing `updateUser` merge write
+  (only non-null fields written; `displayName` mirrors to the legacy `fullName`
+  key) + `AdminUsersCubit.updateDetails`. New **`showEditDetailsSheet`** (Full name ·
+  Phone · Address · Emergency contact, pre-filled, editable/clearable) wired as an
+  **Edit Info** action on **both** the Employees and Managers lists; the employee
+  **Details** dialog now shows phone/address/emergency when present. Admins already
+  have full `users/{uid}` write per `firestore.rules` — no rule change. The fields
+  are non-privileged (not frozen by the self-update rule), so they coexist with
+  profile onboarding (which already collects address/emergency contact).
+- **Notification diagnosis (no code change).** Verified `firebase functions:list` →
+  all 9 functions live; `onNotificationCreated` logs `"notification pushed"` with
+  `tokenCount ≥ 1` as recently as today; a broadcast logged `deliveredCount: 0`
+  (recipient had **no registered device token**). Root causes are platform/config:
+  - **iOS (primary blocker):** ✅ **bundle-id mismatch FIXED** — the iOS bundle id
+    was changed `com.ziadelsewedy.fbro` → **`com.example.fbro`** in
+    `ios/Runner.xcodeproj/project.pbxproj` (all 3 Runner configs), so the app now
+    matches the existing `GoogleService-Info.plist` + `firebase_options.dart` +
+    Android (reuses the one Firebase iOS app — no plist swap, no `flutterfire
+    configure`). **Still owner to-dos (Xcode/Apple, not code):** **no
+    `Runner.entitlements`** at all (no `aps-environment` → iOS can't obtain an
+    APNs/FCM token) — add the **Push Notifications** + **Background Modes → Remote
+    notifications** capabilities in Xcode; and an **APNs Auth Key** must be uploaded
+    to Firebase → Cloud Messaging. (No native signing files were half-edited beyond
+    the bundle id, which would break the build.)
+  - **Android:** correctly configured (`applicationId com.example.fbro` matches
+    `google-services.json`; `POST_NOTIFICATIONS` merges from the `firebase_messaging`
+    plugin). Residual failures are device-side: the runtime notification-permission
+    grant (Android 13+) or a recipient who never registered a token (e.g. only ever
+    signed in on the mis-configured iOS build).
+
 ### Changed + Removed + Added (2026-06-26 — Auth & account provisioning redesign: admin-only accounts)
 
 **Core business change: DROP no longer allows public registration — only an admin

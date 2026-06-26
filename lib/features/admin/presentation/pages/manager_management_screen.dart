@@ -27,6 +27,12 @@ class ManagerManagementScreen extends StatelessWidget {
         final cubit = context.read<AdminUsersCubit>();
         return [
           AdminActionButton(
+            label: 'Edit Info',
+            icon: Icons.edit_outlined,
+            onPressed: () =>
+                showEditDetailsSheet(context: context, cubit: cubit, user: user),
+          ),
+          AdminActionButton(
             label: 'Assign Branch',
             icon: Icons.store_mall_directory_outlined,
             onPressed: () =>

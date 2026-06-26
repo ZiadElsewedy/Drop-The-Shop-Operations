@@ -32,6 +32,18 @@ abstract class UserAdminRepository {
   /// null/empty to clear it.
   Future<void> changeUserPosition(String uid, String? position);
 
+  /// Edit the user's contact details (display name + phone + address +
+  /// emergency contact). Only the provided fields are written; pass an empty
+  /// string to clear one. These are non-privileged profile fields an admin can
+  /// fill in or correct at any time after the account is created.
+  Future<void> updateUserDetails(
+    String uid, {
+    String? displayName,
+    String? phoneNumber,
+    String? address,
+    String? emergencyContact,
+  });
+
   /// Set the HR employment label (`active` / `suspended` / `terminated`).
   Future<void> changeUserEmploymentStatus(String uid, String status);
 }

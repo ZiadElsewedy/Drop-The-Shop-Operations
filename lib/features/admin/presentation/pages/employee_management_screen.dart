@@ -271,6 +271,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         onPressed: () => _showDetails(user),
       ),
       AdminActionButton(
+        label: 'Edit Info',
+        icon: Icons.edit_outlined,
+        onPressed: () =>
+            showEditDetailsSheet(context: context, cubit: cubit, user: user),
+      ),
+      AdminActionButton(
         label: 'Change Branch',
         icon: Icons.store_mall_directory_outlined,
         onPressed: () =>
@@ -315,6 +321,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _detail('Email', user.email),
+            if ((user.phoneNumber ?? '').trim().isNotEmpty)
+              _detail('Phone', user.phoneNumber!.trim()),
+            if ((user.address ?? '').trim().isNotEmpty)
+              _detail('Address', user.address!.trim()),
+            if ((user.emergencyContact ?? '').trim().isNotEmpty)
+              _detail('Emergency', user.emergencyContact!.trim()),
             _detail('Role', user.role.value),
             if ((user.position ?? '').trim().isNotEmpty)
               _detail('Position', user.position!.trim()),
