@@ -254,6 +254,22 @@ class _ActionsMenu extends StatelessWidget {
         await cubit.setArchived(broadcast.id, true);
       case BroadcastCardAction.unarchive:
         await cubit.setArchived(broadcast.id, false);
+      case BroadcastCardAction.delete:
+        final ok = await showConfirmDialog(
+          context,
+          title: 'Delete broadcast?',
+          message:
+              '"${broadcast.title}" will be permanently removed. This can\'t be undone.',
+          confirmLabel: 'Delete',
+          destructive: true,
+        );
+        if (!ok || !context.mounted) return;
+        await cubit.deleteBroadcast(broadcast.id);
+        // The broadcast is gone — leave the now-stale detail screen.
+        if (context.mounted) {
+          AppSnackbar.success(context, 'Broadcast deleted');
+          Navigator.of(context).pop();
+        }
     }
   }
 

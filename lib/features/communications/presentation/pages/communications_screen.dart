@@ -95,6 +95,18 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
         await cubit.setArchived(b.id, true);
       case BroadcastCardAction.unarchive:
         await cubit.setArchived(b.id, false);
+      case BroadcastCardAction.delete:
+        final ok = await showConfirmDialog(
+          context,
+          title: 'Delete broadcast?',
+          message:
+              '"${b.title}" will be permanently removed from the feed. This can\'t be undone.',
+          confirmLabel: 'Delete',
+          destructive: true,
+        );
+        if (!ok || !mounted) return;
+        await cubit.deleteBroadcast(b.id);
+        if (mounted) AppSnackbar.success(context, 'Broadcast deleted');
     }
   }
 

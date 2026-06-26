@@ -25,4 +25,7 @@ abstract class BroadcastRepository {
   /// Archives ([archived] true) / unarchives a broadcast.
   Future<void> setArchived(String id, bool archived);
 
+  /// Permanently deletes a broadcast (`broadcasts/{id}`). Allowed only for an
+  /// admin, the original sender, or the owning-branch manager (Firestore rules).
+  Future<void> delete(String id);
 }

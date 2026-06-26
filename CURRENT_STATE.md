@@ -11,8 +11,23 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-27 (Branch identity in tasks: cover banner + logo chip)
+**Last updated:** 2026-06-27 (Delete sent broadcasts + iOS template-sheet keyboard fix + branch identity in tasks)
 **Version:** 1.0.0+1 · **Branch:** `enhancement/ui-refactor` (DROP — monochrome premium UX)
+
+> **Delete sent broadcasts (2026-06-27):** Re-added an option to **permanently delete**
+> a broadcast from the Communications feed (archive-only since the 2026-06-24 trim).
+> Hard delete of `broadcasts/{id}` via `BroadcastRepository.delete` →
+> `BroadcastCubit.deleteBroadcast`; a destructive **Delete** item in the card + detail
+> overflow menus (confirm-gated). **Firestore rule** `broadcasts` `delete` now allows
+> admin / original sender / owning-branch manager (was `if false`). ⚠️ **Deploy
+> required:** `firebase deploy --only firestore:rules` (until then delete →
+> permission-denied). Per-recipient inbox notifications already delivered are left as-is.
+> `flutter analyze` clean; **217 tests pass**.
+>
+> **iOS template-sheet keyboard fix (2026-06-27):** the Communications template editor
+> (`_TemplateEditor`) keyboard could get stuck on iOS — added tap-outside-to-dismiss
+> (`FocusScope.unfocus`), drag-to-dismiss (`keyboardDismissBehavior: onDrag`), and an
+> explicit ✕ close button. Client-only, no deploy.
 
 > **Branch identity in tasks (2026-06-27):** Tasks now carry their **branch media**
 > so they feel cohesive with the rest of the app. **Task Details** leads with a slim

@@ -272,7 +272,14 @@ service cloud.firestore {
             || resource.data.get('senderId', '') == request.auth.uid
             || canReachBranch(resource.data.get('branchId', '')));
 
-      allow create, delete: if false;
+      allow create: if false;
+
+      // Delete (permanent) — the original sender, an admin, or the owning-branch
+      // manager may remove a broadcast from the feed. (Content/stats are still
+      // function-owned; this just removes the whole doc, it can't forge fields.)
+      allow delete: if isAdmin()
+        || resource.data.get('senderId', '') == request.auth.uid
+        || canReachBranch(resource.data.get('branchId', ''));
     }
 
     // ── Broadcast templates (Communications Center — Phase 2 Commit 2) ──

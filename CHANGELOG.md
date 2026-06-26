@@ -12,6 +12,25 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-06-27 — Delete a sent broadcast)
+
+Owner request: an option to **permanently delete** broadcasts from the Communications
+feed (the earlier 2026-06-24 "simplification" had removed broadcast delete, leaving
+archive-only). Re-added as a real **hard delete** of the `broadcasts/{id}` doc (not
+the old soft-delete/`deletedAt` + "Deleted view" — that stays gone). Full slice:
+`BroadcastRepository.delete` / `BroadcastRemoteDataSource.delete` (`doc(id).delete()`)
+/ `BroadcastCubit.deleteBroadcast` (feed-preserving error handling) → a **Delete**
+(destructive) item in the broadcast card overflow menu **and** the detail-screen
+overflow (pops back after deleting), each behind a confirm dialog. **Firestore rule:**
+`broadcasts` `delete` now allowed for an **admin**, the **original sender**
+(`senderId == uid`), or the **owning-branch manager** (`canReachBranch(branchId)`) —
+was `if false`. The live feed stream re-emits without the doc. `flutter analyze`
+clean; **217 tests pass**. ⚠️ **Deploy required:** `firebase deploy --only
+firestore:rules` — until then the client delete fails with permission-denied.
+_Note: deleting the broadcast doc does not remove the per-recipient `notifications/{id}`
+inbox entries already delivered (separate collection); acceptable — recipients keep
+what they received._
+
 ### Fixed (2026-06-27 — iOS keyboard stuck in the broadcast template sheet)
 
 The Communications Center **template editor** (`_TemplateEditor`, a modal bottom

@@ -203,6 +203,20 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     }
   }
 
+  /// Permanently deletes a broadcast (removes the `broadcasts/{id}` doc). The
+  /// feed stream re-emits without it; an error keeps the current feed visible.
+  /// Rules permit this only for an admin, the original sender, or the
+  /// owning-branch manager.
+  Future<void> deleteBroadcast(String id) async {
+    try {
+      await _repository.delete(id);
+    } on Failure catch (e) {
+      _emitError(e.message);
+    } catch (_) {
+      _emitError('Could not delete the broadcast. Please try again.');
+    }
+  }
+
   /// Surface an error without losing the current feed (when one is loaded).
   void _emitError(String message) {
     final prev = _broadcasts;

@@ -137,6 +137,8 @@ class BroadcastCard extends StatelessWidget {
               'Unarchive')
         else
           _item(BroadcastCardAction.archive, Icons.archive_outlined, 'Archive'),
+        _item(BroadcastCardAction.delete, Icons.delete_outline_rounded, 'Delete',
+            destructive: true),
       ],
     );
   }
