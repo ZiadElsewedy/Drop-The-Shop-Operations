@@ -247,43 +247,55 @@ async function dispatchBroadcast(params) {
 
   // ── Push the notification (chunked; prune dead tokens) — push channels only ──
   let deliveredCount = 0;
+  // Diagnostics: how many times the SAME device token was found on two different
+  // recipients in one send — an ownership-drift signal (defense-in-depth #3).
+  let tokenDriftCount = 0;
   if (categorySendsPush(category)) {
-    // Gather FCM tokens (de-duplicated; remember each token's owner).
+    // Gather FCM tokens (de-duplicated; remember each token's EXCLUSIVE owner).
+    // If a token is already claimed by another recipient in this send, that's
+    // drift: keep the first owner (no double-send) and log it. claimFcmToken is
+    // the authoritative reconciliation; this just surfaces the race for ops.
     const tokens = [];
     const tokenOwner = new Map();
+    const claimToken = (t, uid) => {
+      if (!t) return;
+      const existing = tokenOwner.get(t);
+      if (existing === undefined) {
+        tokenOwner.set(t, uid);
+        tokens.push(t);
+      } else if (existing !== uid) {
+        tokenDriftCount++;
+        logger.warn("token ownership drift during dispatch", {
+          broadcastId: broadcastRef.id,
+          tokenSuffix: String(t).slice(-8),
+          owners: [existing, uid],
+        });
+      }
+    };
     for (const doc of recipientDocs) {
       const u = doc.data() || {};
       const arr = Array.isArray(u.fcmTokens) ? u.fcmTokens : [];
-      for (const t of arr) {
-        if (t && !tokenOwner.has(t)) {
-          tokenOwner.set(t, doc.id);
-          tokens.push(t);
-        }
-      }
+      for (const t of arr) claimToken(t, doc.id);
       // Legacy single-token field (pre-Phase-2 docs).
-      if (u.fcmToken && !tokenOwner.has(u.fcmToken)) {
-        tokenOwner.set(u.fcmToken, doc.id);
-        tokens.push(u.fcmToken);
-      }
+      claimToken(u.fcmToken, doc.id);
     }
 
-    const message = {
-      notification: { title, body },
-      // High-priority broadcasts ride at high priority on both platforms.
-      android: { priority: isHigh ? "high" : "normal" },
-      apns: { headers: { "apns-priority": isHigh ? "10" : "5" } },
-      // Data values must be strings — they ride along to the tap handler.
-      data: {
-        type: notifType,
-        category,
-        priority: isHigh ? "high" : "normal",
-        senderId,
-        broadcastId: broadcastRef.id,
-        route: "broadcast_detail",
-        title,
-        body,
-      },
+    // Data values must be strings — they ride along to the tap handler. Each
+    // push is stamped per-token with its intended `recipientUid` below, so the
+    // client can DROP any notification whose recipient != the signed-in user
+    // (defense-in-depth #3 — the last guard against a drifted/stale token).
+    const baseData = {
+      type: notifType,
+      category,
+      priority: isHigh ? "high" : "normal",
+      senderId,
+      broadcastId: broadcastRef.id,
+      route: "broadcast_detail",
+      title,
+      body,
     };
+    const androidPriority = isHigh ? "high" : "normal";
+    const apnsPriority = isHigh ? "10" : "5";
 
     if (tokens.length === 0) {
       // Recipients exist but none has a registered device token — they still get
@@ -300,7 +312,17 @@ async function dispatchBroadcast(params) {
     try {
     for (let i = 0; i < tokens.length; i += MULTICAST_CHUNK) {
       const batch = tokens.slice(i, i + MULTICAST_CHUNK);
-      const response = await messaging.sendEachForMulticast({ ...message, tokens: batch });
+      // One message per token so `data.recipientUid` can differ per recipient (a
+      // multicast shares one data block). `sendEach` preserves response order, so
+      // the dead-token pruning below still indexes `batch[idx]`.
+      const messages = batch.map((token) => ({
+        token,
+        notification: { title, body },
+        android: { priority: androidPriority },
+        apns: { headers: { "apns-priority": apnsPriority } },
+        data: { ...baseData, recipientUid: tokenOwner.get(token) || "" },
+      }));
+      const response = await messaging.sendEach(messages);
       deliveredCount += response.successCount;
 
       // Remove tokens FCM reports as permanently invalid, per owner.
@@ -346,6 +368,7 @@ async function dispatchBroadcast(params) {
     audience,
     recipientCount,
     deliveredCount,
+    tokenDriftCount,
   });
 
   return { broadcastId: broadcastRef.id, recipientCount, deliveredCount };
@@ -805,6 +828,9 @@ exports.onNotificationCreated = onDocumentCreated(
       notification: { title, body },
       data: {
         type: String(n.type || ""),
+        // Intended recipient — the client drops a push whose recipientUid != the
+        // signed-in user (defense-in-depth #3). This path is already per-recipient.
+        recipientUid: String(recipientUid),
         taskId: String(payload.taskId || ""),
         broadcastId: String(payload.broadcastId || ""),
         category: String(payload.category || ""),

@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:fbro/core/constants/app_constants.dart';
@@ -38,8 +40,12 @@ class NotificationService {
     try {
       await _messaging.requestPermission(alert: true, badge: true, sound: true);
 
-      // Foreground messages.
+      // Foreground messages — suppressed if intended for a different account.
       FirebaseMessaging.onMessage.listen((message) {
+        if (!_isForCurrentUser(message)) {
+          _handleMismatch(message);
+          return;
+        }
         final n = message.notification;
         if (n != null) onForeground?.call(n.title, n.body);
       });
@@ -95,7 +101,39 @@ class NotificationService {
   }
 
   void _handleTap(RemoteMessage message) {
+    // Never route a tap for a notification meant for a different account.
+    if (!_isForCurrentUser(message)) {
+      _handleMismatch(message);
+      return;
+    }
     if (message.data.isNotEmpty) onMessageTap?.call(message.data);
+  }
+
+  /// Defense-in-depth #3 (client guard): whether [message] is intended for the
+  /// currently signed-in user. The server stamps `data.recipientUid` on every
+  /// push; a match (or an absent stamp — legacy / non-stamped messages) means
+  /// it's for us. A **mismatch** means this device's token had drifted to the
+  /// wrong user (interrupted logout, account-switch race, a token claimed before
+  /// reconciliation) — so the notification is **dropped**, guaranteeing it never
+  /// reaches the wrong account even if the server hasn't reconciled ownership yet.
+  bool _isForCurrentUser(RemoteMessage message) {
+    final intended = (message.data['recipientUid'] ?? '').toString().trim();
+    if (intended.isEmpty) return true; // not stamped → allow (back-compat)
+    return intended == _uid;
+  }
+
+  /// A push arrived for a different user on this device. Drop it (handled by the
+  /// callers) and **self-heal**: re-register this device's token to the current
+  /// user, so the server `claimFcmToken` reclaims it from the previous owner.
+  void _handleMismatch(RemoteMessage message) {
+    final intended = (message.data['recipientUid'] ?? '').toString();
+    developer.log(
+      'Dropped a push intended for "$intended" (current uid "$_uid") — '
+      'token ownership drift; reclaiming this device for the current user.',
+      name: 'fcm',
+    );
+    final uid = _uid;
+    if (uid != null) registerToken(uid);
   }
 
   /// Adds [token] to the user's `fcmTokens` array and drops the previously

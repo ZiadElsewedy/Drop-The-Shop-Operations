@@ -12,6 +12,43 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-06-26 — FCM token ownership: layered defense-in-depth)
+
+Hardened notification routing into a **three-layer** defense so no push can reach
+the wrong account under app crashes, interrupted logout, multi-account device
+reuse, or token-refresh races. Builds on the pre-sign-out cleanup (Layer 1) +
+`claimFcmToken` (Layer 2) already in place. `node --check` valid; changed Dart
+parse-checked. ⚠️ Deploy `functions`; run `flutter analyze`/`test` on a current SDK.
+
+- **Layer 1 — pre-sign-out cleanup (client, already shipped).** `AuthCubit.signOut()`
+  awaits `onPreSignOut` (→ `NotificationService.forgetUser`) to remove this device's
+  token **while still authenticated**, then signs out. (Re-confirmed it awaits the
+  Firestore write before `_signOut()`.)
+- **Layer 2 — `claimFcmToken` (server, authoritative).** Unchanged — the source of
+  truth for exclusive token ownership (reclaims a token from all other users the
+  moment a new owner registers it; loop-safe).
+- **Layer 3a — per-recipient push stamping (server).** Every push now carries
+  `data.recipientUid` (the intended owner). `dispatchBroadcast` sends **one message
+  per token via `messaging.sendEach`** (a multicast can't vary `data` per token),
+  each stamped with `tokenOwner.get(token)`; `onNotificationCreated` (already
+  per-recipient) stamps `recipientUid`.
+- **Layer 3b — client drop-guard (the guarantee).** `NotificationService` now checks
+  `data.recipientUid` against the signed-in `_uid` on **foreground** display and on
+  **tap** (`_isForCurrentUser`); a mismatch is **dropped** (never shown/routed) and
+  **self-heals** (`_handleMismatch` re-registers this device's token so
+  `claimFcmToken` reclaims it). An absent stamp is allowed (back-compat). So even a
+  drifted/stale token that receives a push cannot surface it to the wrong user.
+- **Layer 3c — dispatch diagnostics.** `dispatchBroadcast` detects when the **same
+  token is found on two different recipients in one send** (an ownership-drift
+  signal), logs a `warn` (token suffix + the two uids), and reports `tokenDriftCount`
+  in the dispatch summary — operational visibility into mismatches.
+- **Documented residual:** for a **backgrounded/terminated** app, the OS renders the
+  `notification` banner before app code runs, so the client guard can't suppress
+  that banner for a (rare, short-lived) drifted token — but the **tap is guarded**
+  (no wrong-content routing + self-heal) and foreground/in-app inbox are fully
+  protected. Suppressing the background banner too would need data-only messages +
+  local-notification rendering (a larger change, not in scope).
+
 ### Fixed + Changed (2026-06-26 — Token-leak audit · realtime swaps · activity timeline V2)
 
 A deeper notification-security audit + the realtime/UX follow-ups. `node --check`

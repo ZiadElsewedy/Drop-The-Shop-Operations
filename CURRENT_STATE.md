@@ -11,8 +11,24 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-26 (Token-leak audit · realtime swaps · activity timeline V2)
+**Last updated:** 2026-06-26 (FCM token ownership — layered defense-in-depth)
 **Version:** 1.0.0+1 · **Branch:** `enhancement/ui-refactor` (DROP — monochrome premium UX)
+
+> **FCM token ownership — defense-in-depth (2026-06-26):** Three layers ensure a
+> push can never reach the wrong account (crashes / interrupted logout /
+> multi-account device / token-refresh races). **L1 client pre-sign-out cleanup**
+> (`AuthCubit.signOut` awaits `forgetUser` before `_signOut`). **L2 server
+> `claimFcmToken`** (authoritative exclusive ownership). **L3 per-recipient
+> stamping + client drop-guard:** every push carries `data.recipientUid`
+> (broadcast via `messaging.sendEach` per-token; task push per-recipient); the
+> client (`NotificationService._isForCurrentUser`) **drops** any foreground/tap
+> push whose `recipientUid != _uid` and self-heals (re-register → `claimFcmToken`
+> reclaims). Plus dispatch **drift diagnostics** (`tokenDriftCount` + a `warn` when
+> one token is on two recipients in a send). **Residual (documented):** a
+> backgrounded/terminated app's OS-rendered banner for a drifted token can't be
+> suppressed client-side (rare/short-lived; tap is still guarded). `node --check`
+> valid; changed Dart parse-checked. ⚠️ **Deploy `functions`**; run `analyze`/`test`
+> on 3.12.2.
 
 > **Token-leak audit · realtime swaps · timeline V2 (2026-06-26):** **(1) FCM
 > cross-account leak fixed.** Multi-account device audit (A→logout→B same device)
