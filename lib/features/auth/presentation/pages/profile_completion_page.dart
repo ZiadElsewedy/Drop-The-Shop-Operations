@@ -7,6 +7,7 @@ import 'package:fbro/core/extensions/context_extensions.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/utils/validators.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/auth/presentation/animations/fade_slide_transition.dart';
 import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
@@ -177,9 +178,8 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                     hint: '+20 100 000 0000',
                     prefixIcon: Icons.phone_outlined,
                     keyboardType: TextInputType.phone,
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Enter your phone number'
-                        : null,
+                    inputFormatters: [Validators.phoneInput],
+                    validator: Validators.phone,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -190,9 +190,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                     label: 'Emergency contact',
                     hint: 'Name & phone',
                     prefixIcon: Icons.contact_phone_outlined,
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Enter an emergency contact'
-                        : null,
+                    validator: Validators.emergencyContact,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -204,9 +202,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                     hint: 'Street, city',
                     prefixIcon: Icons.home_outlined,
                     maxLines: 2,
-                    validator: (v) => v == null || v.trim().isEmpty
-                        ? 'Enter your address'
-                        : null,
+                    validator: Validators.address,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),

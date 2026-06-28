@@ -7,6 +7,7 @@ import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/utils/validators.dart';
 import 'package:fbro/core/widgets/app_snackbar.dart';
 import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
@@ -187,8 +188,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 controller: _nameController,
                 label: 'Full name',
                 prefixIcon: Icons.person_outline_rounded,
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'Enter a full name' : null,
+                validator: Validators.name,
               ),
               const SizedBox(height: AppSpacing.lg),
 
@@ -198,12 +198,7 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
                 label: 'Email address',
                 prefixIcon: Icons.mail_outline_rounded,
                 keyboardType: TextInputType.emailAddress,
-                validator: (v) {
-                  final t = v?.trim() ?? '';
-                  if (t.isEmpty) return 'Enter an email';
-                  if (!t.contains('@')) return 'Enter a valid email';
-                  return null;
-                },
+                validator: Validators.email,
               ),
               const SizedBox(height: AppSpacing.lg),
 

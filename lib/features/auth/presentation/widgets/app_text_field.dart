@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_radius.dart';
 import 'package:fbro/core/theme/app_typography.dart';
@@ -20,6 +21,10 @@ class AppTextField extends StatefulWidget {
   final int? maxLength;
   final bool readOnly;
   final VoidCallback? onTap;
+
+  /// Live input filters (e.g. restrict a phone field to digits and `+ - ( )`),
+  /// so disallowed characters can't be typed at all.
+  final List<TextInputFormatter>? inputFormatters;
 
   /// Multi-line support (default single line). Set [maxLines] > 1 (and optionally
   /// [minLines]) for a textarea-style field; ignored when [obscureText] is true.
@@ -46,6 +51,7 @@ class AppTextField extends StatefulWidget {
     this.onTap,
     this.maxLines = 1,
     this.minLines,
+    this.inputFormatters,
   });
 
   @override
@@ -123,6 +129,7 @@ class _AppTextFieldState extends State<AppTextField>
           obscureText: _obscure,
           keyboardType: widget.keyboardType,
           textInputAction: widget.textInputAction,
+          inputFormatters: widget.inputFormatters,
           validator: widget.validator,
           onChanged: widget.onChanged,
           onFieldSubmitted: widget.onSubmitted,

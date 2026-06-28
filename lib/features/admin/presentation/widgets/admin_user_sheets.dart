@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fbro/core/theme/app_colors.dart';
 import 'package:fbro/core/theme/app_spacing.dart';
 import 'package:fbro/core/theme/app_typography.dart';
+import 'package:fbro/core/utils/validators.dart';
 import 'package:fbro/core/widgets/user_avatar.dart';
 import 'package:fbro/features/auth/domain/entities/user_entity.dart';
 import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
@@ -379,6 +380,7 @@ class _EditDetailsSheet extends StatefulWidget {
 }
 
 class _EditDetailsSheetState extends State<_EditDetailsSheet> {
+  final _formKey = GlobalKey<FormState>();
   late final _name =
       TextEditingController(text: widget.user.displayName ?? '');
   late final _phone =
@@ -397,6 +399,9 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
   }
 
   void _save() {
+    // Fields are optional here (empty intentionally clears), but a non-empty
+    // value is format-checked — a phone stays a number, a name stays letters.
+    if (!_formKey.currentState!.validate()) return;
     widget.cubit.updateDetails(
       widget.user,
       displayName: _name.text.trim(),
@@ -410,48 +415,56 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _Title('Edit details'),
-          Text(
-            'Contact information for ${widget.user.email}. Editable anytime — '
-            'leave a field empty to clear it.',
-            style: AppTypography.caption,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          AppTextField(
-            controller: _name,
-            label: 'Full name',
-            hint: 'e.g. Ahmed Hassan',
-            prefixIcon: Icons.person_outline_rounded,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppTextField(
-            controller: _phone,
-            label: 'Phone number',
-            hint: 'e.g. +20 100 000 0000',
-            keyboardType: TextInputType.phone,
-            prefixIcon: Icons.phone_outlined,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppTextField(
-            controller: _address,
-            label: 'Address',
-            hint: 'Street, city',
-            prefixIcon: Icons.home_outlined,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          AppTextField(
-            controller: _emergency,
-            label: 'Emergency contact',
-            hint: 'Name · phone',
-            prefixIcon: Icons.emergency_outlined,
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          AppButton(label: 'Save details', onPressed: _save),
-        ],
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const _Title('Edit details'),
+            Text(
+              'Contact information for ${widget.user.email}. Editable anytime — '
+              'leave a field empty to clear it.',
+              style: AppTypography.caption,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            AppTextField(
+              controller: _name,
+              label: 'Full name',
+              hint: 'e.g. Ahmed Hassan',
+              prefixIcon: Icons.person_outline_rounded,
+              validator: (v) => Validators.name(v, required: false),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _phone,
+              label: 'Phone number',
+              hint: 'e.g. +20 100 000 0000',
+              keyboardType: TextInputType.phone,
+              prefixIcon: Icons.phone_outlined,
+              inputFormatters: [Validators.phoneInput],
+              validator: (v) => Validators.phone(v, required: false),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _address,
+              label: 'Address',
+              hint: 'Street, city',
+              prefixIcon: Icons.home_outlined,
+              validator: (v) => Validators.address(v, required: false),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _emergency,
+              label: 'Emergency contact',
+              hint: 'Name · phone',
+              prefixIcon: Icons.emergency_outlined,
+              validator: (v) => Validators.emergencyContact(v, required: false),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            AppButton(label: 'Save details', onPressed: _save),
+          ],
+        ),
       ),
     );
   }

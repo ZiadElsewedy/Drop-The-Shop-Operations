@@ -11,9 +11,19 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-28 (Account-switch push fix on shared device + delete sent broadcasts + iOS template-sheet keyboard fix)
+**Last updated:** 2026-06-28 (User-detail input validation + account-switch push fix on shared device)
 **Version:** 1.0.0+1 · **Branch:** `enhancement/ui-refactor` (DROP — monochrome premium UX)
 
+> **User-detail input validation (2026-06-28):** New shared **`Validators`**
+> (`lib/core/utils/validators.dart`, pure + unicode-aware for Arabic) enforces the
+> right *kind* of value on user-detail fields — `phone` (digits + `+ - ( )`, rejects
+> letters/`@`), `name` (letters only), `address`, `emergencyContact` (must contain a
+> number), `email`; each takes `required` (mandatory onboarding vs. optional admin
+> clear-to-empty). `AppTextField` gained an **`inputFormatters`** hook; phone fields use
+> `Validators.phoneInput` so letters can't be typed. Applied to **ProfileCompletionPage**
+> (first-login required fields), the admin **Edit details** sheet (was un-validated) and
+> **Create account**. `validators_test.dart` → **227 tests pass**. Client-only, no deploy.
+>
 > **Account-switch push fix on a shared device (2026-06-28):** Fixed an L1 client gap
 > behind EXCLUSIVE token ownership. On a shared phone the device's FCM token is the
 > **same** across accounts; `registerToken` set `_uid` then hit `_rotateToken`'s dedup

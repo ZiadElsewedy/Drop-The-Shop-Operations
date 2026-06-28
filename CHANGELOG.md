@@ -12,6 +12,23 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-06-28 — Input validation on user-detail fields)
+
+Owner request: a newly-created user completing their profile (and admins entering
+contact details) must not be able to type the wrong kind of value — a phone field
+must hold a **number**, not an email; a name must be **letters**, not digits, etc.
+New shared **`Validators`** util (`lib/core/utils/validators.dart`, pure + unicode-
+aware so Arabic names/addresses pass): `phone` (digits + `+ - ( )`, 7–15 digits,
+rejects letters/`@`), `name` (letters only), `address`, `emergencyContact` (must
+contain a phone number), `email`; each takes `required` so the same rule serves a
+mandatory onboarding field and an optional admin "clear-to-empty" field. `AppTextField`
+gained an **`inputFormatters`** hook; phone fields use `Validators.phoneInput` so
+letters/`@` can't even be typed. Wired into **`ProfileCompletionPage`** (first-login
+required fields), the admin **Edit details** sheet (was un-validated, now form-checked
+when non-empty) and **Create account** (name/email use the shared validators). New
+`validators_test.dart` (**+10 tests → 227 pass**). `flutter analyze` clean. Client-only,
+**no deploy**.
+
 ### Fixed (2026-06-28 — Account-switch push failure on a shared device)
 
 Owner-reported: on a shared Samsung phone, push to the **currently** signed-in account
