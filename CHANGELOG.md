@@ -12,6 +12,22 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed (2026-06-28 — Account-switch push failure on a shared device)
+
+Owner-reported: on a shared Samsung phone, push to the **currently** signed-in account
+works, but after switching to a **second** account, pushes to that account fail
+persistently. **Root cause (L1 client gap):** a device's FCM token is per-device, not
+per-user — `getToken()` returns the **same** token across accounts. `registerToken(uid)`
+set `_uid = uid` and then called `_rotateToken`, whose dedup guard
+(`_currentToken == token && _uid == uid`) early-returns. If the prior session's
+`_currentToken` survived in memory (any switch path that bypassed `forgetUser`), the
+guard matched and the new user's doc **never** received the token → `claimFcmToken`
+had nothing to reclaim → every push to that user reported "0 registered tokens".
+**Fix:** `NotificationService.registerToken` now clears `_currentToken` whenever the
+uid changes, forcing a fresh `fcmTokens` write that `claimFcmToken` reclaims from the
+prior owner — independent of whether the client `forgetUser` cleanup ran. Client-only,
+**no deploy** (server `claimFcmToken` unchanged). `flutter analyze` clean.
+
 ### Added (2026-06-27 — Delete a sent broadcast)
 
 Owner request: an option to **permanently delete** broadcasts from the Communications

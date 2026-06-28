@@ -78,6 +78,15 @@ class NotificationService {
   /// Persist this device's token for [uid] (call after the user is
   /// authenticated, on login / app start).
   Future<void> registerToken(String uid) async {
+    // Account switch on this device: the device's FCM token is the SAME across
+    // accounts (getToken returns a per-device token, not per-user), so if the
+    // previous session's `_currentToken` survives in memory (any switch path
+    // that bypassed `forgetUser`), `_rotateToken`'s dedup guard
+    // (`_currentToken == token && _uid == uid`) would no-op and the new user's
+    // doc would NEVER get the token — every push to them then fails. Clearing it
+    // on a uid change forces a fresh write, which `claimFcmToken` reclaims from
+    // the prior owner. (L1 client gap behind the EXCLUSIVE-ownership guarantee.)
+    if (_uid != uid) _currentToken = null;
     _uid = uid;
     try {
       final token = await _messaging.getToken();

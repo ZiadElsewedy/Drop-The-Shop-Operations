@@ -11,9 +11,20 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-06-27 (Delete sent broadcasts + iOS template-sheet keyboard fix + branch identity in tasks)
+**Last updated:** 2026-06-28 (Account-switch push fix on shared device + delete sent broadcasts + iOS template-sheet keyboard fix)
 **Version:** 1.0.0+1 · **Branch:** `enhancement/ui-refactor` (DROP — monochrome premium UX)
 
+> **Account-switch push fix on a shared device (2026-06-28):** Fixed an L1 client gap
+> behind EXCLUSIVE token ownership. On a shared phone the device's FCM token is the
+> **same** across accounts; `registerToken` set `_uid` then hit `_rotateToken`'s dedup
+> guard (`_currentToken == token && _uid == uid`), so if the prior session's
+> `_currentToken` survived in memory (a switch path that bypassed `forgetUser`) the new
+> user's `fcmTokens` was **never** written → `claimFcmToken` had nothing to reclaim →
+> pushes to the switched-in account failed ("0 registered tokens"). Now `registerToken`
+> **clears `_currentToken` on a uid change**, forcing a fresh write the server reclaims
+> from the prior owner. Client-only, **no deploy**; `claimFcmToken` unchanged. `flutter
+> analyze` clean.
+>
 > **Delete sent broadcasts (2026-06-27):** Re-added an option to **permanently delete**
 > a broadcast from the Communications feed (archive-only since the 2026-06-24 trim).
 > Hard delete of `broadcasts/{id}` via `BroadcastRepository.delete` →
