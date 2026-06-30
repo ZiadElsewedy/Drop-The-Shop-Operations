@@ -1,9 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/core/widgets/app_snackbar.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/core/widgets/app_snackbar.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/auth/presentation/cubit/auth_cubit.dart';
 
 /// Convenience accessors for the signed-in user off any [BuildContext].
 ///

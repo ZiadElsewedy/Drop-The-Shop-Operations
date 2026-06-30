@@ -1,7 +1,7 @@
-import 'package:fbro/core/extensions/firestore_extensions.dart';
+import 'package:drop/core/extensions/firestore_extensions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
 
 class UserModel {
   final String uid;

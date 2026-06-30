@@ -1,5 +1,5 @@
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
 
 /// Best display name for a user — their display name, falling back to email.
 String userDisplayName(UserEntity u) =>

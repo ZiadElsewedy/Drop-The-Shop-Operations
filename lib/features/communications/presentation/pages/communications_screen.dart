@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fbro/core/extensions/context_extensions.dart';
-import 'package:fbro/core/routes/route_names.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_dialog.dart';
-import 'package:fbro/core/widgets/app_empty_state.dart';
-import 'package:fbro/core/widgets/app_motion.dart';
-import 'package:fbro/core/widgets/app_snackbar.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
-import 'package:fbro/features/communications/presentation/cubit/broadcast_cubit.dart';
-import 'package:fbro/features/communications/presentation/cubit/broadcast_state.dart';
-import 'package:fbro/features/communications/presentation/widgets/broadcast_card.dart';
+import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/core/routes/route_names.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_dialog.dart';
+import 'package:drop/core/widgets/app_empty_state.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/widgets/app_snackbar.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/communications/domain/entities/broadcast_entity.dart';
+import 'package:drop/features/communications/presentation/cubit/broadcast_cubit.dart';
+import 'package:drop/features/communications/presentation/cubit/broadcast_state.dart';
+import 'package:drop/features/communications/presentation/widgets/broadcast_card.dart';
 
 /// The "···" overflow destinations — everything secondary lives here so the home
 /// stays the feed + one primary action.

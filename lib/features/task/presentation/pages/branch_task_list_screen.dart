@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_motion.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
-import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
-import 'package:fbro/features/task/presentation/cubit/task_state.dart';
-import 'package:fbro/features/task/presentation/widgets/manager_task_card.dart';
-import 'package:fbro/features/task/presentation/widgets/task_empty_state.dart';
-import 'package:fbro/features/task/presentation/widgets/task_template_sheets.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
+import 'package:drop/features/task/presentation/cubit/task_state.dart';
+import 'package:drop/features/task/presentation/widgets/manager_task_card.dart';
+import 'package:drop/features/task/presentation/widgets/task_empty_state.dart';
+import 'package:drop/features/task/presentation/widgets/task_template_sheets.dart';
 
 /// The full task list for a single branch, with the manager/admin action set
 /// (create / assign / edit / review / delete via [ManagerTaskCard]). Reads the

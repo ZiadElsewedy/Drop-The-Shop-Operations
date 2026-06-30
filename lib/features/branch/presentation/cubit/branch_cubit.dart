@@ -1,9 +1,9 @@
 import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
-import 'package:fbro/features/branch/domain/repositories/branch_repository.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/branch/domain/entities/branch_entity.dart';
+import 'package:drop/features/branch/domain/repositories/branch_repository.dart';
 import 'branch_state.dart';
 
 /// Admin branch management (Phase 5). Calls [BranchRepository] directly (the

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/glass_container.dart';
-import 'package:fbro/core/widgets/status_badge.dart';
-import 'package:fbro/core/widgets/user_avatar.dart';
-import 'package:fbro/features/admin/presentation/employee_metrics.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/glass_container.dart';
+import 'package:drop/core/widgets/status_badge.dart';
+import 'package:drop/core/widgets/user_avatar.dart';
+import 'package:drop/features/admin/presentation/employee_metrics.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
 
 /// Premium, information-dense employee card for the admin Employees page.
 /// Identity (avatar · name · role · branch), work status (active/inactive), and

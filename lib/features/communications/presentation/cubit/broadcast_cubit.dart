@@ -2,17 +2,17 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/broadcast_audience.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
-import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
-import 'package:fbro/features/branch/domain/repositories/branch_repository.dart';
-import 'package:fbro/features/communications/domain/broadcast_permissions.dart';
-import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
-import 'package:fbro/features/communications/domain/repositories/broadcast_repository.dart';
-import 'package:fbro/features/communications/domain/usecases/send_broadcast.dart';
-import 'package:fbro/features/communications/presentation/cubit/broadcast_state.dart';
+import 'package:drop/core/enums/broadcast_audience.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
+import 'package:drop/features/branch/domain/entities/branch_entity.dart';
+import 'package:drop/features/branch/domain/repositories/branch_repository.dart';
+import 'package:drop/features/communications/domain/broadcast_permissions.dart';
+import 'package:drop/features/communications/domain/entities/broadcast_entity.dart';
+import 'package:drop/features/communications/domain/repositories/broadcast_repository.dart';
+import 'package:drop/features/communications/domain/usecases/send_broadcast.dart';
+import 'package:drop/features/communications/presentation/cubit/broadcast_state.dart';
 
 /// Drives the Communications Center. A **hybrid** cubit, matching `TaskCubit`:
 /// the write (`send`) goes through the [SendBroadcast] use case (→ the callable

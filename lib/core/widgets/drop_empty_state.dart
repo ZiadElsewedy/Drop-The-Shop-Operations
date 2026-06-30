@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/drop_logo.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/drop_logo.dart';
 
 /// **DropEmptyState** — a **brand-led** empty state: a faded DROP mark instead
 /// of a generic grey glyph, then the message + optional action. The branded

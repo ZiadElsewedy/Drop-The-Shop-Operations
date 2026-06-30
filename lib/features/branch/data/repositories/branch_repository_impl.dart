@@ -1,11 +1,11 @@
 import 'dart:io';
 
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/branch/data/datasources/branch_remote_datasource.dart';
-import 'package:fbro/features/branch/data/models/branch_model.dart';
-import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
-import 'package:fbro/features/branch/domain/repositories/branch_repository.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/branch/data/datasources/branch_remote_datasource.dart';
+import 'package:drop/features/branch/data/models/branch_model.dart';
+import 'package:drop/features/branch/domain/entities/branch_entity.dart';
+import 'package:drop/features/branch/domain/repositories/branch_repository.dart';
 
 class BranchRepositoryImpl implements BranchRepository {
   final BranchRemoteDataSource _remote;

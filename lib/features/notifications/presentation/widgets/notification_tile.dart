@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/enums/notification_type.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_glass_card.dart';
-import 'package:fbro/core/widgets/status_badge.dart';
-import 'package:fbro/features/notifications/domain/entities/notification_entity.dart';
-import 'package:fbro/features/notifications/presentation/notification_format.dart';
+import 'package:drop/core/enums/notification_type.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_glass_card.dart';
+import 'package:drop/core/widgets/status_badge.dart';
+import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
+import 'package:drop/features/notifications/presentation/notification_format.dart';
 
 /// A single notification in the inbox — icon (tinted by type), title, body,
 /// time-ago, and an unread dot. Strictly monochrome; semantic colour only for

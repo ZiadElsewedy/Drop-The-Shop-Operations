@@ -2,9 +2,9 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:fbro/core/constants/app_constants.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/features/branch/data/models/branch_model.dart';
+import 'package:drop/core/constants/app_constants.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/features/branch/data/models/branch_model.dart';
 
 abstract class BranchRemoteDataSource {
   /// All branches; soft-deleted ones are excluded unless [includeDeleted].

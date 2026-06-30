@@ -1,6 +1,6 @@
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
 
 /// One employee's at-a-glance workload on the Branch Operations cockpit — the
 /// data behind a single employee card. Derived purely from the branch task

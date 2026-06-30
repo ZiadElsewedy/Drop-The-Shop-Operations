@@ -2,9 +2,9 @@ import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:fbro/core/constants/app_constants.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/features/communications/data/models/broadcast_model.dart';
+import 'package:drop/core/constants/app_constants.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/features/communications/data/models/broadcast_model.dart';
 
 abstract class BroadcastRemoteDataSource {
   /// Sends a broadcast through the **callable `sendBroadcast` Cloud Function**

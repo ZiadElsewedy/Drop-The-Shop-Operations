@@ -12,6 +12,68 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed (2026-06-30 — macOS login "No internet connection" root cause)
+
+The macOS desktop build could not sign in — Firebase Auth surfaced a generic
+"no internet connection" error even with a working network. **Root cause:** the
+app runs in the macOS App Sandbox (`com.apple.security.app-sandbox` = true) but
+was **not granted the outgoing-network entitlement** `com.apple.security.network.client`.
+`DebugProfile.entitlements` only had `network.server` (incoming sockets, e.g. the
+Flutter debug VM service) and `Release.entitlements` had **no network entitlement
+at all** — so every outbound HTTPS call from Firebase Auth/Firestore/Storage/FCM
+was blocked by the sandbox, which the native SDK reports as a connectivity error.
+
+- Added `com.apple.security.network.client` to **both** `macos/Runner/DebugProfile.entitlements`
+  and `macos/Runner/Release.entitlements` (the latter previously had no network access,
+  so release builds could never reach Firebase).
+- Hardened auth error mapping in `auth_remote_datasource.dart`: `signInWithEmail`
+  (and password reset / change) now also catch `SocketException`, `TimeoutException`,
+  `HandshakeException`/`TlsException` and `PlatformException` (previously only
+  `FirebaseAuthException`), mapping each to a precise, actionable message — DNS
+  failure, SSL/TLS error, blocked/unreachable network, timeout, misconfigured API
+  key, disabled provider — instead of one opaque bucket. The null-`user` case is
+  handled explicitly. `network-request-failed` now reads as "could not reach the
+  authentication server / check the app is allowed network access" rather than
+  implying a wrong password.
+
+### Changed (2026-06-30 — Full DROP rebrand: Dart package `fbro` → `drop`)
+
+Completed the rebrand the visual identity started, removing the last source-level
+`FBRO` references. A previous attempt was reverted because it used an invalid
+package name (`Drop`, uppercase) and didn't update imports; this pass does it
+correctly and completely.
+
+- `pubspec.yaml` `name: fbro` → `name: drop` (+ DROP OPERATIONS description); all
+  **272** Dart files updated `package:fbro/…` → `package:drop/…` (lib + test).
+- Platform display names rebranded to **DROP** / **DROP OPERATIONS**: macOS
+  `PRODUCT_NAME`/copyright (+ built product `DROP.app`, scheme + pbxproj refs),
+  Windows `Runner.rc`/`main.cpp`/`CMakeLists.txt`, Linux window titles +
+  `CMakeLists.txt` binary name, `.vscode`/`.claude` launch configs.
+- **Intentionally retained:** the bundle/application identifier `com.example.fbro`
+  (macOS/iOS/Android + GoogleService-Info.plist + google-services.json +
+  firebase_options.dart + Linux APPLICATION_ID + RunnerTests ids). These are
+  registered with Firebase; changing them without re-registering the apps in the
+  Firebase console would break Auth. A note documenting this was added to
+  `AppInfo.xcconfig`. ⚠️ Validate with `flutter pub get && flutter analyze &&
+  dart run build_runner build` (no Dart SDK was available in the change
+  environment).
+
+### Added (2026-06-30 — Premium macOS desktop layout foundation)
+
+First-class desktop chrome so the app stops feeling like a stretched phone UI.
+
+- `lib/core/responsive/breakpoints.dart`: `DeviceType` (mobile/tablet/desktop/
+  ultrawide), centralised thresholds, `BuildContext` responsive extensions
+  (`isDesktop`, `deviceType`, tier-aware `pagePadding`, `gridColumns`),
+  `ResponsiveBuilder`, and `ContentConstraint` (centred max-width column).
+- `lib/core/widgets/desktop_nav_sidebar.dart`: premium persistent left sidebar
+  (DROP wordmark, hover-reactive destinations, active accent pill + leading bar,
+  mouse-click cursors) — the native-desktop counterpart to the mobile bottom nav.
+- `RoleScaffold` is now window-aware: desktop/ultrawide widths render the sidebar
+  + a slim desktop top bar + content constrained to a comfortable width; mobile/
+  tablet keep the original app bar + bottom nav unchanged. Navigation semantics
+  are identical (still routes the same destinations). Resize-safe (MediaQuery-driven).
+
 ### Added (2026-06-28 — Branch cover photo on the admin task overview)
 
 Owner request: show the branch **cover photo** on the branch cards in the admin Task

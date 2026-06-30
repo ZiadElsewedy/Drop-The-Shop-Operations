@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/enums/task_priority.dart';
-import 'package:fbro/core/enums/task_status.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/branch_avatar.dart';
-import 'package:fbro/core/widgets/premium_button.dart';
-import 'package:fbro/core/widgets/status_badge.dart';
-import 'package:fbro/core/widgets/user_avatar.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
-import 'package:fbro/features/task/presentation/widgets/task_badge.dart';
-import 'package:fbro/features/task/presentation/widgets/task_surface.dart';
+import 'package:drop/core/enums/task_priority.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/branch_avatar.dart';
+import 'package:drop/core/widgets/premium_button.dart';
+import 'package:drop/core/widgets/status_badge.dart';
+import 'package:drop/core/widgets/user_avatar.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/presentation/widgets/task_badge.dart';
+import 'package:drop/features/task/presentation/widgets/task_surface.dart';
 
 /// The premium DROP task card — built for **scanning**, not for reading a record.
 /// Metadata reads as glanceable *signals* (status pill · priority · branch · due

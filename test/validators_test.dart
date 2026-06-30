@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fbro/core/utils/validators.dart';
+import 'package:drop/core/utils/validators.dart';
 
 void main() {
   group('Validators.phone', () {

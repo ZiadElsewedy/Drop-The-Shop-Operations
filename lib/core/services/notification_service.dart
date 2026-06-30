@@ -2,7 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:fbro/core/constants/app_constants.dart';
+import 'package:drop/core/constants/app_constants.dart';
 
 /// Firebase Cloud Messaging engine (Phase 6 foundation + Phase 2 receive
 /// handling). Requests notification permission, keeps the device's FCM token in

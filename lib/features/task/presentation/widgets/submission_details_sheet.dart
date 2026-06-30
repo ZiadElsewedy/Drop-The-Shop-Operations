@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_dialog.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
-import 'package:fbro/features/task/domain/entities/activity_entry.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
-import 'package:fbro/features/task/presentation/activity_format.dart';
-import 'package:fbro/features/task/presentation/attachment_format.dart';
-import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
-import 'package:fbro/features/task/presentation/widgets/attachment_gallery.dart';
-import 'package:fbro/features/task/presentation/widgets/task_action_sheets.dart'
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_dialog.dart';
+import 'package:drop/features/auth/presentation/widgets/app_button.dart';
+import 'package:drop/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:drop/features/task/domain/entities/activity_entry.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/presentation/activity_format.dart';
+import 'package:drop/features/task/presentation/attachment_format.dart';
+import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
+import 'package:drop/features/task/presentation/widgets/attachment_gallery.dart';
+import 'package:drop/features/task/presentation/widgets/task_action_sheets.dart'
     show SheetHandle;
 
 /// Opens the deep submission-review surface as a large iOS-style modal sheet

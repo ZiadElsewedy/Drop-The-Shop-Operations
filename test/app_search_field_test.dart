@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fbro/core/theme/app_theme.dart';
-import 'package:fbro/core/widgets/app_search_field.dart';
+import 'package:drop/core/theme/app_theme.dart';
+import 'package:drop/core/widgets/app_search_field.dart';
 
 /// Regression test for the "search box looks like a field-inside-a-field" bug.
 ///

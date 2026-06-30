@@ -1,6 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:fbro/core/enums/schedule_day.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
 
 part 'weekly_schedule_entity.freezed.dart';
 

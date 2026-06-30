@@ -5,8 +5,11 @@ app (admin · manager · employee) for running daily branch work: task assignmen
 and review with proof, weekly scheduling and shift swaps, branch administration,
 and live operations dashboards.
 
-> The Flutter/Dart package identifier remains `fbro` for build stability — only
-> the product/brand name is **DROP**.
+> Fully branded as **DROP**: the Dart package identifier is `drop` (every import
+> is `package:drop/…`) and all platform display names read **DROP** /
+> **DROP OPERATIONS**. The Firebase-registered bundle identifier
+> `com.example.fbro` is intentionally retained — changing it requires
+> re-registering the apps in the Firebase console (see CURRENT_STATE.md).
 
 ## Documentation
 

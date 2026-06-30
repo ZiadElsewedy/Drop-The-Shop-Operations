@@ -1,5 +1,5 @@
-import 'package:fbro/core/enums/broadcast_audience.dart';
-import 'package:fbro/core/enums/user_role.dart';
+import 'package:drop/core/enums/broadcast_audience.dart';
+import 'package:drop/core/enums/user_role.dart';
 
 /// Who may send what — the **recipient-resolution permission matrix** for the
 /// Communications Center, as a pure, deterministic domain rule.

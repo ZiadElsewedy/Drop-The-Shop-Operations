@@ -1,7 +1,7 @@
-import 'package:fbro/core/enums/broadcast_audience.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/core/extensions/firestore_extensions.dart';
-import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
+import 'package:drop/core/enums/broadcast_audience.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/core/extensions/firestore_extensions.dart';
+import 'package:drop/features/communications/domain/entities/broadcast_entity.dart';
 
 /// Firestore (de)serialization for [BroadcastEntity] — collection
 /// `broadcasts/{id}`.

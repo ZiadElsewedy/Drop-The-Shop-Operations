@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
 
 /// A reliable circular user avatar.
 ///

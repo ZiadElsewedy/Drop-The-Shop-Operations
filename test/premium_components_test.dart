@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fbro/core/enums/task_status.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/widgets/app_glass_card.dart';
-import 'package:fbro/core/widgets/metric_pill.dart';
-import 'package:fbro/core/widgets/premium_button.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/widgets/app_glass_card.dart';
+import 'package:drop/core/widgets/metric_pill.dart';
+import 'package:drop/core/widgets/premium_button.dart';
 
 void main() {
   group('AppGlassCard.glowForTaskStatus (subtle semantic glow, no indigo)', () {

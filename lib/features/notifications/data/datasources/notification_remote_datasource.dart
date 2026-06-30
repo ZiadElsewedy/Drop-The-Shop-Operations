@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fbro/core/constants/app_constants.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/features/notifications/data/models/notification_model.dart';
+import 'package:drop/core/constants/app_constants.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/features/notifications/data/models/notification_model.dart';
 
 abstract class NotificationRemoteDataSource {
   Future<void> create(NotificationModel notification);

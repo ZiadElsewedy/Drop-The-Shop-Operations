@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/features/auth/data/models/user_model.dart';
+import 'package:flutter/services.dart' show PlatformException;
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/features/auth/data/models/user_model.dart';
 
 /// Firebase Auth access. DROP is **admin-provisioned** — there is no public
 /// registration, Google sign-in, or phone/OTP path here. Accounts are created
@@ -58,10 +62,21 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         email: email,
         password: password,
       );
-      final user = credential.user!;
+      final user = credential.user;
+      if (user == null) {
+        throw const AuthException(
+          'Sign in succeeded but no account was returned. Please try again.',
+        );
+      }
       return UserModel.fromFirebaseUser(user, authProvider: _resolveProvider(user));
     } on FirebaseAuthException catch (e) {
       throw AuthException(_resolveSignInError(e.code, e.message));
+    } catch (e) {
+      // Anything that is not a FirebaseAuthException (raw socket/DNS/SSL
+      // failures, method-channel PlatformExceptions, timeouts) used to escape
+      // this layer and surface as an opaque "no internet" string from the
+      // native SDK. Map it to a precise, actionable message instead.
+      throw AuthException(_resolveInfraError(e));
     }
   }
 
@@ -80,10 +95,57 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       case 'too-many-requests':
         return 'Too many attempts. Please wait and try again.';
       case 'network-request-failed':
-        return 'Network error. Check your connection and try again.';
+        // Distinct from "you're offline": on macOS this most often means the
+        // request never left the sandbox (missing network.client entitlement)
+        // or the auth host is unreachable — not a wrong password.
+        return 'Could not reach the authentication server. Check your '
+            'connection and that the app is allowed network access, then '
+            'try again.';
+      case 'operation-not-allowed':
+        return 'Email/password sign-in is disabled for this project. '
+            'Contact your administrator.';
+      case 'api-key-not-valid':
+      case 'invalid-api-key':
+        return 'The app is misconfigured (invalid Firebase API key). '
+            'Contact your administrator.';
       default:
         return message ?? 'Sign in failed. Please try again.';
     }
+  }
+
+  /// Maps non-Firebase infrastructure errors (socket/DNS/SSL/timeout/method
+  /// channel) to precise, user-actionable messages. Keeps the generic
+  /// "no internet" bucket from swallowing genuinely different root causes.
+  String _resolveInfraError(Object error) {
+    if (error is AuthException) return error.message;
+    if (error is TimeoutException) {
+      return 'The connection timed out. Check your network and try again.';
+    }
+    if (error is SocketException) {
+      final msg = error.osError?.message.toLowerCase() ?? '';
+      if (msg.contains('nodename') ||
+          msg.contains('not known') ||
+          msg.contains('resolve') ||
+          error.message.toLowerCase().contains('failed host lookup')) {
+        return 'Could not resolve the server address (DNS issue). '
+            'Check your network/DNS settings and try again.';
+      }
+      return 'Unable to reach the server. The network may be down or the '
+          'app may be blocked from making connections.';
+    }
+    if (error is HandshakeException || error is TlsException) {
+      return 'A secure connection could not be established (SSL/TLS error). '
+          'Check your system date/time and network, then try again.';
+    }
+    if (error is PlatformException) {
+      final code = error.code.toLowerCase();
+      if (code.contains('network')) {
+        return 'Could not reach the authentication server. Check your '
+            'connection and that the app is allowed network access.';
+      }
+      return error.message ?? 'Sign in failed (${error.code}). Please try again.';
+    }
+    return 'An unexpected error occurred during sign in. Please try again.';
   }
 
   @override
@@ -95,6 +157,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       await _auth.sendPasswordResetEmail(email: email);
     } on FirebaseAuthException catch (e) {
       throw AuthException(_resolvePasswordResetError(e.code, e.message));
+    } catch (e) {
+      throw AuthException(_resolveInfraError(e));
     }
   }
 
@@ -151,6 +215,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       await user.updatePassword(newPassword);
     } on FirebaseAuthException catch (e) {
       throw AuthException(_resolveChangePasswordError(e.code, e.message));
+    } catch (e) {
+      throw AuthException(_resolveInfraError(e));
     }
   }
 

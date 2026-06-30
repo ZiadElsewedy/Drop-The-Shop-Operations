@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/task_status.dart';
-import 'package:fbro/core/extensions/context_extensions.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_motion.dart';
-import 'package:fbro/core/widgets/app_snackbar.dart';
-import 'package:fbro/core/widgets/branch_avatar.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
-import 'package:fbro/features/operations/presentation/pages/branch_operations_screen.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
-import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
-import 'package:fbro/features/task/presentation/cubit/task_state.dart';
-import 'package:fbro/features/task/presentation/widgets/task_empty_state.dart';
-import 'package:fbro/features/task/presentation/widgets/task_template_sheets.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/widgets/app_snackbar.dart';
+import 'package:drop/core/widgets/branch_avatar.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/branch/domain/entities/branch_entity.dart';
+import 'package:drop/features/operations/presentation/pages/branch_operations_screen.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
+import 'package:drop/features/task/presentation/cubit/task_state.dart';
+import 'package:drop/features/task/presentation/widgets/task_empty_state.dart';
+import 'package:drop/features/task/presentation/widgets/task_template_sheets.dart';
 
 /// Admin task home — a **branch-based overview** instead of a single flat list
 /// of every task across the company (which doesn't scale past a few branches).

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fbro/core/widgets/brand_watermark.dart';
-import 'package:fbro/core/widgets/drop_auth_mark.dart';
-import 'package:fbro/core/widgets/drop_empty_state.dart';
-import 'package:fbro/core/widgets/drop_loading_state.dart';
-import 'package:fbro/core/widgets/drop_wordmark.dart';
+import 'package:drop/core/widgets/brand_watermark.dart';
+import 'package:drop/core/widgets/drop_auth_mark.dart';
+import 'package:drop/core/widgets/drop_empty_state.dart';
+import 'package:drop/core/widgets/drop_loading_state.dart';
+import 'package:drop/core/widgets/drop_wordmark.dart';
 
 void main() {
   Widget host(Widget child) =>

@@ -1,5 +1,5 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:fbro/features/schedule/domain/swap_policy.dart';
+import 'package:drop/features/schedule/domain/swap_policy.dart';
 
 part 'branch_entity.freezed.dart';
 

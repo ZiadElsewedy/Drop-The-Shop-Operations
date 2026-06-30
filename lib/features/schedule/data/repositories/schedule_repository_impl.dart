@@ -1,15 +1,15 @@
-import 'package:fbro/core/enums/schedule_day.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/core/enums/swap_status.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/schedule/data/datasources/schedule_remote_datasource.dart';
-import 'package:fbro/features/schedule/data/models/shift_swap_model.dart';
-import 'package:fbro/features/schedule/data/models/weekly_schedule_model.dart';
-import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
-import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
-import 'package:fbro/features/schedule/domain/repositories/schedule_repository.dart';
-import 'package:fbro/features/schedule/domain/schedule_week.dart';
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/swap_status.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/schedule/data/datasources/schedule_remote_datasource.dart';
+import 'package:drop/features/schedule/data/models/shift_swap_model.dart';
+import 'package:drop/features/schedule/data/models/weekly_schedule_model.dart';
+import 'package:drop/features/schedule/domain/entities/shift_swap_entity.dart';
+import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
+import 'package:drop/features/schedule/domain/schedule_week.dart';
 
 class ScheduleRepositoryImpl implements ScheduleRepository {
   final ScheduleRemoteDataSource _remote;

@@ -1,5 +1,5 @@
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/domain/repositories/auth_repository.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/auth/domain/repositories/auth_repository.dart';
 
 class SignInWithEmail {
   final AuthRepository _repository;

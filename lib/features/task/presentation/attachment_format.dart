@@ -1,8 +1,8 @@
-import 'package:fbro/core/enums/attachment_type.dart';
-import 'package:fbro/core/enums/task_status.dart';
-import 'package:fbro/features/task/domain/entities/activity_entry.dart';
-import 'package:fbro/features/task/domain/entities/task_attachment.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:drop/core/enums/attachment_type.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/features/task/domain/entities/activity_entry.dart';
+import 'package:drop/features/task/domain/entities/task_attachment.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
 
 /// Presentation helpers for task media (Phase 10). Resolve which attachments a
 /// timeline event should show — including a back-compat path that surfaces a

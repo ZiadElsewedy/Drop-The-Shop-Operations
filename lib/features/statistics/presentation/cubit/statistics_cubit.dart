@@ -1,7 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/statistics/domain/repositories/statistics_repository.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/statistics/domain/repositories/statistics_repository.dart';
 import 'statistics_state.dart';
 
 /// Loads the role-scoped operational statistics for the dashboards (Phase 6).

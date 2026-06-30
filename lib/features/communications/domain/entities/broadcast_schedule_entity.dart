@@ -1,8 +1,8 @@
-import 'package:fbro/core/enums/broadcast_audience.dart';
-import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/enums/broadcast_recurrence.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/features/communications/domain/recurrence_rule.dart';
+import 'package:drop/core/enums/broadcast_audience.dart';
+import 'package:drop/core/enums/broadcast_category.dart';
+import 'package:drop/core/enums/broadcast_recurrence.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/features/communications/domain/recurrence_rule.dart';
 
 /// A scheduled / recurring broadcast (Communications Center — Phase 2 Commit 4).
 /// Persisted at `broadcastSchedules/{id}`; the `runBroadcastSchedules` Cloud

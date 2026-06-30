@@ -8,5 +8,10 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<!-- Required for outgoing connections (Firebase Auth/Firestore/Storage/FCM).
+	     Without this a sandboxed macOS app cannot reach the network and the
+	     native Firebase SDK surfaces it as a generic "no internet" error. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
 </dict>
 </plist>

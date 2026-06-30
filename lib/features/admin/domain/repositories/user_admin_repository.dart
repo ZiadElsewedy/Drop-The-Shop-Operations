@@ -1,5 +1,5 @@
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
 
 /// Admin operations over users. Reuses the auth [UserEntity]. All methods require
 /// an admin caller (Firestore rules for field updates; admin-only Cloud Functions

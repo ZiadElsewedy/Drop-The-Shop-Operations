@@ -5,10 +5,13 @@
 // 'flutter create' template.
 
 // The application's name. By default this is also the title of the Flutter window.
-PRODUCT_NAME = fbro
+PRODUCT_NAME = DROP
 
-// The application's bundle identifier
+// The application's bundle identifier.
+// NOTE: kept as com.example.fbro on purpose — this identifier is registered with
+// Firebase (GoogleService-Info.plist / firebase_options.dart). Changing it
+// without re-registering the macOS app in the Firebase console breaks Auth.
 PRODUCT_BUNDLE_IDENTIFIER = com.example.fbro
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 DROP THE SHOP. All rights reserved.

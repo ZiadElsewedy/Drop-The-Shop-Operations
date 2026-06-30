@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_snackbar.dart';
-import 'package:fbro/features/auth/presentation/animations/fade_slide_transition.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_state.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_password_field.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_snackbar.dart';
+import 'package:drop/features/auth/presentation/animations/fade_slide_transition.dart';
+import 'package:drop/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:drop/features/auth/presentation/cubit/auth_state.dart';
+import 'package:drop/features/auth/presentation/widgets/app_button.dart';
+import 'package:drop/features/auth/presentation/widgets/app_password_field.dart';
 
 /// First-login forced password change. Shown (and confined to by the router) when
 /// the signed-in account still has `mustChangePassword == true` — the user must

@@ -1,6 +1,6 @@
-import 'package:fbro/core/extensions/firestore_extensions.dart';
-import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
-import 'package:fbro/features/schedule/domain/swap_policy.dart';
+import 'package:drop/core/extensions/firestore_extensions.dart';
+import 'package:drop/features/branch/domain/entities/branch_entity.dart';
+import 'package:drop/features/schedule/domain/swap_policy.dart';
 
 /// Firestore (de)serialization for [BranchEntity] — collection `branches/{id}`.
 class BranchModel {

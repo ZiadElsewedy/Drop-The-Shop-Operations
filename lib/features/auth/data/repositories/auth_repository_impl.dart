@@ -1,9 +1,9 @@
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/auth/data/datasources/auth_remote_datasource.dart';
-import 'package:fbro/features/auth/data/datasources/user_remote_datasource.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/domain/repositories/auth_repository.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/auth/data/datasources/auth_remote_datasource.dart';
+import 'package:drop/features/auth/data/datasources/user_remote_datasource.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/auth/domain/repositories/auth_repository.dart';
 
 class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDataSource _remote;

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/drop_logo.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/drop_logo.dart';
 
 /// **DropLoadingState** — a **branded** full-area loading moment: the DROP mark
 /// with a slow, calm opacity-pulse (the brand "breathing") and an optional

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/di/injection.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_empty_state.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
-import 'package:fbro/features/task/presentation/pages/task_details_screen.dart';
+import 'package:drop/core/di/injection.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_empty_state.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/presentation/pages/task_details_screen.dart';
 
 /// Loads a single task by id and shows [TaskDetailsScreen]. The deep-link target
 /// for the `/task/:taskId` route, so a task notification opens the **exact task**

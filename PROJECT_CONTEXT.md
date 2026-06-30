@@ -1,8 +1,8 @@
 # DROP — Project Context
 
 > **Source of truth for the DROP codebase** (product name **DROP — Operations
-> Management System**; the Dart package identifier stays `fbro` for build
-> stability — only the brand is DROP). Read this first, before opening any
+> Management System**; the Dart package identifier is `drop` — every import is
+> `package:drop/…`). Read this first, before opening any
 > source file. It documents the architecture, dependency chains, where to make
 > changes, and the conventions every contributor (human or AI) must follow.
 >

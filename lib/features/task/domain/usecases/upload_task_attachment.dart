@@ -1,7 +1,7 @@
 import 'dart:io';
-import 'package:fbro/core/enums/attachment_type.dart';
-import 'package:fbro/features/task/domain/entities/task_attachment.dart';
-import 'package:fbro/features/task/domain/repositories/task_repository.dart';
+import 'package:drop/core/enums/attachment_type.dart';
+import 'package:drop/features/task/domain/entities/task_attachment.dart';
+import 'package:drop/features/task/domain/repositories/task_repository.dart';
 
 /// Uploads one media file (image / video) for a task and returns the resolved
 /// [TaskAttachment] (id, download url, type, uploader, time).

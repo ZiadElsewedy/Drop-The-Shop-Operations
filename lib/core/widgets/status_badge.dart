@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/enums/swap_status.dart';
-import 'package:fbro/core/enums/task_status.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_typography.dart';
+import 'package:drop/core/enums/swap_status.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_typography.dart';
 
 /// Small tinted status pill — one component for every Pending / Approved /
 /// Rejected / Completed / Active … indicator. Background + border are tinted in

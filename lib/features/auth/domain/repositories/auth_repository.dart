@@ -1,4 +1,4 @@
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
 
 /// Auth contract for the **admin-provisioned** model: email/password sign-in,
 /// password reset/change, the first-login flag writes, and user reads/streams.

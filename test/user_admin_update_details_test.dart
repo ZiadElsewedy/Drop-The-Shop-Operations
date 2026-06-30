@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/features/admin/data/datasources/user_admin_remote_datasource.dart';
-import 'package:fbro/features/admin/data/repositories/user_admin_repository_impl.dart';
-import 'package:fbro/features/auth/data/models/user_model.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/features/admin/data/datasources/user_admin_remote_datasource.dart';
+import 'package:drop/features/admin/data/repositories/user_admin_repository_impl.dart';
+import 'package:drop/features/auth/data/models/user_model.dart';
 
 /// Captures the exact merge map an admin "Edit Info" write produces — the
 /// behaviour the owner asked for: edit a person's contact details anytime after

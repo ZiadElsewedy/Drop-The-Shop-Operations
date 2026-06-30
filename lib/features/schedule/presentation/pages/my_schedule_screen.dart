@@ -1,22 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/schedule_day.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/drop_loading_state.dart';
-import 'package:fbro/core/widgets/user_avatar.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/core/extensions/context_extensions.dart';
-import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
-import 'package:fbro/features/schedule/domain/swap_eligibility.dart';
-import 'package:fbro/features/schedule/presentation/cubit/schedule_cubit.dart';
-import 'package:fbro/features/schedule/presentation/cubit/schedule_state.dart';
-import 'package:fbro/features/schedule/presentation/cubit/shift_swap_cubit.dart';
-import 'package:fbro/features/schedule/presentation/widgets/schedule_helpers.dart';
-import 'package:fbro/features/schedule/presentation/widgets/swap_view.dart';
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/drop_loading_state.dart';
+import 'package:drop/core/widgets/user_avatar.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/schedule/domain/swap_eligibility.dart';
+import 'package:drop/features/schedule/presentation/cubit/schedule_cubit.dart';
+import 'package:drop/features/schedule/presentation/cubit/schedule_state.dart';
+import 'package:drop/features/schedule/presentation/cubit/shift_swap_cubit.dart';
+import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
+import 'package:drop/features/schedule/presentation/widgets/swap_view.dart';
 
 /// Employee schedule screen — premium redesign. Two tabs: "My Week" (greeting,
 /// today's hero card with shift / manager / team, and the full week list with

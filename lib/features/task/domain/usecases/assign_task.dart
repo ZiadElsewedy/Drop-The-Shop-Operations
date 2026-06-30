@@ -1,4 +1,4 @@
-import 'package:fbro/features/task/domain/repositories/task_repository.dart';
+import 'package:drop/features/task/domain/repositories/task_repository.dart';
 
 /// Sets a task's assignees (Phase 9 — multi-assignee) and optionally a shift; an
 /// empty list unassigns.

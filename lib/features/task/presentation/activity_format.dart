@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_colors.dart';
 
 /// Presentation helpers that map a task [ActivityEntry.status] string onto a
 /// human label + dot colour, and format an event time. Shared by the Task

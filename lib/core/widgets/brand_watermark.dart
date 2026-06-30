@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/widgets/drop_wordmark.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/widgets/drop_wordmark.dart';
 
 /// Overlays a **barely-there** DROP wordmark in the corner of a premium hero —
 /// a quiet brand presence, never decoration (§9b Wave 3, "selective header

@@ -1,6 +1,6 @@
 import 'package:freezed_annotation/freezed_annotation.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 
 part 'schedule_state.freezed.dart';
 

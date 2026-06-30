@@ -2,17 +2,17 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
-import 'package:fbro/features/operations/domain/branch_workload.dart';
-import 'package:fbro/features/operations/domain/shift_filter.dart';
-import 'package:fbro/features/operations/presentation/cubit/branch_operations_state.dart';
-import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
-import 'package:fbro/features/schedule/domain/repositories/schedule_repository.dart';
-import 'package:fbro/features/schedule/domain/schedule_week.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
-import 'package:fbro/features/task/domain/repositories/task_repository.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
+import 'package:drop/features/operations/domain/branch_workload.dart';
+import 'package:drop/features/operations/domain/shift_filter.dart';
+import 'package:drop/features/operations/presentation/cubit/branch_operations_state.dart';
+import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
+import 'package:drop/features/schedule/domain/schedule_week.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/domain/repositories/task_repository.dart';
 
 /// Drives the Branch Operations cockpit (admin: any branch · manager: own).
 /// **Read/derive only** — it composes three sources for one branch:

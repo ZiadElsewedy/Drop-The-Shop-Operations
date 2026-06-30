@@ -1,11 +1,11 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/schedule_day.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
-import 'package:fbro/features/schedule/domain/repositories/schedule_repository.dart';
-import 'package:fbro/features/schedule/domain/schedule_week.dart';
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
+import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
+import 'package:drop/features/schedule/domain/schedule_week.dart';
 import 'schedule_state.dart';
 
 /// Drives the weekly-schedule view for managers (own branch), admins (any

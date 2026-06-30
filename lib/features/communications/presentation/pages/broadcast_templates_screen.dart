@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/extensions/context_extensions.dart';
-import 'package:fbro/core/routes/route_names.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_dialog.dart';
-import 'package:fbro/core/widgets/app_empty_state.dart';
-import 'package:fbro/core/widgets/app_search_field.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
-import 'package:fbro/features/communications/domain/entities/broadcast_entity.dart';
-import 'package:fbro/features/communications/domain/entities/broadcast_template_entity.dart';
-import 'package:fbro/features/communications/presentation/cubit/broadcast_template_cubit.dart';
-import 'package:fbro/features/communications/presentation/cubit/broadcast_template_state.dart';
-import 'package:fbro/features/communications/presentation/widgets/template_card.dart';
+import 'package:drop/core/enums/broadcast_category.dart';
+import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/core/routes/route_names.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_dialog.dart';
+import 'package:drop/core/widgets/app_empty_state.dart';
+import 'package:drop/core/widgets/app_search_field.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/auth/presentation/widgets/app_button.dart';
+import 'package:drop/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:drop/features/communications/domain/entities/broadcast_entity.dart';
+import 'package:drop/features/communications/domain/entities/broadcast_template_entity.dart';
+import 'package:drop/features/communications/presentation/cubit/broadcast_template_cubit.dart';
+import 'package:drop/features/communications/presentation/cubit/broadcast_template_state.dart';
+import 'package:drop/features/communications/presentation/widgets/template_card.dart';
 
 /// The broadcast Template Library (Communications Center — Phase 2 Commit 2).
 /// Grid/list toggle, search, category filter, favorites + recents, and a

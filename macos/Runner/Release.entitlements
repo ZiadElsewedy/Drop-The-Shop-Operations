@@ -4,5 +4,10 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Required for outgoing connections (Firebase Auth/Firestore/Storage/FCM).
+	     A sandboxed macOS app cannot reach the network without this; its absence
+	     makes login fail with a generic "no internet connection" error. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
 </dict>
 </plist>

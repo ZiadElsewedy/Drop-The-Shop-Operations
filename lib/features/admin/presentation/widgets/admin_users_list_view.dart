@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_motion.dart';
-import 'package:fbro/core/widgets/app_search_field.dart';
-import 'package:fbro/core/widgets/app_snackbar.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
-import 'package:fbro/features/admin/presentation/cubit/admin_users_state.dart';
-import 'package:fbro/features/admin/presentation/widgets/admin_user_card.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/widgets/app_search_field.dart';
+import 'package:drop/core/widgets/app_snackbar.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/admin/presentation/cubit/admin_users_cubit.dart';
+import 'package:drop/features/admin/presentation/cubit/admin_users_state.dart';
+import 'package:drop/features/admin/presentation/widgets/admin_user_card.dart';
 
 typedef AdminUserActions = List<Widget> Function(
     BuildContext context, UserEntity user);

@@ -1,9 +1,9 @@
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/statistics/data/datasources/statistics_remote_datasource.dart';
-import 'package:fbro/features/statistics/data/models/statistics_model.dart';
-import 'package:fbro/features/statistics/domain/entities/statistics_entity.dart';
-import 'package:fbro/features/statistics/domain/repositories/statistics_repository.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/statistics/data/datasources/statistics_remote_datasource.dart';
+import 'package:drop/features/statistics/data/models/statistics_model.dart';
+import 'package:drop/features/statistics/domain/entities/statistics_entity.dart';
+import 'package:drop/features/statistics/domain/repositories/statistics_repository.dart';
 
 class StatisticsRepositoryImpl implements StatisticsRepository {
   final StatisticsRemoteDataSource _remote;

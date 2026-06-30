@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fbro/core/enums/broadcast_recurrence.dart';
-import 'package:fbro/features/communications/domain/recurrence_rule.dart';
+import 'package:drop/core/enums/broadcast_recurrence.dart';
+import 'package:drop/features/communications/domain/recurrence_rule.dart';
 
 /// Phase 2 Commit 4 — the pure recurrence engine for scheduled broadcasts.
 void main() {

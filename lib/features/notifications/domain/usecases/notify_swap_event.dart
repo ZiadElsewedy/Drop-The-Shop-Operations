@@ -1,9 +1,9 @@
 import 'dart:developer' as developer;
 
-import 'package:fbro/core/enums/notification_type.dart';
-import 'package:fbro/features/notifications/domain/entities/notification_entity.dart';
-import 'package:fbro/features/notifications/domain/repositories/notification_repository.dart';
-import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
+import 'package:drop/core/enums/notification_type.dart';
+import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
+import 'package:drop/features/notifications/domain/repositories/notification_repository.dart';
+import 'package:drop/features/schedule/domain/entities/shift_swap_entity.dart';
 
 /// Builds + persists the in-app notification(s) for a **shift-swap** event,
 /// reusing the existing notification pipeline (one `notifications/{id}` doc per

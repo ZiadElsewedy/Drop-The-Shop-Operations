@@ -1,9 +1,9 @@
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/notifications/data/datasources/notification_remote_datasource.dart';
-import 'package:fbro/features/notifications/data/models/notification_model.dart';
-import 'package:fbro/features/notifications/domain/entities/notification_entity.dart';
-import 'package:fbro/features/notifications/domain/repositories/notification_repository.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/notifications/data/datasources/notification_remote_datasource.dart';
+import 'package:drop/features/notifications/data/models/notification_model.dart';
+import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
+import 'package:drop/features/notifications/domain/repositories/notification_repository.dart';
 
 class NotificationRepositoryImpl implements NotificationRepository {
   final NotificationRemoteDataSource _remote;

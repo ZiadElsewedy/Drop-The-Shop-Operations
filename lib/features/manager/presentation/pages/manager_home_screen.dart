@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fbro/core/routes/route_names.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_motion.dart';
-import 'package:fbro/core/extensions/context_extensions.dart';
-import 'package:fbro/features/statistics/domain/entities/statistics_entity.dart';
-import 'package:fbro/features/statistics/presentation/cubit/statistics_cubit.dart';
-import 'package:fbro/features/statistics/presentation/cubit/statistics_state.dart';
-import 'package:fbro/features/statistics/presentation/widgets/dashboard_section.dart';
-import 'package:fbro/features/statistics/presentation/widgets/stat_grid.dart';
+import 'package:drop/core/routes/route_names.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/features/statistics/domain/entities/statistics_entity.dart';
+import 'package:drop/features/statistics/presentation/cubit/statistics_cubit.dart';
+import 'package:drop/features/statistics/presentation/cubit/statistics_state.dart';
+import 'package:drop/features/statistics/presentation/widgets/dashboard_section.dart';
+import 'package:drop/features/statistics/presentation/widgets/stat_grid.dart';
 
 /// Manager dashboard (Phase 6, +Phase 10 command-center layout): the manager's
 /// own-branch operations at a glance — what needs attention first (active tasks,

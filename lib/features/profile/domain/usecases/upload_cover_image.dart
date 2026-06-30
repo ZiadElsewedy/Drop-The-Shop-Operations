@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:fbro/features/profile/domain/repositories/profile_repository.dart';
+import 'package:drop/features/profile/domain/repositories/profile_repository.dart';
 
 class UploadCoverImage {
   final ProfileRepository _repository;

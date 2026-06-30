@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/features/auth/data/models/user_model.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/features/auth/data/models/user_model.dart';
 
 /// Stability regression: `UserModel.fromMap` must never throw on a malformed or
 /// partial `users/{uid}` document. A single bad doc used to crash an entire

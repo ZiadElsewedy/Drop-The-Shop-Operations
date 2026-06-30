@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/user_avatar.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/schedule/presentation/widgets/schedule_helpers.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/user_avatar.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
 
 /// One shift slot in the weekly grid — a tappable cell that shows **who** is on
 /// the shift (faces + names), not just a number. A staffed slot reads as a

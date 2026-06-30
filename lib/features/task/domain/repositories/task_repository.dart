@@ -1,8 +1,8 @@
 import 'dart:io';
-import 'package:fbro/core/enums/attachment_type.dart';
-import 'package:fbro/features/task/domain/entities/task_attachment.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
-import 'package:fbro/features/task/domain/entities/task_template_entity.dart';
+import 'package:drop/core/enums/attachment_type.dart';
+import 'package:drop/features/task/domain/entities/task_attachment.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/domain/entities/task_template_entity.dart';
 
 /// Contract for task data access (Phase 3 foundation). The branch/role access
 /// model is enforced server-side by `firestore.rules` (admin: all branches;

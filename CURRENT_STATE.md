@@ -1,6 +1,6 @@
 # DROP — Current State
 
-> Product: **DROP — Operations Management System** (Dart package id stays `fbro`).
+> Product: **DROP — Operations Management System** (Dart package id is `drop`).
 >
 > **Live status snapshot of the project.** Read this after
 > [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) to know what's done, what's pending,

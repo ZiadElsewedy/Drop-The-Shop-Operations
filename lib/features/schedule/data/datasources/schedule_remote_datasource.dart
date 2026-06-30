@@ -3,14 +3,14 @@ import 'dart:developer' as developer;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:fbro/core/constants/app_constants.dart';
-import 'package:fbro/core/enums/schedule_day.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/core/enums/swap_status.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/features/schedule/data/models/shift_swap_model.dart';
-import 'package:fbro/features/schedule/data/models/weekly_schedule_model.dart';
-import 'package:fbro/features/schedule/domain/schedule_week.dart';
+import 'package:drop/core/constants/app_constants.dart';
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/swap_status.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/features/schedule/data/models/shift_swap_model.dart';
+import 'package:drop/features/schedule/data/models/weekly_schedule_model.dart';
+import 'package:drop/features/schedule/domain/schedule_week.dart';
 
 /// Firestore access for the weekly schedule + shift swaps (Phase 7). Schedules
 /// live at `weekly_schedules/{branchId_yyyy-MM-dd}` (deterministic id → one doc

@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/broadcast_category.dart';
-import 'package:fbro/core/extensions/context_extensions.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_dialog.dart';
-import 'package:fbro/core/widgets/app_empty_state.dart';
-import 'package:fbro/core/widgets/app_motion.dart';
-import 'package:fbro/core/widgets/glass_container.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/communications/domain/entities/broadcast_schedule_entity.dart';
-import 'package:fbro/features/communications/presentation/communications_format.dart';
-import 'package:fbro/features/communications/presentation/cubit/broadcast_schedule_cubit.dart';
-import 'package:fbro/features/communications/presentation/cubit/broadcast_schedule_state.dart';
+import 'package:drop/core/enums/broadcast_category.dart';
+import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_dialog.dart';
+import 'package:drop/core/widgets/app_empty_state.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/widgets/glass_container.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/communications/domain/entities/broadcast_schedule_entity.dart';
+import 'package:drop/features/communications/presentation/communications_format.dart';
+import 'package:drop/features/communications/presentation/cubit/broadcast_schedule_cubit.dart';
+import 'package:drop/features/communications/presentation/cubit/broadcast_schedule_state.dart';
 
 /// Scheduled broadcasts (Communications Center — Phase 2 Commit 4) — the manager
 /// surface for recurring/one-time schedules: next run, recurrence, run count,

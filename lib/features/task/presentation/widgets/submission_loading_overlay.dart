@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/features/task/presentation/submission_progress.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/features/task/presentation/submission_progress.dart';
 
 /// The single, state-driven submission overlay (Phase 10 refinement). Rendered
 /// by the Task Details screen in a Stack whenever `TaskState.isSubmitting` — it

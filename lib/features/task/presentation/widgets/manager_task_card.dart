@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/task_status.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/widgets/app_dialog.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/branch/presentation/cubit/branch_cubit.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
-import 'package:fbro/features/task/presentation/cubit/task_cubit.dart';
-import 'package:fbro/features/task/presentation/pages/task_details_screen.dart';
-import 'package:fbro/features/task/presentation/widgets/task_action_sheets.dart';
-import 'package:fbro/features/task/presentation/widgets/task_card.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/widgets/app_dialog.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/branch/presentation/cubit/branch_cubit.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
+import 'package:drop/features/task/presentation/pages/task_details_screen.dart';
+import 'package:drop/features/task/presentation/widgets/task_action_sheets.dart';
+import 'package:drop/features/task/presentation/widgets/task_card.dart';
 
 /// A [TaskCard] with the manager/admin action set (Review when awaiting review,
 /// Assign, Edit, Delete) wired to the [TaskCubit] in context; tapping the card

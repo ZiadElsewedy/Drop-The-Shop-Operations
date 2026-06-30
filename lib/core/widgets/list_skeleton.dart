@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/widgets/skeleton.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/widgets/skeleton.dart';
 
 /// A shimmering placeholder list shown on first load of a card list (tasks,
 /// admin users, branches) — mirrors the real card rhythm so the screen doesn't

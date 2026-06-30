@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/core/enums/task_status.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/glass_container.dart';
-import 'package:fbro/core/widgets/user_avatar.dart';
-import 'package:fbro/features/operations/domain/employee_workload.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/glass_container.dart';
+import 'package:drop/core/widgets/user_avatar.dart';
+import 'package:drop/features/operations/domain/employee_workload.dart';
 
 /// One employee's workload at a glance — the core of the Branch Operations
 /// cockpit. Identity (avatar · name · role · today's shift), a four-up metric

@@ -1,9 +1,9 @@
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/admin/data/datasources/user_admin_remote_datasource.dart';
-import 'package:fbro/features/admin/domain/repositories/user_admin_repository.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/admin/data/datasources/user_admin_remote_datasource.dart';
+import 'package:drop/features/admin/domain/repositories/user_admin_repository.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
 
 class UserAdminRepositoryImpl implements UserAdminRepository {
   final UserAdminRemoteDataSource _remote;

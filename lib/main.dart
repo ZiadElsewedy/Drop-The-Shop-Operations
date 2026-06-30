@@ -6,13 +6,13 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fbro/core/di/injection.dart';
-import 'package:fbro/core/routes/app_router.dart';
-import 'package:fbro/core/routes/route_names.dart';
-import 'package:fbro/core/theme/app_theme.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_cubit.dart';
-import 'package:fbro/features/auth/presentation/cubit/auth_state.dart';
-import 'package:fbro/firebase_options.dart';
+import 'package:drop/core/di/injection.dart';
+import 'package:drop/core/routes/app_router.dart';
+import 'package:drop/core/routes/route_names.dart';
+import 'package:drop/core/theme/app_theme.dart';
+import 'package:drop/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:drop/features/auth/presentation/cubit/auth_state.dart';
+import 'package:drop/firebase_options.dart';
 
 /// Background FCM handler. The push carries a `notification` block, so the OS
 /// renders it while the app is backgrounded/terminated — no background data

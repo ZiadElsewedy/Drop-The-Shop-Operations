@@ -1,16 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/notification_type.dart';
-import 'package:fbro/core/enums/schedule_day.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/core/enums/swap_status.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/features/auth/domain/usecases/get_users_by_branch.dart';
-import 'package:fbro/features/notifications/domain/usecases/notify_swap_event.dart';
-import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
-import 'package:fbro/features/schedule/domain/repositories/schedule_repository.dart';
-import 'package:fbro/features/schedule/domain/swap_eligibility.dart';
+import 'package:drop/core/enums/notification_type.dart';
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/swap_status.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
+import 'package:drop/features/notifications/domain/usecases/notify_swap_event.dart';
+import 'package:drop/features/schedule/domain/entities/shift_swap_entity.dart';
+import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
+import 'package:drop/features/schedule/domain/swap_eligibility.dart';
 import 'shift_swap_state.dart';
 
 /// Drives the shift-swap workflow (Phase 7, **realtime** since 2026-06-26). An

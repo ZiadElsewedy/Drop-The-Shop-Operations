@@ -2,21 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fbro/core/extensions/context_extensions.dart';
-import 'package:fbro/core/routes/route_names.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_dialog.dart';
-import 'package:fbro/core/widgets/app_empty_state.dart';
-import 'package:fbro/core/widgets/drop_empty_state.dart';
-import 'package:fbro/core/widgets/app_motion.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/notifications/domain/entities/notification_entity.dart';
-import 'package:fbro/features/notifications/presentation/cubit/notification_cubit.dart';
-import 'package:fbro/features/notifications/presentation/cubit/notification_state.dart';
-import 'package:fbro/features/notifications/presentation/notification_format.dart';
-import 'package:fbro/features/notifications/presentation/widgets/notification_tile.dart';
+import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/core/routes/route_names.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_dialog.dart';
+import 'package:drop/core/widgets/app_empty_state.dart';
+import 'package:drop/core/widgets/drop_empty_state.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
+import 'package:drop/features/notifications/presentation/cubit/notification_cubit.dart';
+import 'package:drop/features/notifications/presentation/cubit/notification_state.dart';
+import 'package:drop/features/notifications/presentation/notification_format.dart';
+import 'package:drop/features/notifications/presentation/widgets/notification_tile.dart';
 
 /// The in-app Notification Center — an **operations workflow inbox** (§5). Not a
 /// flat feed: notifications are **grouped by time** (Today / Yesterday / Earlier),

@@ -1,10 +1,10 @@
 import 'dart:developer' as developer;
 
-import 'package:fbro/core/enums/notification_type.dart';
-import 'package:fbro/features/auth/domain/entities/user_entity.dart';
-import 'package:fbro/features/notifications/domain/entities/notification_entity.dart';
-import 'package:fbro/features/notifications/domain/repositories/notification_repository.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:drop/core/enums/notification_type.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
+import 'package:drop/features/notifications/domain/repositories/notification_repository.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
 
 /// Builds + persists the in-app notification(s) for a task event (Notification
 /// System Phase 1, Part 3). One document per recipient. The matching FCM push is

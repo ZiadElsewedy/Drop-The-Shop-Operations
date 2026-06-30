@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/core/errors/failures.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_radius.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/utils/validators.dart';
-import 'package:fbro/core/widgets/app_snackbar.dart';
-import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_button.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_dropdown_field.dart';
-import 'package:fbro/features/auth/presentation/widgets/app_text_field.dart';
-import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/core/errors/failures.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/validators.dart';
+import 'package:drop/core/widgets/app_snackbar.dart';
+import 'package:drop/features/admin/presentation/cubit/admin_users_cubit.dart';
+import 'package:drop/features/auth/presentation/widgets/app_button.dart';
+import 'package:drop/features/auth/presentation/widgets/app_dropdown_field.dart';
+import 'package:drop/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:drop/features/branch/domain/entities/branch_entity.dart';
 
 /// Admin → User Management → **Create Account**. The admin-only provisioning
 /// form. Account creation runs server-side (the `createUserAccount` Cloud

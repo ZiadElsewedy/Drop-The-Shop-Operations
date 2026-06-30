@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:fbro/core/enums/user_role.dart';
-import 'package:fbro/core/theme/app_colors.dart';
-import 'package:fbro/core/theme/app_spacing.dart';
-import 'package:fbro/core/theme/app_typography.dart';
-import 'package:fbro/core/widgets/app_dialog.dart';
-import 'package:fbro/core/widgets/app_glass_card.dart';
-import 'package:fbro/core/widgets/branch_avatar.dart';
-import 'package:fbro/core/widgets/drop_empty_state.dart';
-import 'package:fbro/core/widgets/premium_button.dart';
-import 'package:fbro/core/widgets/app_motion.dart';
-import 'package:fbro/core/widgets/app_search_field.dart';
-import 'package:fbro/core/widgets/app_snackbar.dart';
-import 'package:fbro/core/widgets/list_skeleton.dart';
-import 'package:fbro/features/admin/presentation/cubit/admin_users_cubit.dart';
-import 'package:fbro/features/branch/domain/entities/branch_entity.dart';
-import 'package:fbro/features/branch/presentation/cubit/branch_cubit.dart';
-import 'package:fbro/features/branch/presentation/cubit/branch_state.dart';
-import 'package:fbro/features/branch/presentation/widgets/branch_form_sheet.dart';
+import 'package:drop/core/enums/user_role.dart';
+import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_dialog.dart';
+import 'package:drop/core/widgets/app_glass_card.dart';
+import 'package:drop/core/widgets/branch_avatar.dart';
+import 'package:drop/core/widgets/drop_empty_state.dart';
+import 'package:drop/core/widgets/premium_button.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/widgets/app_search_field.dart';
+import 'package:drop/core/widgets/app_snackbar.dart';
+import 'package:drop/core/widgets/list_skeleton.dart';
+import 'package:drop/features/admin/presentation/cubit/admin_users_cubit.dart';
+import 'package:drop/features/branch/domain/entities/branch_entity.dart';
+import 'package:drop/features/branch/presentation/cubit/branch_cubit.dart';
+import 'package:drop/features/branch/presentation/cubit/branch_state.dart';
+import 'package:drop/features/branch/presentation/widgets/branch_form_sheet.dart';
 
 /// Admin → Branches (Phase 9 redesign). Premium branch cards showing the
 /// branch's manager, employee count and status, with create / edit /

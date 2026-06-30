@@ -1,8 +1,8 @@
-import 'package:fbro/core/enums/schedule_day.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/core/enums/swap_status.dart';
-import 'package:fbro/features/schedule/domain/entities/shift_swap_entity.dart';
-import 'package:fbro/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/swap_status.dart';
+import 'package:drop/features/schedule/domain/entities/shift_swap_entity.dart';
+import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 
 /// Contract for weekly-schedule + shift-swap data access (Phase 7). Branch/role
 /// access is enforced server-side by `firestore.rules` (admin: all branches;

@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/features/auth/data/models/user_model.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/features/auth/data/models/user_model.dart';
 
 abstract class UserRemoteDataSource {
   Future<UserModel?> getUser(String uid);

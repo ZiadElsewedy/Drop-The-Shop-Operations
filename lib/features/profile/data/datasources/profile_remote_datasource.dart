@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:fbro/core/errors/exceptions.dart';
-import 'package:fbro/features/profile/data/models/profile_model.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/features/profile/data/models/profile_model.dart';
 
 abstract class ProfileRemoteDataSource {
   Future<ProfileModel?> getProfile(String uid);

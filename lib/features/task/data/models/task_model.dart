@@ -1,16 +1,16 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fbro/core/extensions/firestore_extensions.dart';
-import 'package:fbro/core/enums/attachment_type.dart';
-import 'package:fbro/core/enums/recurrence_frequency.dart';
-import 'package:fbro/core/enums/schedule_shift.dart';
-import 'package:fbro/core/enums/task_type.dart';
-import 'package:fbro/core/enums/task_status.dart';
-import 'package:fbro/core/enums/task_priority.dart';
-import 'package:fbro/features/task/domain/entities/activity_entry.dart';
-import 'package:fbro/features/task/domain/entities/checklist_item.dart';
-import 'package:fbro/features/task/domain/entities/recurrence_config.dart';
-import 'package:fbro/features/task/domain/entities/task_attachment.dart';
-import 'package:fbro/features/task/domain/entities/task_entity.dart';
+import 'package:drop/core/extensions/firestore_extensions.dart';
+import 'package:drop/core/enums/attachment_type.dart';
+import 'package:drop/core/enums/recurrence_frequency.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/task_type.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/core/enums/task_priority.dart';
+import 'package:drop/features/task/domain/entities/activity_entry.dart';
+import 'package:drop/features/task/domain/entities/checklist_item.dart';
+import 'package:drop/features/task/domain/entities/recurrence_config.dart';
+import 'package:drop/features/task/domain/entities/task_attachment.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
 
 /// Firestore (de)serialization for [TaskEntity] — collection `tasks/{taskId}`.
 ///
