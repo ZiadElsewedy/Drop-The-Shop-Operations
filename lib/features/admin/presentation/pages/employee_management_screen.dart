@@ -11,6 +11,7 @@ import 'package:drop/core/widgets/adaptive_scaffold.dart';
 import 'package:drop/core/widgets/app_motion.dart';
 import 'package:drop/core/widgets/app_search_field.dart';
 import 'package:drop/core/widgets/app_snackbar.dart';
+import 'package:drop/core/widgets/responsive_card_grid.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/admin/presentation/cubit/admin_users_cubit.dart';
 import 'package:drop/features/admin/presentation/cubit/admin_users_state.dart';
@@ -151,20 +152,26 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding,
                         AppSpacing.sm, AppSpacing.pagePadding, AppSpacing.xxxl),
                     children: [
-                      for (var i = 0; i < filtered.length; i++)
-                        EntranceFade(
-                          delay: staggerDelay(i),
-                          child: EmployeeCard(
-                            user: filtered[i],
-                            metrics: metrics[filtered[i].uid] ??
-                                const EmployeeMetrics(),
-                            branchLabel: filtered[i].branchId == null
-                                ? null
-                                : _branchNames[filtered[i].branchId],
-                            onTap: () => _showDetails(filtered[i]),
-                            actions: _actions(filtered[i]),
-                          ),
-                        ),
+                      ResponsiveCardGrid(
+                        runSpacing: 0, // EmployeeCard carries its own bottom margin
+                        ultrawideColumns: 2, // rich cards read best at 2-up max
+                        children: [
+                          for (var i = 0; i < filtered.length; i++)
+                            EntranceFade(
+                              delay: staggerDelay(i),
+                              child: EmployeeCard(
+                                user: filtered[i],
+                                metrics: metrics[filtered[i].uid] ??
+                                    const EmployeeMetrics(),
+                                branchLabel: filtered[i].branchId == null
+                                    ? null
+                                    : _branchNames[filtered[i].branchId],
+                                onTap: () => _showDetails(filtered[i]),
+                                actions: _actions(filtered[i]),
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
           ),

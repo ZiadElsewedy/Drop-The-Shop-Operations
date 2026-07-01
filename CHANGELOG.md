@@ -12,6 +12,36 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed (2026-07-01 — live QA on Firebase emulators: Employees grid + Change Password heading)
+
+First **live, running-app** verification pass (every earlier desktop-polish entry
+below was static: code + `flutter analyze`/`test` only). Installed a local Flutter
+SDK, built the app for web, pointed it at local Firebase Auth/Firestore/Storage
+emulators (seeded admin/manager/3 employees across 2 branches with tasks in every
+status), and drove it with Chromium at a 1440×900 desktop viewport through every
+sidebar destination for all three roles plus the full first-login gate. Confirmed
+the whole desktop redesign (dashboards, task/branch/schedule/comms/analytics
+surfaces, forms, sheets) renders and fits as documented. Found and fixed two real bugs:
+
+- **Employees page wasn't using the responsive grid.** `EmployeeManagementScreen`
+  rendered its `EmployeeCard`s in a plain `ListView` (never wrapped in
+  `ResponsiveCardGrid`), unlike the sibling Managers page — so on any desktop
+  window it stayed a single full-width column instead of the 2-up grid every other
+  admin list uses. Fixed by wrapping it in `ResponsiveCardGrid(runSpacing: 0,
+  ultrawideColumns: 2)`, matching `admin_users_list_view.dart`.
+- **Change Password showed its title twice.** The page still carried a
+  pre-migration in-body heading (`Text('Change\nPassword', style:
+  displayMedium)`) left over from before it was wired into `AdaptiveScaffold`,
+  which already renders the `title: 'Change Password'` in the app bar (mobile) /
+  page header (desktop). The leftover duplicate was hard-wrapped onto two lines by
+  a stale literal `\n`. Removed the redundant heading (and the now-unused
+  `isDark`/`AppColors` import), kept the one-line instructional subtitle.
+
+`flutter analyze` clean (7 pre-existing infos, 0 new); **233 tests pass**;
+`flutter build web --release` green. The emulator harness (seed script, temp
+`dev_tools/main_emulator.dart` entrypoint, Playwright driver) was scratch-only —
+not committed.
+
 ### Changed (2026-07-01 — full-screen UI audit: form/detail column widths)
 
 Swept **every** page (39) for desktop-width behaviour. Beyond the card grids

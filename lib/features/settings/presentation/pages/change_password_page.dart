@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
-import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/core/widgets/adaptive_scaffold.dart';
@@ -35,8 +34,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return AdaptiveScaffold(
       title: 'Change Password',
       contentMaxWidth: 560,
@@ -61,16 +58,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
                 FadeSlideTransition(
                   delay: const Duration(milliseconds: 50),
-                  child: Text(
-                    'Change\nPassword',
-                    style: AppTypography.displayMedium.copyWith(
-                      color: isDark ? AppColors.textPrimary : AppColors.textDark,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 120),
                   child: const Text(
                     'Enter your current password and choose a new one.',
                     style: AppTypography.bodyLarge,

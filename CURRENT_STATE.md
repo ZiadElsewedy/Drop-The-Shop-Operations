@@ -11,10 +11,50 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-01 (macOS keychain login fix · desktop window sizing · indigo reverted to strictly monochrome)
+**Last updated:** 2026-07-01 (full-app live QA pass on Firebase emulators: Employees grid + Change Password heading fixed)
 **Version:** 1.0.0+1 · **Branch:** `feature/macos-desktop` (DROP — monochrome premium desktop UX)
 
 ---
+
+## ✅ Live end-to-end QA pass across all three roles (2026-07-01)
+
+Previous desktop-polish passes below were all **static** (code + `flutter analyze`/`test`
+only — no Dart SDK / no running app in those sessions). This pass actually **ran the
+app** — built for web, connected to local Firebase Auth/Firestore/Storage emulators
+(seeded with an admin/manager/3 employees/2 branches/tasks in every status), and
+drove it with a real Chromium browser at a 1440×900 desktop viewport (the macOS
+desktop breakpoint), clicking through every sidebar destination for all three roles
+plus the auth/onboarding gate screens. This is the first session to **visually
+confirm** (not just infer from code) that the desktop redesign work in the sections
+below actually renders correctly.
+
+**Verified working, matches the documented design:** Login (desktop split panel),
+all three dashboards, Task Management + Branch Operations cockpit + Employee detail
++ Task Details ticket, the weekly Schedule grid (+ assign-shift sheet), Communications
+Center (feed + delivery panel), Notifications empty state, Analytics grid, Branches
+list + Edit Branch sheet (media/swap-policy sections), Managers list, Create Account
+form, New Task sheet, Profile/Settings, and the full first-login gate (Force Password
+Change → Profile Completion → Home).
+
+**Two real bugs found and fixed** (the rest of the punch-list below was already
+correct):
+1. **Employees page ignored the responsive grid.** `EmployeeManagementScreen` had
+   its own bespoke `ListView` of `EmployeeCard`s that never went through
+   `ResponsiveCardGrid` — unlike the sibling Managers page (`AdminUsersListView`),
+   it always rendered a single full-width column, wasting most of a 1440px window.
+   Fixed by wrapping it in the same `ResponsiveCardGrid(runSpacing: 0,
+   ultrawideColumns: 2)` convention used everywhere else.
+2. **Change Password had a duplicated, badly-wrapped title.** The page kept a
+   pre-`AdaptiveScaffold`-migration in-body heading (`Text('Change\nPassword',
+   style: displayMedium)`) even though `AdaptiveScaffold(title: 'Change Password')`
+   already renders that title in both the mobile app bar and the desktop page
+   header — so desktop showed "Change Password" twice, with the second copy
+   force-wrapped onto two lines by a stale hardcoded `\n`. Removed the redundant
+   heading (kept the one-line instructional subtitle).
+
+`flutter analyze` clean (7 pre-existing infos, 0 new) · **233 tests pass** ·
+`flutter build web --release` green. QA harness (temp emulator entrypoint, seed
+script, Playwright driver) was scratch-only and not committed.
 
 ## ✅ macOS desktop hardening (2026-07-01)
 
