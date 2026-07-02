@@ -33,6 +33,8 @@ class ScheduleGrid extends StatelessWidget {
     this.onMoveChip,
     this.onRemoveChip,
     this.onSwapChip,
+    this.onChipActions,
+    this.onChipSwapWith,
   });
 
   final WeeklyScheduleEntity schedule;
@@ -66,6 +68,15 @@ class ScheduleGrid extends StatelessWidget {
   /// holds (toDay, toShift) — the two trade slots.
   final void Function(ChipDragData data, ScheduleDay toDay,
       ScheduleShift toShift, String withUid)? onSwapChip;
+
+  /// Touch long-press on a chip → the move/switch/remove action sheet
+  /// (Schedule 4.0 mobile UX).
+  final void Function(ScheduleDay day, ScheduleShift shift, String uid)?
+      onChipActions;
+
+  /// Desktop chip context-menu "Switch shifts with…" — the guided flow.
+  final void Function(ScheduleDay day, ScheduleShift shift, String uid)?
+      onChipSwapWith;
 
   static const double _railWidth = 78;
   static const double _cellWidth = 128;
@@ -258,6 +269,12 @@ class ScheduleGrid extends StatelessWidget {
       onSwapChip: onSwapChip == null
           ? null
           : (data, withUid) => onSwapChip!(data, day, shift, withUid),
+      onChipActions: onChipActions == null
+          ? null
+          : (uid) => onChipActions!(day, shift, uid),
+      onChipSwapWith: onChipSwapWith == null
+          ? null
+          : (uid) => onChipSwapWith!(day, shift, uid),
     );
   }
 }

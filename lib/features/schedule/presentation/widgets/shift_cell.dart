@@ -33,6 +33,8 @@ class ShiftCell extends StatefulWidget {
     this.onRemoveUid,
     this.onMoveUidToOpposite,
     this.onSwapChip,
+    this.onChipActions,
+    this.onChipSwapWith,
   });
 
   final List<UserEntity> users;
@@ -66,9 +68,18 @@ class ShiftCell extends StatefulWidget {
   /// [data] is the dragged person, `withUid` the person they land on.
   final void Function(ChipDragData data, String withUid)? onSwapChip;
 
+  /// Touch long-press on a chip → the move/switch/remove action sheet.
+  final void Function(String uid)? onChipActions;
+
+  /// Desktop context-menu "Switch shifts with…" on a chip.
+  final void Function(String uid)? onChipSwapWith;
+
   static const double radius = 14;
 
-  /// How many chips render before collapsing into a "+N" pill.
+  /// Crowded-cell rule (Schedule 4.0): up to [maxChips] + 1 people render in
+  /// full; a busier cell shows the first [maxChips] chips and collapses the
+  /// rest into a tappable "+N more" pill (→ the full shift panel). So a cell
+  /// never shows a "+1 more" that hides exactly one person.
   static const int maxChips = 3;
 
   @override
@@ -154,7 +165,13 @@ class _ShiftCellState extends State<ShiftCell> {
   }
 
   Widget _chips(bool targeted) {
-    final visible = widget.users.take(ShiftCell.maxChips).toList();
+    // ≤ maxChips+1 people all fit — collapsing one person into "+1 more"
+    // would cost the same space it saves. Beyond that, show the first
+    // maxChips and roll the rest into the pill.
+    final collapse = widget.users.length > ShiftCell.maxChips + 1;
+    final visible = collapse
+        ? widget.users.take(ShiftCell.maxChips).toList()
+        : widget.users;
     final extra = widget.users.length - visible.length;
     return Stack(
       children: [
@@ -178,27 +195,50 @@ class _ShiftCellState extends State<ShiftCell> {
                   onSwapDrop: widget.onSwapChip == null
                       ? null
                       : (data) => widget.onSwapChip!(data, user.uid),
+                  onOpenActions: widget.onChipActions == null
+                      ? null
+                      : () => widget.onChipActions!(user.uid),
+                  onSwapWith: widget.onChipSwapWith == null
+                      ? null
+                      : () => widget.onChipSwapWith!(user.uid),
                 ),
               if (extra > 0)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(99),
-                    border: Border.all(color: AppColors.darkBorder),
-                  ),
-                  child: Text(
-                    '+$extra',
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w700,
-                      height: 1,
+                // Tappable overflow pill → the full shift panel, where every
+                // person is listed with their actions.
+                GestureDetector(
+                  onTap: widget.onTap,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _hovered
+                          ? AppColors.darkSurfaceElevated
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(99),
+                      border: Border.all(
+                          color: _hovered
+                              ? AppColors.accentBorder
+                              : AppColors.darkBorder),
+                    ),
+                    child: Text(
+                      '+$extra more',
+                      style: AppTypography.caption.copyWith(
+                        color: _hovered
+                            ? AppColors.textPrimary
+                            : AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                      ),
                     ),
                   ),
                 ),
               // Quiet inline add affordance on hover (desktop) — one click
               // fewer than going through the cell sheet's Assign button.
-              if (widget.canEdit && _hovered && extra == 0)
+              // Hidden once the cell is at chip capacity (4 rows max).
+              if (widget.canEdit &&
+                  _hovered &&
+                  extra == 0 &&
+                  widget.users.length <= ShiftCell.maxChips)
                 GestureDetector(
                   onTap: widget.onTap,
                   child: Container(

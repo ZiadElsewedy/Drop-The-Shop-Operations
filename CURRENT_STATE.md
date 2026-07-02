@@ -11,8 +11,61 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-02 (swap-queue one-tap access + macOS icon + Schedule 3.1)
+**Last updated:** 2026-07-02 (Schedule 4.0 + stabilization pass)
 **Version:** 1.0.0+1 · **Branch:** `feature/macos-desktop` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Schedule 4.0 — overflow · mobile actions · undo · validation (2026-07-02)
+
+The stabilize-then-finish pass (owner phase plan). **Phase 1 (bugs):** the
+mobile blank-My-Week bug was already fixed + guarded (verified,
+`my_schedule_tab_test.dart` green); closed the last "schedule disappears on
+navigation" path — `ScheduleCubit.load` is now **silent on a same-scope
+reload** (revisit/pull-to-refresh keeps the view on screen; unchanged data →
+no emission; a real branch/week change still shows the loader;
+`schedule_silent_reload_test.dart`), and `_MyWeekTab`'s `orElse` renders the
+loader, never a blank. Cubit stream/listener audit clean (all stream cubits
+cancel on close; TaskCubit scope-keyed; NotificationService recipient-guarded).
+
+**Phase 2 (Schedule 4.0), all in the manager/admin grid:**
+
+1. **Crowded cells** — ≤4 people: all chips; >4: first 3 + tappable
+   **“+N more”** → the shift panel. Hover “+ assign” hides at capacity.
+2. **Mobile actions** — long-press a chip → premium action sheet
+   (`chip_action_sheet.dart`): **Move** (mini week map; invalid slots show
+   their reason), **Switch** (pick (person, slot) → trade preview → confirm),
+   **Remove**. Desktop right-click gains “Switch shifts with…” → same flow.
+3. **Undo (5s)** — every move/exchange/remove records its exact inverse on
+   `ScheduleCubit` (`canUndo`/`undoLast`, single-use, invalidated by newer
+   mutations); monochrome UNDO snackbar for the window.
+4. **Validation** — pure `domain/move_validation.dart`: double-booking
+   **blocked** with the day named; exchange position-compatibility follows
+   the branch `SwapPolicy` (same rule as employee swaps); emptying a shift =
+   **confirm, not block** (facts, never quotas). All edit paths funnel
+   through validated helpers in `manager_schedule_view`.
+5. **Approval integrity (audited)** — drag-to-switch cannot bypass approvals:
+   employees have no `weekly_schedules` write path (rules), swap final
+   approval is function-only. Manager/admin direct edit = sanctioned instant.
+
+`flutter analyze` clean (7 pre-existing infos) · **293 tests pass** (+25:
+move_validation 10 · undo 6 · silent-reload 4 · action-sheet/overflow 4 + 1).
+macOS debug build + web release build green.
+⚠️ On-device QA: long-press sheet on a phone, undo snackbar timing.
+
+**Phases 3–5 deliverables (repo root):**
+[PRODUCTION_AUDIT_2026-07-02.md](PRODUCTION_AUDIT_2026-07-02.md) —
+🔴 C1 **verified against production** (`bazic-d9ad7`): rules + storage rules
+are LIVE and byte-identical; what's missing = the **`tasks` composite index**
+(employee shift streams fail `failed-precondition`) + the
+**`generateShiftTaskInstances` function** (fleet last deployed 2026-06-26,
+now on a stale `firebase-functions` v6) — deploy order: indexes → surgical
+function → fleet · C2 salary-read exposure (design property, unaffected by
+deploys — subdoc migration planned) · C3 iOS push entitlement;
+[BETA_CHECKLIST.md](BETA_CHECKLIST.md) — pre-flight + role walkthroughs +
+S1–S10 scenario drills + lean feedback-collection design (unbuilt, ~½ day);
+[AUTO_SCHEDULE_DESIGN.md](AUTO_SCHEDULE_DESIGN.md) — Phase 5 architecture
+(greedy+repair pure-Dart generator; design only, no code).
 
 ---
 

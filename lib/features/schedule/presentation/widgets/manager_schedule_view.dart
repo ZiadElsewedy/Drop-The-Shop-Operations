@@ -16,15 +16,23 @@ import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/features/branch/domain/entities/branch_entity.dart';
 import 'package:drop/features/branch/presentation/cubit/branch_cubit.dart';
 import 'package:drop/features/branch/presentation/cubit/branch_state.dart';
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/widgets/app_dialog.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/schedule/domain/move_validation.dart';
 import 'package:drop/features/schedule/domain/schedule_week.dart';
+import 'package:drop/features/schedule/domain/swap_policy.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_state.dart';
 import 'package:drop/features/schedule/presentation/cubit/shift_swap_cubit.dart';
 import 'package:drop/features/schedule/presentation/cubit/shift_swap_state.dart';
 import 'package:drop/features/schedule/presentation/schedule_insights.dart';
+import 'package:drop/features/schedule/presentation/widgets/assignment_chip.dart'
+    show ChipDragData;
 import 'package:drop/features/schedule/presentation/widgets/broken_assignment_banner.dart';
+import 'package:drop/features/schedule/presentation/widgets/chip_action_sheet.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_grid.dart';
+import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
 import 'package:drop/features/schedule/presentation/widgets/shift_details_sheet.dart';
 import 'package:drop/features/schedule/presentation/widgets/swap_alert_card.dart' show showSwapQueueSheet;
 
@@ -386,7 +394,6 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     }
     if (schedule == null) return _emptySchedule();
 
-    final cubit = context.read<ScheduleCubit>();
     final orphanCount = brokenSlots(schedule, members).length;
     final insights =
         computeScheduleInsights(schedule, members, filter: _filter);
@@ -410,23 +417,22 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
         shift: shift,
         canEdit: true,
       ),
-      onMoveChip: (data, toDay, toShift) => cubit.move(
-        fromDay: data.day,
-        fromShift: data.shift,
-        toDay: toDay,
-        toShift: toShift,
-        uid: data.uid,
-      ),
-      onRemoveChip: (day, shift, uid) => cubit.remove(day, shift, uid),
+      // Every edit path funnels through the validated helpers below —
+      // blocked edits state their reason, successful ones offer UNDO.
+      onMoveChip: (data, toDay, toShift) =>
+          _moveChip(schedule, members, data, toDay, toShift),
+      onRemoveChip: (day, shift, uid) =>
+          _removeChip(schedule, members, day, shift, uid),
       // Drop a person ON another person → the two trade slots.
-      onSwapChip: (data, toDay, toShift, withUid) => cubit.exchange(
-        dayA: data.day,
-        shiftA: data.shift,
-        uidA: data.uid,
-        dayB: toDay,
-        shiftB: toShift,
-        uidB: withUid,
-      ),
+      onSwapChip: (data, toDay, toShift, withUid) =>
+          _exchangeChips(schedule, members, data, toDay, toShift, withUid),
+      // Touch long-press → the premium action sheet; desktop context-menu
+      // "Switch shifts with…" opens the same flow at its picker step.
+      onChipActions: (day, shift, uid) =>
+          _openChipActions(schedule, members, day, shift, uid),
+      onChipSwapWith: (day, shift, uid) => _openChipActions(
+          schedule, members, day, shift, uid,
+          startAtSwap: true),
     );
 
     return ListView(
@@ -448,6 +454,206 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
         _gridHint(),
       ],
     );
+  }
+
+  // ── Validated roster edits + undo (Schedule 4.0) ───────────────
+  /// The branch's swap policy — the same rule set employee swaps obey, so a
+  /// manager's direct switch can never contradict what employees are told.
+  SwapPolicy _policy(String branchId) =>
+      context.read<BranchCubit>().branchById(branchId)?.effectiveSwapPolicy ??
+      SwapPolicy.permissive;
+
+  Future<void> _moveChip(
+    WeeklyScheduleEntity schedule,
+    List<UserEntity> members,
+    ChipDragData data,
+    ScheduleDay toDay,
+    ScheduleShift toShift,
+  ) async {
+    final cubit = context.read<ScheduleCubit>();
+    final user = userForUid(data.uid, members);
+    final name = user == null ? 'This person' : shortName(user);
+    final reason = MoveValidation.checkMove(
+      schedule: schedule,
+      uid: data.uid,
+      name: name,
+      fromDay: data.day,
+      fromShift: data.shift,
+      toDay: toDay,
+      toShift: toShift,
+    );
+    if (reason != null) {
+      AppSnackbar.error(context, reason);
+      return;
+    }
+    // Fact, not quota: emptying the source shift is allowed, but never silent.
+    if (MoveValidation.wouldEmptySlot(
+        schedule: schedule, uid: data.uid, day: data.day, shift: data.shift)) {
+      final go = await showConfirmDialog(
+        context,
+        title: 'Leave shift unstaffed?',
+        message: 'Moving $name leaves ${data.day.label} '
+            '${data.shift.label.toLowerCase()} with no one assigned.',
+        confirmLabel: 'Move anyway',
+      );
+      if (!go || !mounted) return;
+    }
+    final ok = await cubit.move(
+      fromDay: data.day,
+      fromShift: data.shift,
+      toDay: toDay,
+      toShift: toShift,
+      uid: data.uid,
+    );
+    if (ok && mounted) {
+      _showUndoSnackbar(
+          'Moved $name to ${toDay.label} ${toShift.label.toLowerCase()}');
+    }
+  }
+
+  Future<void> _exchangeChips(
+    WeeklyScheduleEntity schedule,
+    List<UserEntity> members,
+    ChipDragData data,
+    ScheduleDay toDay,
+    ScheduleShift toShift,
+    String withUid,
+  ) async {
+    final cubit = context.read<ScheduleCubit>();
+    final a = userForUid(data.uid, members);
+    final b = userForUid(withUid, members);
+    final nameA = a == null ? 'This person' : shortName(a);
+    final nameB = b == null ? 'their coworker' : shortName(b);
+    final reason = MoveValidation.checkExchange(
+      schedule: schedule,
+      uidA: data.uid,
+      nameA: nameA,
+      dayA: data.day,
+      shiftA: data.shift,
+      uidB: withUid,
+      nameB: nameB,
+      dayB: toDay,
+      shiftB: toShift,
+      positionA: a?.position,
+      positionB: b?.position,
+      policy: _policy(schedule.branchId),
+    );
+    if (reason != null) {
+      AppSnackbar.error(context, reason);
+      return;
+    }
+    final ok = await cubit.exchange(
+      dayA: data.day,
+      shiftA: data.shift,
+      uidA: data.uid,
+      dayB: toDay,
+      shiftB: toShift,
+      uidB: withUid,
+    );
+    if (ok && mounted) _showUndoSnackbar('Switched $nameA ⇄ $nameB');
+  }
+
+  Future<void> _removeChip(
+    WeeklyScheduleEntity schedule,
+    List<UserEntity> members,
+    ScheduleDay day,
+    ScheduleShift shift,
+    String uid,
+  ) async {
+    final cubit = context.read<ScheduleCubit>();
+    final user = userForUid(uid, members);
+    final name = user == null ? 'This person' : shortName(user);
+    if (MoveValidation.wouldEmptySlot(
+        schedule: schedule, uid: uid, day: day, shift: shift)) {
+      final go = await showConfirmDialog(
+        context,
+        title: 'Leave shift unstaffed?',
+        message: 'Removing $name leaves ${day.label} '
+            '${shift.label.toLowerCase()} with no one assigned.',
+        confirmLabel: 'Remove',
+        destructive: true,
+      );
+      if (!go || !mounted) return;
+    }
+    final ok = await cubit.remove(day, shift, uid);
+    if (ok && mounted) {
+      _showUndoSnackbar(
+          'Removed $name from ${day.label} ${shift.label.toLowerCase()}');
+    }
+  }
+
+  void _openChipActions(
+    WeeklyScheduleEntity schedule,
+    List<UserEntity> members,
+    ScheduleDay day,
+    ScheduleShift shift,
+    String uid, {
+    bool startAtSwap = false,
+  }) {
+    final user = userForUid(uid, members);
+    if (user == null) return;
+    showChipActionSheet(
+      context: context,
+      schedule: schedule,
+      members: members,
+      user: user,
+      day: day,
+      shift: shift,
+      policy: _policy(schedule.branchId),
+      startAtSwap: startAtSwap,
+      onMove: (toDay, toShift) => _moveChip(
+          schedule,
+          members,
+          ChipDragData(uid: uid, day: day, shift: shift),
+          toDay,
+          toShift),
+      onExchange: (withUid, withDay, withShift) => _exchangeChips(
+          schedule,
+          members,
+          ChipDragData(uid: uid, day: day, shift: shift),
+          withDay,
+          withShift,
+          withUid),
+      onRemove: () => _removeChip(schedule, members, day, shift, uid),
+    );
+  }
+
+  /// Premium monochrome undo bar — the safety net for every direct roster
+  /// edit, shown for exactly the cubit's undo window.
+  void _showUndoSnackbar(String message) {
+    final cubit = context.read<ScheduleCubit>();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.check_circle_outline_rounded,
+                  color: AppColors.textPrimary, size: 18),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: AppTypography.label
+                      .copyWith(color: AppColors.textPrimary),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: AppColors.darkSurfaceElevated,
+          behavior: SnackBarBehavior.floating,
+          duration: ScheduleCubit.undoWindow,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: AppColors.darkBorder),
+          ),
+          action: SnackBarAction(
+            label: 'UNDO',
+            textColor: AppColors.primary,
+            onPressed: () => cubit.undoLast(),
+          ),
+        ),
+      );
   }
 
   /// One-line affordance hint under the grid — drag / switch / right-click /

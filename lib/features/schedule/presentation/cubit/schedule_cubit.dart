@@ -35,10 +35,21 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   /// Loads the schedule + branch members for ([branchId], [weekStart]). Pass an
   /// empty [branchId] (admin, no branch picked yet) to render the empty view.
+  ///
+  /// A **same-scope** reload (screen revisit, pull-to-refresh) keeps the
+  /// current view on screen while refetching — no skeleton flash, the schedule
+  /// never "disappears" on navigation. Only a real scope change (different
+  /// branch or week) shows the loading state.
   Future<void> load({required String branchId, DateTime? weekStart}) async {
+    final newWeek = ScheduleWeek.startOf(weekStart ?? _weekStart);
+    // Silent only when the data already ON SCREEN is the requested scope.
+    final showingSameScope = state.maybeWhen(
+      loaded: (b, w, _, _, _) => b == branchId && w == newWeek,
+      orElse: () => false,
+    );
     _branchId = branchId;
-    _weekStart = ScheduleWeek.startOf(weekStart ?? _weekStart);
-    emit(const ScheduleState.loading());
+    _weekStart = newWeek;
+    if (!showingSameScope) emit(const ScheduleState.loading());
     await _emitLoaded();
   }
 
@@ -63,7 +74,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         ));
   }
 
-  Future<void> assign(ScheduleDay day, ScheduleShift shift, String uid) =>
+  Future<bool> assign(ScheduleDay day, ScheduleShift shift, String uid) =>
       _mutate(() => _repository.assignEmployee(
             scheduleId: ScheduleWeek.docId(_branchId, _weekStart),
             day: day,
@@ -71,27 +82,38 @@ class ScheduleCubit extends Cubit<ScheduleState> {
             employeeId: uid,
           ));
 
-  Future<void> remove(ScheduleDay day, ScheduleShift shift, String uid) =>
-      _mutate(() => _repository.removeEmployee(
-            scheduleId: ScheduleWeek.docId(_branchId, _weekStart),
-            day: day,
-            shift: shift,
-            employeeId: uid,
-          ));
+  Future<bool> remove(
+    ScheduleDay day,
+    ScheduleShift shift,
+    String uid, {
+    bool recordUndo = true,
+  }) async {
+    final ok = await _mutate(() => _repository.removeEmployee(
+          scheduleId: ScheduleWeek.docId(_branchId, _weekStart),
+          day: day,
+          shift: shift,
+          employeeId: uid,
+        ));
+    if (ok && recordUndo) {
+      _recordUndo(() => assign(day, shift, uid));
+    }
+    return ok;
+  }
 
   /// Drag-to-move (Schedule 3.0): reassign [uid] from one slot to another in
   /// a single busy cycle. Assign to the target FIRST, then release the source
   /// — if the assign fails the person never leaves their original shift.
-  Future<void> move({
+  Future<bool> move({
     required ScheduleDay fromDay,
     required ScheduleShift fromShift,
     required ScheduleDay toDay,
     required ScheduleShift toShift,
     required String uid,
-  }) {
-    if (fromDay == toDay && fromShift == toShift) return Future.value();
+    bool recordUndo = true,
+  }) async {
+    if (fromDay == toDay && fromShift == toShift) return false;
     final scheduleId = ScheduleWeek.docId(_branchId, _weekStart);
-    return _mutate(() async {
+    final ok = await _mutate(() async {
       await _repository.assignEmployee(
         scheduleId: scheduleId,
         day: toDay,
@@ -105,6 +127,17 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         employeeId: uid,
       );
     });
+    if (ok && recordUndo) {
+      _recordUndo(() => move(
+            fromDay: toDay,
+            fromShift: toShift,
+            toDay: fromDay,
+            toShift: fromShift,
+            uid: uid,
+            recordUndo: false,
+          ));
+    }
+    return ok;
   }
 
   /// Chip-onto-chip drag (Schedule 3.1): two people trade slots in a single
@@ -112,19 +145,20 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// Same safety order as [move]: both are assigned to their NEW slots first,
   /// then released from the old ones — a failed assign never strands anyone
   /// off the schedule.
-  Future<void> exchange({
+  Future<bool> exchange({
     required ScheduleDay dayA,
     required ScheduleShift shiftA,
     required String uidA,
     required ScheduleDay dayB,
     required ScheduleShift shiftB,
     required String uidB,
-  }) {
+    bool recordUndo = true,
+  }) async {
     // Self-swaps and same-slot trades are no-ops, not errors.
-    if (uidA == uidB) return Future.value();
-    if (dayA == dayB && shiftA == shiftB) return Future.value();
+    if (uidA == uidB) return false;
+    if (dayA == dayB && shiftA == shiftB) return false;
     final scheduleId = ScheduleWeek.docId(_branchId, _weekStart);
-    return _mutate(() async {
+    final ok = await _mutate(() async {
       await _repository.assignEmployee(
           scheduleId: scheduleId, day: dayB, shift: shiftB, employeeId: uidA);
       await _repository.assignEmployee(
@@ -134,6 +168,44 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       await _repository.removeEmployee(
           scheduleId: scheduleId, day: dayB, shift: shiftB, employeeId: uidB);
     });
+    if (ok && recordUndo) {
+      // An exchange is self-inverse: trade the (now swapped) slots back.
+      _recordUndo(() => exchange(
+            dayA: dayB,
+            shiftA: shiftB,
+            uidA: uidA,
+            dayB: dayA,
+            shiftB: shiftA,
+            uidB: uidB,
+            recordUndo: false,
+          ));
+    }
+    return ok;
+  }
+
+  // ── Undo (Schedule 4.0) ────────────────────────────────────────
+  /// The inverse of the last direct roster edit (move / exchange / remove),
+  /// valid for [undoWindow] and cleared by any newer mutation. UI shows an
+  /// UNDO snackbar for the same window.
+  static const Duration undoWindow = Duration(seconds: 5);
+
+  Future<bool> Function()? _undo;
+  DateTime _undoExpires = DateTime.fromMillisecondsSinceEpoch(0);
+
+  bool get canUndo => _undo != null && DateTime.now().isBefore(_undoExpires);
+
+  void _recordUndo(Future<bool> Function() inverse) {
+    _undo = inverse;
+    _undoExpires = DateTime.now().add(undoWindow);
+  }
+
+  /// Reverts the last move / exchange / remove. Safe to call after the window
+  /// or twice — a stale/duplicate undo is a quiet no-op.
+  Future<void> undoLast() async {
+    final inverse = _undo;
+    if (inverse == null || !DateTime.now().isBefore(_undoExpires)) return;
+    _undo = null;
+    await inverse();
   }
 
   // ── Internals ──────────────────────────────────────────────────
@@ -161,9 +233,14 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   }
 
   /// Runs [action], then reloads the view — keeping the current view visible
-  /// (busy) so the UI never flickers, and restoring it on failure.
-  Future<void> _mutate(Future<void> Function() action) async {
-    if (_busy) return;
+  /// (busy) so the UI never flickers, and restoring it on failure. Returns
+  /// whether the action succeeded (drives undo recording + UI feedback).
+  Future<bool> _mutate(Future<void> Function() action) async {
+    if (_busy) return false;
+    // Any newer mutation invalidates a pending undo — the schedule it would
+    // restore no longer exists. (undoLast clears _undo before running its
+    // inverse, so the inverse itself is never wiped here.)
+    _undo = null;
     final prev = state;
     state.maybeWhen(
       loaded: (b, w, s, m, _) => emit(ScheduleState.loaded(
@@ -173,12 +250,15 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     try {
       await action();
       await _emitLoaded();
+      return true;
     } on Failure catch (e) {
       emit(ScheduleState.error(e.message));
       emit(prev);
+      return false;
     } catch (_) {
       emit(const ScheduleState.error('Something went wrong. Please try again.'));
       emit(prev);
+      return false;
     }
   }
 }

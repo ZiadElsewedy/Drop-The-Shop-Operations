@@ -42,6 +42,8 @@ class AssignmentChip extends StatefulWidget {
     this.onRemove,
     this.onMoveToOpposite,
     this.onSwapDrop,
+    this.onOpenActions,
+    this.onSwapWith,
   });
 
   final UserEntity user;
@@ -65,6 +67,14 @@ class AssignmentChip extends StatefulWidget {
   /// other side of the exchange.
   final void Function(ChipDragData data)? onSwapDrop;
 
+  /// Touch long-press → the premium action sheet (move · switch · remove).
+  /// When set, it replaces the bare context menu on mobile (Schedule 4.0).
+  final VoidCallback? onOpenActions;
+
+  /// Desktop context-menu "Switch shifts with…" — the guided switch flow for
+  /// people who don't discover chip-onto-chip drag.
+  final VoidCallback? onSwapWith;
+
   @override
   State<AssignmentChip> createState() => _AssignmentChipState();
 }
@@ -86,6 +96,12 @@ class _AssignmentChipState extends State<AssignmentChip> {
           enabled: widget.canMoveToOpposite,
           onSelected: widget.onMoveToOpposite,
         ),
+        if (widget.onSwapWith != null)
+          AppContextMenuItem(
+            icon: Icons.swap_horiz_rounded,
+            label: 'Switch shifts with…',
+            onSelected: widget.onSwapWith,
+          ),
         AppContextMenuItem(
           icon: Icons.person_remove_outlined,
           label: 'Remove from shift',
@@ -178,9 +194,13 @@ class _AssignmentChipState extends State<AssignmentChip> {
           child: GestureDetector(
             onSecondaryTapDown:
                 widget.canEdit ? (d) => _showMenu(d.globalPosition) : null,
-            // Touch fallback for the same actions (no right-click on mobile).
+            // Touch: long-press opens the premium action sheet (move · switch
+            // · remove, Schedule 4.0); the bare context menu remains only as
+            // a fallback when no sheet callback is wired.
             onLongPressStart: widget.canEdit && !isDesktop
-                ? (d) => _showMenu(d.globalPosition)
+                ? (d) => widget.onOpenActions != null
+                    ? widget.onOpenActions!()
+                    : _showMenu(d.globalPosition)
                 : null,
             child: _visual(hovered: _hovered, swapTarget: swapTarget),
           ),

@@ -163,7 +163,10 @@ class _MyWeekTabState extends State<_MyWeekTab>
                 style: AppTypography.bodySmall.copyWith(color: AppColors.error)),
           ),
         ),
-        orElse: () => const SizedBox.shrink(),
+        // `initial` (load not kicked off yet, e.g. before the post-frame _load
+        // or a momentarily-null user) must never render as a blank screen —
+        // show the loader; the app-bar Refresh recovers any stuck state.
+        orElse: () => const DropLoadingState(message: 'Loading your week…'),
       ),
     );
   }

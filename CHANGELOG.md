@@ -12,6 +12,78 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-07-02 — Schedule 4.0: overflow · mobile actions · undo · validation)
+
+Stabilize-then-finish pass on the schedule (owner phase plan). Phase 1
+verified the mobile blank-My-Week fix (test green) and closed the last
+"schedule disappears on navigation" path; Phase 2 completed Schedule 4.0.
+
+- **Stabilization — silent same-scope reload:** `ScheduleCubit.load` no longer
+  emits `loading` when the data already on screen is the requested (branch,
+  week) — a screen revisit / pull-to-refresh keeps the schedule visible while
+  refetching (unchanged data → no emission at all, bloc dedupes). A real
+  branch/week change still shows the loader. `_MyWeekTab`'s `orElse` now
+  renders the loader instead of a blank `SizedBox` (stale-state guard).
+  New `schedule_silent_reload_test.dart`.
+- **Crowded cells:** `ShiftCell` shows all chips up to 4 people; beyond that,
+  the first 3 + a **tappable "+N more"** pill that opens the shift panel
+  (so a "+1 more" hiding exactly one person can never happen). The hover
+  "+ assign" affordance hides at chip capacity (no overpaint).
+- **Mobile move/switch/remove:** long-pressing a chip on touch now opens a
+  premium **action sheet** (`chip_action_sheet.dart`) — Move (mini week map,
+  invalid slots disabled *with the reason shown on tap*), Switch (pick a
+  coworker's (person, slot) row → **preview both sides of the trade** →
+  confirm), Remove. Desktop right-click menu gains "Switch shifts with…"
+  opening the same flow at the picker step — one flow, no platform drift.
+- **Undo (5s):** `ScheduleCubit` records the exact inverse of every
+  move / exchange / remove (`undoWindow` = 5s; single-use; invalidated by any
+  newer mutation; the undo never records an undo-of-undo). The view shows a
+  monochrome floating snackbar with **UNDO** for the same window.
+  New `schedule_undo_test.dart` (6 tests).
+- **Constraint validation:** new pure `domain/move_validation.dart` —
+  `checkMove` / `checkExchange` return `null` or a user-facing reason:
+  double-booking is **blocked** (with the day named), position compatibility
+  on an exchange follows the branch's existing `SwapPolicy` (the same rule
+  employee swaps obey — manager edits can never contradict it). Emptying a
+  shift is a **confirm dialog, not a block** (facts, never quotas — the
+  settled ruling). Every grid edit path (drag-move, drag-switch, context
+  menu, action sheet) funnels through validated helpers in
+  `manager_schedule_view` — blocked edits state their reason, successes
+  offer UNDO. New `move_validation_test.dart` (10 tests).
+- **Approval integrity (audited):** drag-to-switch does NOT bypass the swap
+  approval flow — `weekly_schedules` writes require `canReachBranch`
+  (admin/own-branch manager) so employees have no direct roster write path;
+  employee swaps still go request → coworker accept → manager approve via
+  the `approveSwap` callable (clients are denied `status → managerApproved`
+  by rules). Manager/admin direct edits are the sanctioned instant path.
+
+`flutter analyze` clean (7 pre-existing infos); **293 tests pass** (+25).
+
+### Added (2026-07-02 — production audit, beta plan, auto-schedule design)
+
+Three deliverable documents in the repo root (owner phase plan, phases 3–5):
+
+- **[PRODUCTION_AUDIT_2026-07-02.md](PRODUCTION_AUDIT_2026-07-02.md)** — full
+  security/performance/reliability/release audit. Critical: **C1** undeployed
+  rules/indexes/functions (the single biggest risk — deploy before beta),
+  **C2** salary fields readable by any same-branch member (recommend a
+  `users/{uid}/private/compensation` subdoc), **C3** iOS push entitlement
+  still missing. Five medium + five low findings with fixes. macOS debug +
+  web release builds verified green.
+- **[BETA_CHECKLIST.md](BETA_CHECKLIST.md)** — pre-flight deploy gate, role
+  walkthroughs (onboarding → daily workflow → schedule → oversight →
+  notifications), ten realistic scenario drills (S1 sick day … S10 new-hire
+  day one), and a lean beta feedback design (`feedback/{id}` collection + one
+  in-app sheet + admin triage list; ~half-day build, not yet implemented).
+- **[AUTO_SCHEDULE_DESIGN.md](AUTO_SCHEDULE_DESIGN.md)** — Phase 5 design
+  (NO implementation): pure-Dart `ScheduleGeneratorService` using greedy
+  weighted scoring + repair passes (constraint solver + rule engine evaluated
+  and rejected as over-engineering at 14 slots/week); hard constraints reuse
+  `MoveValidation`/`SwapValidation` semantics; draft → review-in-grid →
+  publish UX reusing the Schedule 4.0 edit tools; `staffingTemplate` as a
+  hidden generator input reconciling the no-quotas ruling. Feasibility: HIGH,
+  ~4 days phased.
+
 ### Fixed (2026-07-02 — admin Pending Actions swap row now opens the queue)
 
 Owner report: clicking "N Swap Requests" on the admin home pushed the
