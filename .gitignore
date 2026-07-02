@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# C2 migration backups (contain salary data — never commit)
+compensation_backup_*.json

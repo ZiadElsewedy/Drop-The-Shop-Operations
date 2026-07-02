@@ -8,6 +8,7 @@ import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/auth/presentation/widgets/app_button.dart';
 import 'package:drop/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:drop/features/branch/domain/entities/branch_entity.dart';
+import 'package:drop/features/admin/domain/entities/user_compensation.dart';
 import 'package:drop/features/admin/presentation/cubit/admin_users_cubit.dart';
 import 'package:drop/features/admin/presentation/widgets/compensation_fields.dart';
 
@@ -49,8 +50,16 @@ Future<void> showEditDetailsSheet({
   required BuildContext context,
   required AdminUsersCubit cubit,
   required UserEntity user,
-}) =>
-    _sheet(context, _EditDetailsSheet(cubit: cubit, user: user));
+}) async {
+  // Compensation is private data (C2) — loaded on demand from the
+  // subdocument so the sheet can prefill it (it is not on the user entity).
+  final compensation =
+      await cubit.compensationFor(user.uid) ?? UserCompensation.empty;
+  if (!context.mounted) return;
+  return _sheet(
+      context,
+      _EditDetailsSheet(cubit: cubit, user: user, compensation: compensation));
+}
 
 Future<void> _sheet(BuildContext context, Widget child) => showModalBottomSheet(
       context: context,
@@ -373,9 +382,16 @@ class _SetPositionSheetState extends State<_SetPositionSheet> {
 
 // ─── Edit contact details (name / phone / address / emergency) ───
 class _EditDetailsSheet extends StatefulWidget {
-  const _EditDetailsSheet({required this.cubit, required this.user});
+  const _EditDetailsSheet({
+    required this.cubit,
+    required this.user,
+    required this.compensation,
+  });
   final AdminUsersCubit cubit;
   final UserEntity user;
+
+  /// The private compensation record, pre-fetched by [showEditDetailsSheet].
+  final UserCompensation compensation;
   @override
   State<_EditDetailsSheet> createState() => _EditDetailsSheetState();
 }
@@ -390,16 +406,16 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
   late final _emergency =
       TextEditingController(text: widget.user.emergencyContact ?? '');
   late final _salaryAmount = TextEditingController(
-      text: widget.user.salaryAmount == null
+      text: widget.compensation.salaryAmount == null
           ? ''
-          : (widget.user.salaryAmount ==
-                  widget.user.salaryAmount!.roundToDouble()
-              ? widget.user.salaryAmount!.toStringAsFixed(0)
-              : widget.user.salaryAmount.toString()));
+          : (widget.compensation.salaryAmount ==
+                  widget.compensation.salaryAmount!.roundToDouble()
+              ? widget.compensation.salaryAmount!.toStringAsFixed(0)
+              : widget.compensation.salaryAmount.toString()));
   late final _paymentNumber =
-      TextEditingController(text: widget.user.paymentNumber ?? '');
-  late String? _salaryType = widget.user.salaryType;
-  late String? _paymentMethod = widget.user.paymentMethod;
+      TextEditingController(text: widget.compensation.paymentNumber ?? '');
+  late String? _salaryType = widget.compensation.salaryType;
+  late String? _paymentMethod = widget.compensation.paymentMethod;
 
   @override
   void dispose() {

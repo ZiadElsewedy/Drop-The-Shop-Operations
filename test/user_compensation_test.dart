@@ -1,14 +1,66 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drop/features/admin/domain/entities/user_compensation.dart';
 import 'package:drop/features/admin/presentation/widgets/compensation_fields.dart';
 import 'package:drop/features/auth/data/models/user_model.dart';
 import 'package:drop/features/profile/data/models/profile_model.dart';
 
-/// Compensation slice (2026-07-02): salary/payment fields on `users/{uid}`.
-/// Admin-only: salaryAmount / salaryType / paymentMethod. Self-editable:
-/// paymentNumber (the employee's own salary-receiving number).
+/// C2 fix (2026-07-03): compensation lives in the PRIVATE subdocument
+/// `users/{uid}/private/compensation` (see [UserCompensation]) — the
+/// branch-readable public user fetch must never carry salary data.
 void main() {
-  group('UserModel compensation fields', () {
-    test('round-trip through fromMap → toEntity', () {
+  group('UserCompensation (private subdocument record)', () {
+    test('round-trips through fromMap → toMap', () {
+      final c = UserCompensation.fromMap({
+        'salaryAmount': 4500,
+        'salaryType': 'monthly',
+        'paymentMethod': 'wallet',
+        'paymentNumber': '+201000000000',
+      });
+      expect(c.salaryAmount, 4500.0);
+      expect(c.salaryType, 'monthly');
+      expect(c.paymentMethod, 'wallet');
+      expect(c.paymentNumber, '+201000000000');
+
+      final map = c.toMap();
+      expect(map['salaryAmount'], 4500.0);
+      expect(map['salaryType'], 'monthly');
+      expect(map['paymentMethod'], 'wallet');
+      expect(map['paymentNumber'], '+201000000000');
+    });
+
+    test('toMap writes all four keys — null clears a stale value', () {
+      final map = const UserCompensation(salaryAmount: 100).toMap();
+      expect(
+          map.keys,
+          containsAll(
+              ['salaryAmount', 'salaryType', 'paymentMethod', 'paymentNumber']));
+      expect(map['salaryType'], isNull);
+    });
+
+    test('parses the same keys off a LEGACY user-doc map (migration window)',
+        () {
+      // Pre-migration docs still carry the fields top-level; the datasource
+      // fallback feeds that whole doc map through this same factory.
+      final c = UserCompensation.fromMap({
+        'uid': 'u1',
+        'email': 'a@b.com',
+        'role': 'employee',
+        'salaryAmount': 300.5,
+        'paymentNumber': '+2010',
+      });
+      expect(c.salaryAmount, 300.5);
+      expect(c.paymentNumber, '+2010');
+      expect(c.isEmpty, isFalse);
+    });
+
+    test('null / empty map → empty record', () {
+      expect(UserCompensation.fromMap(null).isEmpty, isTrue);
+      expect(UserCompensation.fromMap(const {}).isEmpty, isTrue);
+    });
+  });
+
+  group('public user fetch carries NO compensation (C2 guarantee)', () {
+    test('UserModel ignores legacy salary keys — nothing echoes back out', () {
       final model = UserModel.fromMap({
         'uid': 'u1',
         'email': 'a@b.com',
@@ -17,28 +69,8 @@ void main() {
         'paymentMethod': 'wallet',
         'paymentNumber': '+201000000000',
       });
-      final entity = model.toEntity();
-      expect(entity.salaryAmount, 4500.0);
-      expect(entity.salaryType, 'monthly');
-      expect(entity.paymentMethod, 'wallet');
-      expect(entity.paymentNumber, '+201000000000');
-    });
-
-    test('legacy doc without compensation parses to nulls', () {
-      final model = UserModel.fromMap({'uid': 'u1', 'email': 'a@b.com'});
-      expect(model.salaryAmount, isNull);
-      expect(model.salaryType, isNull);
-      expect(model.paymentMethod, isNull);
-      expect(model.paymentNumber, isNull);
-    });
-
-    test('toMap excludes compensation (routine writes cannot clobber it)', () {
-      final model = UserModel.fromMap({
-        'uid': 'u1',
-        'email': 'a@b.com',
-        'salaryAmount': 4500,
-        'paymentNumber': '+201000000000',
-      });
+      // The fields no longer exist on the model/entity; the serialized form
+      // is the observable surface and must not echo the keys back.
       final map = model.toMap();
       expect(map.containsKey('salaryAmount'), isFalse);
       expect(map.containsKey('salaryType'), isFalse);
@@ -48,24 +80,19 @@ void main() {
   });
 
   group('ProfileModel self-service payroll field', () {
-    test('editMap writes paymentNumber only when provided', () {
-      final withNumber = ProfileModel.editMap(paymentNumber: '+201');
-      expect(withNumber['paymentNumber'], '+201');
-      final without = ProfileModel.editMap(fullName: 'Ada');
-      expect(without.containsKey('paymentNumber'), isFalse);
+    test('editMap never writes paymentNumber to the public user doc', () {
+      final map = ProfileModel.editMap(fullName: 'Ada');
+      expect(map.containsKey('paymentNumber'), isFalse);
     });
 
-    test('fromMap reads address / emergencyContact / paymentNumber', () {
+    test('fromMap still reads paymentNumber (overlaid from the subdocument)',
+        () {
       final entity = ProfileModel.fromMap({
         'uid': 'u1',
         'email': 'a@b.com',
-        'address': 'Cairo',
-        'emergencyContact': 'Mona · +2010',
-        'paymentNumber': '+201000000000',
+        'paymentNumber': '+2010',
       }).toEntity();
-      expect(entity.address, 'Cairo');
-      expect(entity.emergencyContact, 'Mona · +2010');
-      expect(entity.paymentNumber, '+201000000000');
+      expect(entity.paymentNumber, '+2010');
     });
   });
 

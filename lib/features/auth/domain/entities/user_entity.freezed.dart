@@ -68,21 +68,7 @@ mixin _$UserEntity {
 
   /// The admin uid that provisioned this account (audit). Null for accounts
   /// created out of band (e.g. the bootstrapped first admin).
-  String? get createdBy =>
-      throw _privateConstructorUsedError; // ─── Compensation (admin-managed; paymentNumber is self-editable) ───
-  /// Salary amount in the local currency. Admin-only.
-  double? get salaryAmount => throw _privateConstructorUsedError;
-
-  /// Salary cadence: `monthly` / `weekly` / `daily`. Admin-only.
-  String? get salaryType => throw _privateConstructorUsedError;
-
-  /// How the salary is paid: `cash` / `bank` / `wallet`. Admin-only.
-  String? get paymentMethod => throw _privateConstructorUsedError;
-
-  /// The phone / wallet / account number the salary is transferred to. The
-  /// ONE compensation field the employee may edit themselves (it is their
-  /// own receiving number); the rest are frozen to admin in the rules.
-  String? get paymentNumber => throw _privateConstructorUsedError;
+  String? get createdBy => throw _privateConstructorUsedError;
 
   /// Create a copy of UserEntity
   /// with the given fields replaced by the non-null parameter values.
@@ -118,10 +104,6 @@ abstract class $UserEntityCopyWith<$Res> {
     bool isProfileCompleted,
     String employmentStatus,
     String? createdBy,
-    double? salaryAmount,
-    String? salaryType,
-    String? paymentMethod,
-    String? paymentNumber,
   });
 }
 
@@ -159,10 +141,6 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
     Object? isProfileCompleted = null,
     Object? employmentStatus = null,
     Object? createdBy = freezed,
-    Object? salaryAmount = freezed,
-    Object? salaryType = freezed,
-    Object? paymentMethod = freezed,
-    Object? paymentNumber = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -242,22 +220,6 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
                 ? _value.createdBy
                 : createdBy // ignore: cast_nullable_to_non_nullable
                       as String?,
-            salaryAmount: freezed == salaryAmount
-                ? _value.salaryAmount
-                : salaryAmount // ignore: cast_nullable_to_non_nullable
-                      as double?,
-            salaryType: freezed == salaryType
-                ? _value.salaryType
-                : salaryType // ignore: cast_nullable_to_non_nullable
-                      as String?,
-            paymentMethod: freezed == paymentMethod
-                ? _value.paymentMethod
-                : paymentMethod // ignore: cast_nullable_to_non_nullable
-                      as String?,
-            paymentNumber: freezed == paymentNumber
-                ? _value.paymentNumber
-                : paymentNumber // ignore: cast_nullable_to_non_nullable
-                      as String?,
           )
           as $Val,
     );
@@ -293,10 +255,6 @@ abstract class _$$UserEntityImplCopyWith<$Res>
     bool isProfileCompleted,
     String employmentStatus,
     String? createdBy,
-    double? salaryAmount,
-    String? salaryType,
-    String? paymentMethod,
-    String? paymentNumber,
   });
 }
 
@@ -333,10 +291,6 @@ class __$$UserEntityImplCopyWithImpl<$Res>
     Object? isProfileCompleted = null,
     Object? employmentStatus = null,
     Object? createdBy = freezed,
-    Object? salaryAmount = freezed,
-    Object? salaryType = freezed,
-    Object? paymentMethod = freezed,
-    Object? paymentNumber = freezed,
   }) {
     return _then(
       _$UserEntityImpl(
@@ -416,22 +370,6 @@ class __$$UserEntityImplCopyWithImpl<$Res>
             ? _value.createdBy
             : createdBy // ignore: cast_nullable_to_non_nullable
                   as String?,
-        salaryAmount: freezed == salaryAmount
-            ? _value.salaryAmount
-            : salaryAmount // ignore: cast_nullable_to_non_nullable
-                  as double?,
-        salaryType: freezed == salaryType
-            ? _value.salaryType
-            : salaryType // ignore: cast_nullable_to_non_nullable
-                  as String?,
-        paymentMethod: freezed == paymentMethod
-            ? _value.paymentMethod
-            : paymentMethod // ignore: cast_nullable_to_non_nullable
-                  as String?,
-        paymentNumber: freezed == paymentNumber
-            ? _value.paymentNumber
-            : paymentNumber // ignore: cast_nullable_to_non_nullable
-                  as String?,
       ),
     );
   }
@@ -460,10 +398,6 @@ class _$UserEntityImpl extends _UserEntity {
     this.isProfileCompleted = true,
     this.employmentStatus = 'active',
     this.createdBy,
-    this.salaryAmount,
-    this.salaryType,
-    this.paymentMethod,
-    this.paymentNumber,
   }) : super._();
 
   @override
@@ -543,28 +477,10 @@ class _$UserEntityImpl extends _UserEntity {
   /// created out of band (e.g. the bootstrapped first admin).
   @override
   final String? createdBy;
-  // ─── Compensation (admin-managed; paymentNumber is self-editable) ───
-  /// Salary amount in the local currency. Admin-only.
-  @override
-  final double? salaryAmount;
-
-  /// Salary cadence: `monthly` / `weekly` / `daily`. Admin-only.
-  @override
-  final String? salaryType;
-
-  /// How the salary is paid: `cash` / `bank` / `wallet`. Admin-only.
-  @override
-  final String? paymentMethod;
-
-  /// The phone / wallet / account number the salary is transferred to. The
-  /// ONE compensation field the employee may edit themselves (it is their
-  /// own receiving number); the rest are frozen to admin in the rules.
-  @override
-  final String? paymentNumber;
 
   @override
   String toString() {
-    return 'UserEntity(uid: $uid, email: $email, authProvider: $authProvider, displayName: $displayName, photoUrl: $photoUrl, phoneNumber: $phoneNumber, address: $address, emergencyContact: $emergencyContact, isEmailVerified: $isEmailVerified, createdAt: $createdAt, role: $role, branchId: $branchId, isActive: $isActive, assignedShift: $assignedShift, position: $position, mustChangePassword: $mustChangePassword, isProfileCompleted: $isProfileCompleted, employmentStatus: $employmentStatus, createdBy: $createdBy, salaryAmount: $salaryAmount, salaryType: $salaryType, paymentMethod: $paymentMethod, paymentNumber: $paymentNumber)';
+    return 'UserEntity(uid: $uid, email: $email, authProvider: $authProvider, displayName: $displayName, photoUrl: $photoUrl, phoneNumber: $phoneNumber, address: $address, emergencyContact: $emergencyContact, isEmailVerified: $isEmailVerified, createdAt: $createdAt, role: $role, branchId: $branchId, isActive: $isActive, assignedShift: $assignedShift, position: $position, mustChangePassword: $mustChangePassword, isProfileCompleted: $isProfileCompleted, employmentStatus: $employmentStatus, createdBy: $createdBy)';
   }
 
   @override
@@ -605,15 +521,7 @@ class _$UserEntityImpl extends _UserEntity {
             (identical(other.employmentStatus, employmentStatus) ||
                 other.employmentStatus == employmentStatus) &&
             (identical(other.createdBy, createdBy) ||
-                other.createdBy == createdBy) &&
-            (identical(other.salaryAmount, salaryAmount) ||
-                other.salaryAmount == salaryAmount) &&
-            (identical(other.salaryType, salaryType) ||
-                other.salaryType == salaryType) &&
-            (identical(other.paymentMethod, paymentMethod) ||
-                other.paymentMethod == paymentMethod) &&
-            (identical(other.paymentNumber, paymentNumber) ||
-                other.paymentNumber == paymentNumber));
+                other.createdBy == createdBy));
   }
 
   @override
@@ -638,10 +546,6 @@ class _$UserEntityImpl extends _UserEntity {
     isProfileCompleted,
     employmentStatus,
     createdBy,
-    salaryAmount,
-    salaryType,
-    paymentMethod,
-    paymentNumber,
   ]);
 
   /// Create a copy of UserEntity
@@ -674,10 +578,6 @@ abstract class _UserEntity extends UserEntity {
     final bool isProfileCompleted,
     final String employmentStatus,
     final String? createdBy,
-    final double? salaryAmount,
-    final String? salaryType,
-    final String? paymentMethod,
-    final String? paymentNumber,
   }) = _$UserEntityImpl;
   const _UserEntity._() : super._();
 
@@ -749,24 +649,7 @@ abstract class _UserEntity extends UserEntity {
   /// The admin uid that provisioned this account (audit). Null for accounts
   /// created out of band (e.g. the bootstrapped first admin).
   @override
-  String? get createdBy; // ─── Compensation (admin-managed; paymentNumber is self-editable) ───
-  /// Salary amount in the local currency. Admin-only.
-  @override
-  double? get salaryAmount;
-
-  /// Salary cadence: `monthly` / `weekly` / `daily`. Admin-only.
-  @override
-  String? get salaryType;
-
-  /// How the salary is paid: `cash` / `bank` / `wallet`. Admin-only.
-  @override
-  String? get paymentMethod;
-
-  /// The phone / wallet / account number the salary is transferred to. The
-  /// ONE compensation field the employee may edit themselves (it is their
-  /// own receiving number); the rest are frozen to admin in the rules.
-  @override
-  String? get paymentNumber;
+  String? get createdBy;
 
   /// Create a copy of UserEntity
   /// with the given fields replaced by the non-null parameter values.

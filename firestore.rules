@@ -84,6 +84,27 @@ service cloud.firestore {
       // Deactivate via isActive (an admin update), never a hard delete; document
       // cleanup on account removal belongs to a Cloud Function.
       allow delete: if false;
+
+      // ── Private compensation (C2 fix, 2026-07-03) ────────────────
+      // Salary data lives OFF the branch-readable user doc, in
+      // users/{uid}/private/compensation — Firestore reads are document-level
+      // (no field filtering), so anything on the parent doc is served whole
+      // to every same-branch member. Here only the OWNER and an ADMIN read;
+      // managers deliberately cannot (compensation is admin-managed — branch
+      // reach must never expose pay). The owner may create/update ONLY their
+      // own `paymentNumber` (their salary-receiving number, exposed in Edit
+      // Profile); the admin-set fields are admin-only. No client deletes.
+      match /private/{docId} {
+        allow read: if isOwner(uid) || isAdmin();
+        allow create: if isAdmin()
+          || (isOwner(uid) && docId == 'compensation'
+              && request.resource.data.keys().hasOnly(['paymentNumber']));
+        allow update: if isAdmin()
+          || (isOwner(uid) && docId == 'compensation'
+              && request.resource.data.diff(resource.data)
+                   .affectedKeys().hasOnly(['paymentNumber']));
+        allow delete: if false;
+      }
     }
 
     // ── Tasks (Phase 3, +Phase 9 multi-assignee) ───────────────────

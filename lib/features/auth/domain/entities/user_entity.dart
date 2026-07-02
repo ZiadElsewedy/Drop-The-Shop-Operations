@@ -51,17 +51,11 @@ class UserEntity with _$UserEntity {
     /// The admin uid that provisioned this account (audit). Null for accounts
     /// created out of band (e.g. the bootstrapped first admin).
     String? createdBy,
-    // ─── Compensation (admin-managed; paymentNumber is self-editable) ───
-    /// Salary amount in the local currency. Admin-only.
-    double? salaryAmount,
-    /// Salary cadence: `monthly` / `weekly` / `daily`. Admin-only.
-    String? salaryType,
-    /// How the salary is paid: `cash` / `bank` / `wallet`. Admin-only.
-    String? paymentMethod,
-    /// The phone / wallet / account number the salary is transferred to. The
-    /// ONE compensation field the employee may edit themselves (it is their
-    /// own receiving number); the rest are frozen to admin in the rules.
-    String? paymentNumber,
+    // NOTE (C2 fix, 2026-07-03): compensation (salaryAmount / salaryType /
+    // paymentMethod / paymentNumber) is deliberately NOT on this entity — it
+    // lives in the private subdocument `users/{uid}/private/compensation`
+    // (see UserCompensation) and is loaded on demand, so the branch-readable
+    // public user fetch can never carry salary data.
   }) = _UserEntity;
 
   /// Whether the user may enter the app. DROP is admin-provisioned: the only

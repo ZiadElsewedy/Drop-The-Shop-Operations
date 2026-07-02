@@ -25,11 +25,9 @@ class UserModel {
   final bool isProfileCompleted;
   final String employmentStatus;
   final String? createdBy;
-  // ─── Compensation (admin-managed; paymentNumber self-editable) ──
-  final double? salaryAmount;
-  final String? salaryType;
-  final String? paymentMethod;
-  final String? paymentNumber;
+  // NOTE (C2 fix, 2026-07-03): compensation fields are deliberately absent —
+  // they live in users/{uid}/private/compensation (UserCompensation) and are
+  // loaded on demand, never as part of a user fetch.
 
   const UserModel({
     required this.uid,
@@ -51,10 +49,6 @@ class UserModel {
     this.isProfileCompleted = true,
     this.employmentStatus = 'active',
     this.createdBy,
-    this.salaryAmount,
-    this.salaryType,
-    this.paymentMethod,
-    this.paymentNumber,
   });
 
   factory UserModel.fromFirebaseUser(User user, {String authProvider = 'unknown'}) =>
@@ -88,10 +82,6 @@ class UserModel {
         isProfileCompleted: entity.isProfileCompleted,
         employmentStatus: entity.employmentStatus,
         createdBy: entity.createdBy,
-        salaryAmount: entity.salaryAmount,
-        salaryType: entity.salaryType,
-        paymentMethod: entity.paymentMethod,
-        paymentNumber: entity.paymentNumber,
       );
 
   factory UserModel.fromMap(Map<String, dynamic> map) => UserModel(
@@ -122,20 +112,16 @@ class UserModel {
         isProfileCompleted: map['isProfileCompleted'] as bool? ?? true,
         employmentStatus: map['employmentStatus'] as String? ?? 'active',
         createdBy: map['createdBy'] as String?,
-        salaryAmount: (map['salaryAmount'] as num?)?.toDouble(),
-        salaryType: map['salaryType'] as String?,
-        paymentMethod: map['paymentMethod'] as String?,
-        paymentNumber: map['paymentNumber'] as String?,
+        // Compensation keys on legacy (pre-migration) docs are intentionally
+        // NOT parsed — salary data never enters the public user entity.
       );
 
   /// Identity/auth fields only. The privileged + provisioning fields (`role`,
   /// `branchId`, `isActive`, `assignedShift`, `position`, `employmentStatus`,
-  /// `createdBy`, `mustChangePassword`, `isProfileCompleted`) and the
-  /// compensation fields (`salaryAmount`, `salaryType`, `paymentMethod`,
-  /// `paymentNumber`) are intentionally EXCLUDED so a routine write can never
-  /// overwrite admin-assigned values. Provisioning fields are seeded once,
-  /// server-side, by the `createUserAccount` Cloud Function; compensation is
-  /// written only via the targeted admin/profile update paths.
+  /// `createdBy`, `mustChangePassword`, `isProfileCompleted`) are intentionally
+  /// EXCLUDED so a routine write can never overwrite admin-assigned values
+  /// (they are seeded once, server-side, by the `createUserAccount` Cloud
+  /// Function). Compensation lives in the private subdocument entirely.
   Map<String, dynamic> toMap() => {
         'uid': uid,
         'email': email,
@@ -168,9 +154,5 @@ class UserModel {
         isProfileCompleted: isProfileCompleted,
         employmentStatus: employmentStatus,
         createdBy: createdBy,
-        salaryAmount: salaryAmount,
-        salaryType: salaryType,
-        paymentMethod: paymentMethod,
-        paymentNumber: paymentNumber,
       );
 }

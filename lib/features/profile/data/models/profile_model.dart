@@ -71,7 +71,6 @@ class ProfileModel {
     String? coverImage,
     String? emergencyContact,
     String? address,
-    String? paymentNumber,
   }) {
     final map = <String, dynamic>{'updatedAt': FieldValue.serverTimestamp()};
     if (fullName != null) {
@@ -94,9 +93,9 @@ class ProfileModel {
     // Onboarding fields (Profile Completion). Stored on users/{uid}.
     if (emergencyContact != null) map['emergencyContact'] = emergencyContact;
     if (address != null) map['address'] = address;
-    // Self-service payroll field: the number the salary is sent to. The
-    // admin-only salary fields are frozen by the users self-update rule.
-    if (paymentNumber != null) map['paymentNumber'] = paymentNumber;
+    // NOTE (C2 fix): `paymentNumber` is deliberately NOT part of this map —
+    // it is private compensation data living in
+    // users/{uid}/private/compensation; the datasource writes it there.
     return map;
   }
 }

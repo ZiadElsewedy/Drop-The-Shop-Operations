@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:drop/core/constants/app_constants.dart';
 import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/features/admin/domain/entities/user_compensation.dart';
 import 'package:drop/features/auth/data/models/user_model.dart';
 
 /// Admin-side access to the `users` collection (reuses the auth [UserModel]).
@@ -14,6 +15,17 @@ abstract class UserAdminRemoteDataSource {
 
   /// Admin field update on `users/{uid}` ([data] is merged + `updatedAt` set).
   Future<void> updateUser(String uid, Map<String, dynamic> data);
+
+  /// The private compensation record at `users/{uid}/private/compensation`
+  /// (C2 fix). Loaded ON DEMAND only — never part of a user-list fetch. During
+  /// the migration window a missing subdocument falls back to the four legacy
+  /// fields still sitting on the `users/{uid}` doc.
+  Future<UserCompensation> getCompensation(String uid);
+
+  /// Writes the FULL compensation record to the private subdocument (all four
+  /// keys, null clears). Rules: admin-only for salary fields; the owner may
+  /// touch only their own `paymentNumber` (a different, profile-side path).
+  Future<void> setCompensation(String uid, UserCompensation compensation);
 
   /// Provisions a brand-new account via the admin-only `createUserAccount` Cloud
   /// Function (Firebase Admin SDK creates the Auth user + the Firestore doc;
@@ -75,6 +87,36 @@ class UserAdminRemoteDataSourceImpl implements UserAdminRemoteDataSource {
       }, SetOptions(merge: true));
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to update user.');
+    }
+  }
+
+  DocumentReference<Map<String, dynamic>> _compensationDoc(String uid) =>
+      _users.doc(uid).collection('private').doc('compensation');
+
+  @override
+  Future<UserCompensation> getCompensation(String uid) async {
+    try {
+      final sub = await _compensationDoc(uid).get();
+      if (sub.exists && sub.data() != null) {
+        return UserCompensation.fromMap(sub.data());
+      }
+      // Migration window: the record may still live on the user doc.
+      final legacy = await _users.doc(uid).get();
+      return UserCompensation.fromMap(legacy.data());
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to load compensation.');
+    }
+  }
+
+  @override
+  Future<void> setCompensation(String uid, UserCompensation compensation) async {
+    try {
+      await _compensationDoc(uid).set({
+        ...compensation.toMap(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to save compensation.');
     }
   }
 

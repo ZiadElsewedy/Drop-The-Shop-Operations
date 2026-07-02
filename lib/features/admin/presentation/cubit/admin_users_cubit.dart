@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/enums/user_role.dart';
 import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/admin/domain/entities/user_compensation.dart';
 import 'package:drop/features/admin/domain/repositories/user_admin_repository.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/branch/domain/entities/branch_entity.dart';
@@ -150,6 +151,18 @@ class AdminUsersCubit extends Cubit<AdminUsersState> {
         paymentMethod: paymentMethod,
         paymentNumber: paymentNumber,
       );
+
+  /// The user's private compensation record, loaded on demand for the admin
+  /// Details / Edit-Info / inspector surfaces (C2 fix — compensation is no
+  /// longer part of the user list). Non-emitting, best-effort: an error shows
+  /// as "no record" rather than failing the surface.
+  Future<UserCompensation?> compensationFor(String uid) async {
+    try {
+      return await _users.getUserCompensation(uid);
+    } catch (_) {
+      return null;
+    }
+  }
 
   /// Set the HR employment label (active / suspended / terminated).
   Future<void> changeEmploymentStatus(UserEntity user, String status) =>

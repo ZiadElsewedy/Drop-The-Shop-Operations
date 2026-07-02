@@ -4,6 +4,7 @@ import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/core/widgets/premium_button.dart';
 import 'package:drop/core/widgets/user_avatar.dart';
+import 'package:drop/features/admin/domain/entities/user_compensation.dart';
 import 'package:drop/features/admin/presentation/cubit/admin_users_cubit.dart';
 import 'package:drop/features/admin/presentation/employee_metrics.dart';
 import 'package:drop/features/admin/presentation/widgets/admin_user_sheets.dart';
@@ -164,17 +165,26 @@ class _InspectorPanel extends StatelessWidget {
                 _row(Icons.lock_clock_outlined, 'First login',
                     'Pending password change'),
             ]),
-            _section('COMPENSATION', [
-              _row(Icons.payments_outlined, 'Salary',
-                  salarySummary(user.salaryAmount, user.salaryType)),
-              _row(
-                  Icons.account_balance_wallet_outlined,
-                  'Paid via',
-                  (user.paymentMethod ?? '').isEmpty
-                      ? null
-                      : paymentMethodLabel(user.paymentMethod!)),
-              _row(Icons.tag_rounded, 'Payment no.', user.paymentNumber),
-            ]),
+            // Compensation is private data (C2) — fetched on demand from the
+            // subdocument, never carried on the user entity.
+            FutureBuilder<UserCompensation?>(
+              future: cubit.compensationFor(user.uid),
+              builder: (_, snap) {
+                final c = snap.data;
+                if (c == null || c.isEmpty) return const SizedBox.shrink();
+                return _section('COMPENSATION', [
+                  _row(Icons.payments_outlined, 'Salary',
+                      salarySummary(c.salaryAmount, c.salaryType)),
+                  _row(
+                      Icons.account_balance_wallet_outlined,
+                      'Paid via',
+                      (c.paymentMethod ?? '').isEmpty
+                          ? null
+                          : paymentMethodLabel(c.paymentMethod!)),
+                  _row(Icons.tag_rounded, 'Payment no.', c.paymentNumber),
+                ]);
+              },
+            ),
             if (metrics != null) ...[
               _caption('THIS WEEK'),
               const SizedBox(height: AppSpacing.sm),

@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:drop/core/enums/user_role.dart';
 import 'package:drop/features/admin/data/datasources/user_admin_remote_datasource.dart';
 import 'package:drop/features/admin/data/repositories/user_admin_repository_impl.dart';
+import 'package:drop/features/admin/domain/entities/user_compensation.dart';
 import 'package:drop/features/auth/data/models/user_model.dart';
 
 /// Captures the exact merge map an admin "Edit Info" write produces — the
@@ -10,6 +11,8 @@ import 'package:drop/features/auth/data/models/user_model.dart';
 class _CapturingDataSource implements UserAdminRemoteDataSource {
   String? lastUid;
   Map<String, dynamic>? lastData;
+  String? lastCompensationUid;
+  UserCompensation? lastCompensation;
 
   @override
   Future<void> updateUser(String uid, Map<String, dynamic> data) async {
@@ -38,6 +41,14 @@ class _CapturingDataSource implements UserAdminRemoteDataSource {
     required String uid,
     required String tempPassword,
   }) async {}
+  @override
+  Future<UserCompensation> getCompensation(String uid) async =>
+      UserCompensation.empty;
+  @override
+  Future<void> setCompensation(String uid, UserCompensation compensation) async {
+    lastCompensationUid = uid;
+    lastCompensation = compensation;
+  }
 }
 
 void main() {
@@ -93,6 +104,29 @@ void main() {
       final data = ds.lastData!;
       expect(data.containsKey('address'), isTrue);
       expect(data['address'], '');
+    });
+  });
+
+  group('UserAdminRepository.updateUserCompensation (C2 fix)', () {
+    test('routes to the PRIVATE subdocument write, never the user doc', () async {
+      final ds = _CapturingDataSource();
+      final repo = UserAdminRepositoryImpl(ds);
+
+      await repo.updateUserCompensation(
+        'u9',
+        salaryAmount: 4500,
+        salaryType: 'monthly',
+        paymentMethod: 'wallet',
+        paymentNumber: '+2010',
+      );
+
+      expect(ds.lastCompensationUid, 'u9');
+      expect(ds.lastCompensation,
+          isNotNull);
+      expect(ds.lastCompensation!.salaryAmount, 4500);
+      // The public user-doc write path was NOT used.
+      expect(ds.lastData, isNull,
+          reason: 'compensation must never land on users/{uid}');
     });
   });
 

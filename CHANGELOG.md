@@ -12,6 +12,42 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Security (2026-07-03 — C2: compensation moved to a private subdocument)
+
+Production blocker fix (audit C2). Salary data lived on the branch-readable
+`users/{uid}` doc — Firestore reads are document-level, so every same-branch
+member received coworkers' `salaryAmount`/`salaryType`/`paymentMethod`/
+`paymentNumber` in normal app use (the branch query behind schedule/team
+surfaces). **Moved to `users/{uid}/private/compensation`:**
+
+- **Rules:** new `users/{uid}/private/{docId}` block — read = owner + admin
+  only (managers deliberately excluded); create/update = admin, or the owner
+  touching ONLY `paymentNumber` (field-diff enforced); delete denied.
+  **Deployed.**
+- **Client:** new plain `UserCompensation` value object
+  (`admin/domain/entities/user_compensation.dart`, SwapPolicy precedent);
+  the 4 fields REMOVED from `UserEntity`/`UserModel` (public user fetch can
+  never carry salary data); `UserAdminRepository.updateUserCompensation` now
+  writes the subdocument + new `getUserCompensation` (subdoc with legacy
+  fallback); `AdminUsersCubit.compensationFor` non-emitting on-demand load;
+  admin Details dialog / desktop inspector render compensation via
+  FutureBuilder; Edit-Info sheet pre-fetches it; profile `paymentNumber`
+  reads overlay from the subdoc and writes go to it (`editMap` no longer
+  emits the key).
+- **Migration:** `tool/migrate_compensation.js` (privileged REST, gcloud
+  identity; dry-run default · pre-write JSON backup (gitignored) ·
+  write→verify→delete per user · `--rollback` · final residue scan).
+  **Executed against production: 1/1 user migrated, 0 residue, VERIFIED.**
+- **Owner ruling applied while here:** the self-service Contact-details +
+  Salary-payment-number sections in Edit Profile (and the "Salary sent to"
+  profile row) are **manager/employee-only** — hidden for admin, and an
+  admin save never writes those fields (the admin manages compensation,
+  never receives it in-app).
+- Tests: `user_compensation_test` rewritten for the subdocument model (+
+  UserModel no-echo guard) and `user_admin_update_details_test` gains a
+  routes-to-subdoc test.
+
+
 ### Added (2026-07-02 — Schedule 4.0: overflow · mobile actions · undo · validation)
 
 Stabilize-then-finish pass on the schedule (owner phase plan). Phase 1

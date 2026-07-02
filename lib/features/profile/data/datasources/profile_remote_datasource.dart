@@ -47,12 +47,32 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
   CollectionReference<Map<String, dynamic>> get _users =>
       _firestore.collection('users');
 
+  /// The OWN private compensation subdocument (C2 fix) — readable by the
+  /// owner + admin only. Carries the self-service `paymentNumber`.
+  DocumentReference<Map<String, dynamic>> _compensationDoc(String uid) =>
+      _users.doc(uid).collection('private').doc('compensation');
+
   @override
   Future<ProfileModel?> getProfile(String uid) async {
     try {
       final doc = await _users.doc(uid).get();
       if (!doc.exists || doc.data() == null) return null;
-      return ProfileModel.fromMap({'uid': uid, ...doc.data()!});
+      // paymentNumber moved to the private subdocument (C2). Overlay it when
+      // present; a missing subdoc falls back to the legacy field still on the
+      // doc map (pre-migration window). Best-effort — a subdoc read failure
+      // must never take down the whole profile.
+      String? paymentNumber;
+      try {
+        final comp = await _compensationDoc(uid).get();
+        paymentNumber = comp.data()?['paymentNumber'] as String?;
+      } on FirebaseException {
+        paymentNumber = null;
+      }
+      return ProfileModel.fromMap({
+        'uid': uid,
+        ...doc.data()!,
+        'paymentNumber': ?paymentNumber,
+      });
     } on FirebaseException catch (e) {
       throw AuthException(e.message ?? 'Failed to load profile.');
     }
@@ -91,9 +111,15 @@ class ProfileRemoteDataSourceImpl implements ProfileRemoteDataSource {
         coverImage: coverImage,
         emergencyContact: emergencyContact,
         address: address,
-        paymentNumber: paymentNumber,
       );
       await _users.doc(uid).set(map, SetOptions(merge: true));
+      // paymentNumber is private compensation data (C2) — written to the
+      // subdocument the owner may touch (rules allow a paymentNumber-only
+      // create/update there), never to the branch-readable user doc.
+      if (paymentNumber != null) {
+        await _compensationDoc(uid)
+            .set({'paymentNumber': paymentNumber}, SetOptions(merge: true));
+      }
     } on FirebaseException catch (e) {
       throw AuthException(e.message ?? 'Failed to update profile.');
     }

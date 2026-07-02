@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/responsive/breakpoints.dart';
+import 'package:drop/features/admin/domain/entities/user_compensation.dart';
 import 'package:drop/core/routes/route_names.dart';
 import 'package:drop/core/widgets/app_context_menu.dart';
 import 'package:drop/core/theme/app_colors.dart';
@@ -413,13 +414,13 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                     : (_branchNames[user.branchId] ?? user.branchId!)),
             _detail('Status', user.isActive ? 'Active' : 'Inactive'),
             _detail('Employment', user.employmentStatus),
-            if (salarySummary(user.salaryAmount, user.salaryType) != null)
-              _detail(
-                  'Salary', salarySummary(user.salaryAmount, user.salaryType)!),
-            if ((user.paymentMethod ?? '').isNotEmpty)
-              _detail('Paid via', paymentMethodLabel(user.paymentMethod!)),
-            if ((user.paymentNumber ?? '').trim().isNotEmpty)
-              _detail('Payment no.', user.paymentNumber!.trim()),
+            // Compensation is private data (C2) — fetched on demand from the
+            // subdocument, never carried on the user entity.
+            FutureBuilder<UserCompensation?>(
+              future:
+                  context.read<AdminUsersCubit>().compensationFor(user.uid),
+              builder: (_, snap) => _compensationRows(snap.data, _detail),
+            ),
             if (user.mustChangePassword)
               _detail('First login', 'Pending password change'),
             if (!user.isProfileCompleted)
@@ -452,6 +453,27 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           ),
         ),
       );
+
+  /// Renders the Salary / Paid via / Payment no. rows once the private
+  /// compensation record resolves (C2 — on-demand load). Nothing renders
+  /// while loading or when no record exists, matching the old conditional
+  /// rows for a user without compensation.
+  static Widget _compensationRows(
+      UserCompensation? c, Widget Function(String, String) row) {
+    if (c == null || c.isEmpty) return const SizedBox.shrink();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (salarySummary(c.salaryAmount, c.salaryType) != null)
+          row('Salary', salarySummary(c.salaryAmount, c.salaryType)!),
+        if ((c.paymentMethod ?? '').isNotEmpty)
+          row('Paid via', paymentMethodLabel(c.paymentMethod!)),
+        if ((c.paymentNumber ?? '').trim().isNotEmpty)
+          row('Payment no.', c.paymentNumber!.trim()),
+      ],
+    );
+  }
 
   Widget _empty(bool noEmployeesAtAll) => LayoutBuilder(
         builder: (context, c) => SingleChildScrollView(

@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/utils/platform_capabilities.dart';
 import 'package:drop/core/utils/validators.dart';
 import 'package:drop/core/widgets/adaptive_scaffold.dart';
@@ -130,14 +131,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
+    // The self-service contact + salary-payment sections are for managers and
+    // employees — the admin MANAGES compensation and has no manager to reach
+    // them, so an admin save never touches those fields (they aren't shown).
+    final isAdmin = context.isAdmin;
     context.read<ProfileCubit>().save(
           uid: _initial.uid,
           fullName: _orNull(_name),
           bio: _orNull(_bio),
-          phoneNumber: _orNull(_phone),
-          address: _orNull(_address),
-          emergencyContact: _orNull(_emergency),
-          paymentNumber: _orNull(_paymentNumber),
+          phoneNumber: isAdmin ? null : _orNull(_phone),
+          address: isAdmin ? null : _orNull(_address),
+          emergencyContact: isAdmin ? null : _orNull(_emergency),
+          paymentNumber: isAdmin ? null : _orNull(_paymentNumber),
           avatarFile: _avatarFile,
           coverFile: _coverFile,
         );
@@ -274,47 +279,52 @@ class _Form extends StatelessWidget {
                     maxLength: 160,
                     maxLines: 3,
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  const _SectionLabel(
-                    'CONTACT DETAILS',
-                    hint: 'Keep these current — your manager uses them to '
-                        'reach you.',
-                  ),
-                  _Field(
-                    controller: phone,
-                    hint: 'Phone number',
-                    icon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [Validators.phoneInput],
-                    validator: (v) => Validators.phone(v, required: false),
-                  ),
-                  _Field(
-                    controller: address,
-                    hint: 'Address',
-                    icon: Icons.home_outlined,
-                    validator: (v) => Validators.address(v, required: false),
-                  ),
-                  _Field(
-                    controller: emergency,
-                    hint: 'Emergency contact (name · phone)',
-                    icon: Icons.emergency_outlined,
-                    validator: (v) =>
-                        Validators.emergencyContact(v, required: false),
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  const _SectionLabel(
-                    'SALARY PAYMENT NUMBER',
-                    hint: 'The wallet or account number your salary is sent '
-                        'to. Salary details are managed by your admin.',
-                  ),
-                  _Field(
-                    controller: paymentNumber,
-                    hint: 'Wallet / account number',
-                    icon: Icons.account_balance_wallet_outlined,
-                    keyboardType: TextInputType.phone,
-                    inputFormatters: [Validators.phoneInput],
-                    validator: (v) => Validators.phone(v, required: false),
-                  ),
+                  // Self-service sections for managers/employees only. The
+                  // admin manages compensation (never receives it in-app)
+                  // and has no manager to be reached by — owner ruling.
+                  if (!context.isAdmin) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    const _SectionLabel(
+                      'CONTACT DETAILS',
+                      hint: 'Keep these current — your manager uses them to '
+                          'reach you.',
+                    ),
+                    _Field(
+                      controller: phone,
+                      hint: 'Phone number',
+                      icon: Icons.phone_outlined,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [Validators.phoneInput],
+                      validator: (v) => Validators.phone(v, required: false),
+                    ),
+                    _Field(
+                      controller: address,
+                      hint: 'Address',
+                      icon: Icons.home_outlined,
+                      validator: (v) => Validators.address(v, required: false),
+                    ),
+                    _Field(
+                      controller: emergency,
+                      hint: 'Emergency contact (name · phone)',
+                      icon: Icons.emergency_outlined,
+                      validator: (v) =>
+                          Validators.emergencyContact(v, required: false),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    const _SectionLabel(
+                      'SALARY PAYMENT NUMBER',
+                      hint: 'The wallet or account number your salary is sent '
+                          'to. Salary details are managed by your admin.',
+                    ),
+                    _Field(
+                      controller: paymentNumber,
+                      hint: 'Wallet / account number',
+                      icon: Icons.account_balance_wallet_outlined,
+                      keyboardType: TextInputType.phone,
+                      inputFormatters: [Validators.phoneInput],
+                      validator: (v) => Validators.phone(v, required: false),
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.xl),
                   AppButton(
                     label: uploadProgress != null
