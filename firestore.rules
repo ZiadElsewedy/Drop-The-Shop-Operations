@@ -283,14 +283,36 @@ service cloud.firestore {
         && request.resource.data.get('requesterId', '') == request.auth.uid
         && request.resource.data.get('branchId', '') == selfBranch()
         && swapSlotInFuture(request.resource.data);
+      // M1 fix (2026-07-03): per-party STATUS-TRANSITION enforcement. The old
+      // rule let either involved employee set any non-final status — so a
+      // requester could forge the coworker-acceptance step (employeeApproved)
+      // and deceive the manager into approving a trade the coworker never
+      // agreed to. Now:
+      //   manager/admin — anything except managerApproved (finalizing is
+      //     OWNED BY the approveSwap Cloud Function: Admin SDK, bypasses
+      //     rules, re-validates + applies the exchange atomically).
+      //   TARGET  — consents/declines a PENDING request only
+      //     (pending → employeeApproved | rejected).
+      //   REQUESTER — withdraws their own unresolved request only
+      //     (pending | employeeApproved → cancelled). They can NEVER set
+      //     employeeApproved.
+      //   Employee writes are field-locked to status (+ updatedAt) — no
+      //   editing day/shift/target/branch after creation.
       allow update: if (canReachBranch(resource.data.get('branchId', ''))
-          || resource.data.get('requesterId', '') == request.auth.uid
-          || resource.data.get('targetId', '') == request.auth.uid)
-        // Finalizing the swap (→ managerApproved, which rewrites the schedule) is
-        // OWNED BY the approveSwap Cloud Function (Admin SDK, bypasses rules).
-        // Deny any direct client write that sets it, so a swap can never be
-        // applied without the server-side re-validation + atomic exchange.
-        && request.resource.data.get('status', '') != 'managerApproved';
+          && request.resource.data.get('status', '') != 'managerApproved')
+        || (isSignedIn()
+            && request.resource.data.diff(resource.data)
+                 .affectedKeys().hasOnly(['status', 'updatedAt'])
+            && (
+              (request.auth.uid == resource.data.get('targetId', '')
+                && resource.data.get('status', '') == 'pending'
+                && request.resource.data.get('status', '')
+                     in ['employeeApproved', 'rejected'])
+              || (request.auth.uid == resource.data.get('requesterId', '')
+                && resource.data.get('status', '')
+                     in ['pending', 'employeeApproved']
+                && request.resource.data.get('status', '') == 'cancelled')
+            ));
       allow delete: if canReachBranch(resource.data.get('branchId', ''));
     }
 
