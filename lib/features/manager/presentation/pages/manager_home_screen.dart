@@ -13,6 +13,8 @@ import 'package:drop/features/statistics/presentation/cubit/statistics_cubit.dar
 import 'package:drop/features/statistics/presentation/cubit/statistics_state.dart';
 import 'package:drop/features/statistics/presentation/widgets/dashboard_section.dart';
 import 'package:drop/features/statistics/presentation/widgets/stat_grid.dart';
+import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
+import 'package:drop/features/task/presentation/widgets/task_feed_section.dart';
 
 /// Manager dashboard (Phase 6, +Phase 10 command-center layout): the manager's
 /// own-branch operations at a glance — what needs attention first (active tasks,
@@ -35,6 +37,8 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
     final user = context.currentUser;
     if (user != null) {
       context.read<StatisticsCubit>().load(user, forceRefresh: force);
+      // Powers the on-home active-task feed (branch-scoped stream).
+      context.read<TaskCubit>().load(user, forceRefresh: force);
     }
   }
 
@@ -51,6 +55,14 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
               error: (m) => _ErrorCard(message: m),
               orElse: () => const _LoadingSkeleton(),
             ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          const SectionHeader('Active tasks'),
+          const SizedBox(height: AppSpacing.md),
+          // Branch stream is already scoped by TaskCubit → lock the scope UI.
+          TaskFeedSection(
+            branchLocked: true,
+            branchId: context.currentUser?.branchId,
           ),
         ],
       ),

@@ -4,9 +4,10 @@ import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/presentation/widgets/task_badge.dart';
 
-/// Verifies the task lifecycle badge mapping (Notification System Phase 1 —
-/// Part 5): NEW (monochrome) · REWORK #n (amber) · Rejected (red) · Approved
-/// (green), with the documented precedence.
+/// Verifies the task lifecycle badge mapping after the P1 dedupe (2026-07-03):
+/// the badge now carries ONLY NEW (monochrome) and REWORK #n (amber). Approved
+/// and Rejected were removed — the card's status pill already shows them, so a
+/// badge for them stacked the word twice.
 void main() {
   group('taskBadgeFor', () {
     test('a fresh pending task → NEW (monochrome)', () {
@@ -28,28 +29,25 @@ void main() {
       expect(badge?.color, AppColors.warning);
     });
 
-    test('a terminally rejected task → Rejected (red)', () {
-      final badge = taskBadgeFor(const TaskEntity(
-        id: '1',
-        title: 't',
-        status: TaskStatus.rejected,
-        // requiresRework stays false → terminal reject, not rework.
-      ));
-      expect(badge?.label, 'Rejected');
-      expect(badge?.color, AppColors.error);
+    test('an approved task → NO badge (the status pill already says "Approved")',
+        () {
+      expect(
+        taskBadgeFor(const TaskEntity(
+            id: '1', title: 't', status: TaskStatus.approved)),
+        isNull,
+      );
     });
 
-    test('an approved task → Approved (green)', () {
-      final badge = taskBadgeFor(const TaskEntity(
-        id: '1',
-        title: 't',
-        status: TaskStatus.approved,
-      ));
-      expect(badge?.label, 'Approved');
-      expect(badge?.color, AppColors.success);
+    test('a terminally rejected task → NO badge (the pill carries the state)',
+        () {
+      expect(
+        taskBadgeFor(const TaskEntity(
+            id: '1', title: 't', status: TaskStatus.rejected)),
+        isNull,
+      );
     });
 
-    test('rework outranks the rejected status (precedence)', () {
+    test('rework still shows on a rejected task (it is not just the status)', () {
       final badge = taskBadgeFor(const TaskEntity(
         id: '1',
         title: 't',

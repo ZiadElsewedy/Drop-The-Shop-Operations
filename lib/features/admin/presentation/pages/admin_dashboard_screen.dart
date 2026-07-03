@@ -27,11 +27,10 @@ import 'package:drop/features/schedule/presentation/widgets/swap_alert_card.dart
 import 'package:drop/features/statistics/domain/entities/statistics_entity.dart';
 import 'package:drop/features/statistics/presentation/cubit/statistics_cubit.dart';
 import 'package:drop/features/statistics/presentation/cubit/statistics_state.dart';
-import 'package:drop/features/task/domain/entities/activity_entry.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
-import 'package:drop/features/task/presentation/activity_format.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/cubit/task_state.dart';
+import 'package:drop/features/task/presentation/widgets/task_feed_section.dart';
 
 /// Admin Home — an operations **command center**. Pulls from live sources
 /// (statistics · the task stream · shift swaps) so an admin instantly sees
@@ -149,6 +148,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         sec('overview-h', const AdminSectionHeader(title: 'Overview')),
         sec('metrics', _StatsSection(builder: (s) => _metrics(s))),
         const SizedBox(height: AppSpacing.xl),
+        sec(
+            'feed-h',
+            const AdminSectionHeader(
+                title: 'Active tasks', subtitle: 'Every branch, live')),
+        sec('feed', const TaskFeedSection()),
+        const SizedBox(height: AppSpacing.xl),
         sec('qa-h', const AdminSectionHeader(title: 'Quick actions')),
         sec('qa', _quickActions()),
         const SizedBox(height: AppSpacing.xl),
@@ -190,9 +195,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   sec('overview-h', const AdminSectionHeader(title: 'Overview')),
                   sec('metrics', _StatsSection(builder: (s) => _metrics(s))),
                   const SizedBox(height: AppSpacing.xl),
-                  sec('activity-h',
-                      const AdminSectionHeader(title: 'Live activity')),
-                  sec('activity', const _ActivityFeed()),
+                  sec(
+                      'feed-h',
+                      const AdminSectionHeader(
+                        title: 'Active tasks',
+                        subtitle: 'Every branch, live — tap to open',
+                      )),
+                  sec('feed', const TaskFeedSection()),
                 ],
               ),
             ),
@@ -376,100 +385,6 @@ class _CommandHint extends StatelessWidget {
 }
 
 // ─── Live activity feed (desktop main column) ───────────────────────
-
-/// The newest activity entries across every branch's tasks — who did what,
-/// where, moments ago. Derived entirely from the live task stream already in
-/// memory; scoped to this widget so feed churn never rebuilds the dashboard.
-class _ActivityFeed extends StatelessWidget {
-  const _ActivityFeed();
-
-  static const int _max = 6;
-
-  @override
-  Widget build(BuildContext context) {
-    return BlocBuilder<TaskCubit, TaskState>(
-      builder: (context, state) {
-        final tasks = state.maybeWhen(
-            loaded: (t, _, _, _, _) => t, orElse: () => const <TaskEntity>[]);
-        final events = <(TaskEntity, ActivityEntry)>[
-          for (final t in tasks)
-            for (final e in t.activityLog) (t, e),
-        ]..sort((a, b) => b.$2.at.compareTo(a.$2.at));
-        final top = events.take(_max).toList();
-
-        if (top.isEmpty) {
-          return GlassContainer(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            child: Text(
-              'Activity across all branches shows up here as work happens.',
-              style: AppTypography.bodySmall,
-            ),
-          );
-        }
-        return GlassContainer(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg, vertical: AppSpacing.sm),
-          child: Column(
-            children: [
-              for (final (i, event) in top.indexed) ...[
-                if (i > 0)
-                  const Divider(height: 1, color: AppColors.darkBorder),
-                _row(event.$1, event.$2),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _row(TaskEntity task, ActivityEntry entry) {
-    final color = activityColor(entry.status);
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: color.withAlpha(26),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: Icon(activityIcon(entry.status), size: 14, color: color),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${entry.actorName ?? 'Someone'} · ${activityTitle(entry.status)}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.labelSmall
-                      .copyWith(color: AppColors.textPrimary),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  task.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.caption,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Text(relativeTime(entry.at),
-              style:
-                  AppTypography.caption.copyWith(color: AppColors.textTertiary)),
-        ],
-      ),
-    );
-  }
-}
 
 // ─── Branch pulse (desktop rail) ────────────────────────────────────
 

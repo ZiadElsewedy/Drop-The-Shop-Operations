@@ -13,6 +13,7 @@ import 'package:drop/core/di/injection.dart';
 import 'package:drop/core/observability/crash_reporter.dart';
 import 'package:drop/core/routes/app_router.dart';
 import 'package:drop/core/routes/route_names.dart';
+import 'package:drop/core/services/usage_tracker.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/core/theme/app_theme.dart';
@@ -67,6 +68,8 @@ Future<void> _bootstrap() async {
   );
 
   AppDependencies.init();
+  // Lightweight homepage-feed usage telemetry (best-effort, debounced).
+  UsageTracker.init(FirebaseFirestore.instance);
   _router = createRouter(AppDependencies.authCubit);
 
   // FCM engine (best-effort; never blocks startup).

@@ -644,3 +644,253 @@ fallback) **or** an `archivedAt`-on-all-docs backfill migration to make the
 `isNull` filter safe. Not needed at current volume; scoped here so it's a
 known, costed follow-up rather than a surprise.
 
+## P3 — clarifications (owner review, 2026-07-03)
+
+### C1. Read-amplification risk is REAL and currently UNSOLVED (explicit)
+
+`TaskRepositoryImpl._newestFirst` filtering `isArchived` solves **UI clutter
+only**. It does **not** reduce Firestore reads: the admin `watchAllTasks`
+snapshot stream still subscribes to the **entire `tasks` collection**, downloads
+every doc (archived included), and the client discards archived ones **after**
+they were billed. So:
+
+- **Reads scale with total `tasks` size, not with active-task count.** Every
+  admin cold app-open re-reads the whole collection (~108k docs ≈ **$0.06/open**
+  at year-3 projections; ~$29/mo at 15 opens/day — see the R2 cost table).
+- The `taskHousekeeping` archive pass itself also reads archived docs while
+  paging (bounded per run by `RUN_CAP`, but still non-zero).
+- **This is deliberately deferred, not overlooked** — at current volume (tens of
+  tasks) it's fractions of a cent; it only matters at scale, and P4 is now the
+  lowest priority (see C4). Filtering was chosen for clutter now; bounding is a
+  separate, later lever.
+
+### C2. Migration-safe server-side query strategies (future, pick at P4)
+
+Ordered by preference. All avoid the `isNull` missing-field trap and all keep
+the stats/deep-link contract intact:
+
+1. **`isActive` boolean, dual-written + backfilled (recommended).** Every task
+   carries `isActive: true` from creation (`toMap`); `taskHousekeeping` flips it
+   `false` on archive. Streams query `where('isActive', isEqualTo: true)`.
+   *Migration-safe path:* the function's **first runs backfill** `isActive` onto
+   legacy docs (set true for non-archived, false for archived) **before** the
+   client query switches — deploy function → confirm backfill complete → deploy
+   the client query change. A boolean equality needs no composite index and
+   `true` matches only docs that explicitly hold it (so the backfill gate is
+   what makes it safe). Reads then scale with **active** count. Stats keep
+   reading `status`/`approvedAt` directly (unaffected).
+2. **`tasks_archive` collection-move.** Archived docs leave `tasks` entirely →
+   the live collection is inherently bounded, streams need **zero query change**.
+   Cost: `taskHousekeeping` does copy+delete per archive (one-time, negligible),
+   **statistics must sum `tasks` + `tasks_archive`** via two cheap `count()`
+   aggregates (count() bills ~1 read/1000 docs), and `getTask` needs an archive
+   fallback for old deep-links. Cleanest bound, most moving parts.
+3. **Time-boxed stream window.** Stream only
+   `where('createdAt', >, now - Ndays)` + always-include the small set of
+   non-terminal older tasks via a second query. Rejected: an old-but-still-open
+   task can slip the window; more fragile than (1).
+
+**Recommendation:** option 1 (`isActive` + gated backfill) when P4 is picked up —
+it's the least invasive, index-free, and leaves stats untouched.
+
+### C3. Cold-tiering = Storage **class** change, NOT compression, NOT bucket rules
+
+To be exact about what `taskHousekeeping` does today:
+
+- It calls `file.setStorageClass("COLDLINE")` **per object** via the Admin SDK —
+  a server-side **rewrite of each object's storage class** from Standard →
+  Coldline. This lowers the **$/GB storage price (~$0.026 → ~$0.004)**; the
+  **bytes are unchanged** (no re-encoding). Retrieval later costs a small
+  per-GB fee, which is why it's only applied to *archived* (rarely-read) proof.
+- It is **not** image/video compression — that's a separate concern, done at
+  **pick time** by `image_picker` (`imageQuality`/`maxWidth` in
+  `AttachmentLimits`), which reduces bytes *before upload*. Cold-tiering reduces
+  *price-per-stored-byte after archive*. Two different levers.
+- It is **not** GCS **Object Lifecycle Management** (bucket-level, age-based
+  auto-transition rules configured on the bucket, no code). That's the standard
+  alternative and arguably simpler, but it can only key off object **age**, not
+  the task's archival decision. **Option for P4:** replace the per-object
+  `setStorageClass` with a one-time bucket lifecycle rule (e.g. "Standard →
+  Coldline after 30 days on prefix `tasks/`") — no per-object writes, but
+  coarser (ties tiering to upload age, not archive state). Left as-is for now
+  since the function already owns the archive decision.
+
+### C4. Re-prioritized — homepage UX first, retention last
+
+Owner ruling: primary pain is **homepage usability + active-task
+discoverability**, not retention. New order (supersedes the earlier phasing):
+
+| New | Was | Scope |
+| --- | --- | --- |
+| **P1** | old P1 | Homepage UX improvements (badge dedupe · tappable KPIs · attention chip) |
+| **P2** | old P2 | Global task feed + filters/search/grouping (no urgency engine yet) |
+| **P3** | (R4) | Urgency ranking engine → the feed's "Smart" sort/grouping |
+| **P4** | old P3 lifecycle | Retention read-bounding (C1/C2) + cold-tier revisit (C3) — **paused** |
+
+The archive lifecycle already shipped stays as-is (soft-archive + clutter
+filter); **no further backend/infra work** until P1–P3 land.
+
+---
+
+# P1 + P2 — IMPLEMENTED (2026-07-03)
+
+Homepage UX + the global feed, per the re-prioritization. **Presentation-only —
+nothing to deploy.**
+
+**P1 — homepage UX:**
+- **Badge dedupe (the flagged bug).** `taskBadgeFor` no longer returns
+  `Approved`/`Rejected` — the card's status pill already shows those, so the
+  word stacked twice. The badge now carries only `REWORK #n` / `NEW`
+  (`task_badge.dart`; `task_badge_test.dart` updated).
+
+**P2 — global active-task feed on the homepage:**
+- **`task_feed.dart`** (pure engine, 23 tests): `TaskFeedFilter` (branch ·
+  assignee · shift · priority · status · search · preset · grouping · sort) +
+  `applyFeed` (active-window base + AND-composed filters + search over
+  title/description/branch/assignee) + `groupFeed` (Due-time / Branch /
+  Employee / Priority, ordered) + 4 pinned presets. O(n), no index, offline.
+- **`task_feed_row.dart`** (5 tests): the dense scannable row — status dot +
+  short label · title · branch chip · High-only flag · assignee · due
+  (red + "· late" when overdue) · 2px checklist underline. Colour from the
+  canonical `taskStatusColor`.
+- **`task_feed_section.dart`**: the composable homepage feed over the app-wide
+  `TaskCubit` (no new cubit/query) — preset chips + search + group/sort menus
+  (+ branch scope for admin) + collapsible grouped rows; row taps through to
+  `TaskDetailsScreen` (any task in ≤2 taps). `branchLocked` for managers.
+- **Wired in:** `AdminDashboardScreen` (main column — **replaced** the
+  redundant `_ActivityFeed`, which was deleted; the feed is the activity
+  surface now) on desktop + mobile; `ManagerHomeScreen` (`branchLocked`, and it
+  now also loads `TaskCubit`).
+
+**Deferred to P3 (next):** the urgency ranking engine → the feed's "Smart"
+sort/grouping (P2 ships Due-date / Priority / Newest). **Deferred refinement:**
+the R1 inline row-expansion / bottom-sheet triage surface — P2 taps straight to
+the full details screen for now.
+
+`flutter analyze` clean (7 pre-existing infos) · **330 tests pass** (+28).
+⚠️ On-device visual QA suggested (feed density on a phone; the admin
+main-column feed replacing the activity list).
+
+---
+
+# R1 (inline expandable row) + Attention strip — IMPLEMENTED (2026-07-03)
+
+Owner priority after P2: the remaining friction was navigating into
+`TaskDetailsScreen` for routine triage. Presentation-only.
+
+**R1 — accordion expansion, one shared surface, two presentations:**
+- **`task_feed_expansion.dart`** — the single shared triage surface: description ·
+  facts (branch · shift · due [red if overdue] · assignee) · checklist preview +
+  progress · attachment/proof thumbnails · compact status timeline (newest-first) ·
+  quick actions. Actions read the app-wide `TaskCubit` **lazily on tap** (no new
+  cubit, and rendering needs no provider).
+  - **Approve** → instant `approveTask`; **Reject** → the canonical
+    `showReviewSheet` (reason capture); **Reassign** → `showAssignSheet` (hidden
+    for shift tasks / approved); **Open full details** → the full screen. Actions
+    call `onClose` (collapse desktop / pop sheet mobile).
+- **Desktop = inline accordion** in `task_feed_section.dart`: `_expandedId` (one
+  open at a time), rendered under the row via **`AnimatedSize` (height) +
+  `TweenAnimationBuilder` opacity (fade)**; the row shows a `selected` highlight +
+  chevron flip. Scroll is preserved (the outer dashboard `ListView` +
+  `LiveListItem` keys).
+- **Mobile = bottom sheet**: the same surface in a `DraggableScrollableSheet`
+  (drag handle · 0.7 initial · row header on top). `context.isDesktop` picks the
+  presentation.
+
+**Attention Needed strip** — a stable triage bar above the feed
+(`_AttentionStrip`): **Overdue · Pending review · Blocked** counts over the
+scope's active set (not the user's preset/query, so counts stay stable). Each
+pill is tappable → filters the feed (overdue/needs-review presets · blocked =
+`rejected` status). "All clear" state when nothing needs attention.
+
+> **⚠️ "Blocked" interpretation (owner, confirm):** mapped to **`rejected` /
+> rework** tasks — work bounced back from review, blocked from completion. If you
+> meant **unassigned** (work with no owner), it's a one-line change in
+> `_AttentionStrip` + the count predicate.
+
+`flutter analyze` clean (7 pre-existing infos) · **336 tests pass** (+6
+`task_feed_expansion_test.dart`). ⚠️ On-device QA: accordion animation + the
+mobile bottom sheet on a real phone.
+
+---
+
+# R1 refinements + Smart Queue (P3-lite) — IMPLEMENTED (2026-07-03)
+
+Owner: three R1 refinements + a lightweight Smart Queue *before* the full
+urgency engine. Presentation-only except one additive cubit method.
+
+- **Attention strip: Blocked → Unassigned (owner ruling).** "Blocked" now means
+  *can't progress for lack of an owner* → **unassigned** individual/team tasks
+  (shift tasks target a shift, never "unassigned"). The strip is now
+  **Overdue · Pending review · Unassigned**; the Unassigned pill taps the
+  `unassigned` preset.
+- **Approval safety (proof).** Approve is now **proof-safe**: a submission
+  carrying proof (any `activityLog` attachment or legacy `proofImageUrl`) shows
+  a **lightweight confirm sheet** (evidence thumbnails + Approve/Cancel) before
+  approving; proofless tasks stay one-tap. In `TaskFeedActions._approve`.
+- **Sticky action footer.** The quick actions were extracted into a reusable
+  **`TaskFeedActions`** widget. Desktop inline = actions at the surface bottom;
+  **mobile bottom sheet = a pinned footer** (`TaskFeedExpansion(showActions:
+  false)` in the scroll body + `TaskFeedActions` in a bordered footer that stays
+  visible as content grows).
+- **Quick manager notes.** New **`Note`** action → a small note sheet
+  (`_NoteSheet`) → **`TaskCubit.addNote(task, text)`** appends a `note` activity
+  entry (no status change; rendered via a new `note` kind in `activity_format`).
+  The one added cubit method — mirrors `toggleChecklistItem`'s append pattern,
+  no new cubit.
+- **Smart Queue (lightweight, P3-lite).** New **`FeedSort.smart`** = the
+  **default**, a simple 5-tier `smartRank`: `0` overdue+high · `1` pending
+  review · `2` overdue · `3` due today · `4` normal (ties broken by due date).
+  When Smart is active the feed is a **single flat ranked list** (group headers
+  hidden, grouping menu hidden); switching sort to Due date / Priority / Newest
+  restores grouping. **Deliberately NOT the full urgency engine** — validate
+  this ranking in real use first, then evolve into `task_urgency.dart` (the
+  tier + `reviewer`/`executor` lens design still stands).
+
+`flutter analyze` clean (7 pre-existing infos) · **341 tests pass** (+5).
+> **Note:** Smart Queue is the **default sort**, so the feed now opens as a flat
+> ranked queue rather than the P2 due-time groups. Easy to flip back (change the
+> `TaskFeedFilter.sort` default) if you'd rather groups stay the default and
+> Smart be opt-in.
+
+⚠️ On-device QA: the approve-confirm + note sheets on a phone; Smart Queue order.
+
+---
+
+# Smart-not-default + note categories + counters + telemetry (2026-07-03)
+
+Owner: don't make Smart the default yet; add note metadata + animated counters;
+then lightweight usage telemetry *before* the full urgency engine.
+
+- **Smart Queue reverted to opt-in.** Default sort is back to **Due date
+  (grouped)**; Smart Queue stays an explicit sort mode (menu order: Smart Queue ·
+  Due date · Priority · Newest). One-line default change; the flat-when-smart
+  rendering is unchanged. Rationale: compare real behavior before promoting the
+  unvalidated heuristic.
+- **Note categories (info / warning / issue).** New `NoteCategory` enum
+  ([note_category.dart](lib/features/task/domain/note_category.dart)) stored as
+  the note's activity **kind** (`note` / `noteWarning` / `noteIssue` — no schema
+  change; `info` reuses the plain `note` for back-compat). `TaskCubit.addNote`
+  takes a `category`; `activity_format` renders each with a distinct
+  title/colour/icon (warning=amber, issue=red). The note sheet gained a 3-chip
+  category selector. Sets up future filtering + timeline hierarchy.
+- **Animated attention counters.** The strip now **always renders the three
+  pills** (muted at zero) instead of swapping to an "all clear" chip, so each
+  pill's `AnimatedCount` persists in the tree and tweens smoothly through any
+  change — including to/from zero.
+- **Lightweight feed telemetry.** New
+  [`UsageTracker`](lib/core/services/usage_tracker.dart) — a **single aggregate
+  counters doc** `usageStats/feed` of `FieldValue.increment` fields, **debounced
+  to ~one write/20s** (a burst of expansions = one write; dodges single-doc
+  contention), **best-effort** (never affects UI), **test-safe** (no-op until
+  `init`). Tracks the five owner-requested signals: `preset_{name}` (chips +
+  attention pills) · `sort_{name}` · `expansion_open` · `quick_approve` ·
+  `note_create`. `init` wired in `main.dart`. **Rules:** `usageStats/{doc}` —
+  signed-in write (increment), admin read.
+
+`flutter analyze` clean (7 pre-existing infos) · **343 tests pass** (+2
+`note_category_test.dart`). ⚠️ **Deploy required for telemetry:** `firebase
+deploy --only firestore:rules` (until then increments are permission-denied —
+harmless, telemetry just records nothing). Read the data at `usageStats/feed`
+in the Firestore console. Everything else is client-only (no deploy).
+

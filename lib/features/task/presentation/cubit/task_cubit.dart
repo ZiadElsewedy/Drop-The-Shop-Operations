@@ -27,6 +27,7 @@ import 'package:drop/features/task/domain/entities/recurring_task_template_entit
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/domain/entities/task_template_entity.dart';
+import 'package:drop/features/task/domain/note_category.dart';
 import 'package:drop/features/task/domain/repositories/task_repository.dart';
 import 'package:drop/features/task/domain/task_ordering.dart';
 import 'package:drop/features/task/domain/usecases/assign_task.dart';
@@ -673,6 +674,31 @@ class TaskCubit extends Cubit<TaskState> {
           i,
     ];
     return _mutate(() => _updateTask(task.copyWith(checklist: updated)));
+  }
+
+  /// Appends a manager/admin operational **note** to the task's timeline WITHOUT
+  /// a status change — fast feedback from the feed's triage surface. No-op on
+  /// blank text. The [category] (info / warning / issue) sets the note's
+  /// activity kind so `activity_format` can render its hierarchy.
+  Future<void> addNote(
+    TaskEntity task,
+    String note, {
+    NoteCategory category = NoteCategory.info,
+  }) {
+    final text = note.trim();
+    if (text.isEmpty) return Future<void>.value();
+    return _mutate(() => _updateTask(task.copyWith(
+          activityLog: [
+            ...task.activityLog,
+            ActivityEntry(
+              status: category.activityStatus,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: DateTime.now(),
+              note: text,
+            ),
+          ],
+        )));
   }
 
   Future<void> submitForReview(TaskEntity task) async {

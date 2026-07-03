@@ -1,25 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:drop/core/enums/task_status.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 
-/// The label + colour of a task's lifecycle badge (Notification System Phase 1,
-/// Part 5). Pure + unit-testable. Returns `null` when no badge applies (e.g. a
-/// task that's started / in review / has no distinguishing state).
+/// The label + colour of a task's lifecycle badge. Pure + unit-testable.
+/// Returns `null` when no badge applies.
 ///
-/// Precedence: rework → approved → rejected → new. Colours follow the locked
-/// design decision — **NEW stays monochrome** (white accent); REWORK→amber,
-/// Rejected→red, Approved→green use the existing semantic palette.
+/// The badge now carries **only what the status pill can't** — `REWORK #n`
+/// (revision count) and `NEW` (unseen). Approved / Rejected were **removed**
+/// (Home Dashboard redesign P1, 2026-07-03): the card's `_StatusPill` already
+/// renders those from the same status, so a badge for them stacked the word
+/// twice ("Approved" over "Approved"). One pill per fact. Precedence:
+/// rework → new. Colours: **NEW stays monochrome** (white accent);
+/// REWORK → amber (existing semantic palette).
 ({String label, Color color})? taskBadgeFor(TaskEntity task) {
   if (task.requiresRework) {
     return (label: 'REWORK #${task.revisionNumber}', color: AppColors.warning);
-  }
-  if (task.status == TaskStatus.approved) {
-    return (label: 'Approved', color: AppColors.success);
-  }
-  if (task.status == TaskStatus.rejected) {
-    return (label: 'Rejected', color: AppColors.error);
   }
   if (task.isNew) {
     return (label: 'NEW', color: AppColors.primary);

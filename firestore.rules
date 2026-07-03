@@ -432,5 +432,16 @@ service cloud.firestore {
       allow update: if isOwner(resource.data.get('recipientUid', ''));
       allow delete: if isOwner(resource.data.get('recipientUid', '')) || isAdmin();
     }
+
+    // ── Feed usage telemetry (Home Dashboard redesign) ──
+    // A single aggregate counters doc (`usageStats/feed`) of
+    // `FieldValue.increment` fields — preset/sort/expansion/approve/note usage.
+    // Any signed-in user may increment (trusted internal telemetry, no PII);
+    // only an admin reads the totals. Debounced client-side to ~one write/20s.
+    match /usageStats/{doc} {
+      allow read: if isAdmin();
+      allow create, update: if isSignedIn();
+      allow delete: if false;
+    }
   }
 }

@@ -16,14 +16,17 @@ String activityTitle(String status) => switch (status) {
       'approved' => 'Approved',
       'rejected' => 'Rework requested',
       'cancelled' => 'Cancelled',
+      'note' => 'Note',
+      'noteWarning' => 'Warning',
+      'noteIssue' => 'Issue',
       _ => status,
     };
 
 /// Dot / accent colour for a task activity entry.
 Color activityColor(String status) => switch (status) {
       'approved' => AppColors.success,
-      'rejected' => AppColors.error,
-      'waitingReview' => AppColors.warning,
+      'rejected' || 'noteIssue' => AppColors.error,
+      'waitingReview' || 'noteWarning' => AppColors.warning,
       'started' || 'assigned' => AppColors.textPrimary,
       _ => AppColors.textTertiary,
     };
@@ -38,6 +41,9 @@ IconData activityIcon(String status) => switch (status) {
       'approved' => Icons.verified_rounded,
       'rejected' => Icons.replay_rounded,
       'cancelled' => Icons.close_rounded,
+      'note' => Icons.chat_bubble_outline_rounded,
+      'noteWarning' => Icons.warning_amber_rounded,
+      'noteIssue' => Icons.report_gmailerrorred_rounded,
       _ => Icons.circle_outlined,
     };
 

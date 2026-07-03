@@ -12,6 +12,96 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-07-03 — note categories + feed telemetry; Smart Queue opt-in)
+
+- **Smart Queue is opt-in again** — default sort reverted to **Due date
+  (grouped)**; Smart Queue stays an explicit sort mode. Validate the heuristic
+  before promoting it.
+- **Note categories** — new `NoteCategory` (info / warning / issue), stored as
+  the note's activity kind (`note` / `noteWarning` / `noteIssue`; no schema
+  change, `info` = back-compat `note`). `TaskCubit.addNote(category:)`;
+  `activity_format` renders each distinctly; the note sheet gained a category
+  selector.
+- **Animated attention counters** — the strip always renders the three pills
+  (muted at zero) so each `AnimatedCount` tweens smoothly through changes,
+  including to/from zero (no all-clear layout swap).
+- **Lightweight feed telemetry** — new `UsageTracker` (`core/services`): a single
+  `usageStats/feed` counters doc (`FieldValue.increment`), **debounced to ~one
+  write/20s**, best-effort, test-safe (no-op until `init`, wired in `main.dart`).
+  Tracks `preset_{name}` · `sort_{name}` · `expansion_open` · `quick_approve` ·
+  `note_create`. New `usageStats/{doc}` rule (signed-in write, admin read).
+- `flutter analyze` clean (7 pre-existing infos) · **343 tests pass** (+2).
+  ⚠️ **Deploy for telemetry:** `firebase deploy --only firestore:rules`.
+
+### Added (2026-07-03 — R1 refinements + Smart Queue, Home Dashboard redesign)
+
+- **Attention strip: Blocked → Unassigned** (owner ruling — "blocked" = can't
+  progress for lack of an owner). Strip is now Overdue · Pending review ·
+  Unassigned; the Unassigned pill filters to the `unassigned` preset.
+- **Proof-safe approve:** a task whose submission carries proof shows a
+  lightweight confirm sheet (evidence thumbnails + Approve/Cancel) before
+  approving; proofless tasks stay one-tap (`TaskFeedActions`).
+- **Sticky action footer:** actions extracted into a reusable `TaskFeedActions`;
+  the mobile bottom sheet pins it as a footer (`TaskFeedExpansion(showActions:
+  false)` scroll body + pinned footer) so quick actions stay visible.
+- **Quick manager notes:** new `Note` action → note sheet →
+  **`TaskCubit.addNote`** appends a `note` activity entry (no status change; new
+  `note` kind in `activity_format`). One additive cubit method, no new cubit.
+- **Smart Queue (P3-lite):** new `FeedSort.smart` (now the **default**) — a
+  simple 5-tier `smartRank` (overdue+high · pending review · overdue · due today
+  · normal). Smart renders a flat ranked list (grouping hidden); other sorts
+  restore grouping. Deliberately not the full urgency engine — validate first.
+- `flutter analyze` clean (7 pre-existing infos) · **341 tests pass** (+5).
+
+### Added (2026-07-03 — inline expandable feed row + Attention strip, redesign R1)
+
+Owner priority after P2 (before P3): remove the friction of opening
+`TaskDetailsScreen` for routine triage. Presentation-only.
+
+- **Inline expandable task row (R1)** — `task_feed_expansion.dart`, ONE shared
+  triage surface (description · branch/shift/due/assignee facts · checklist
+  preview + progress · attachment/proof thumbnails · compact status timeline ·
+  quick actions Approve/Reject/Reassign/Open-full-details). Actions read the
+  app-wide `TaskCubit` lazily on tap (no new cubit).
+  - **Desktop** = inline accordion (`_expandedId`, one open at a time;
+    `AnimatedSize` height + `TweenAnimationBuilder` fade; row `selected`
+    highlight + chevron flip; scroll preserved).
+  - **Mobile** = the same surface in a `DraggableScrollableSheet` bottom sheet.
+    `context.isDesktop` selects the presentation.
+- **Attention Needed strip** (`_AttentionStrip`) above the feed — Overdue ·
+  Pending review · Blocked counts over the scope's active set (independent of
+  the user's filter); each pill filters the feed; "all clear" state at zero.
+  **"Blocked" = `rejected`/rework** (owner to confirm vs. unassigned).
+- `flutter analyze` clean (7 pre-existing infos) · **336 tests pass** (+6
+  `task_feed_expansion_test.dart`). Next: P3 urgency engine.
+
+### Added (2026-07-03 — homepage global task feed + badge dedupe, redesign P1/P2)
+
+Owner re-prioritized to homepage usability first. Presentation-only (no deploy).
+
+- **Badge dedupe (P1):** `taskBadgeFor` dropped its `Approved`/`Rejected`
+  branches — the card's status pill already renders those, so the word stacked
+  twice ("Approved" over "Approved"). The lifecycle badge now carries only
+  `REWORK #n` / `NEW`.
+- **Global active-task feed (P2)** on the admin + manager homepages — reach any
+  task in ≤2 taps, no Branch→Employee→Task drill:
+  - `features/task/domain/task_feed.dart` — pure engine: `TaskFeedFilter`
+    (branch/assignee/shift/priority/status/search/preset/grouping/sort),
+    `applyFeed` (active-window base + AND filters + search), `groupFeed`
+    (Due-time/Branch/Employee/Priority), 4 pinned presets. O(n), no index.
+  - `task_feed_row.dart` — dense scannable row (status dot · title · branch ·
+    High-only flag · assignee · overdue-aware due · 2px checklist track).
+  - `task_feed_section.dart` — composable homepage feed over the app-wide
+    `TaskCubit` (no new cubit/query): preset chips · search · group/sort menus ·
+    admin branch scope · collapsible grouped rows → tap to `TaskDetailsScreen`.
+  - Wired into `AdminDashboardScreen` (main column, **replacing** the redundant
+    `_ActivityFeed`, now deleted) and `ManagerHomeScreen` (`branchLocked`; also
+    now loads `TaskCubit`).
+- Deferred: urgency "Smart" sort (P3) and the inline row-expansion triage
+  surface (P2 taps straight to details for now).
+- `flutter analyze` clean (7 pre-existing infos) · **330 tests pass** (+28:
+  `task_feed_test` 23, `task_feed_row_test` 5).
+
 ### Added (2026-07-03 — task retention lifecycle, Home Dashboard redesign P3)
 
 Design proposal + first implemented slice of the home-dashboard redesign
