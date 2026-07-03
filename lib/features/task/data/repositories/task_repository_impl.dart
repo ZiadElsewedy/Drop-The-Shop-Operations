@@ -20,10 +20,22 @@ class TaskRepositoryImpl implements TaskRepository {
 
   TaskRepositoryImpl(this._remote);
 
-  /// Maps models → entities, then orders newest-first (pending timestamps on top
-  /// — see [sortTasksNewestFirst]).
-  List<TaskEntity> _newestFirst(List<TaskModel> models) =>
-      sortTasksNewestFirst(models.map((m) => m.toEntity()).toList());
+  /// Maps models → entities, drops archived (retention-swept) tasks, then orders
+  /// newest-first (pending timestamps on top — see [sortTasksNewestFirst]).
+  ///
+  /// Archived tasks are still full records in `tasks` (soft archive), but they
+  /// must never clutter an active list/feed — this is the single client-side
+  /// gate that keeps them out of *every* stream + fetch. `getTask` deliberately
+  /// bypasses this (deep-links to an archived task still resolve), and the
+  /// statistics layer reads Firestore directly, so lifetime "completed" counts
+  /// are unaffected. A future Archived view would use a dedicated unfiltered
+  /// query rather than these active-list paths.
+  List<TaskEntity> _newestFirst(List<TaskModel> models) => sortTasksNewestFirst(
+        models
+            .map((m) => m.toEntity())
+            .where((t) => !t.isArchived)
+            .toList(),
+      );
 
   @override
   Future<List<TaskEntity>> getAllTasks() async {

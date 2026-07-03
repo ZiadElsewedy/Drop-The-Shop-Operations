@@ -11,8 +11,41 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-03 (production blockers fixed + deployed)
+**Last updated:** 2026-07-03 (task retention lifecycle — Home Dashboard redesign P3)
 **Version:** 1.0.0+1 · **Branch:** `feature/macos-desktop` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Home Dashboard redesign — proposal + P3 lifecycle shipped (2026-07-03)
+
+Full UX/architecture proposal in
+[HOME_DASHBOARD_REDESIGN.md](HOME_DASHBOARD_REDESIGN.md) (global task feed on
+the homepage · dense rows + expandable triage surface · KPIs-as-filters ·
+urgency ranking engine · monochrome per the locked ruling · retention costed).
+Owner reviewed, chose **monochrome** and **P3 (lifecycle) first**.
+
+**P3 shipped — completed tasks stop cluttering active views:**
+- `TaskEntity.archivedAt` + `isArchived`; `TaskModel` round-trips it (written in
+  `toMap` only so an admin reopen clears it — always null on a live task).
+- `TaskRepositoryImpl._newestFirst` filters archived out of **every** active
+  list/stream (single clutter gate). `getTask` bypasses it (deep-links resolve);
+  statistics read Firestore directly (lifetime counts intact).
+  `TaskCubit.reopenTask` clears `archivedAt`.
+- **`taskHousekeeping`** Cloud Function (`onSchedule` 24h): archives approved
+  tasks > `archiveAfterDays` (default 30) → stamps `archivedAt` + cold-tiers
+  `tasks/{id}/` Storage to COLDLINE; **hard-delete opt-in** (`deleteAfterDays`
+  null by default = soft-archive-forever). Cursor-paged archive query (no
+  composite index, outage-tolerant). Config `config/taskRetention` (defaults).
+- **Kept archive in-place** (not a separate collection): stats count approved
+  from `tasks`, and the Firestore `isNull` missing-field gotcha would make a
+  server-side filter need a migration. *Server-side* read-bounding deferred +
+  costed (not needed at current volume).
+- `flutter analyze` clean (7 pre-existing infos) · **302 tests pass** (+6
+  `task_archive_test.dart`) · `node --check` OK · freezed regenerated.
+- ⚠️ **Deploy (owner, surgical):** `firebase deploy --only
+  functions:taskHousekeeping`. No rules/indexes/storage-rule change. Rollback =
+  `firebase functions:delete taskHousekeeping`. Remaining redesign slices (P1
+  quick wins, P2 feed + urgency engine) not yet built.
 
 ---
 

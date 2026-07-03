@@ -109,6 +109,15 @@ class TaskEntity with _$TaskEntity {
     @Default(<ActivityEntry>[]) List<ActivityEntry> activityLog,
     DateTime? createdAt,
     DateTime? updatedAt,
+    /// When the task was archived by the retention pass (`taskHousekeeping`
+    /// Cloud Function) — set only on an `approved` task older than the branch's
+    /// `archiveAfterDays`. Null = live. Server-managed: the function stamps it
+    /// via the Admin SDK; the client only ever *reads* it (to filter archived
+    /// work out of active views) or *clears* it on an admin reopen. An archived
+    /// task is still a full record in `tasks` (soft archive — never deleted
+    /// unless a retention `deleteAfterDays` is explicitly configured), so
+    /// statistics and deep-links keep working.
+    DateTime? archivedAt,
   }) = _TaskEntity;
 
   /// Whether anyone is assigned — a named assignee, or (for a shift task) the
@@ -124,6 +133,11 @@ class TaskEntity with _$TaskEntity {
 
   /// Whether the manager attached any reference images.
   bool get hasReferences => referenceAttachments.isNotEmpty;
+
+  /// True once the retention pass has archived this (approved) task — it drops
+  /// out of every active list/stream (filtered in `TaskRepositoryImpl`) but
+  /// remains a full record for stats/audit/deep-links.
+  bool get isArchived => archivedAt != null;
 
   // ─── Checklist progress (Phase 9) ──────────────────────────────
   bool get hasChecklist => checklist.isNotEmpty;

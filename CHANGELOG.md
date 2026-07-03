@@ -12,6 +12,39 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-07-03 — task retention lifecycle, Home Dashboard redesign P3)
+
+Design proposal + first implemented slice of the home-dashboard redesign
+([HOME_DASHBOARD_REDESIGN.md](HOME_DASHBOARD_REDESIGN.md)). Owner picked the
+**task lifecycle (P3)** to build first — completed tasks no longer accumulate
+in active views forever.
+
+- **`archivedAt` on tasks (server-managed soft archive).** New
+  `TaskEntity.archivedAt` + `isArchived`; `TaskModel` round-trips it (written
+  in `toMap` so an admin reopen clears it, always null on a live task).
+  `TaskRepositoryImpl._newestFirst` filters archived out of **every** active
+  list/stream — the single clutter gate. `getTask` bypasses it (deep-links to
+  archived tasks still resolve) and statistics read Firestore directly, so
+  lifetime "completed" counts are unaffected. `TaskCubit.reopenTask` clears
+  `archivedAt` (un-archives on admin reopen).
+- **`taskHousekeeping` Cloud Function** (`onSchedule` every 24h): archives
+  approved tasks older than `archiveAfterDays` (default 30) — stamps
+  `archivedAt` + cold-tiers their `tasks/{id}/` Storage evidence to COLDLINE
+  (~85% cheaper); **hard-delete is opt-in** (`deleteAfterDays`, default null =
+  soft archive forever, per owner). Archive pass pages by `approvedAt` with a
+  cursor and skips already-archived docs → no composite index, outage-tolerant,
+  no starvation. Config in `config/taskRetention` (defaults when absent).
+- **Architecture note:** kept archive **in place** (not a separate collection)
+  because statistics count approved tasks straight from `tasks`, and the
+  Firestore `isNull` gotcha (missing fields aren't matched) would make a
+  server-side filter need a migration. *Server-side* read-bounding of the admin
+  all-tasks stream is deferred + costed (not needed at current volume).
+- `flutter analyze` clean (7 pre-existing infos) · **302 tests pass** (+6
+  `task_archive_test.dart`) · `node --check functions/index.js` OK.
+- ⚠️ **Deploy (owner, surgical):** `firebase deploy --only
+  functions:taskHousekeeping`. No rules / indexes / storage-rule change.
+  Rollback = `firebase functions:delete taskHousekeeping`.
+
 ### Security (2026-07-03 — M1/M2/M3 hardening + C1 deployments, all live)
 
 Remaining production-blocker fixes (per-blocker commits, each deployed to

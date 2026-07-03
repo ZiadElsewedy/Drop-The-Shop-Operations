@@ -464,6 +464,9 @@ class TaskCubit extends Cubit<TaskState> {
         status: TaskStatus.started,
         approvedBy: null,
         approvedAt: null,
+        // Reopening a task that the retention pass had archived brings it back
+        // into active views (it's no longer an approved historical record).
+        archivedAt: null,
         requiresRework: false,
         activityLog: [
           ...task.activityLog,

@@ -120,6 +120,16 @@ mixin _$TaskEntity {
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
 
+  /// When the task was archived by the retention pass (`taskHousekeeping`
+  /// Cloud Function) — set only on an `approved` task older than the branch's
+  /// `archiveAfterDays`. Null = live. Server-managed: the function stamps it
+  /// via the Admin SDK; the client only ever *reads* it (to filter archived
+  /// work out of active views) or *clears* it on an admin reopen. An archived
+  /// task is still a full record in `tasks` (soft archive — never deleted
+  /// unless a retention `deleteAfterDays` is explicitly configured), so
+  /// statistics and deep-links keep working.
+  DateTime? get archivedAt => throw _privateConstructorUsedError;
+
   /// Create a copy of TaskEntity
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -168,6 +178,7 @@ abstract class $TaskEntityCopyWith<$Res> {
     List<ActivityEntry> activityLog,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? archivedAt,
   });
 
   $RecurrenceConfigCopyWith<$Res>? get recurrence;
@@ -221,6 +232,7 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? activityLog = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
+    Object? archivedAt = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -356,6 +368,10 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.updatedAt
                 : updatedAt // ignore: cast_nullable_to_non_nullable
                       as DateTime?,
+            archivedAt: freezed == archivedAt
+                ? _value.archivedAt
+                : archivedAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
           )
           as $Val,
     );
@@ -419,6 +435,7 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     List<ActivityEntry> activityLog,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? archivedAt,
   });
 
   @override
@@ -472,6 +489,7 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? activityLog = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
+    Object? archivedAt = freezed,
   }) {
     return _then(
       _$TaskEntityImpl(
@@ -607,6 +625,10 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.updatedAt
             : updatedAt // ignore: cast_nullable_to_non_nullable
                   as DateTime?,
+        archivedAt: freezed == archivedAt
+            ? _value.archivedAt
+            : archivedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
       ),
     );
   }
@@ -649,6 +671,7 @@ class _$TaskEntityImpl extends _TaskEntity {
     final List<ActivityEntry> activityLog = const <ActivityEntry>[],
     this.createdAt,
     this.updatedAt,
+    this.archivedAt,
   }) : _assigneeIds = assigneeIds,
        _checklist = checklist,
        _referenceAttachments = referenceAttachments,
@@ -835,9 +858,20 @@ class _$TaskEntityImpl extends _TaskEntity {
   @override
   final DateTime? updatedAt;
 
+  /// When the task was archived by the retention pass (`taskHousekeeping`
+  /// Cloud Function) — set only on an `approved` task older than the branch's
+  /// `archiveAfterDays`. Null = live. Server-managed: the function stamps it
+  /// via the Admin SDK; the client only ever *reads* it (to filter archived
+  /// work out of active views) or *clears* it on an admin reopen. An archived
+  /// task is still a full record in `tasks` (soft archive — never deleted
+  /// unless a retention `deleteAfterDays` is explicitly configured), so
+  /// statistics and deep-links keep working.
+  @override
+  final DateTime? archivedAt;
+
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt)';
   }
 
   @override
@@ -912,7 +946,9 @@ class _$TaskEntityImpl extends _TaskEntity {
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
-                other.updatedAt == updatedAt));
+                other.updatedAt == updatedAt) &&
+            (identical(other.archivedAt, archivedAt) ||
+                other.archivedAt == archivedAt));
   }
 
   @override
@@ -951,6 +987,7 @@ class _$TaskEntityImpl extends _TaskEntity {
     const DeepCollectionEquality().hash(_activityLog),
     createdAt,
     updatedAt,
+    archivedAt,
   ]);
 
   /// Create a copy of TaskEntity
@@ -997,6 +1034,7 @@ abstract class _TaskEntity extends TaskEntity {
     final List<ActivityEntry> activityLog,
     final DateTime? createdAt,
     final DateTime? updatedAt,
+    final DateTime? archivedAt,
   }) = _$TaskEntityImpl;
   const _TaskEntity._() : super._();
 
@@ -1131,6 +1169,17 @@ abstract class _TaskEntity extends TaskEntity {
   DateTime? get createdAt;
   @override
   DateTime? get updatedAt;
+
+  /// When the task was archived by the retention pass (`taskHousekeeping`
+  /// Cloud Function) — set only on an `approved` task older than the branch's
+  /// `archiveAfterDays`. Null = live. Server-managed: the function stamps it
+  /// via the Admin SDK; the client only ever *reads* it (to filter archived
+  /// work out of active views) or *clears* it on an admin reopen. An archived
+  /// task is still a full record in `tasks` (soft archive — never deleted
+  /// unless a retention `deleteAfterDays` is explicitly configured), so
+  /// statistics and deep-links keep working.
+  @override
+  DateTime? get archivedAt;
 
   /// Create a copy of TaskEntity
   /// with the given fields replaced by the non-null parameter values.

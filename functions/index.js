@@ -49,6 +49,7 @@ const BRANCHES = "branches";
 const WEEKLY_SCHEDULES = "weekly_schedules";
 const SHIFT_SWAPS = "shift_swaps";
 const RECURRING_TASK_TEMPLATES = "recurringTaskTemplates";
+const CONFIG = "config";
 
 // `branchId` marker for a direct message — never a real branch id and never ''
 // (mirrors BroadcastModel.directBranchMarker), so a DM never appears in a
@@ -1596,5 +1597,144 @@ exports.generateShiftTaskInstances = onSchedule("every 24 hours", async () => {
   }
 
   logger.info("shift task instances generated", { templates: snap.size, created });
+});
+
+/**
+ * Task retention sweep (Home Dashboard redesign, P3). Runs daily:
+ *
+ *  1. ARCHIVE — every APPROVED task older than `archiveAfterDays` (default 30)
+ *     is soft-archived: `archivedAt` is stamped so the client filters it out of
+ *     active lists/feeds. The doc STAYS in `tasks` (never moved to another
+ *     collection), so statistics' lifetime "completed" counts, audit history,
+ *     and `/task/:id` deep-links keep working. When `coldTierImages` is true its
+ *     Storage evidence under `tasks/{id}/` is re-classed to COLDLINE (~85%
+ *     cheaper storage; archived proof is rarely read again).
+ *  2. DELETE (opt-in) — only when `deleteAfterDays` is a positive number: an
+ *     archived task older than that is hard-deleted, its `tasks/{id}/` Storage
+ *     prefix FIRST (so evidence never orphans), then the doc. Off by default —
+ *     soft archive is forever unless an org explicitly opts into purging.
+ *
+ * Config in `config/taskRetention` (defaults applied when the doc is absent).
+ * All queries are single-field inequalities on an auto-indexed field (no
+ * composite index to deploy). Idempotent + outage-tolerant: the archive pass
+ * pages by `approvedAt` with a cursor and skips already-archived docs, so it
+ * never starves; the Storage ops are safe to repeat.
+ */
+exports.taskHousekeeping = onSchedule("every 24 hours", async () => {
+  const now = Date.now();
+  const nowTs = admin.firestore.Timestamp.fromMillis(now);
+  const cutoff = (days) =>
+    admin.firestore.Timestamp.fromMillis(now - days * 24 * 60 * 60 * 1000);
+
+  // Config (defaults when the doc is absent). `deleteAfterDays` is opt-in: any
+  // non-positive / missing value keeps soft archive forever.
+  let cfg = { archiveAfterDays: 30, coldTierImages: true, deleteAfterDays: null };
+  try {
+    const cSnap = await db.collection(CONFIG).doc("taskRetention").get();
+    if (cSnap.exists) {
+      const c = cSnap.data() || {};
+      cfg = {
+        archiveAfterDays: Number.isFinite(c.archiveAfterDays) && c.archiveAfterDays > 0
+          ? c.archiveAfterDays : 30,
+        coldTierImages: c.coldTierImages !== false,
+        deleteAfterDays: Number.isFinite(c.deleteAfterDays) && c.deleteAfterDays > 0
+          ? c.deleteAfterDays : null,
+      };
+    }
+  } catch (_) {
+    // best-effort; use defaults
+  }
+
+  const bucket = admin.storage().bucket();
+  let archived = 0;
+  let coldTiered = 0;
+  let deleted = 0;
+
+  // Best-effort: re-class every object under tasks/{id}/ to a colder class.
+  const coldTier = async (taskId) => {
+    try {
+      const [files] = await bucket.getFiles({ prefix: `${TASKS}/${taskId}/` });
+      for (const f of files) {
+        try {
+          const [meta] = await f.getMetadata();
+          if (String(meta.storageClass || "STANDARD").toUpperCase() === "COLDLINE") continue;
+          await f.setStorageClass("COLDLINE");
+          coldTiered++;
+        } catch (e) {
+          logger.warn("cold-tier object failed", { taskId, file: f.name, error: String(e) });
+        }
+      }
+    } catch (e) {
+      logger.warn("cold-tier list failed", { taskId, error: String(e) });
+    }
+  };
+
+  // ── 1. ARCHIVE approved tasks past the window ──
+  // `approvedAt` is set ONLY on a currently-approved task (an admin reopen
+  // clears it), so `approvedAt <= cutoff` returns exactly the approved tasks
+  // old enough to archive. We page by `approvedAt` (cursor) and skip any doc
+  // already archived, so re-runs / long outages can't starve un-archived docs.
+  const RUN_CAP = 5000; // bound per-run scan; daily cadence drains any backlog
+  try {
+    let scanned = 0;
+    let last = null;
+    // eslint-disable-next-line no-constant-condition
+    while (scanned < RUN_CAP) {
+      let q = db
+        .collection(TASKS)
+        .where("approvedAt", "<=", cutoff(cfg.archiveAfterDays))
+        .orderBy("approvedAt", "asc")
+        .limit(BATCH_LIMIT);
+      if (last) q = q.startAfter(last);
+      const snap = await q.get();
+      if (snap.empty) break;
+
+      const batch = db.batch();
+      const toColdTier = [];
+      let n = 0;
+      for (const doc of snap.docs) {
+        last = doc;
+        const t = doc.data() || {};
+        if ((t.status || "") !== "approved") continue; // reopened → skip
+        if (t.archivedAt) continue; // already archived on a prior run
+        batch.update(doc.ref, { archivedAt: nowTs });
+        if (cfg.coldTierImages) toColdTier.push(doc.id);
+        n++;
+      }
+      if (n > 0) await batch.commit();
+      archived += n;
+      for (const id of toColdTier) await coldTier(id);
+
+      scanned += snap.size;
+      if (snap.size < BATCH_LIMIT) break;
+    }
+  } catch (err) {
+    logger.warn("task archive sweep failed", { error: String(err) });
+  }
+
+  // ── 2. DELETE archived tasks past the (opt-in) purge window ──
+  if (cfg.deleteAfterDays) {
+    try {
+      const snap = await db
+        .collection(TASKS)
+        .where("archivedAt", "<=", cutoff(cfg.deleteAfterDays))
+        .limit(BATCH_LIMIT)
+        .get();
+      for (const doc of snap.docs) {
+        // Evidence first, so a crash between the two never orphans Storage.
+        try {
+          await bucket.deleteFiles({ prefix: `${TASKS}/${doc.id}/`, force: true });
+        } catch (e) {
+          logger.warn("delete task storage failed", { taskId: doc.id, error: String(e) });
+        }
+        await doc.ref.delete();
+        deleted++;
+      }
+    } catch (err) {
+      logger.warn("task delete sweep failed", { error: String(err) });
+    }
+  }
+
+  logger.info("task housekeeping done", { archived, coldTiered, deleted });
 });
 

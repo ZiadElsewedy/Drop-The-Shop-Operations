@@ -55,6 +55,7 @@ class TaskModel {
   final List<ActivityEntry> activityLog;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final DateTime? archivedAt;
 
   const TaskModel({
     required this.id,
@@ -90,6 +91,7 @@ class TaskModel {
     this.activityLog = const [],
     this.createdAt,
     this.updatedAt,
+    this.archivedAt,
   });
 
   factory TaskModel.fromMap(Map<String, dynamic> map, {String? id}) => TaskModel(
@@ -126,6 +128,7 @@ class TaskModel {
         activityLog: _activityLogFromList(map['activityLog']),
         createdAt: map.date('createdAt'),
         updatedAt: map.date('updatedAt'),
+        archivedAt: map.date('archivedAt'),
       );
 
   factory TaskModel.fromEntity(TaskEntity e) => TaskModel(
@@ -162,6 +165,7 @@ class TaskModel {
         activityLog: e.activityLog,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
+        archivedAt: e.archivedAt,
       );
 
   /// Persisted fields. `createdAt`/`updatedAt` are written by the datasource as
@@ -201,6 +205,12 @@ class TaskModel {
         'rejectionReason': rejectionReason,
         'recurrence': _recurrenceToMap(recurrence),
         'activityLog': _activityLogToList(activityLog),
+        // Server-managed by `taskHousekeeping`, but written here so an admin
+        // REOPEN (which passes `archivedAt: null`) un-archives the task. For a
+        // live task this is always null (no-op); the function is the only other
+        // writer, and archived tasks are filtered out of every client stream, so
+        // a client write can't race-clobber a fresh archive stamp.
+        'archivedAt': archivedAt == null ? null : Timestamp.fromDate(archivedAt!),
       };
 
   /// Returns a copy with the Firestore-generated [id] applied (used on create).
@@ -238,6 +248,7 @@ class TaskModel {
         activityLog: activityLog,
         createdAt: createdAt,
         updatedAt: updatedAt,
+        archivedAt: archivedAt,
       );
 
   TaskEntity toEntity() => TaskEntity(
@@ -274,6 +285,7 @@ class TaskModel {
         activityLog: activityLog,
         createdAt: createdAt,
         updatedAt: updatedAt,
+        archivedAt: archivedAt,
       );
 
   /// Reads `assigneeIds` (array); falls back to the legacy single
