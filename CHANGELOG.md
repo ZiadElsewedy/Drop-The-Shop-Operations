@@ -12,6 +12,31 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Security (2026-07-03 — M1/M2/M3 hardening + C1 deployments, all live)
+
+Remaining production-blocker fixes (per-blocker commits, each deployed to
+`bazic-d9ad7` and verified):
+
+- **C1a/C1b deployments:** the `tasks` composite index (READY; audit
+  correction — the equality-only shift query also ran index-free via merge
+  join, so prod was never broken) and `generateShiftTaskInstances` (surgical
+  deploy; scheduler ENABLED; forced run clean).
+- **M2 — notification forgery closed:** new **`sendNotification` callable**
+  is the ONLY client path for notification docs (client-type whitelist ·
+  admin-or-same-branch recipients · length caps · sanitized payload ·
+  server-stamped `senderUid`); `NotificationRemoteDataSource.create/createMany`
+  now call it; `notifications` `create: if false`. The push trigger
+  (`onNotificationCreated`) is unchanged.
+- **M1 — swap consent forgery closed:** `shift_swaps` update enforces
+  per-party status transitions (target: pending→employeeApproved|rejected;
+  requester: pending|employeeApproved→cancelled; employee writes locked to
+  `status`+`updatedAt`); `approveSwap`'s existing
+  status==employeeApproved gate verified.
+- **M3 — proof tampering closed:** Storage `tasks/**` is create-only
+  (update/delete denied); uploads already use unique push-id paths (no fixed
+  `proof.jpg` remains), so evidence is immutable from upload.
+
+
 ### Security (2026-07-03 — C2: compensation moved to a private subdocument)
 
 Production blocker fix (audit C2). Salary data lived on the branch-readable

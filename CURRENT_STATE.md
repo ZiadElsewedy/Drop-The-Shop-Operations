@@ -11,10 +11,58 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-02 (Schedule 4.0 + stabilization pass)
+**Last updated:** 2026-07-03 (production blockers fixed + deployed)
 **Version:** 1.0.0+1 · **Branch:** `feature/macos-desktop` (DROP — monochrome premium desktop UX)
 
 ---
+
+## ✅ Production blockers FIXED + DEPLOYED (2026-07-03)
+
+All six audit blockers closed against production `bazic-d9ad7` (each verified
+after deploy; per-blocker commits):
+
+1. **C1a `tasks` composite index — DEPLOYED, READY.** Audit correction: the
+   probe proved the equality-only `watchShiftTasks` query ran WITHOUT the
+   composite (merge join) — production was never broken; the deploy aligns
+   repo config + makes it a direct index scan.
+2. **C1b `generateShiftTaskInstances` — DEPLOYED** (surgical, first v7-SDK
+   build). Scheduler job ENABLED; forced run executed clean
+   (`templates: 0, created: 0` — no recurring templates in prod yet).
+   Rollback = `firebase functions:delete generateShiftTaskInstances`.
+3. **C2 salary privacy — MIGRATED.** Compensation now lives in
+   `users/{uid}/private/compensation` (read: owner+admin ONLY — managers
+   excluded; write: admin, owner may touch only `paymentNumber`). The four
+   fields are REMOVED from `UserEntity`/`UserModel` (public fetch can never
+   carry salary); admin surfaces load it on demand
+   (`AdminUsersCubit.compensationFor`); profile `paymentNumber`
+   overlays/writes the subdoc. `tool/migrate_compensation.js` ran against
+   production: **1/1 user migrated, 0 residue, readback-VERIFIED** (backup
+   JSON on disk, gitignored; `--rollback` supported).
+4. **M2 notification forgery — CLOSED.** New **`sendNotification` callable**
+   (type whitelist: 5 task + 4 swap types · recipients must be admin-reachable
+   or same-branch · title/body caps · sanitized payload keys ·
+   **server-stamped senderUid**); client datasource now calls it;
+   `notifications` `create: if false` deployed. Push trigger unchanged.
+5. **M1 swap consent forgery — CLOSED.** `shift_swaps` update rule now
+   enforces per-party transitions: TARGET only may set
+   `employeeApproved`/`rejected` (from pending); REQUESTER only `cancelled`
+   (from pending/employeeApproved); employee writes field-locked to
+   `status`+`updatedAt`; `managerApproved` stays function-only (`approveSwap`
+   already gates on current status == employeeApproved — verified).
+6. **M3 proof tampering — CLOSED.** Storage `tasks/**` is now **create-only**
+   (update/delete denied). Every upload already mints a unique Firestore push
+   id (verified: no fixed `proof.jpg` path remains in lib/), so evidence is
+   immutable from the moment of upload — rework loops add new files.
+
+**Also (owner ruling):** Edit Profile's self-service sections (Contact
+details + Salary payment number) and the "Salary sent to" profile row are
+**manager/employee-only — hidden for admin** (the admin manages compensation,
+never receives it in-app; admin saves never write those fields).
+
+`flutter analyze` clean (7 pre-existing infos) · **296 tests pass** (+3) ·
+functions fleet: 11 deployed (2 new). ⚠️ Remaining from the audit (not in
+this scope): C1c stale-fleet redeploy (9 functions still on the 2026-06-26
+build — diagnostics-only gap), C3 iOS push entitlement (owner, Xcode).
 
 ## ✅ Schedule 4.0 — overflow · mobile actions · undo · validation (2026-07-02)
 
