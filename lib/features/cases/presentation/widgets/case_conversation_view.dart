@@ -121,7 +121,7 @@ class _Loaded extends StatelessWidget {
     final name = (identity?.createdByName ?? '').trim();
     showDialog<void>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.darkSurfaceElevated,
         title: const Text('Reporter identity'),
         content: Text(
@@ -132,7 +132,7 @@ class _Loaded extends StatelessWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => Navigator.of(dialogContext).pop(),
               child: const Text('Close')),
         ],
       ),
@@ -142,7 +142,7 @@ class _Loaded extends StatelessWidget {
   Future<void> _confirmDelete(BuildContext context) async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         backgroundColor: AppColors.darkSurfaceElevated,
         title: const Text('Delete case?'),
         content: const Text(
@@ -150,10 +150,10 @@ class _Loaded extends StatelessWidget {
             'cannot be undone.'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancel')),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
             style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('Delete'),
           ),

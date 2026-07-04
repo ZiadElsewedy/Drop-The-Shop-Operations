@@ -115,7 +115,13 @@ class CaseRemoteDataSourceImpl implements CaseRemoteDataSource {
       );
       final caseIds = <String>{
         for (final d in identitySnap.docs)
-          if (d.reference.parent.parent != null) d.reference.parent.parent!.id,
+          // `reporter` was also used by the retired `reports` collection, and a
+          // collection-group query spans both trees. Never reinterpret a legacy
+          // report id as a case id.
+          if (d.reference.parent.parent != null &&
+              d.reference.parent.parent!.parent.id ==
+                  AppConstants.casesCollection)
+            d.reference.parent.parent!.id,
       };
       if (caseIds.isEmpty) return const [];
       final cases = await Future.wait(caseIds.map((id) async {
