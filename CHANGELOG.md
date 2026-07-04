@@ -12,6 +12,34 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added / Refactored (2026-07-04 — premium animated cold-start intro)
+
+Client/startup-only; no Firebase schema, rules, functions, or deploy change.
+
+- **Added** the supplied `assets/0704.json` as the full-screen black DROP intro
+  via `lottie` (registered in `pubspec.yaml`). Playback uses the composition's
+  real duration and signals completion from its controller—no arbitrary splash
+  delay.
+- **Refactored cold start** around `LaunchApp` in `main.dart`: Flutter paints the
+  first black frame, then Firebase initialization, Firestore persistence, DI,
+  auth restoration/user-doc fetch, and the existing essential home preload run
+  while Lottie plays. `MaterialApp.router` mounts only after **both** animation
+  and bootstrap complete; `createRouter(initialLocation:)` enters the resolved
+  Login / first-login gate / role home directly, so the intro never double-plays.
+- **Preserved the current auth contract:** no Welcome/registration/pending-
+  approval flow; inactive accounts are blocked, and `mustChangePassword` →
+  `isProfileCompleted` → role home remains authoritative.
+- **Hardened failure paths:** malformed/missing Lottie falls back to `DropLogo`
+  without deadlocking; bootstrap failure holds the final frame and offers Retry.
+- **Optimized the raster-heavy export:** the current ~1.1MB, 720×405, 30fps,
+  155-frame JSON embeds 102 full-frame WebPs (~113MiB decoded at source size).
+  Parsing runs off the UI isolate and embedded images decode at a bounded 480px
+  width (~51MiB estimated); no extra raster render cache is used.
+- **Removed native white flash:** Android launch/normal themes and both Android
+  launch drawables are black; iOS LaunchScreen is black with no stale launch
+  image. Analysis: 7 pre-existing infos, 0 new; **406 tests pass**; native launch
+  XML validates.
+
 ### Added (2026-07-04 — Case Management: inbox unread indicators)
 
 Client-only; no new dependency (reuses `path_provider`), no schema/rules/

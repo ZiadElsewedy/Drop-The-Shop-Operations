@@ -40,9 +40,12 @@ import 'package:drop/features/cases/presentation/pages/create_case_screen.dart';
 import 'package:drop/features/cases/presentation/pages/case_conversation_screen.dart';
 import 'route_names.dart';
 
-GoRouter createRouter(AuthCubit authCubit) {
+GoRouter createRouter(
+  AuthCubit authCubit, {
+  String initialLocation = RouteNames.splash,
+}) {
   return GoRouter(
-    initialLocation: RouteNames.splash,
+    initialLocation: initialLocation,
     refreshListenable: _AuthStateNotifier(authCubit),
     observers: [LoggingNavigatorObserver('root')],
     redirect: (BuildContext context, GoRouterState state) {
@@ -57,37 +60,29 @@ GoRouter createRouter(AuthCubit authCubit) {
       // These must NOT show the persistent sidebar.
       GoRoute(
         path: RouteNames.splash,
-        pageBuilder: (context, state) => const NoTransitionPage(
-          child: SplashPage(),
+        pageBuilder: (context, state) => NoTransitionPage(
+          child: SplashPage(onAnimationComplete: () {}, isBootstrapping: false),
         ),
       ),
       GoRoute(
         path: RouteNames.login,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const LoginPage(),
-        ),
+        pageBuilder: (context, state) =>
+            _slideTransition(state, const LoginPage()),
       ),
       GoRoute(
         path: RouteNames.forgotPassword,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const ForgotPasswordPage(),
-        ),
+        pageBuilder: (context, state) =>
+            _slideTransition(state, const ForgotPasswordPage()),
       ),
       GoRoute(
         path: RouteNames.forcePasswordChange,
-        pageBuilder: (context, state) => _fadeTransition(
-          state,
-          const ForcePasswordChangePage(),
-        ),
+        pageBuilder: (context, state) =>
+            _fadeTransition(state, const ForcePasswordChangePage()),
       ),
       GoRoute(
         path: RouteNames.profileCompletion,
-        pageBuilder: (context, state) => _fadeTransition(
-          state,
-          const ProfileCompletionPage(),
-        ),
+        pageBuilder: (context, state) =>
+            _fadeTransition(state, const ProfileCompletionPage()),
       ),
       // ─── App shell: persistent desktop sidebar across every route below ──
       ShellRoute(
@@ -95,241 +90,198 @@ GoRouter createRouter(AuthCubit authCubit) {
         builder: (context, state, child) =>
             AppShell(location: state.matchedLocation, child: child),
         routes: [
-      GoRoute(
-        path: RouteNames.home,
-        pageBuilder: (context, state) => _fadeTransition(
-          state,
-          const EmployeeShell(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.adminDashboard,
-        pageBuilder: (context, state) => _fadeTransition(
-          state,
-          const AdminShell(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.managerHome,
-        pageBuilder: (context, state) => _fadeTransition(
-          state,
-          const ManagerShell(),
-        ),
-      ),
-      // ─── Tasks (Phase 3) ───────────────────────────────────────
-      // Guarded like the rest: /admin/tasks is admin-only, /manager/tasks admits
-      // manager + admin; /my-tasks is self-scoped.
-      GoRoute(
-        path: RouteNames.adminTasks,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const TaskManagementScreen(),
-        ),
-      ),
-      // Admin Pending Review drill-down (Summary → Branch → Employee → Task).
-      GoRoute(
-        path: RouteNames.adminReview,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const PendingReviewScreen(),
-        ),
-      ),
-      // Manager "Operations" tab → the Branch Operations cockpit for the
-      // manager's own branch (the task→operations redesign; the full per-branch
-      // task list is now reached via the cockpit's "All tasks" → BranchTaskListScreen).
-      GoRoute(
-        path: RouteNames.managerTasks,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const ManagerOperationsScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.myTasks,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const MyTasksScreen(),
-        ),
-      ),
-      // Exact-task deep-link (every role) — a task notification lands here.
-      GoRoute(
-        path: RouteNames.taskDetailPattern,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          TaskDetailLoaderScreen(taskId: state.pathParameters['taskId'] ?? ''),
-        ),
-      ),
-      // ─── Weekly schedule (Phase 7) ─────────────────────────────
-      // Guarded like tasks: /admin/schedule is admin-only, /manager/schedule
-      // admits manager + admin; /my-schedule is self-scoped (own branch).
-      GoRoute(
-        path: RouteNames.adminSchedule,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const ScheduleManagementScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.managerSchedule,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const BranchScheduleScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.mySchedule,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const MyScheduleScreen(),
-        ),
-      ),
-      // ─── Admin module (Phase 5) ────────────────────────────────
-      // All under /admin/*, covered by the admin-only `_isAdminArea` guard.
-      GoRoute(
-        path: RouteNames.adminBranches,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const BranchManagementScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.adminManagers,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const ManagerManagementScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.adminEmployees,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const EmployeeManagementScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.adminAnalytics,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const AdminAnalyticsScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.adminCreateAccount,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const CreateAccountScreen(),
-        ),
-      ),
-      // ─── Communications Center (Phase 3) ───────────────────────
-      // admin + manager (employees blocked by `_isCommunicationsArea`). The
-      // static `/compose` route is declared BEFORE the `:broadcastId` detail
-      // route so it is never captured as an id.
-      GoRoute(
-        path: RouteNames.communications,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const CommunicationsScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.communicationsCompose,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          ComposeBroadcastScreen(
-            prefill:
-                state.extra is BroadcastEntity ? state.extra as BroadcastEntity : null,
+          GoRoute(
+            path: RouteNames.home,
+            pageBuilder: (context, state) =>
+                _fadeTransition(state, const EmployeeShell()),
           ),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.communicationsTemplates,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          BroadcastTemplatesScreen(pickMode: state.extra == 'pick'),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.communicationsSchedules,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const BroadcastSchedulesScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.communicationsDetailPattern,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          BroadcastDetailScreen(
-            broadcastId: state.pathParameters['broadcastId'] ?? '',
-            broadcast: state.extra is BroadcastEntity
-                ? state.extra as BroadcastEntity
-                : null,
+          GoRoute(
+            path: RouteNames.adminDashboard,
+            pageBuilder: (context, state) =>
+                _fadeTransition(state, const AdminShell()),
           ),
-        ),
-      ),
-      // In-app notification inbox — shared by every role (not under /admin or
-      // /manager, so no role guard blocks it).
-      GoRoute(
-        path: RouteNames.notifications,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const NotificationsScreen(),
-        ),
-      ),
-      // ─── Case Management (private conversation until resolution) ──────────
-      // Shared by every role (like notifications); the list self-scopes by role
-      // and Firestore rules enforce access. The static `/cases/create` route is
-      // declared here; the singular `/case/:caseId` deep-link is a distinct path,
-      // so it never captures `create`.
-      GoRoute(
-        path: RouteNames.cases,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const CasesScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.casesCreate,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const CreateCaseScreen(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.caseDetailPattern,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          CaseConversationScreen(caseId: state.pathParameters['caseId'] ?? ''),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.profile,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const ProfilePage(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.editProfile,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const EditProfilePage(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.settings,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const SettingsPage(),
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.changePassword,
-        pageBuilder: (context, state) => _slideTransition(
-          state,
-          const ChangePasswordPage(),
-        ),
-      ),
+          GoRoute(
+            path: RouteNames.managerHome,
+            pageBuilder: (context, state) =>
+                _fadeTransition(state, const ManagerShell()),
+          ),
+          // ─── Tasks (Phase 3) ───────────────────────────────────────
+          // Guarded like the rest: /admin/tasks is admin-only, /manager/tasks admits
+          // manager + admin; /my-tasks is self-scoped.
+          GoRoute(
+            path: RouteNames.adminTasks,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const TaskManagementScreen()),
+          ),
+          // Admin Pending Review drill-down (Summary → Branch → Employee → Task).
+          GoRoute(
+            path: RouteNames.adminReview,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const PendingReviewScreen()),
+          ),
+          // Manager "Operations" tab → the Branch Operations cockpit for the
+          // manager's own branch (the task→operations redesign; the full per-branch
+          // task list is now reached via the cockpit's "All tasks" → BranchTaskListScreen).
+          GoRoute(
+            path: RouteNames.managerTasks,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const ManagerOperationsScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.myTasks,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const MyTasksScreen()),
+          ),
+          // Exact-task deep-link (every role) — a task notification lands here.
+          GoRoute(
+            path: RouteNames.taskDetailPattern,
+            pageBuilder: (context, state) => _slideTransition(
+              state,
+              TaskDetailLoaderScreen(
+                taskId: state.pathParameters['taskId'] ?? '',
+              ),
+            ),
+          ),
+          // ─── Weekly schedule (Phase 7) ─────────────────────────────
+          // Guarded like tasks: /admin/schedule is admin-only, /manager/schedule
+          // admits manager + admin; /my-schedule is self-scoped (own branch).
+          GoRoute(
+            path: RouteNames.adminSchedule,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const ScheduleManagementScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.managerSchedule,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const BranchScheduleScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.mySchedule,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const MyScheduleScreen()),
+          ),
+          // ─── Admin module (Phase 5) ────────────────────────────────
+          // All under /admin/*, covered by the admin-only `_isAdminArea` guard.
+          GoRoute(
+            path: RouteNames.adminBranches,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const BranchManagementScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.adminManagers,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const ManagerManagementScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.adminEmployees,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const EmployeeManagementScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.adminAnalytics,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const AdminAnalyticsScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.adminCreateAccount,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const CreateAccountScreen()),
+          ),
+          // ─── Communications Center (Phase 3) ───────────────────────
+          // admin + manager (employees blocked by `_isCommunicationsArea`). The
+          // static `/compose` route is declared BEFORE the `:broadcastId` detail
+          // route so it is never captured as an id.
+          GoRoute(
+            path: RouteNames.communications,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const CommunicationsScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.communicationsCompose,
+            pageBuilder: (context, state) => _slideTransition(
+              state,
+              ComposeBroadcastScreen(
+                prefill: state.extra is BroadcastEntity
+                    ? state.extra as BroadcastEntity
+                    : null,
+              ),
+            ),
+          ),
+          GoRoute(
+            path: RouteNames.communicationsTemplates,
+            pageBuilder: (context, state) => _slideTransition(
+              state,
+              BroadcastTemplatesScreen(pickMode: state.extra == 'pick'),
+            ),
+          ),
+          GoRoute(
+            path: RouteNames.communicationsSchedules,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const BroadcastSchedulesScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.communicationsDetailPattern,
+            pageBuilder: (context, state) => _slideTransition(
+              state,
+              BroadcastDetailScreen(
+                broadcastId: state.pathParameters['broadcastId'] ?? '',
+                broadcast: state.extra is BroadcastEntity
+                    ? state.extra as BroadcastEntity
+                    : null,
+              ),
+            ),
+          ),
+          // In-app notification inbox — shared by every role (not under /admin or
+          // /manager, so no role guard blocks it).
+          GoRoute(
+            path: RouteNames.notifications,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const NotificationsScreen()),
+          ),
+          // ─── Case Management (private conversation until resolution) ──────────
+          // Shared by every role (like notifications); the list self-scopes by role
+          // and Firestore rules enforce access. The static `/cases/create` route is
+          // declared here; the singular `/case/:caseId` deep-link is a distinct path,
+          // so it never captures `create`.
+          GoRoute(
+            path: RouteNames.cases,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const CasesScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.casesCreate,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const CreateCaseScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.caseDetailPattern,
+            pageBuilder: (context, state) => _slideTransition(
+              state,
+              CaseConversationScreen(
+                caseId: state.pathParameters['caseId'] ?? '',
+              ),
+            ),
+          ),
+          GoRoute(
+            path: RouteNames.profile,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const ProfilePage()),
+          ),
+          GoRoute(
+            path: RouteNames.editProfile,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const EditProfilePage()),
+          ),
+          GoRoute(
+            path: RouteNames.settings,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const SettingsPage()),
+          ),
+          GoRoute(
+            path: RouteNames.changePassword,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const ChangePasswordPage()),
+          ),
         ],
       ),
     ],
@@ -342,14 +294,9 @@ GoRouter createRouter(AuthCubit authCubit) {
 String? _redirect(AuthCubit authCubit, GoRouterState state) {
   final loc = state.matchedLocation;
 
-  if (loc == RouteNames.splash) return null;
-
   final authState = authCubit.state;
 
-  final user = authState.maybeWhen(
-    authenticated: (u) => u,
-    orElse: () => null,
-  );
+  final user = authState.maybeWhen(authenticated: (u) => u, orElse: () => null);
 
   final isOnAuthFlow =
       loc == RouteNames.login || loc == RouteNames.forgotPassword;
@@ -388,6 +335,7 @@ String? _redirect(AuthCubit authCubit, GoRouterState state) {
 
     // A fully onboarded user never sees the auth / onboarding screens.
     if (isOnAuthFlow ||
+        loc == RouteNames.splash ||
         loc == RouteNames.forcePasswordChange ||
         loc == RouteNames.profileCompletion) {
       return roleHome;
@@ -411,10 +359,7 @@ String? _redirect(AuthCubit authCubit, GoRouterState state) {
   return null;
 }
 
-CustomTransitionPage<void> _fadeTransition(
-  GoRouterState state,
-  Widget child,
-) =>
+CustomTransitionPage<void> _fadeTransition(GoRouterState state, Widget child) =>
     CustomTransitionPage<void>(
       key: state.pageKey,
       // Real path in the page's RouteSettings so navigation logs name routes.
@@ -423,53 +368,51 @@ CustomTransitionPage<void> _fadeTransition(
       transitionDuration: const Duration(milliseconds: 180),
       transitionsBuilder: (context, animation, secondaryAnimation, child) =>
           FadeTransition(
-        opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
-        child: child,
-      ),
+            opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+            child: child,
+          ),
     );
 
 CustomTransitionPage<void> _slideTransition(
   GoRouterState state,
   Widget child,
-) =>
-    CustomTransitionPage<void>(
-      key: state.pageKey,
-      // Real path in the page's RouteSettings so navigation logs name routes.
-      name: state.uri.toString(),
-      // Desktop reads the fade band (≈160ms of the 320ms window); mobile uses
-      // the full window for the slide.
-      transitionDuration: const Duration(milliseconds: 320),
-      child: child,
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        // Desktop / macOS: no mobile slide — a calm, quick fade so sidebar
-        // navigation feels native, not like pushing phone screens.
-        final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
-        if (isDesktop) {
-          return FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
-            ),
-            child: child,
-          );
-        }
-        final slide = Tween<Offset>(
-          begin: const Offset(1.0, 0),
-          end: Offset.zero,
-        ).animate(
-            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
-        return SlideTransition(
-          position: slide,
-          child: FadeTransition(
-            opacity: CurvedAnimation(
-              parent: animation,
-              curve: const Interval(0.0, 0.6),
-            ),
-            child: child,
-          ),
-        );
-      },
+) => CustomTransitionPage<void>(
+  key: state.pageKey,
+  // Real path in the page's RouteSettings so navigation logs name routes.
+  name: state.uri.toString(),
+  // Desktop reads the fade band (≈160ms of the 320ms window); mobile uses
+  // the full window for the slide.
+  transitionDuration: const Duration(milliseconds: 320),
+  child: child,
+  transitionsBuilder: (context, animation, secondaryAnimation, child) {
+    // Desktop / macOS: no mobile slide — a calm, quick fade so sidebar
+    // navigation feels native, not like pushing phone screens.
+    final isDesktop = MediaQuery.sizeOf(context).width >= 1024;
+    if (isDesktop) {
+      return FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+        ),
+        child: child,
+      );
+    }
+    final slide = Tween<Offset>(
+      begin: const Offset(1.0, 0),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+    return SlideTransition(
+      position: slide,
+      child: FadeTransition(
+        opacity: CurvedAnimation(
+          parent: animation,
+          curve: const Interval(0.0, 0.6),
+        ),
+        child: child,
+      ),
     );
+  },
+);
 
 /// True when [loc] is anywhere inside the admin area (`/admin` or `/admin/...`).
 bool _isAdminArea(String loc) =>

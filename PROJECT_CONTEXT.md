@@ -72,7 +72,7 @@ the role chrome.
 | ------------------ | ------------------------------------------------------------ |
 | State management   | `flutter_bloc` (Cubits only, no Blocs)                       |
 | Navigation         | `go_router` (declarative, auth-aware redirects)             |
-| Backend            | Firebase: Auth, Cloud Firestore, Storage, Google Sign-In    |
+| Backend            | Firebase: email/password Auth, Cloud Firestore, Storage     |
 | Push / server      | Firebase Cloud Messaging (`firebase_messaging`) + **Cloud Functions** (Node.js, `functions/`) called via `cloud_functions` — the Communications Center send engine |
 | Immutable models   | `freezed` + `freezed_annotation` (entities & states)        |
 | Media              | `image_picker`                                              |
@@ -109,7 +109,7 @@ The dependency rule points **inward**: `presentation → domain ← data`. The
 
 ```
 lib/
-├── main.dart                 # Bootstraps Firebase, DI, router, MaterialApp.router
+├── main.dart                 # Paints LaunchApp first; bootstraps Firebase/DI/auth/cache in parallel with Lottie, then mounts MaterialApp.router
 ├── firebase_options.dart     # FlutterFire generated config
 ├── core/
 │   ├── constants/            # app_constants.dart (appName, collection names)
@@ -184,7 +184,7 @@ app-wide cubits (`AuthCubit`, `ProfileCubit`) are provided at the root via
 ### Authentication chain (ADMIN-PROVISIONED — no public registration, 2026-06-26)
 
 ```
-SplashPage · LoginPage · ForgotPasswordPage              (presentation/pages)
+LaunchApp → SplashPage · LoginPage · ForgotPasswordPage (composition root / presentation pages)
 ForcePasswordChangePage · ProfileCompletionPage
         ↓  context.read<AuthCubit>()
 AuthCubit                                                (presentation/cubit)
@@ -228,7 +228,8 @@ _AuthStateNotifier (ChangeNotifier)   ← refreshListenable
         ↓
 GoRouter.redirect                     ← first-login gate + ROLE guard
         ↓
-splash → login/forgot → force-password-change → complete-profile → role shell
+native black launch → Lottie + bootstrap gate → login/forgot OR
+force-password-change → complete-profile → role shell
 ```
 
 `createRouter(AuthCubit)` ([core/routes/app_router.dart](lib/core/routes/app_router.dart))
@@ -244,15 +245,20 @@ The redirect **only** bounces an *explicitly* `unauthenticated` session to Login
 in-flight forced change never flickers the user out). It still **role-guards**
 every navigation: admin areas admin-only, manager areas admit manager + admin
 (**admin ⊇ manager**), the employee home (`/`) employee-only; `/profile` &
-`/settings` are shared. `SplashPage` calls `AuthCubit.restoreSession()` on cold
-start and dispatches via the same gate (`_destinationFor`); minimum dwell is the
-**brand-animation length (1400 ms)**. **Warm-start preload (Perf · Phase C):** the
-app-wide `BlocListener<AuthCubit>` in `main.dart` preloads the home-critical cubits
-on `authenticated` (gated on `hasAppAccess` = `isActive`). Because a Firebase
-sign-in doesn't know the role/flags, `AuthCubit` re-reads the Firestore user after
-sign-in (`_withStoredProfile`) so the emitted `authenticated` state carries the
-authoritative role/branch + first-login flags. The first-login screens flip their
-flag then call `refreshUser()`, so the router advances automatically.
+`/settings` are shared. **Cold start is coordinated above the router** by
+`LaunchApp` in `main.dart`: Flutter paints a black frame first, then starts
+Firebase → DI → `AuthCubit.restoreSession()` → the authoritative user-doc
+read → the existing home-critical preload (`StatisticsCubit`, `TaskCubit`,
+`BranchCubit`) while `SplashPage` independently loads and plays
+`assets/0704.json`. The routed app mounts only when **both** Lottie playback and
+bootstrap complete; there is no arbitrary timer floor. `createRouter` accepts a
+resolved `initialLocation`, so the old splash route is not replayed. The app-wide
+`BlocListener<AuthCubit>` handles later login/logout side effects and idempotent
+warm preloads. Because a Firebase sign-in doesn't know role/flags, `AuthCubit`
+re-reads Firestore (`_withStoredProfile`) so the emitted authenticated state
+carries the authoritative role/branch + first-login flags. The first-login
+screens flip their flag then call `refreshUser()`, so the router advances
+automatically.
 
 ### Profile chain
 
@@ -726,7 +732,7 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Auth screens / UI**                     | `lib/features/auth/presentation/pages/` + `.../widgets/`                  |
 | **Auth logic / flow / state**             | `lib/features/auth/presentation/cubit/auth_cubit.dart` + `auth_state.dart` |
 | **A new auth action**                     | add `domain/usecases/`, a method on `AuthRepository(+Impl)`, a datasource method, wire in `auth_cubit.dart` **and** `core/di/injection.dart` |
-| **Firebase Auth / Google calls**          | `lib/features/auth/data/datasources/auth_remote_datasource.dart`         |
+| **Firebase Auth calls**                   | `lib/features/auth/data/datasources/auth_remote_datasource.dart` (email/password only) |
 | **User Firestore document (auth side)**   | `lib/features/auth/data/datasources/user_remote_datasource.dart` + `data/models/user_model.dart` |
 | **Profile screens / UI**                  | `lib/features/profile/presentation/pages/` + `.../widgets/`              |
 | **Profile logic / state**                 | `lib/features/profile/presentation/cubit/profile_cubit.dart` + `profile_state.dart` |
@@ -782,7 +788,7 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Branch schema / data**                  | `lib/features/branch/domain/entities/branch_entity.dart` + `data/models/branch_model.dart` + `data/datasources/branch_remote_datasource.dart` (then run codegen) |
 | **Branch logic / repo / UI**              | `lib/features/branch/domain/repositories/branch_repository.dart` (+impl) · `presentation/cubit/branch_cubit.dart` · `presentation/pages/branch_management_screen.dart` · `widgets/branch_form_sheet.dart` |
 | **Admin user administration (data)**      | `lib/features/admin/data/datasources/user_admin_remote_datasource.dart` + `domain/repositories/user_admin_repository.dart` (+impl) — operates on `users/{uid}`, reuses auth `UserModel` |
-| **Admin user lists / actions (pending·managers·employees)** | `lib/features/admin/presentation/cubit/admin_users_cubit.dart` (`AdminUserFilter`) + `presentation/pages/{manager,employee}_management_screen.dart` · `pending_approvals_screen.dart` · `widgets/admin_user_card.dart` · `admin_user_sheets.dart` · `admin_users_list_view.dart` |
+| **Admin user lists / actions (managers·employees)** | `lib/features/admin/presentation/cubit/admin_users_cubit.dart` (`AdminUserFilter`) + `presentation/pages/{manager,employee}_management_screen.dart` · `create_account_screen.dart` · `widgets/admin_user_card.dart` · `admin_user_sheets.dart` · `admin_users_list_view.dart` |
 | **Operational stats / dashboard data**    | `lib/features/statistics/` (entity·model·repository·datasource + `StatisticsCubit`) — branch-scoped counts for all 3 dashboards; **schedule figures (Phase 7)** read `weekly_schedules` in the statistics datasource |
 | **Weekly schedule schema / serialization**| `lib/features/schedule/domain/entities/weekly_schedule_entity.dart` + `data/models/weekly_schedule_model.dart` (then run codegen); week math in `domain/schedule_week.dart`; day/shift/swap enums in `lib/core/enums/schedule_day.dart` · `schedule_shift.dart` · `swap_status.dart` |
 | **Schedule/swap reads/writes (Firestore)**| `lib/features/schedule/data/datasources/schedule_remote_datasource.dart` (`weekly_schedules` + `shift_swaps`) + `data/repositories/schedule_repository_impl.dart` (+ `domain/repositories/schedule_repository.dart`) |
@@ -838,9 +844,8 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Role checks / feedback off a context**  | `lib/core/extensions/context_extensions.dart` (`context.isAdmin`/`isManager`/`isEmployee`, `context.showSuccess`/`showError`) |
 | **Firestore Timestamp→DateTime mapping**  | `lib/core/extensions/firestore_extensions.dart` (`map.date('field')` in every `*Model.fromMap`) |
 | **Roles enum / role values**              | `lib/core/enums/user_role.dart`                                         |
-| **Approval status enum / values**         | `lib/core/enums/approval_status.dart` (pending/approved/rejected)        |
-| **Role + approval on the user model / seeding** | `lib/features/auth/data/models/user_model.dart` + `data/datasources/user_remote_datasource.dart` (seed-once block: pending + inactive employee) |
-| **Approval gate (pending → dashboard)**   | `lib/core/routes/app_router.dart` (redirect `hasAppAccess` check) + `UserEntity.hasAppAccess`/`isApproved` + `pending_approval_page.dart` + `AuthCubit.refreshUser` |
+| **Account provisioning / activation**     | `features/admin/.../create_account_screen.dart` → callable `createUserAccount`; `UserEntity.isActive` is the sole access flag (no approval enum/screen) |
+| **Cold-start intro / bootstrap rendezvous** | `lib/main.dart` (`LaunchApp`, Firebase/DI/auth + essential preload) + `features/auth/presentation/pages/splash_page.dart` (Lottie playback/error fallback) + `assets/0704.json`; Android/iOS native launch backgrounds are black |
 | **Role-based redirect / route guards**    | `lib/core/routes/app_router.dart` (redirect + `_isAdminArea`/`_isManagerArea`) + `RouteNames.homeForRole` |
 | **Settings / change password UI**         | `lib/features/settings/presentation/pages/`                              |
 | **Routes / navigation guards**            | `lib/core/routes/app_router.dart` + `route_names.dart`                    |
@@ -849,7 +854,7 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Colors / typography / spacing / radius**| `lib/core/theme/app_colors.dart` · `app_typography.dart` · `app_spacing.dart` · `app_radius.dart` |
 | **Global ThemeData (inputs, buttons…)**   | `lib/core/theme/app_theme.dart`                                          |
 | **Cross-feature widgets (snackbar, logo, skeleton)** | `lib/core/widgets/`                                            |
-| **App brand / logo (the DROP wordmark)**  | artwork `assets/drop_logo.png` (registered in `pubspec.yaml`) rendered by `lib/core/widgets/drop_logo.dart` (`DropLogo`, white-tinted via `srcIn`, sized by `height`) — used on splash, login, the **role-home app-bar lockup** (`RoleScaffold`), the **desktop sidebar brand header** (`AppSidebar`), and the **quiet tertiary mark closing every mobile app bar** (`AdaptiveScaffold.showBrandMark`, default on, `_AppBarBrandMark`). **`AnimatedDropLogo`** (`core/widgets/animated_drop_logo.dart`) adds the diagonal shimmer sweep (ShaderMask srcATop, ~3.2s cycle) — hero placements only: Splash lockup + Login desktop brand panel. **macOS Dock icon** = Big Sur squircle composed from the wordmark: master `assets/icon/app_icon_macos.png` → `macos/…/AppIcon.appiconset` (pubspec `flutter_launcher_icons.macos` block documents the source). App name in `main.dart` (`title`) + `AppConstants.appName`. Tested in `test/brand_chrome_test.dart` |
+| **App brand / logo (the DROP wordmark)**  | artwork `assets/drop_logo.png` (registered in `pubspec.yaml`) rendered by `lib/core/widgets/drop_logo.dart` (`DropLogo`, white-tinted via `srcIn`, sized by `height`) — used on login, the **role-home app-bar lockup** (`RoleScaffold`), the **desktop sidebar brand header** (`AppSidebar`), and the **quiet tertiary mark closing every mobile app bar** (`AdaptiveScaffold.showBrandMark`, default on, `_AppBarBrandMark`). Cold start uses `assets/0704.json` through `lottie`; its embedded raster frames are parsed off-isolate and decoded at bounded width. **`AnimatedDropLogo`** remains the shimmer treatment for the Login desktop brand panel. **macOS Dock icon** = Big Sur squircle composed from the wordmark: master `assets/icon/app_icon_macos.png` → `macos/…/AppIcon.appiconset`. App name in `main.dart` (`title`) + `AppConstants.appName`. Tested in `test/brand_chrome_test.dart` |
 | **Error / failure types**                 | `lib/core/errors/exceptions.dart` (data) · `failures.dart` (domain)      |
 | **Constants (collection names, app name)**| `lib/core/constants/app_constants.dart`                                  |
 | **App bootstrap / providers**             | `lib/main.dart`                                                          |
@@ -990,10 +995,10 @@ Patterns below are established across the codebase and **must be reused**.
   signup/`approvalStatus`/Pending-Approval artifacts no longer exist in the
   code. The **first admin** is bootstrapped out of band (Firebase console).
 - **Privileged fields** (`role`, `branchId`, `isActive`, `assignedShift`,
-  `approvalStatus`) are seeded **once** in the `saveUser` first-creation block
-  and are kept **out of `UserModel.toMap()`**, because `saveUser` merges on every
-  login — including them would reset an admin's role / re-pend an approved
-  account on the next sign-in. Self cannot change these (enforced by
+  `position`, `employmentStatus`, `createdBy`, `mustChangePassword`, and
+  `isProfileCompleted`) are created by the admin provisioning function and are
+  kept **out of `UserModel.toMap()`** so routine profile writes cannot reset
+  admin-owned account state. Self cannot change the admin-owned subset (enforced by
   `firestore.rules`); only an **admin** may. (Self may still write
   non-privileged fields like `fcmToken`.)
 - **Enforcement** lives in `firestore.rules`: reusable `isAdmin()`/`isManager()`/

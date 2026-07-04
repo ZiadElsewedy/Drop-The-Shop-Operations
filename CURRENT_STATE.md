@@ -11,8 +11,36 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-04 (Case Management — inbox unread indicators)
+**Last updated:** 2026-07-04 (premium animated cold-start intro)
 **Version:** 1.0.0+1 · **Branch:** `feature/report-issue` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Premium animated cold-start intro (2026-07-04)
+
+- Replaced the old 1400ms timer-driven branded splash with the supplied
+  `assets/0704.json` Lottie on a full black surface. The animation uses its
+  composition duration; there is no artificial `Future.delayed` floor.
+- `LaunchApp` now paints Flutter's first black frame before initializing
+  Firebase. After that frame, Firebase → Firestore persistence → DI → auth
+  restore/user-document fetch → only the existing home-critical preload
+  (`StatisticsCubit`, `TaskCubit`, `BranchCubit`) run concurrently with Lottie.
+  The router mounts only when **animation + bootstrap** have both completed.
+- Routing behavior is unchanged: signed out → Login; signed in → forced
+  password change, then profile completion when required, else the role home.
+  DROP has no Welcome/registration/pending-approval flow; inactive accounts are
+  signed out and blocked.
+- Startup failure holds the final brand frame and offers Retry. A bad/missing
+  animation falls back to the static `DropLogo` and cannot deadlock startup.
+- Asset audit: the current export is ~1.1MB, 720×405, 30fps, 155 frames (~5.17s)
+  and embeds **102 full-frame WebPs**. JSON parsing runs in the background and
+  embedded frames decode at a bounded 480px width, reducing estimated decoded
+  image memory from ~113MiB to ~51MiB. No Lottie raster render cache is added.
+- Android and iOS native launch surfaces are black, removing the pre-Flutter
+  white flash. `assets/0704.json` is registered in `pubspec.yaml`; `lottie`
+  3.4.0 was already locked. No backend/schema/deploy change.
+- Verification: `flutter analyze` has 7 pre-existing infos and 0 new issues;
+  **all 406 tests pass**; Android/iOS launch XML validates.
 
 ---
 
@@ -1992,8 +2020,8 @@ stretched-mobile on desktop anymore.**
 
 | Module           | Status        | Notes                                                          |
 | ---------------- | ------------- | ------------------------------------------------------------- |
-| Authentication   | ✅ Complete    | Email, phone OTP, Google, verify, forgot/change pw, delete; landing = **Login** (social Welcome page removed) |
-| Account approval | ✅ Complete*   | New sign-ups seeded `pending` + inactive → **Pending Approval** screen; gate in router (`hasAppAccess`). *In-app approval UI (manager/admin) still pending — approve out of band (console) until Phase 5 |
+| Authentication   | ✅ Complete    | Admin-provisioned email/password accounts; Login, forgot/change password, forced first-login password change + profile completion. No public registration/Google/OTP/approval flow |
+| Account access   | ✅ Complete    | `isActive` is the sole access gate; inactive accounts are signed out/blocked. Admins provision accounts via `createUserAccount` |
 | Roles & routing  | ✅ Complete    | `UserRole` enum, role dispatch + guards; **admin ⊇ manager** hierarchy + branch-scoped access model (admin global · manager own-branch · employee self) |
 | Shifts (Phase 2) | ❌ Removed (Phase 10) | The unused `shift` foundation (data/domain + placeholder screens + `shifts/{shiftId}` rules + `/admin\|manager/shifts`·`/my-shift` routes + DI) was **deleted** as dead code. The **Weekly Schedule** (Phase 7) is the production roster |
 | Weekly Schedule (Phase 7, +2026-06-20 grid redesign) | ✅ Complete | `schedule` feature: `WeeklyScheduleEntity` + `ScheduleCubit`. **Manager/admin view is now a weekly assignment grid** (`ScheduleGrid` + `ShiftCell`) — each cell shows **assigned head-count** (monochrome density tint + "Empty" state, **no staffing quota/target**); cell tap → `ShiftDetailsSheet` (assign/remove/resolve, conflicts). Single-surface screens (tabs removed). Employee keeps the My-Week view. Roster `day → morning/night → employees`; `weekly_schedules/{id}` rules |
@@ -2018,17 +2046,15 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 
 ## Working tree
 
-- **Branch:** `feature/roles-and-foundation`.
+- **Branch:** `feature/report-issue`.
 - **Phase 1 (Roles & Foundation) implemented** — `UserRole` enum, extended
   user model, role seeding, role-based routing + guards, three role shells, and
   Firestore/Storage security rules. `flutter analyze` is clean.
-- **Auth-flow rework** — removed the social **Welcome** page (landing is now
-  **Login**); added the **account-approval gate**: new sign-ups are seeded
-  `pending` + inactive and confined to a new **Pending Approval** screen
-  (`/pending-approval`) until an admin approves them (`hasAppAccess` gate in the
-  router; approval became **admin-only** in Phase 6). New `ApprovalStatus` enum +
-  `approvalStatus` user field + `AuthCubit.refreshUser` (polled by the pending
-  screen).
+- **Current auth flow (2026-06-26 redesign):** admins create accounts through
+  the callable `createUserAccount`; users sign in with the issued email/password,
+  then complete forced password change → profile completion → role home.
+  Welcome, public registration, Google/OTP, email-verification, approval status,
+  and Pending Approval were removed. `isActive` is the only access gate.
 - **Phase 2 — Shift foundation** — *(deleted in Phase 10 as dead code; the weekly
   schedule superseded it.)* Was a data+domain `shift` feature with placeholder
   screens, never wired into a working UI.
@@ -2050,13 +2076,11 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 - **Phase 5 — Admin module** — new `branch` feature (full vertical slice +
   `BranchCubit`: CRUD, activate/deactivate, soft delete) and `admin` module
   (`UserAdminRepository` over `users/{uid}`, `AdminUsersCubit`): management
-  screens for **branches, managers, employees, and pending approvals**
-  (`/admin/branches|managers|employees|approvals`). Admin can approve/reject
-  users, (de)activate, change role/branch, assign managers to branches, and move
-  employees between branches. `branches/{branchId}` Firestore rules added.
-  **Managers are promoted from existing approved users** (no client-side Auth
-  account creation — no Cloud Functions). admin/branch cubits call repositories
-  directly (no use-case layer).
+  screens for **branches, managers, and employees**, plus admin-only account
+  provisioning (`/admin/users/create`). Admin can create/deactivate accounts,
+  change role/branch, assign managers to branches, and move employees between
+  branches. `branches/{branchId}` Firestore rules added. Account creation/reset
+  uses Cloud Functions so the admin's own Auth session is never replaced.
 - **Phase 6 — Dashboards & notifications** — new `statistics` feature
   (`StatisticsEntity`/`Model`/`Repository(+Impl)`/`RemoteDataSource` +
   `StatisticsCubit`) computes **role-scoped operational counts** (branch-scoped
@@ -2182,7 +2206,7 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
   (`firebase deploy --only functions,firestore:rules`; the Cloud Function
   requires the **Blaze** plan); enable Firebase Storage; for iOS push, add the
   APNs key + the `remote-notification` background mode (console/native, not set
-  here); bootstrap the first admin (set `role/approvalStatus/isActive` in the
+  here); bootstrap the first admin (set `role: admin` / `isActive: true` in the
   console) before production.
 
 ---
@@ -2191,35 +2215,30 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 
 | Name                | Path                         | Page                    | Access        |
 | ------------------- | ---------------------------- | ----------------------- | ------------- |
-| splash              | `/splash`                    | `SplashPage`            | public        |
+| splash              | `/splash`                    | `SplashPage` (cold-start visual; normal boot enters router at resolved destination) | public |
 | home                | `/`                          | `EmployeeShell`         | **employee**  |
 | adminDashboard      | `/admin`                     | `AdminShell`            | **admin**     |
 | managerHome         | `/manager`                   | `ManagerShell`          | **manager**   |
-| adminShifts         | `/admin/shifts`              | `ShiftManagementScreen` | **admin**     |
-| managerShifts       | `/manager/shifts`            | `BranchShiftScreen`     | **manager** (+admin) |
-| myShift             | `/my-shift`                  | `MyShiftScreen`         | any approved auth (self) |
 | adminTasks          | `/admin/tasks`               | `TaskManagementScreen` (branch overview → drills into `BranchOperationsScreen`) | **admin**     |
 | managerTasks        | `/manager/tasks`             | `ManagerOperationsScreen` → `BranchOperationsScreen` (own branch) | **manager** (+admin) |
-| myTasks             | `/my-tasks`                  | `MyTasksScreen`         | any approved auth (self) |
+| myTasks             | `/my-tasks`                  | `MyTasksScreen`         | employee/self |
 | _(removed Phase 10)_ | ~~`/admin\|manager/shifts`, `/my-shift`~~ | — | Phase 2 shift screens deleted (dead code) |
 | adminSchedule       | `/admin/schedule`            | `ScheduleManagementScreen` | **admin**  |
 | managerSchedule     | `/manager/schedule`          | `BranchScheduleScreen`  | **manager** (+admin) |
-| mySchedule          | `/my-schedule`               | `MyScheduleScreen`      | any approved auth (self) |
+| mySchedule          | `/my-schedule`               | `MyScheduleScreen`      | employee/self |
 | adminBranches       | `/admin/branches`            | `BranchManagementScreen`| **admin**     |
 | adminManagers       | `/admin/managers`            | `ManagerManagementScreen`| **admin**    |
 | adminEmployees      | `/admin/employees`           | `EmployeeManagementScreen`| **admin**   |
 | adminAnalytics      | `/admin/analytics`           | `AdminAnalyticsScreen`  | **admin**     |
-| adminApprovals      | `/admin/approvals`           | `PendingApprovalsScreen`| **admin**     |
+| adminCreateAccount  | `/admin/users/create`        | `CreateAccountScreen`   | **admin**     |
 | communications      | `/communications`            | `CommunicationsScreen`  | **admin + manager** |
 | communicationsCompose | `/communications/compose`  | `ComposeBroadcastScreen`| **admin + manager** |
 | communicationsDetail | `/communications/:broadcastId` | `BroadcastDetailScreen` | **admin + manager** |
 | notifications       | `/notifications`             | `NotificationsScreen`   | all roles     |
 | login               | `/login`                     | `LoginPage`             | unauth (landing) |
-| register            | `/register`                  | `RegisterPage`          | unauth        |
-| phone               | `/phone`                     | `PhoneOtpPage`          | unauth        |
 | forgotPassword      | `/forgot-password`           | `ForgotPasswordPage`    | unauth        |
-| emailVerification   | `/email-verification`        | `EmailVerificationPage` | awaiting verif|
-| pendingApproval     | `/pending-approval`          | `PendingApprovalPage`   | auth, not approved |
+| forcePasswordChange | `/force-password-change`     | `ForcePasswordChangePage` | first login |
+| profileCompletion   | `/complete-profile`          | `ProfileCompletionPage` | first login |
 | profile             | `/profile`                   | `ProfilePage`           | any auth      |
 | editProfile         | `/profile/edit`              | `EditProfilePage`       | any auth      |
 | settings            | `/settings`                  | `SettingsPage`          | any auth      |
@@ -2227,42 +2246,38 @@ Legend: ✅ done · 🟡 partial · ⛔ not started
 
 Defined in [route_names.dart](lib/core/routes/route_names.dart) /
 [app_router.dart](lib/core/routes/app_router.dart). Navigation is auth-guarded,
-**approval-gated**, **and role-guarded**: an authenticated-but-unapproved user
-(`!user.hasAppAccess`) is held on `/pending-approval`; once approved each user is
-dispatched to their role shell (`RouteNames.homeForRole`), and attempts to enter
-another role's area (incl. manual URL hacking) are bounced back to their own
-home. `/profile` & `/settings` are shared across all roles. The unauthenticated
-landing is **Login** (the social Welcome page was removed).
+**first-login-gated** and **role-guarded**: `mustChangePassword` then
+`!isProfileCompleted` are enforced before role dispatch. Attempts to enter
+another role's area are bounced to that user's own home. `/profile` and
+`/settings` are shared. The unauthenticated landing is **Login**; there is no
+Welcome, registration, or pending-approval route.
 
 ---
 
 ## Backend / Firebase status
 
-- **Firebase Auth** — configured & working: Email/Password, Phone, Google.
+- **Firebase Auth** — configured & working: admin-provisioned Email/Password.
 - **Cloud Firestore** — in use. **Offline persistence enabled** (stabilization):
   `Settings(persistenceEnabled: true, cacheSizeBytes: CACHE_SIZE_UNLIMITED)` set
   in `main.dart` — cached reads, writes queued + synced on reconnect, no crashes
-  when the connection drops. The Pending Approval screen uses a **real-time**
-  `users/{uid}` listener (`AuthCubit.watchCurrentUser`) instead of polling.
+  when the connection drops. `AuthCubit.watchCurrentUser` streams the signed-in
+  user document so admin deactivation takes effect without polling.
 - **Firebase Storage** — code uploads to `users/{uid}/avatar.jpg` &
   `cover.jpg`. ⚠️ **Storage must be enabled** in the Firebase console for
   uploads to work in production.
 - **Security rules** — ✅ **In the repo:** [`firestore.rules`](firestore.rules)
   and [`storage.rules`](storage.rules), wired into [`firebase.json`](firebase.json).
-  Firestore rules encode the role/branch + **approval** access model: **self
-  registration** is allowed only as a `pending`, **inactive** employee;
-  **admin** reads/writes any user (approve/reject, promotions, branch moves,
-  (de)activation) — **account approval is admin-only (Phase 6)**; **any branch
+  Firestore rules encode the role/branch + admin-provisioned access model:
+  client creation of `users/{uid}` is denied; **admin** manages public user
+  records (role, branch, activation, contact data), while account creation/reset
+  goes through callable Cloud Functions. **Any branch
   member** (manager **or** employee) **reads** users in their **own branch** —
   managers see their team, employees see the coworkers on their shift + their
   manager for the weekly schedule (stabilization fix; `selfBranch() != '' &&
   branchId == selfBranch()`) but only an **admin** writes user docs; **employee**
-  edits only their own doc and may **not** change
-  the privileged fields (`role`, `branchId`, `isActive`, `assignedShift`,
-  `approvalStatus`) — non-privileged fields (profile, `fcmToken`) are allowed. **`shifts/{shiftId}` (Phase 2)** is the
-  first branch-scoped collection wired to `canReachBranch()`: admin = all
-  branches, manager = own branch, employee = their own assigned shift
-  (read-only). **`tasks/{taskId}` (Phase 3–4)** follows the same model with a
+  edits only their own allowed profile/token/first-login fields and may not
+  change admin-owned role/branch/activation/employment fields.
+  **`tasks/{taskId}` (Phase 3–4)** follows the branch model with a
   **limited employee self-update** — the assignee may advance status / add notes /
   proof, but not reassign, move branch, set approved/rejected, or forge the
   review-attribution fields (`approvedBy`/`rejectedBy`). **Storage** (`storage.rules`)
@@ -2335,8 +2350,10 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 | `role`                                                 | string    | **Phase 1** — `admin` (global) / `manager` (one branch) / `employee` (own data); seeded `employee` once, role-guarded |
 | `branchId`                                             | string?   | **Phase 1** — owning branch. **admin:** null/ignored (global); **manager:** their one branch; **employee:** their branch. Assigned by an admin. |
 | `assignedShift`                                        | string?   | **Phase 1/2** — references the assigned `shifts/{shiftId}`; null until a manager assigns one |
-| `isActive`                                             | bool      | **Phase 1** — activation/soft-disable. **New sign-ups seeded `false`** (pending approval); set `true` on approval |
-| `approvalStatus`                                       | string    | **Approval** — `pending` / `approved` / `rejected`. New sign-ups seeded `pending`; missing → treated as `approved` (legacy). **Flipped by admin only (Phase 6)** |
+| `isActive`                                             | bool      | Activation/soft-disable and the sole app-access gate; seeded by admin provisioning |
+| `mustChangePassword`                                   | bool      | Admin-created account must replace its temporary password before app access |
+| `isProfileCompleted`                                   | bool      | First-login profile-completion gate |
+| `position`, `employmentStatus`, `createdBy`            | string?   | Admin-owned employment/provisioning metadata |
 | `fcmTokens`                                            | string[]  | **Phase 2** — device push tokens (multi-device; self-written via `arrayUnion`/`arrayRemove`, refresh-aware). Read server-side by the `sendBroadcast` function |
 | `fcmToken`, `fcmTokenUpdatedAt`                        | string? / Timestamp? | **Phase 6 (legacy single token)** — superseded by `fcmTokens`; still read by the function for back-compat; `fcmTokenUpdatedAt` still stamped on register |
 | `displayName`, `photoUrl`                              | string    | **legacy** auth keys, kept in sync |
@@ -2348,11 +2365,9 @@ Shared by the auth (`UserModel`) and profile (`ProfileModel`) layers.
 | `accountStatus`                                        | string    | default `active`               |
 | `followersCount`, `followingCount`, `postsCount`, `likesCount` | int | **legacy/unused** — FBRO is not a social app |
 
-> **Privileged-field seeding:** `role`/`branchId`/`isActive`/`assignedShift`/
-> `approvalStatus` are seeded **once** on first document creation (a new account
-> is seeded as a `pending`, **inactive** employee) and are deliberately excluded
-> from `UserModel.toMap()`, so a routine re-login (which merges) can never reset
-> an admin-assigned role/branch or re-pend an approved account.
+> **Privileged fields:** account provisioning creates role/branch/activation and
+> first-login metadata server-side. They are excluded from `UserModel.toMap()`
+> so routine profile writes cannot reset admin-owned account state.
 
 ### Firestore schema — `branches/{branchId}` (Phase 5)
 
@@ -2565,19 +2580,12 @@ writes are denied by the rules.
   (they don't depend on the new index/function), but an employee's shift-task
   *stream* won't resolve and daily/weekly recurring instances won't
   auto-generate.
-- **Approval & user administration are now in-app (Phase 5)** — admins approve/
-  reject users, (de)activate, change role/branch, assign managers to branches and
-  move employees between branches from the admin module. The **first admin** must
-  still be bootstrapped in the Firebase console (set `role: admin`,
-  `approvalStatus: approved`, `isActive: true`), since every sign-up — including
-  the founder's — is seeded `pending`/inactive.
-- **Managers are promoted, not created** — there is no admin "create account"
-  flow: client-side Firebase Auth account creation would sign the admin out, and
-  there are no Cloud Functions (no Node.js). "Add Manager" promotes an existing
-  approved employee to `role: manager`; new staff self-register, then an admin
-  approves them (optionally directly as a manager).
-- **Approval is admin-only (Phase 6)** — managers no longer approve or write user
-  accounts (rules + UI); they manage branch operations (shifts/tasks) only.
+- **Admin-provisioned accounts** — there is no public registration or approval
+  queue. Admins create/reset/deactivate accounts and manage role/branch through
+  the admin module; the callable `createUserAccount` uses the Admin SDK so the
+  current admin remains signed in. The first admin is still bootstrapped in the
+  Firebase console (`role: admin`, `isActive: true`). Managers do not write user
+  administration data.
 - **Push notifications need a sender** — the FCM **client** foundation is in
   place (permission, `users/{uid}.fcmToken`, foreground snackbars), but actually
   **emitting** the events (task assigned, waiting review, new registration, …)
@@ -2598,20 +2606,17 @@ writes are denied by the rules.
   `AppConstants.shiftsCollection`, and the `shifts/{shiftId}` rules) was deleted
   as verified dead code. The shift-visibility requirement is fully met by the
   Weekly Schedule (employee My Week · manager branch schedule · admin all branches).
-- **Real-time scope: tasks + approval are push; everything else is reload-after-mutation.**
+- **Real-time scope: tasks are pushed; most other lists reload after mutation.**
   **Tasks are fully streamed** (`TaskRepository.watch*` → `TaskCubit`): an
   assigned task or any status change appears on every open client immediately
-  (cross-client push), backed by the offline cache. Pending-approval is also
-  stream-driven (`watchCurrentUser`). **Schedule / branch / admin / swap** lists
+  (cross-client push), backed by the offline cache. The signed-in user doc is
+  stream-watched for live deactivation. **Schedule / branch / admin / swap** lists
   still use **reload-after-mutation** (instant for the acting user) +
   pull-to-refresh; another user's open list reflects a change on next refresh.
   **(Phase 8)** approving a swap auto-refreshes the manager Schedule tab via a
   `BlocListener`.
-- **Integration-audit findings.** (1) **Managers do not approve users** —
-  approval is admin-only (Phase 6 design); any "manager approves employee"
-  expectation is intentionally unsupported. (2) **Rejected users** land on the
-  generic "Pending Approval" screen — access is correctly blocked, but the copy
-  doesn't distinguish *rejected* from *pending*. (3) ~~Admin task creation uses a
+- **Integration-audit findings.** (1) **Managers do not administer users** —
+  account provisioning/activation is admin-only. (2) ~~Admin task creation uses a
   free-text branch field~~ **FIXED (Stabilization)** — admin now selects from a
   Firestore-backed branch dropdown, so a task's `branchId` always matches a real
   branch and the Assign picker is populated.
@@ -2668,7 +2673,9 @@ writes are denied by the rules.
 ## Suggested next steps
 
 1. **Deploy rules + enable Storage** — `firebase deploy --only firestore:rules,storage` and enable Firebase Storage in the console. Until then proof uploads return `unauthorized`.
-2. **Bootstrap first admin** — in the Firebase console set `role: admin`, `approvalStatus: approved`, `isActive: true` on the founder's account; then verify register → Pending Approval → approve → role dispatch end to end.
+2. **Bootstrap first admin** — in the Firebase console set `role: admin` and
+   `isActive: true` on the founder's account; then verify admin provisioning →
+   forced password change → profile completion → role dispatch end to end.
 3. **Firestore rules for `activityLog`/`recurrence`** — the new fields written by `TaskCubit` are covered by the existing employee self-update path. Confirm the limited-employee rule allows writing `activityLog` (array union) without allowing `recurrence` changes. Harden if needed.
 4. **Recurring tasks: server-side spawn** — the current `_spawnNextRecurrence` runs client-side on approve. A Cloud Function on `tasks/{taskId}` write (status==approved + frequency!=none) would be more reliable for offline/concurrent approval cases.
 5. **Deploy the notification engine** — the 7 Cloud Functions (`sendBroadcast`, `onNotificationCreated`, `runTaskReminders`, `runBroadcastSchedules`, `broadcastHousekeeping`, `onNotificationRead`, `onBroadcastOpened`) are written + tested but **not deployed**; `firebase deploy --only functions,firestore:rules,firestore:indexes` (Blaze plan) + native FCM setup (APNs key + Push/Background-Modes capability on iOS) are required before any push fires. Until then in-app notifications work but push is inert.

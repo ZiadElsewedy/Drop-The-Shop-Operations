@@ -1,15 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:drop/core/di/injection.dart';
-import 'package:drop/core/routes/route_names.dart';
-import 'package:drop/core/utils/app_logger.dart';
+import 'package:lottie/lottie.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_typography.dart';
-import 'package:drop/core/widgets/animated_drop_logo.dart';
-import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/core/widgets/drop_logo.dart';
 
+/// The cold-start visual surface.
+///
+/// Bootstrap is intentionally owned by the composition root (`LaunchApp` in
+/// `main.dart`), not this page. Keeping this widget presentation-only lets the
+/// Firebase/session work and the Lottie playback run independently, with the
+/// parent acting as the two-condition rendezvous.
 class SplashPage extends StatefulWidget {
-  const SplashPage({super.key});
+  const SplashPage({
+    required this.onAnimationComplete,
+    required this.isBootstrapping,
+    this.bootstrapError,
+    this.onRetry,
+    super.key,
+  });
+
+  final VoidCallback onAnimationComplete;
+  final bool isBootstrapping;
+  final Object? bootstrapError;
+  final VoidCallback? onRetry;
 
   @override
   State<SplashPage> createState() => _SplashPageState();
@@ -17,73 +30,26 @@ class SplashPage extends StatefulWidget {
 
 class _SplashPageState extends State<SplashPage>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _logoScale;
-  late Animation<double> _logoOpacity;
-  late Animation<double> _textOpacity;
+  late final AnimationController _controller;
+  bool _animationReported = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    );
-
-    _logoScale = Tween<double>(begin: 0.6, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack),
-      ),
-    );
-    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
-      ),
-    );
-    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _controller,
-        curve: const Interval(0.5, 0.9, curve: Curves.easeOut),
-      ),
-    );
-
-    _controller.forward();
-    _initSession();
+    _controller = AnimationController(vsync: this);
   }
 
-  Future<void> _initSession() async {
-    await Future.wait([
-      AppLog.time('auth', 'restoreSession',
-          () => AppDependencies.authCubit.restoreSession()),
-      // Minimum splash time = the brand animation length (was an arbitrary
-      // 2400ms, ~1s of dead time after the 1400ms animation finished). Home data
-      // is preloaded during this window (main.dart AuthCubit listener), so Home
-      // paints instantly once the splash clears.
-      Future.delayed(const Duration(milliseconds: 1400)),
-    ]);
-    if (!mounted) return;
-
-    AppDependencies.authCubit.state.when(
-      initial: () => context.go(RouteNames.login),
-      loading: (_) => context.go(RouteNames.login),
-      authenticated: (user) => context.go(_destinationFor(user)),
-      unauthenticated: () => context.go(RouteNames.login),
-      passwordResetSent: () => context.go(RouteNames.login),
-      passwordChanged: () => context.go(RouteNames.login),
-      error: (_) => context.go(RouteNames.login),
-    );
+  void _play(LottieComposition composition) {
+    if (_controller.isAnimating || _animationReported) return;
+    _controller
+      ..duration = composition.duration
+      ..forward().whenComplete(_reportAnimationComplete);
   }
 
-  /// First-login gate, mirroring the router redirect: force password change →
-  /// profile completion → role home. A deactivated account (the cubit signs it
-  /// out) falls back to Login.
-  String _destinationFor(UserEntity user) {
-    if (!user.isActive) return RouteNames.login;
-    if (user.mustChangePassword) return RouteNames.forcePasswordChange;
-    if (!user.isProfileCompleted) return RouteNames.profileCompletion;
-    return RouteNames.homeForRole(user.role);
+  void _reportAnimationComplete() {
+    if (!mounted || _animationReported) return;
+    _animationReported = true;
+    widget.onAnimationComplete();
   }
 
   @override
@@ -94,101 +60,145 @@ class _SplashPageState extends State<SplashPage>
 
   @override
   Widget build(BuildContext context) {
+    final animationDone = _animationReported;
+    final showError = animationDone && widget.bootstrapError != null;
+    final showWaiting =
+        animationDone &&
+        widget.bootstrapError == null &&
+        widget.isBootstrapping;
+
     return Scaffold(
-      backgroundColor: AppColors.darkBg,
-      body: Stack(
-        children: [
-          // Soft white glow bloom behind the brand lockup (monochrome — the
-          // accent is white, never indigo).
-          Center(
-            child: Container(
-              width: 320,
-              height: 320,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.primary.withValues(alpha: 0.18),
-                    AppColors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Center(
-            child: AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) => Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FadeTransition(
-                    opacity: _logoOpacity,
-                    child: ScaleTransition(
-                      scale: _logoScale,
-                      // Shimmer sweep on top of the entrance fade/scale.
-                      child: const AnimatedDropLogo(height: 92),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  FadeTransition(
-                    opacity: _textOpacity,
-                    child: Column(
-                      children: [
-                        Text(
-                          'THE SHOP',
-                          style: AppTypography.labelLarge.copyWith(
-                            letterSpacing: 6,
-                            color: AppColors.textPrimary,
+      backgroundColor: Colors.black,
+      body: ColoredBox(
+        color: Colors.black,
+        child: SafeArea(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(
+                child: RepaintBoundary(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: FractionallySizedBox(
+                      widthFactor: 0.86,
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Semantics(
+                          label: 'DROP Operations',
+                          image: true,
+                          child: LottieBuilder(
+                            // This export contains 102 embedded 720×405 WebP
+                            // image assets (not lightweight vector paths). Load
+                            // the JSON off the UI isolate and decode the images
+                            // at a bounded size to avoid a ~113 MiB cold-start
+                            // decoded-image footprint.
+                            lottie: _LaunchAssetLottie('assets/0704.json'),
+                            controller: _controller,
+                            fit: BoxFit.contain,
+                            repeat: false,
+                            animate: false,
+                            onLoaded: _play,
+                            errorBuilder: (context, error, stackTrace) {
+                              // A malformed/missing launch asset must never
+                              // deadlock startup. Keep the brand visible and
+                              // release the animation side of the gate.
+                              WidgetsBinding.instance.addPostFrameCallback(
+                                (_) => _reportAnimationComplete(),
+                              );
+                              return const Center(child: DropLogo(height: 88));
+                            },
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Operations Management System',
-                          style: AppTypography.bodySmall.copyWith(
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          // Loading bar + version pinned to the bottom.
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 56),
-              child: FadeTransition(
-                opacity: _textOpacity,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: 150,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: const LinearProgressIndicator(
-                          minHeight: 4,
-                          color: AppColors.primary,
-                          backgroundColor: AppColors.darkSurfaceElevated,
                         ),
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Version 1.0.0',
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textTertiary),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
+              Align(
+                alignment: Alignment.bottomCenter,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 36),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: showError
+                        ? _StartupError(
+                            key: const ValueKey('startup-error'),
+                            onRetry: widget.onRetry,
+                          )
+                        : showWaiting
+                        ? const _WaitingIndicator(
+                            key: ValueKey('startup-waiting'),
+                          )
+                        : const SizedBox.shrink(key: ValueKey('startup-idle')),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
+}
+
+/// Asset provider that keeps the supplied Lottie intact while bounding its
+/// embedded raster-frame decode size. `AssetLottie` otherwise resolves data URI
+/// images at their full 720×405 source dimensions before playback begins.
+class _LaunchAssetLottie extends AssetLottie {
+  // The explicit forward keeps the private provider's fixed loading policy
+  // visible at the call site.
+  // ignore: use_super_parameters
+  _LaunchAssetLottie(String assetName)
+      : super(assetName, backgroundLoading: true);
+
+  static const _decodedWidth = 480;
+
+  @override
+  ImageProvider<Object>? getImageProvider(LottieImageAsset lottieImage) {
+    final provider = super.getImageProvider(lottieImage);
+    return provider == null
+        ? null
+        : ResizeImage(provider, width: _decodedWidth, allowUpscaling: false);
+  }
+}
+
+class _WaitingIndicator extends StatelessWidget {
+  const _WaitingIndicator({super.key});
+
+  @override
+  Widget build(BuildContext context) => const SizedBox(
+    width: 18,
+    height: 18,
+    child: CircularProgressIndicator(
+      strokeWidth: 1.5,
+      color: AppColors.textSecondary,
+    ),
+  );
+}
+
+class _StartupError extends StatelessWidget {
+  const _StartupError({required this.onRetry, super.key});
+
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Text(
+        'DROP could not start. Check your connection and try again.',
+        textAlign: TextAlign.center,
+        style: AppTypography.bodySmall.copyWith(color: AppColors.textSecondary),
+      ),
+      const SizedBox(height: 12),
+      TextButton(
+        onPressed: onRetry,
+        style: TextButton.styleFrom(
+          foregroundColor: AppColors.textPrimary,
+          minimumSize: const Size(96, 44),
+        ),
+        child: const Text('Try again'),
+      ),
+    ],
+  );
 }
