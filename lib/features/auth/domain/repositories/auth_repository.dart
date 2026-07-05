@@ -24,4 +24,8 @@ abstract class AuthRepository {
   /// password / completes their profile.
   Future<void> setMustChangePassword(String uid, bool value);
   Future<void> setProfileCompleted(String uid, bool value);
+
+  /// One-time Welcome flag (self-write): seeded `false` at profile completion so
+  /// a new employee sees the Welcome screen once, set `true` when they dismiss it.
+  Future<void> setOnboardingCompleted(String uid, bool value);
 }

@@ -23,6 +23,7 @@ class UserModel {
   // ─── Account provisioning (admin-created) ───────────────────
   final bool mustChangePassword;
   final bool isProfileCompleted;
+  final bool hasCompletedOnboarding;
   final String employmentStatus;
   final String? createdBy;
   // NOTE (C2 fix, 2026-07-03): compensation fields are deliberately absent —
@@ -47,6 +48,7 @@ class UserModel {
     this.position,
     this.mustChangePassword = false,
     this.isProfileCompleted = true,
+    this.hasCompletedOnboarding = true,
     this.employmentStatus = 'active',
     this.createdBy,
   });
@@ -80,6 +82,7 @@ class UserModel {
         position: entity.position,
         mustChangePassword: entity.mustChangePassword,
         isProfileCompleted: entity.isProfileCompleted,
+        hasCompletedOnboarding: entity.hasCompletedOnboarding,
         employmentStatus: entity.employmentStatus,
         createdBy: entity.createdBy,
       );
@@ -110,6 +113,10 @@ class UserModel {
         // trapped in the onboarding flow.
         mustChangePassword: map['mustChangePassword'] as bool? ?? false,
         isProfileCompleted: map['isProfileCompleted'] as bool? ?? true,
+        // Absent on every pre-onboarding-feature doc → default true = "already
+        // welcomed", so no existing user is ever shown the Welcome screen. Only
+        // a new account seeded false at profile completion triggers it.
+        hasCompletedOnboarding: map['hasCompletedOnboarding'] as bool? ?? true,
         employmentStatus: map['employmentStatus'] as String? ?? 'active',
         createdBy: map['createdBy'] as String?,
         // Compensation keys on legacy (pre-migration) docs are intentionally
@@ -152,6 +159,7 @@ class UserModel {
         position: position,
         mustChangePassword: mustChangePassword,
         isProfileCompleted: isProfileCompleted,
+        hasCompletedOnboarding: hasCompletedOnboarding,
         employmentStatus: employmentStatus,
         createdBy: createdBy,
       );

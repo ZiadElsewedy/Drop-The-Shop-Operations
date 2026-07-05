@@ -72,9 +72,11 @@ service cloud.firestore {
 
       // Admin: full control.
       // Self: profile fields + the first-login flags (mustChangePassword,
-      //   isProfileCompleted) + non-privileged fields (fcmToken, and
-      //   paymentNumber — the employee's own salary-receiving number). All
-      //   PRIVILEGED fields stay frozen: role, isActive, branchId,
+      //   isProfileCompleted, hasCompletedOnboarding — the one-time Welcome
+      //   flag) + non-privileged fields (fcmToken, and paymentNumber — the
+      //   employee's own salary-receiving number). All PRIVILEGED fields (below)
+      //   stay frozen — the flags above are permitted precisely because they are
+      //   NOT in that freeze-list: role, isActive, branchId,
       //   assignedShift, position, employmentStatus, createdBy, and the
       //   admin-set compensation fields (salaryAmount, salaryType,
       //   paymentMethod).

@@ -62,6 +62,14 @@ mixin _$UserEntity {
   /// legacy / pre-migration documents are never trapped in onboarding.
   bool get isProfileCompleted => throw _privateConstructorUsedError;
 
+  /// True once the user has seen the one-time Welcome screen (shown to
+  /// employees right after profile completion). Defaults true so every
+  /// existing user is treated as already welcomed and is NEVER interrupted —
+  /// only a genuinely new account is seeded `false` at profile completion, so
+  /// the router shows Welcome exactly once. Non-employees never see it
+  /// regardless of this flag (the gate is employee-scoped).
+  bool get hasCompletedOnboarding => throw _privateConstructorUsedError;
+
   /// HR employment label (`active` / `suspended` / `terminated`). A record
   /// field shown/edited in admin — it does NOT gate access (that's [isActive]).
   String get employmentStatus => throw _privateConstructorUsedError;
@@ -102,6 +110,7 @@ abstract class $UserEntityCopyWith<$Res> {
     String? position,
     bool mustChangePassword,
     bool isProfileCompleted,
+    bool hasCompletedOnboarding,
     String employmentStatus,
     String? createdBy,
   });
@@ -139,6 +148,7 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
     Object? position = freezed,
     Object? mustChangePassword = null,
     Object? isProfileCompleted = null,
+    Object? hasCompletedOnboarding = null,
     Object? employmentStatus = null,
     Object? createdBy = freezed,
   }) {
@@ -212,6 +222,10 @@ class _$UserEntityCopyWithImpl<$Res, $Val extends UserEntity>
                 ? _value.isProfileCompleted
                 : isProfileCompleted // ignore: cast_nullable_to_non_nullable
                       as bool,
+            hasCompletedOnboarding: null == hasCompletedOnboarding
+                ? _value.hasCompletedOnboarding
+                : hasCompletedOnboarding // ignore: cast_nullable_to_non_nullable
+                      as bool,
             employmentStatus: null == employmentStatus
                 ? _value.employmentStatus
                 : employmentStatus // ignore: cast_nullable_to_non_nullable
@@ -253,6 +267,7 @@ abstract class _$$UserEntityImplCopyWith<$Res>
     String? position,
     bool mustChangePassword,
     bool isProfileCompleted,
+    bool hasCompletedOnboarding,
     String employmentStatus,
     String? createdBy,
   });
@@ -289,6 +304,7 @@ class __$$UserEntityImplCopyWithImpl<$Res>
     Object? position = freezed,
     Object? mustChangePassword = null,
     Object? isProfileCompleted = null,
+    Object? hasCompletedOnboarding = null,
     Object? employmentStatus = null,
     Object? createdBy = freezed,
   }) {
@@ -362,6 +378,10 @@ class __$$UserEntityImplCopyWithImpl<$Res>
             ? _value.isProfileCompleted
             : isProfileCompleted // ignore: cast_nullable_to_non_nullable
                   as bool,
+        hasCompletedOnboarding: null == hasCompletedOnboarding
+            ? _value.hasCompletedOnboarding
+            : hasCompletedOnboarding // ignore: cast_nullable_to_non_nullable
+                  as bool,
         employmentStatus: null == employmentStatus
             ? _value.employmentStatus
             : employmentStatus // ignore: cast_nullable_to_non_nullable
@@ -396,6 +416,7 @@ class _$UserEntityImpl extends _UserEntity {
     this.position,
     this.mustChangePassword = false,
     this.isProfileCompleted = true,
+    this.hasCompletedOnboarding = true,
     this.employmentStatus = 'active',
     this.createdBy,
   }) : super._();
@@ -467,6 +488,16 @@ class _$UserEntityImpl extends _UserEntity {
   @JsonKey()
   final bool isProfileCompleted;
 
+  /// True once the user has seen the one-time Welcome screen (shown to
+  /// employees right after profile completion). Defaults true so every
+  /// existing user is treated as already welcomed and is NEVER interrupted —
+  /// only a genuinely new account is seeded `false` at profile completion, so
+  /// the router shows Welcome exactly once. Non-employees never see it
+  /// regardless of this flag (the gate is employee-scoped).
+  @override
+  @JsonKey()
+  final bool hasCompletedOnboarding;
+
   /// HR employment label (`active` / `suspended` / `terminated`). A record
   /// field shown/edited in admin — it does NOT gate access (that's [isActive]).
   @override
@@ -480,7 +511,7 @@ class _$UserEntityImpl extends _UserEntity {
 
   @override
   String toString() {
-    return 'UserEntity(uid: $uid, email: $email, authProvider: $authProvider, displayName: $displayName, photoUrl: $photoUrl, phoneNumber: $phoneNumber, address: $address, emergencyContact: $emergencyContact, isEmailVerified: $isEmailVerified, createdAt: $createdAt, role: $role, branchId: $branchId, isActive: $isActive, assignedShift: $assignedShift, position: $position, mustChangePassword: $mustChangePassword, isProfileCompleted: $isProfileCompleted, employmentStatus: $employmentStatus, createdBy: $createdBy)';
+    return 'UserEntity(uid: $uid, email: $email, authProvider: $authProvider, displayName: $displayName, photoUrl: $photoUrl, phoneNumber: $phoneNumber, address: $address, emergencyContact: $emergencyContact, isEmailVerified: $isEmailVerified, createdAt: $createdAt, role: $role, branchId: $branchId, isActive: $isActive, assignedShift: $assignedShift, position: $position, mustChangePassword: $mustChangePassword, isProfileCompleted: $isProfileCompleted, hasCompletedOnboarding: $hasCompletedOnboarding, employmentStatus: $employmentStatus, createdBy: $createdBy)';
   }
 
   @override
@@ -518,6 +549,8 @@ class _$UserEntityImpl extends _UserEntity {
                 other.mustChangePassword == mustChangePassword) &&
             (identical(other.isProfileCompleted, isProfileCompleted) ||
                 other.isProfileCompleted == isProfileCompleted) &&
+            (identical(other.hasCompletedOnboarding, hasCompletedOnboarding) ||
+                other.hasCompletedOnboarding == hasCompletedOnboarding) &&
             (identical(other.employmentStatus, employmentStatus) ||
                 other.employmentStatus == employmentStatus) &&
             (identical(other.createdBy, createdBy) ||
@@ -544,6 +577,7 @@ class _$UserEntityImpl extends _UserEntity {
     position,
     mustChangePassword,
     isProfileCompleted,
+    hasCompletedOnboarding,
     employmentStatus,
     createdBy,
   ]);
@@ -576,6 +610,7 @@ abstract class _UserEntity extends UserEntity {
     final String? position,
     final bool mustChangePassword,
     final bool isProfileCompleted,
+    final bool hasCompletedOnboarding,
     final String employmentStatus,
     final String? createdBy,
   }) = _$UserEntityImpl;
@@ -640,6 +675,15 @@ abstract class _UserEntity extends UserEntity {
   /// legacy / pre-migration documents are never trapped in onboarding.
   @override
   bool get isProfileCompleted;
+
+  /// True once the user has seen the one-time Welcome screen (shown to
+  /// employees right after profile completion). Defaults true so every
+  /// existing user is treated as already welcomed and is NEVER interrupted —
+  /// only a genuinely new account is seeded `false` at profile completion, so
+  /// the router shows Welcome exactly once. Non-employees never see it
+  /// regardless of this flag (the gate is employee-scoped).
+  @override
+  bool get hasCompletedOnboarding;
 
   /// HR employment label (`active` / `suspended` / `terminated`). A record
   /// field shown/edited in admin — it does NOT gate access (that's [isActive]).

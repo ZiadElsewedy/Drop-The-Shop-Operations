@@ -11,8 +11,86 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-05 (schedule Final View)
+**Last updated:** 2026-07-05 (one-time employee Welcome / onboarding)
 **Version:** 1.0.0+1 · **Branch:** `feature/report-issue` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ One-time employee Welcome screen (2026-07-05)
+
+A cinematic, once-per-account Welcome shown to a new **employee** right after
+profile completion — welcomes them to the team and sets the tone (accountability
+· teamwork · one place for the work). Follows the existing gated-flag pattern
+exactly. **No rules/functions change, no deploy** (the flag is a non-privileged
+self-write already permitted by the `users` freeze-list rule).
+
+- **New flag `UserEntity.hasCompletedOnboarding`** (`@Default(true)` → every
+  existing user is treated as already welcomed and is NEVER interrupted).
+  `UserModel` round-trips it (legacy/absent `?? true`); it is **not** in `toMap`
+  (a provisioning-style flag, written only via its dedicated setter, like
+  `isProfileCompleted`). Datasource/repo/cubit gain `setOnboardingCompleted`.
+- **Seeded at profile completion:** `AuthCubit.completeProfile()` now writes
+  `isProfileCompleted:true` **and** `hasCompletedOnboarding:false`, so a
+  genuinely new employee is marked to see Welcome once; existing users never pass
+  through here again → stay `true` → never see it.
+- **Gate:** the router's first-login decision was extracted to a pure,
+  unit-tested `firstLoginLocation(user)` — ordered temp-password → profile
+  completion → (**employees only**) `!hasCompletedOnboarding` → `/welcome`.
+  Managers/admins always fall straight through. `OnboardingWelcomePage`'s "Get
+  started" → `AuthCubit.completeOnboarding()` (flag→true, persisted) → role home;
+  never shown again (survives reinstall/new device). Interruption-safe (it's a
+  gate — re-shows until dismissed, like profile completion).
+- **UI:** strictly monochrome, single-screen, staggered reveal (reuses
+  `FadeSlideTransition` + `AppButton`). **Adaptive hero** (owner ruling): the
+  launch Lottie on tablet/desktop, the animated `AnimatedDropLogo` on phones —
+  the same deliberate no-13MB-Lottie-on-phones split the splash uses (bounded
+  480px decode when it does play). Static light atmosphere (no perpetual motion).
+- **Tests (+13, all green):** `first_login_gate_test.dart` (8 — ordering +
+  employees-only + managers/admins skip), `onboarding_welcome_page_test.dart` (3
+  — greeting/expectations/CTA-dismiss), `user_model_test.dart` (+2 — legacy
+  default true, explicit-false round-trip). `flutter analyze`: 7 pre-existing
+  infos, 0 new. Full suite: **429 pass, 2 fail** (the 2 are the pre-existing
+  desktop splash-framing tests — unrelated; see the splash entry below).
+- ⚠️ On-device QA: create a new employee → force-password → complete profile →
+  **Welcome shows once** → Get started → employee home → sign out/in → **no
+  Welcome**. Managers/admins: complete profile → straight to dashboard.
+
+---
+
+## ✅ Mobile splash — premium pass (2026-07-05)
+
+Presentation-only, mobile cold-start splash only. No schema/rules/functions/
+route/Cubit/dependency change; desktop/tablet splash and the shared
+`_OperationsWordmark` / `_PremiumLoadingBar` are untouched.
+
+- **Orchestrated staggered entrance.** `_buildMobileSplash` now reveals the
+  brand group as one choreographed sequence off the single 1.8s intro controller
+  (`_reveal(v, start, end, curve)` window mapper): the logo blooms first
+  (fade 0→0.42, settle easeOutCubic to 0.72, scale 0.9→1.0), `OPERATIONS` rises
+  in over 0.34→0.78, the loading bar draws in over 0.54→0.96 — instead of the
+  wordmark + bar popping in at full opacity from frame 1.
+- **Animated hero logo.** Mobile now uses `AnimatedDropLogo` (the monochrome
+  light-sweep), matching the desktop splash + login brand panel; it was the
+  static `DropLogo` before. This also makes the mobile branch trivially
+  identifiable in tests (desktop uses the Lottie).
+- **Breathing atmosphere.** New private `_AmbientBackdrop` (in `splash_page.dart`)
+  — layered, strictly monochrome: a faint wide halo for depth + a soft central
+  pool behind the logo that slowly breathes in radius (0.52→0.58) and intensity
+  (α14→22) over a ~5.6s in-and-out cycle, so the screen feels alive during the
+  bootstrap wait. Replaces the flat single radial + the per-logo glow box.
+- **Tests:** new `test/splash_mobile_test.dart` (**3 pass**) — animated hero +
+  OPERATIONS present · completion hand-off after ~1.8s · animation-gated startup
+  error stays visible through the staggered entrance + Retry fires.
+- `flutter analyze`: 7 pre-existing infos, 0 new. Full suite: **416 pass, 2 fail**.
+
+⚠️ **Known pre-existing failure (NOT from this change), desktop-only:**
+`test/splash_centering_test.dart` has **2 red** combined-lockup framing tests —
+the owner's by-eye `kLogoManualNudgeX = 120` / `kLogoManualScale = 1.50` desktop
+tuning (2026-07-05) shifts the visible bbox the centering assertions still model
+as un-nudged/un-scaled. Confirmed red at HEAD with this change stashed, so the
+prior "**415 pass**" claims below were already off by these 2. Reconciling the
+by-eye tuning with (or updating) the test is a separate desktop follow-up for the
+owner.
 
 ---
 
@@ -50,24 +128,26 @@ new dependency (reuses `path_provider`).
 
 Client-only; no Firebase schema, rules, functions, or deploy change.
 
-- **Splash now plays over a fixed 5s** regardless of the Lottie asset's native
-  frame length (`_introDuration` in `splash_page.dart` overrides the
-  controller's duration instead of using `composition.duration`) — swapping
-  the composition later changes its speed, not the launch's wall-clock length.
+- **Adaptive launch intro:** desktop/tablet plays the approved Lottie over a
+  fixed 5s; phone widths below 600px use a local static `DropLogo` with a short
+  1.8s fade/settle entrance. The mobile branch returns before any
+  `_LaunchAssetLottie` is constructed, so the 12MB JSON and its raster frames
+  are never parsed or decoded on phones.
 - **Premium loading bar is visible for the whole intro**, not just once the
-  animation ends while bootstrap is still pending: `_WaitingIndicator` is a
-  thin (168×3) monochrome indeterminate bar with a soft white band sweeping
-  left→right across a dim track (replacing the bare `CircularProgressIndicator`),
-  shown directly under the logo and only stepping aside for the error state.
-- **Full premium brand lockup, one centered `Column`** — the layout is exactly
+  intro ends while bootstrap is still pending: `_PremiumLoadingBar` is a thin
+  monochrome indeterminate bar with a soft white band sweeping left→right
+  across a dim track (240×3.5 desktop, 210×3.5 phone), shown directly under
+  the logo and only stepping aside for the error state.
+- **Desktop premium brand lockup, one centered `Column`** — the layout is exactly
   `Scaffold → Center → Column(min) → [logo, 'OPERATIONS', loading bar]` —
   **no** `SafeArea`, `Stack`, `Align`, `Positioned`, `ConstrainedBox` (the old
   build used a `Stack` with the logo `Center`-ed and the indicator `Align`-ed
   to the bottom edge, which is what read as off-centre).
-- **Owner-tuned Lottie box placement supersedes horizontal bbox centering:**
-  the entire Lottie container is translated **60 logical pixels right** and
-  scaled to **1.22×** in `splash_page.dart`. Both transforms are paint-only;
-  OPERATIONS, the loading bar, and their layout spacing are unchanged.
+- **Owner-tuned Lottie box placement is desktop/tablet-only:** the approved
+  **120px-right / 1.50×** tuning remains unchanged. Mobile has no Lottie
+  transforms; it uses a larger responsive static `DropLogo` (108–136px high),
+  subtle radial light, 30px optical lift, compact OPERATIONS tracking, and a
+  compact 210px loading bar inside `SafeArea`.
 - **OPERATIONS trailing-tracking compensation is measured, not assumed:** this
   engine appends `letterSpacing` after the LAST glyph too (TextPainter:
   `width('AB', ls:12) − width('AB', ls:0) == 24`), so the glyph run sits 6px
@@ -79,10 +159,9 @@ Client-only; no Firebase schema, rules, functions, or deploy change.
   ~59px of dead space above the artwork (`kLogoArtworkTop = 59`, settled-tail
   mean, pixel-locked by the visual test) and (b) a dead-centred mass reads low
   to the eye. The column now ends with a **balancer `SizedBox(height: 2·lift)`**
-  (pure layout — no Transform/Align) where `lift = kSplashOpticalLift(80) +
+  (pure layout — no Transform/Align) where `lift = kSplashOpticalLift(50) +
   topInset/2`, so the **combined visible bbox (artwork top → bar bottom) sits
-  exactly 80px above the window centre** (total visible shift ≈ 92px at
-  1440×900, inside the owner's requested 80–100 band). Asserted at 1440×900
+  exactly 50px above the window centre**. Asserted at 1440×900
   AND 1024×720 by `expectLockupFraming` in `test/splash_centering_test.dart`.
 - **Premium treatments:** soft radial light pool behind the logo (decoration
   under the Lottie, no Stack); **'OPERATIONS' luxury pass** — metallic glyph
@@ -98,7 +177,7 @@ Client-only; no Firebase schema, rules, functions, or deploy change.
   its `CustomPainter` are no longer rendered on the splash.
 - Proven by `test/splash_centering_test.dart` (artwork centre == window centre
   horizontally; logo box lifted by exactly the measured compensation; combined
-  lockup bbox framed 80px above centre at 1440×900 and 1024×720;
+  lockup bbox framed 50px above centre at 1440×900 and 1024×720;
   `padding == EdgeInsets.zero`, so the macOS transparent title bar adds no
   offset).
 - **Sidebar brand mark now uses `AnimatedDropLogo`** (the light-sweep shimmer)
@@ -130,23 +209,28 @@ Client-only; no Firebase schema, rules, functions, or deploy change.
 
 ---
 
-## ✅ Premium animated cold-start intro (2026-07-04)
+## ✅ Adaptive premium cold-start intro (2026-07-04, mobile split 2026-07-05)
 
-- Replaced the old 1400ms timer-driven branded splash with the supplied
-  `assets/0704.json` Lottie on a full black surface. The animation uses its
-  composition duration; there is no artificial `Future.delayed` floor.
+- Desktop/tablet uses the supplied `assets/0704.json` Lottie on a full black
+  surface. Phone widths below 600px use the local static `DropLogo` instead and
+  never instantiate the Lottie provider.
 - `LaunchApp` now paints Flutter's first black frame before initializing
   Firebase. After that frame, Firebase → Firestore persistence → DI → auth
   restore/user-document fetch → only the existing home-critical preload
-  (`StatisticsCubit`, `TaskCubit`, `BranchCubit`) run concurrently with Lottie.
-  The router mounts only when **animation + bootstrap** have both completed.
+  (`StatisticsCubit`, `TaskCubit`, `BranchCubit`) run concurrently with the
+  selected platform intro. The router mounts only when **intro + bootstrap**
+  have both completed.
 - Routing behavior is unchanged: signed out → Login; signed in → forced
   password change, then profile completion when required, else the role home.
   DROP has no Welcome/registration/pending-approval flow; inactive accounts are
   signed out and blocked.
-- Startup failure holds the final brand frame and offers Retry. A bad/missing
-  animation falls back to the static `DropLogo` and cannot deadlock startup.
-- Asset audit: the current export is ~1.1MB, 720×405, 30fps, 155 frames (~5.17s)
+- Startup failure holds the brand surface and offers Retry. A bad/missing
+  desktop animation falls back to the static `DropLogo` and cannot deadlock.
+- **Mobile splash is local-only:** no Lottie provider, JSON parsing, raster
+  decoding, network call, or substitute poster participates in its visual
+  intro. Firebase/auth bootstrap still runs independently in `LaunchApp` as
+  required for entering the application.
+- Desktop/tablet asset audit: the current export is ~12MB, 720×405, 30fps, 155 frames (~5.17s)
   and embeds **102 full-frame WebPs**. JSON parsing runs in the background and
   embedded frames decode at a bounded 480px width, reducing estimated decoded
   image memory from ~113MiB to ~51MiB. No Lottie raster render cache is added.

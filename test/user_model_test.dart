@@ -109,4 +109,32 @@ void main() {
       expect(map['emergencyContact'], 'Mona · +201111111111');
     });
   });
+
+  group('hasCompletedOnboarding (one-time Welcome flag)', () {
+    test('is absent on legacy docs → defaults true (never re-shows Welcome)', () {
+      // No existing / pre-feature user carries the field, so they must read as
+      // "already welcomed" and never be gated into the Welcome screen.
+      expect(UserModel.fromMap(const {}).hasCompletedOnboarding, isTrue);
+      final legacy = UserModel.fromMap({'uid': 'u', 'email': 'a@b.com'});
+      expect(legacy.hasCompletedOnboarding, isTrue);
+    });
+
+    test('an explicit false (new employee, seeded at completion) round-trips',
+        () {
+      final model = UserModel.fromMap({
+        'uid': 'e1',
+        'email': 'new@b.com',
+        'role': 'employee',
+        'isProfileCompleted': true,
+        'hasCompletedOnboarding': false,
+      });
+      expect(model.hasCompletedOnboarding, isFalse);
+      // Survives model ⇄ entity both ways.
+      expect(model.toEntity().hasCompletedOnboarding, isFalse);
+      expect(
+        UserModel.fromEntity(model.toEntity()).hasCompletedOnboarding,
+        isFalse,
+      );
+    });
+  });
 }

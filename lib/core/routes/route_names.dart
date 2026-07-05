@@ -16,6 +16,11 @@ class RouteNames {
   /// `isProfileCompleted == false` here (after any forced password change).
   static const String profileCompletion = '/complete-profile';
 
+  /// One-time cinematic Welcome. The router confines an **employee** whose
+  /// profile is complete but `hasCompletedOnboarding == false` here — shown once
+  /// per account, right after profile completion, before the role home.
+  static const String welcome = '/welcome';
+
   static const String profile = '/profile';
   static const String editProfile = '/profile/edit';
   static const String settings = '/settings';

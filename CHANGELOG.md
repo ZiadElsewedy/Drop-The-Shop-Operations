@@ -12,6 +12,62 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-07-05 — One-time employee Welcome / onboarding)
+
+A cinematic, once-per-account Welcome screen shown to a new **employee** right
+after profile completion (accountability · teamwork · one place for the work).
+Follows the established gated-flag pattern. **No rules/functions/deploy change**
+(the flag is a non-privileged self-write the `users` freeze-list rule already
+permits; the rules comment was tidied only).
+
+- **Added `UserEntity.hasCompletedOnboarding`** (`@Default(true)` — existing
+  users are never interrupted). `UserModel` round-trips it (legacy `?? true`;
+  excluded from `toMap` like the other provisioning flags). New
+  `setOnboardingCompleted` on datasource / repository / repository-impl.
+- **Added `AuthCubit.completeOnboarding()`**; `completeProfile()` now also seeds
+  `hasCompletedOnboarding:false` so a new employee is shown Welcome exactly once.
+- **Refactored** the router's first-login decision into a pure, unit-tested
+  `firstLoginLocation(user)` (temp-password → profile completion → employees'
+  `/welcome`), replacing three repetitive redirect blocks (behavior-preserving).
+- **Added `OnboardingWelcomePage`** (`/welcome`, outside the app shell) — strictly
+  monochrome, single-screen, staggered reveal (reuses `FadeSlideTransition` +
+  `AppButton`). Adaptive hero: launch Lottie on tablet/desktop, `AnimatedDropLogo`
+  on phones (same no-heavy-Lottie-on-phones split as the splash; bounded 480px
+  decode). New `RouteNames.welcome`.
+- **Tests +13** (`first_login_gate_test` 8, `onboarding_welcome_page_test` 3,
+  `user_model_test` +2). `flutter analyze`: 7 pre-existing infos, 0 new. Full
+  suite: **429 pass, 2 fail** (the 2 = pre-existing desktop splash-framing tests).
+
+### Added / Fixed (2026-07-05 — Mobile splash premium pass)
+
+Presentation-only; mobile cold-start splash only. No Firebase schema, rules,
+functions, route, Cubit, or new dependency. Desktop/tablet splash and the shared
+`_OperationsWordmark` / `_PremiumLoadingBar` widgets are untouched.
+
+- **Orchestrated staggered entrance.** The brand group now reveals as one
+  choreographed sequence off the single intro controller — the logo blooms
+  first, `OPERATIONS` rises in a beat behind it, then the loading bar draws in —
+  instead of the wordmark and bar appearing at full opacity from frame 1. Driven
+  by a pure `_reveal(v, start, end, curve)` window mapper.
+- **Animated hero logo.** The mobile splash now uses `AnimatedDropLogo` (the
+  monochrome light-sweep) as the hero, matching the desktop splash + login brand
+  panel; it previously used the static `DropLogo`.
+- **Breathing atmosphere.** New `_AmbientBackdrop` — a layered, strictly
+  monochrome backdrop (faint wide halo for depth + a soft central pool that
+  slowly breathes in radius/intensity) so the screen feels alive during the
+  bootstrap wait instead of frozen. Replaces the flat single-radial background
+  and the per-logo glow box (one light source now, not two).
+- **Coverage.** New `test/splash_mobile_test.dart` (animated hero + OPERATIONS
+  present · completion hand-off after the ~1.8s intro · animation-gated startup
+  error stays visible through the entrance + Retry) — **3 pass**. `flutter
+  analyze`: 7 pre-existing infos, 0 new. Full suite: **416 pass, 2 fail**.
+- ⚠️ **Pre-existing (not from this change):** `test/splash_centering_test.dart`
+  has 2 red **desktop** framing tests — the by-eye `kLogoManualNudgeX = 120` /
+  `kLogoManualScale = 1.50` tuning (2026-07-05) doesn't match the combined-bbox
+  centering math the test still asserts. Verified red at HEAD with this change
+  stashed. Needs the owner to reconcile the tuning with the test (separate,
+  desktop-only follow-up).
+
 ### Added / Fixed (2026-07-05 — Schedule Final View + PNG export)
 
 Client/presentation-only; no Firebase schema, rules, functions, route-name,
@@ -71,17 +127,22 @@ Client-only; no Firebase schema, rules, functions, or deploy change.
   glyphs @ls:12), so the OPERATIONS leading-pad compensation is correct, and
   locked it with a glyph-centring widget test.
 - **Superseded the horizontal bbox compensation with the owner's manual visual
-  correction:** the whole Lottie container now receives `Offset(60, 0)` and a
-  centre-anchored `1.22×` scale. OPERATIONS, the loading bar, and the spacing
-  beneath the logo are untouched.
+  correction:** desktop/tablet keeps `Offset(120, 0)` with a centre-anchored
+  `1.50×` scale. The adjustment is no longer applied to phones.
+- **Replaced mobile Lottie with a local premium static intro:** phone widths
+  below 600px return before `_LaunchAssetLottie` is constructed, so the ~12MB
+  JSON and 102 embedded WebPs are never parsed/decoded there. Mobile now uses a
+  responsive 108–136px `DropLogo`, subtle radial light, short 1.8s fade/settle,
+  compact OPERATIONS treatment, and a 210px loading bar inside `SafeArea`.
+  Desktop/tablet Lottie and bootstrap behavior remain unchanged.
 - **Framed the whole lockup as one unit at the optical centre** (owner: "the
   group sits too low — centre the combined bbox, move it up 80–100px"): the
   Lottie frame bakes ~59px of dead space above the artwork
   (`kLogoArtworkTop = 59`, settled-tail mean, pixel-locked), and dead-centre
   reads low optically. A balancer `SizedBox(height: 2·lift)` at the column's
   end (pure layout, no Transform) now places the **combined visible bbox
-  (artwork top → bar bottom) exactly `kSplashOpticalLift` (80px) above the
-  window centre** — a ≈92px visible shift at 1440×900. Asserted at both
+  (artwork top → bar bottom) exactly `kSplashOpticalLift` (50px) above the
+  window centre**. Asserted at both
   1440×900 and 1024×720.
 - **OPERATIONS luxury pass:** metallic glyph gradient (white → silver,
   `TextStyle.foreground` shader), triple white glow (bloom 30 / glow 12 /

@@ -17,6 +17,12 @@ abstract class UserRemoteDataSource {
   /// Marks onboarding complete once the user has filled their profile. A
   /// self-write (rules allow the owner to flip this flag).
   Future<void> setProfileCompleted(String uid, bool value);
+
+  /// Flips the one-time Welcome flag: seeded `false` at profile completion (so a
+  /// new employee is shown Welcome once) and set `true` when they dismiss it. A
+  /// self-write — `hasCompletedOnboarding` is a non-privileged field, so the
+  /// existing owner-update rule already permits it (no rules change).
+  Future<void> setOnboardingCompleted(String uid, bool value);
 }
 
 class UserRemoteDataSourceImpl implements UserRemoteDataSource {
@@ -77,6 +83,18 @@ class UserRemoteDataSourceImpl implements UserRemoteDataSource {
     try {
       await _users.doc(uid).set({
         'isProfileCompleted': value,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } on FirebaseException catch (e) {
+      throw AuthException(e.message ?? 'Failed to update account.');
+    }
+  }
+
+  @override
+  Future<void> setOnboardingCompleted(String uid, bool value) async {
+    try {
+      await _users.doc(uid).set({
+        'hasCompletedOnboarding': value,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } on FirebaseException catch (e) {

@@ -95,4 +95,13 @@ class AuthRepositoryImpl implements AuthRepository {
       throw AuthFailure(e.message);
     }
   }
+
+  @override
+  Future<void> setOnboardingCompleted(String uid, bool value) async {
+    try {
+      await _userRemote.setOnboardingCompleted(uid, value);
+    } on AuthException catch (e) {
+      throw AuthFailure(e.message);
+    }
+  }
 }

@@ -59,7 +59,7 @@ Future<void> _bootstrap() async {
   if (kDebugMode) Bloc.observer = AppBlocObserver();
   // Paint the native-matching black frame immediately. Firebase, DI, session
   // restore, and home-critical cache warm-up start after that first frame while
-  // the Lottie intro is already visible.
+  // the platform-appropriate launch intro is already visible.
   runApp(const LaunchApp());
 
   // If the previous session crashed, surface the persisted report for export
@@ -68,7 +68,7 @@ Future<void> _bootstrap() async {
 }
 
 /// Owns the cold-start rendezvous: the routed app is mounted only after both
-/// the Lottie composition has completed and the app bootstrap has completed.
+/// the platform intro and the app bootstrap have completed.
 class LaunchApp extends StatefulWidget {
   const LaunchApp({super.key});
 

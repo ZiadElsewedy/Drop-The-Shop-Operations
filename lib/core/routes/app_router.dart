@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/core/widgets/app_shell.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:drop/features/auth/presentation/pages/splash_page.dart';
 import 'package:drop/features/auth/presentation/pages/login_page.dart';
 import 'package:drop/features/auth/presentation/pages/forgot_password_page.dart';
 import 'package:drop/features/auth/presentation/pages/force_password_change_page.dart';
 import 'package:drop/features/auth/presentation/pages/profile_completion_page.dart';
+import 'package:drop/features/auth/presentation/pages/onboarding_welcome_page.dart';
 import 'package:drop/features/admin/presentation/pages/admin_shell.dart';
 import 'package:drop/features/manager/presentation/pages/manager_shell.dart';
 import 'package:drop/features/employee/presentation/pages/employee_shell.dart';
@@ -83,6 +85,11 @@ GoRouter createRouter(
         path: RouteNames.profileCompletion,
         pageBuilder: (context, state) =>
             _fadeTransition(state, const ProfileCompletionPage()),
+      ),
+      GoRoute(
+        path: RouteNames.welcome,
+        pageBuilder: (context, state) =>
+            _fadeTransition(state, const OnboardingWelcomePage()),
       ),
       // ─── App shell: persistent desktop sidebar across every route below ──
       ShellRoute(
@@ -303,17 +310,13 @@ String? _redirect(AuthCubit authCubit, GoRouterState state) {
 
   if (user != null) {
     // ── First-login gate (admin-provisioned accounts) ──
-    // 1) Force the admin-issued temp password to be changed.
-    if (user.mustChangePassword) {
-      return loc == RouteNames.forcePasswordChange
-          ? null
-          : RouteNames.forcePasswordChange;
-    }
-    // 2) Then require profile completion.
-    if (!user.isProfileCompleted) {
-      return loc == RouteNames.profileCompletion
-          ? null
-          : RouteNames.profileCompletion;
+    // A single ordered decision (temp-password change → profile completion →
+    // employees' one-time Welcome), extracted to `firstLoginLocation` so the
+    // ordering is unit-tested. While a stage is required, the user is confined
+    // to it; already there → allow (null).
+    final forced = firstLoginLocation(user);
+    if (forced != null) {
+      return loc == forced ? null : forced;
     }
 
     final roleHome = RouteNames.homeForRole(user.role);
@@ -337,7 +340,8 @@ String? _redirect(AuthCubit authCubit, GoRouterState state) {
     if (isOnAuthFlow ||
         loc == RouteNames.splash ||
         loc == RouteNames.forcePasswordChange ||
-        loc == RouteNames.profileCompletion) {
+        loc == RouteNames.profileCompletion ||
+        loc == RouteNames.welcome) {
       return roleHome;
     }
 
@@ -356,6 +360,23 @@ String? _redirect(AuthCubit authCubit, GoRouterState state) {
     return RouteNames.login;
   }
 
+  return null;
+}
+
+/// The forced first-login location for [user], or `null` once they've cleared
+/// the gate. Pure + ordered so the sequence is unit-tested independently of the
+/// GoRouter/page machinery:
+///   1. `mustChangePassword` → Force Password Change.
+///   2. `!isProfileCompleted` → Profile Completion.
+///   3. EMPLOYEES with `!hasCompletedOnboarding` → the one-time Welcome. Seeded
+///      `false` at profile completion; the flag persists, so a returning
+///      employee (flag `true`) and every non-employee fall straight through.
+String? firstLoginLocation(UserEntity user) {
+  if (user.mustChangePassword) return RouteNames.forcePasswordChange;
+  if (!user.isProfileCompleted) return RouteNames.profileCompletion;
+  if (user.role.isEmployee && !user.hasCompletedOnboarding) {
+    return RouteNames.welcome;
+  }
   return null;
 }
 

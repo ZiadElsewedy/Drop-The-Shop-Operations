@@ -216,8 +216,12 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  /// Marks onboarding complete (after the profile fields were saved) and
-  /// re-emits the session so the router advances the user to Home.
+  /// Marks profile completion (after the profile fields were saved) and seeds
+  /// the one-time Welcome flag `false` so the router shows the Welcome screen to
+  /// a newly-provisioned employee exactly once, then re-emits the session so the
+  /// router advances (→ Welcome for employees, → Home for others). Existing
+  /// users never pass through here again, so they keep the default `true` and
+  /// are never shown Welcome.
   Future<void> completeProfile() async {
     final uid = _repository.currentUser?.uid;
     if (uid == null) {
@@ -226,6 +230,24 @@ class AuthCubit extends Cubit<AuthState> {
     }
     try {
       await _repository.setProfileCompleted(uid, true);
+      await _repository.setOnboardingCompleted(uid, false);
+      await refreshUser();
+    } on AuthFailure catch (e) {
+      emit(AuthState.error(e.message));
+    }
+  }
+
+  /// Dismisses the one-time Welcome screen (its "Get started" CTA): flips the
+  /// flag `true` and re-emits so the router advances to the role home. The flag
+  /// is persisted, so Welcome is never shown again on any device.
+  Future<void> completeOnboarding() async {
+    final uid = _repository.currentUser?.uid;
+    if (uid == null) {
+      emit(const AuthState.unauthenticated());
+      return;
+    }
+    try {
+      await _repository.setOnboardingCompleted(uid, true);
       await refreshUser();
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));

@@ -23,8 +23,9 @@ ships an **admin-provisioned** authentication system (2026-06-26 redesign): **no
 public registration** — only an admin creates accounts (via the secure
 `createUserAccount` Cloud Function), and every new account is forced through a
 **first-login flow** (change the admin-issued temp password → complete profile →
-home). The auth surface is **Splash · Login · Forgot Password · Force Password
-Change · Profile Completion** (registration / OTP / Google / email-verification /
+one-time Welcome [employees] → home). The auth surface is **Splash · Login ·
+Forgot Password · Force Password Change · Profile Completion · Welcome**
+(registration / OTP / Google / email-verification /
 pending-approval were all removed). Plus a role system with role-based navigation
 + route guards (Phase 1), a production-ready user profile module, account
 settings, a
@@ -109,7 +110,7 @@ The dependency rule points **inward**: `presentation → domain ← data`. The
 
 ```
 lib/
-├── main.dart                 # Paints LaunchApp first; bootstraps Firebase/DI/auth/cache in parallel with Lottie, then mounts MaterialApp.router
+├── main.dart                 # Paints LaunchApp first; bootstraps Firebase/DI/auth/cache in parallel with the adaptive launch intro, then mounts MaterialApp.router
 ├── firebase_options.dart     # FlutterFire generated config
 ├── core/
 │   ├── constants/            # app_constants.dart (appName, collection names)
@@ -124,7 +125,7 @@ lib/
 │   ├── observability/         # crash_reporter.dart (Phase 3 — CrashReporter: 4 crash funnels [FlutterError.onError · PlatformDispatcher.onError · runZonedGuarded zone · isolate listener] → structured 🔴 CRASH report [timestamp/screen/route/user/role/error/stack/last action/breadcrumbs], persisted to Application Support/last_crash.log EVEN IN RELEASE, next-launch export banner in main.dart; CrashContext — ambient route/user/role/lastAction, fed by observers + auth listener + AppLog.call)
 │   └── widgets/              # app_snackbar, app_dialog (showConfirmDialog), app_card, app_empty_state, status_badge (+`.task` = the task-status chip; `taskStatusColor` = the single status→colour source), drop_logo, skeleton, list_skeleton, role_scaffold (bottom-nav chrome), app_bottom_nav (AppBottomNav + AppNavItem), user_avatar (+AvatarStack), app_motion (EntranceFade), animated_count (AnimatedCount — the single reusable animated counter: count-up on appear, tween on change; used by dashboard metrics + review counts), live_list_item (LiveListItem — keyed realtime-list item: enters once + optional new-arrival highlight, preserves scroll, no AnimatedList/diff), app_search_field, glass_container (GlassContainer — the shared premium surface, now with an optional semantic `glow`), dashboard_metric_card (DashboardMetricCard), action_card (ActionCard — primary vertical action + non-ellipsizing flat horizontal `secondary` Manage shortcut), admin_section_header (AdminSectionHeader), timeline_tile (TimelineTile) · **Premium component system (Slice 2):** app_glass_card (AppGlassCard — premium card mapping task status → subtle glow; thin wrapper over GlassContainer), metric_pill (MetricPill — compact `[icon] value · label`), premium_button (PremiumButton — canonical compact inline action button, distinct from the 56px form AppButton), branch_avatar (BranchAvatar — branch logo · else initials · else store glyph, §8) · **Brand primitives (§9a):** drop_wordmark (DropWordmark — typographic DROP logotype, complements the PNG DropLogo), drop_empty_state (DropEmptyState — brand-led empty state), drop_loading_state (DropLoadingState — pulsing-logo loader) · **§9b rollout helpers:** drop_auth_mark (DropAuthMark — auth lockup: DropLogo + "DROP Operations System" tagline; on login/register), brand_watermark (BrandWatermark — clipped ≤0.05-opacity corner wordmark for hero cards; currently used by the Branch Operations hero, not Admin Home). Rolled out: DropEmptyState → task/notification/branch empties; DropLoadingState → schedule full-page loaders · **Desktop shell (2026-06-30):** app_shell (AppShell — the ShellRoute desktop chrome: persistent role-aware sidebar on desktop widths, pass-through on mobile; **⌘1–⌘9 jump to the Nth sidebar destination + ⌘K opens the command palette**; `AppShell.sectionsForRole` is public — the single source for sidebar + palette, 2026-07-02. ⚠️ **The ShellRoute child is go_router's shell Navigator (a GlobalKey) — NEVER wrap it in AnimatedSwitcher/keyed cross-fades**: mounting it twice duplicates the GlobalKey and froze all macOS navigation, root-caused + removed 2026-07-02; the desktop fade lives at the page level in `app_router.dart` instead), app_sidebar (AppSidebar/SidebarSection/SidebarItem — hover states, active indicator, `⌘n` hint on hover, user footer + unread bell), adaptive_scaffold (AdaptiveScaffold — mobile AppBar ⇄ desktop page header; `titleWidget`/`bottomBar`/`constrainContent`), responsive_card_grid (ResponsiveCardGrid) · **macOS interaction layer (Phase 2, 2026-07-02):** app_context_menu (AppContextMenuItem + showAppContextMenu — the app-wide right-click/long-press menu; consumed by schedule chips + employee cards), command_palette (showCommandPalette — ⌘K: Go-to destinations · role-gated Actions · People from the warm TaskCubit directory; ↑↓/↵ keyboard, prefix-ranked), hover_lift (HoverLift — reusable hover rise + whisper shadow)
 └── features/
-    ├── auth/                 # Admin-provisioned: email sign-in, forgot/force password change, profile completion, role (no signup/OTP/Google/approval)
+    ├── auth/                 # Admin-provisioned: email sign-in, forgot/force password change, profile completion, one-time employee Welcome (`OnboardingWelcomePage`, gated on `hasCompletedOnboarding`), role (no signup/OTP/Google/approval)
     ├── profile/              # View + edit profile, image uploads, username checks
     ├── task/                 # Task feature — data/domain + use cases + TaskCubit + functional role screens (Phase 3–4); realtime streams + templates (Stabilization); Phase 9 — multi-assignee + checklist + redesigned cards; Workflow Upgrade — RecurrenceConfig + ActivityEntry + TaskDetailsScreen + MyTasksScreen redesign; presentation/activity_format.dart (shared timeline label/colour/time helpers); Premium task UX slice (2026-06-25) — admin/manager reference images (`TaskEntity.referenceAttachments`, reused `AttachmentPickerField`) + a redesigned, **de-flashed** signal-driven `TaskCard` (flat `TaskSurface` primitive — no glow/gradient/pulse; status pill · High-only priority · branch/due/refs chips · thin checklist bar); **Shift Assignment feature (2026-07-01)** — `TaskEntity.assignmentType` (individual/team/shift) + `domain/task_access.dart` (`canUserAccessTask`) + merged per-shift task streams in `TaskCubit` + recurring shift-task **templates → generated instances** (`RecurringTaskTemplateEntity`, `recurring_shift_task_sheets.dart`, Cloud Function `generateShiftTaskInstances`) — see "Task chain" narrative for the full design
     ├── branch/               # Branch feature — data/domain + BranchCubit + branch management (Phase 5)
@@ -228,15 +229,18 @@ _AuthStateNotifier (ChangeNotifier)   ← refreshListenable
         ↓
 GoRouter.redirect                     ← first-login gate + ROLE guard
         ↓
-native black launch → Lottie + bootstrap gate → login/forgot OR
+native black launch → adaptive intro + bootstrap gate → login/forgot OR
 force-password-change → complete-profile → role shell
 ```
 
 `createRouter(AuthCubit)` ([core/routes/app_router.dart](lib/core/routes/app_router.dart))
 re-evaluates its `redirect` whenever `AuthCubit` emits. **First-login gate** (in
-order, before role dispatch): `user.mustChangePassword` → **Force Password Change**
+order, before role dispatch — the ordered decision is the pure, unit-tested
+`firstLoginLocation(user)`): `user.mustChangePassword` → **Force Password Change**
 (`/force-password-change`); else `!user.isProfileCompleted` → **Profile Completion**
-(`/complete-profile`); else the **role shell** (`RouteNames.homeForRole(user.role)`
+(`/complete-profile`); else — **employees only** — `!user.hasCompletedOnboarding`
+→ the one-time cinematic **Welcome** (`/welcome`, `OnboardingWelcomePage`); else
+the **role shell** (`RouteNames.homeForRole(user.role)`
 → `/` employee, `/admin`, `/manager`). A **deactivated** account never reaches the
 router as authenticated — `AuthCubit` signs it out at login (and on a mid-session
 deactivate via `watchCurrentUser`) and surfaces "This account has been disabled".
@@ -249,9 +253,11 @@ every navigation: admin areas admin-only, manager areas admit manager + admin
 `LaunchApp` in `main.dart`: Flutter paints a black frame first, then starts
 Firebase → DI → `AuthCubit.restoreSession()` → the authoritative user-doc
 read → the existing home-critical preload (`StatisticsCubit`, `TaskCubit`,
-`BranchCubit`) while `SplashPage` independently loads and plays
-`assets/0704.json`. The routed app mounts only when **both** Lottie playback and
-bootstrap complete; there is no arbitrary timer floor. `createRouter` accepts a
+`BranchCubit`) while `SplashPage` independently runs the launch intro: desktop/
+tablet loads and plays `assets/0704.json`; phone widths below 600px never create
+a Lottie provider and instead show the local static `DropLogo` with a short
+1.8s entrance. The routed app mounts only when **both** the selected intro and
+bootstrap complete. `createRouter` accepts a
 resolved `initialLocation`, so the old splash route is not replayed. The app-wide
 `BlocListener<AuthCubit>` handles later login/logout side effects and idempotent
 warm preloads. Because a Firebase sign-in doesn't know role/flags, `AuthCubit`
@@ -846,7 +852,7 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Firestore Timestamp→DateTime mapping**  | `lib/core/extensions/firestore_extensions.dart` (`map.date('field')` in every `*Model.fromMap`) |
 | **Roles enum / role values**              | `lib/core/enums/user_role.dart`                                         |
 | **Account provisioning / activation**     | `features/admin/.../create_account_screen.dart` → callable `createUserAccount`; `UserEntity.isActive` is the sole access flag (no approval enum/screen) |
-| **Cold-start intro / bootstrap rendezvous** | `lib/main.dart` (`LaunchApp`, Firebase/DI/auth + essential preload) + `features/auth/presentation/pages/splash_page.dart` (Lottie playback/error fallback; owner-tuned whole-box `Offset(60, 0)` + `1.22` scale, with OPERATIONS/bar layout untouched and no debug crosshair) + `assets/0704.json`; Android/iOS native launch backgrounds are black |
+| **Cold-start intro / bootstrap rendezvous** | `lib/main.dart` (`LaunchApp`, Firebase/DI/auth + essential preload) + `features/auth/presentation/pages/splash_page.dart`: desktop/tablet uses `assets/0704.json` Lottie (fixed 5s, owner-tuned `Offset(120, 0)` + `1.50` scale); phone `<600px` never constructs/loads Lottie and uses the local `DropLogo` in a 1.8s fade/settle lockup with compact OPERATIONS + loading bar. Both rendezvous with the same bootstrap; Android/iOS native launch backgrounds are black |
 | **Role-based redirect / route guards**    | `lib/core/routes/app_router.dart` (redirect + `_isAdminArea`/`_isManagerArea`) + `RouteNames.homeForRole` |
 | **Settings / change password UI**         | `lib/features/settings/presentation/pages/`                              |
 | **Routes / navigation guards**            | `lib/core/routes/app_router.dart` + `route_names.dart`                    |
@@ -855,7 +861,7 @@ imports `core/theme`, `core/widgets`, `core/routes`. Data imports
 | **Colors / typography / spacing / radius**| `lib/core/theme/app_colors.dart` · `app_typography.dart` · `app_spacing.dart` · `app_radius.dart` |
 | **Global ThemeData (inputs, buttons…)**   | `lib/core/theme/app_theme.dart`                                          |
 | **Cross-feature widgets (snackbar, logo, skeleton)** | `lib/core/widgets/`                                            |
-| **App brand / logo (the DROP wordmark)**  | artwork `assets/drop_logo.png` (registered in `pubspec.yaml`) rendered by `lib/core/widgets/drop_logo.dart` (`DropLogo`, white-tinted via `srcIn`, sized by `height`) — used on the **role-home app-bar lockup** (`RoleScaffold`) and the **quiet tertiary mark closing every mobile app bar** (`AdaptiveScaffold.showBrandMark`, default on, `_AppBarBrandMark`). Cold start uses `assets/0704.json` through `lottie` (fixed 5s playback, `SplashPage`); its embedded raster frames are parsed off-isolate and decoded at bounded width. **`AnimatedDropLogo`** (`lib/core/widgets/animated_drop_logo.dart`) is the shimmer treatment for the Login desktop brand panel **and, since 2026-07-05, the desktop sidebar brand header** (`AppSidebar`) — the sidebar previously used the static `DropLogo` only; that "chrome marks stay static" scoping was reversed for the sidebar specifically. **macOS Dock icon** = Big Sur squircle composed from the wordmark: master `assets/icon/app_icon_macos.png` → `macos/…/AppIcon.appiconset`. App name in `main.dart` (`title`) + `AppConstants.appName`. Tested in `test/brand_chrome_test.dart` |
+| **App brand / logo (the DROP wordmark)**  | artwork `assets/drop_logo.png` (registered in `pubspec.yaml`) rendered by `lib/core/widgets/drop_logo.dart` (`DropLogo`, white-tinted via `srcIn`, sized by `height`) — used by the **phone launch intro**, the **role-home app-bar lockup** (`RoleScaffold`), and the **quiet tertiary mark closing every mobile app bar** (`AdaptiveScaffold.showBrandMark`, default on, `_AppBarBrandMark`). Desktop/tablet cold start uses `assets/0704.json` through `lottie` (fixed 5s playback, `SplashPage`); phone cold start does not construct a Lottie provider. **`AnimatedDropLogo`** (`lib/core/widgets/animated_drop_logo.dart`) is the shimmer treatment for the Login desktop brand panel **and, since 2026-07-05, the desktop sidebar brand header** (`AppSidebar`) — the sidebar previously used the static `DropLogo` only; that "chrome marks stay static" scoping was reversed for the sidebar specifically. **macOS Dock icon** = Big Sur squircle composed from the wordmark: master `assets/icon/app_icon_macos.png` → `macos/…/AppIcon.appiconset`. App name in `main.dart` (`title`) + `AppConstants.appName`. Tested in `test/brand_chrome_test.dart` |
 | **Error / failure types**                 | `lib/core/errors/exceptions.dart` (data) · `failures.dart` (domain)      |
 | **Constants (collection names, app name)**| `lib/core/constants/app_constants.dart`                                  |
 | **App bootstrap / providers**             | `lib/main.dart`                                                          |
@@ -990,8 +996,12 @@ Patterns below are established across the codebase and **must be reused**.
   accounts, via the `createUserAccount` callable (Admin SDK creates the Auth
   user + `users/{uid}` doc; `firestore.rules` has `users` `create: if false`).
   The first-login gate is `mustChangePassword → Force Password Change`, then
-  `!isProfileCompleted → Profile Completion`, then the role home (router
-  redirect). `UserEntity.hasAppAccess` is now just `isActive`; a deactivated
+  `!isProfileCompleted → Profile Completion`, then — **employees only** —
+  `!hasCompletedOnboarding → the one-time Welcome` (`/welcome`), then the role
+  home (router redirect; ordering = pure `firstLoginLocation`). The Welcome flag
+  defaults `true` (existing users are never interrupted) and is seeded `false`
+  at profile completion, so a new employee sees it exactly once.
+  `UserEntity.hasAppAccess` is now just `isActive`; a deactivated
   account is blocked at login and signed out. The old
   signup/`approvalStatus`/Pending-Approval artifacts no longer exist in the
   code. The **first admin** is bootstrapped out of band (Firebase console).
