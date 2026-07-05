@@ -12,6 +12,45 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed / Refactored (2026-07-05 — intro polish, card-grid, undo bugfixes)
+
+Client-only; no Firebase schema, rules, functions, or deploy change.
+
+- **Fixed** the cold-start intro to always play over a fixed **5s**, instead of
+  whatever length the `assets/0704.json` composition happens to encode
+  (`SplashPage._introDuration` now overrides the Lottie controller's duration).
+- **Added** a premium monochrome 3-dot loading indicator under the splash logo,
+  visible for the whole intro (previously a bare spinner shown only after the
+  animation finished, if bootstrap was still pending).
+- **Changed** `AppSidebar`'s brand header from the static `DropLogo` to the
+  shimmering `AnimatedDropLogo` (owner-requested 2026-07-05) — **reverses the
+  2026-07-02 "chrome marks stay static" scoping** for the persistent desktop
+  sidebar; Splash/Login keep their existing treatment.
+- **Fixed** mismatched card heights on the admin dashboard's Overview grid
+  (e.g. the "Managers" metric card sitting visibly shorter than its row
+  siblings): `DashboardMetricCard` now reserves the trend line's height even
+  when a card has none, via `Visibility(maintainSize: true)` (not `Opacity`,
+  which cost an extra compositing layer and left a stray blank node in the
+  accessibility tree).
+- **Refactored** `ResponsiveCardGrid` from a `Wrap`-based layout (each card's
+  own natural height) to a row-chunked layout where each row is wrapped in
+  `IntrinsicHeight` + `CrossAxisAlignment.stretch`, so cards sharing a row
+  always match the tallest sibling — fixes the same "uneven cards" look on the
+  Tasks page grids (`my_tasks_screen.dart`, `branch_task_list_screen.dart`,
+  `pending_review_screen.dart`), which all wrap `ResponsiveCardGrid` around
+  variable-height task cards.
+- **Fixed** the schedule undo bar occasionally staying on screen indefinitely:
+  `SnackBar`'s built-in `duration` pauses while the bar is hovered and can be
+  orphaned by a rebuild. `manager_schedule_view.dart` now drives the 5s
+  dismiss with an explicit `Timer` that closes the specific
+  `ScaffoldFeatureController` returned by `showSnackBar` (never the ambient
+  `hideCurrentSnackBar()`, which could otherwise kill an unrelated later
+  snackbar if the user swiped the undo bar away early).
+- Reviewed via `/code-review`; verification: `flutter analyze` 7 pre-existing
+  infos, 0 new; **406 tests pass** (`test/responsive_card_grid_test.dart`
+  updated for the row-based layout; `test/brand_chrome_test.dart` unchanged
+  and green — `AnimatedDropLogo` renders a real `DropLogo` internally).
+
 ### Added / Refactored (2026-07-04 — premium animated cold-start intro)
 
 Client/startup-only; no Firebase schema, rules, functions, or deploy change.

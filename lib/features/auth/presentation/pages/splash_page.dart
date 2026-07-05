@@ -39,10 +39,15 @@ class _SplashPageState extends State<SplashPage>
     _controller = AnimationController(vsync: this);
   }
 
+  /// The cold-start intro always plays over this exact wall-clock duration,
+  /// regardless of the Lottie asset's native frame length — swapping the
+  /// composition later never silently changes how long the launch feels.
+  static const _introDuration = Duration(seconds: 5);
+
   void _play(LottieComposition composition) {
     if (_controller.isAnimating || _animationReported) return;
     _controller
-      ..duration = composition.duration
+      ..duration = _introDuration
       ..forward().whenComplete(_reportAnimationComplete);
   }
 
@@ -60,12 +65,12 @@ class _SplashPageState extends State<SplashPage>
 
   @override
   Widget build(BuildContext context) {
-    final animationDone = _animationReported;
-    final showError = animationDone && widget.bootstrapError != null;
-    final showWaiting =
-        animationDone &&
-        widget.bootstrapError == null &&
-        widget.isBootstrapping;
+    // The premium loading indicator is visible for the whole intro — under
+    // the logo from the very first frame — not just once the Lottie
+    // playback finishes and bootstrap is still pending. It only steps aside
+    // for the error state.
+    final showError = _animationReported && widget.bootstrapError != null;
+    final showWaiting = !showError;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -162,18 +167,68 @@ class _LaunchAssetLottie extends AssetLottie {
   }
 }
 
-class _WaitingIndicator extends StatelessWidget {
+/// A premium, monochrome indeterminate loading cue — three dots breathing in
+/// a staggered wave. Reads as quiet brand chrome rather than a bare spinner,
+/// matching the rest of the app's shimmer-driven loading language.
+class _WaitingIndicator extends StatefulWidget {
   const _WaitingIndicator({super.key});
 
   @override
-  Widget build(BuildContext context) => const SizedBox(
-    width: 18,
-    height: 18,
-    child: CircularProgressIndicator(
-      strokeWidth: 1.5,
-      color: AppColors.textSecondary,
-    ),
-  );
+  State<_WaitingIndicator> createState() => _WaitingIndicatorState();
+}
+
+class _WaitingIndicatorState extends State<_WaitingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < 3; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              _dot(i),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _dot(int index) {
+    // Each dot's wave is offset by a third of the cycle, so the pulse travels
+    // left → right instead of all three dots breathing in unison.
+    final t = (_controller.value - index * (1 / 3)) % 1.0;
+    final wave = (1 - (2 * t - 1).abs()).clamp(0.0, 1.0);
+    final scale = 0.6 + wave * 0.4;
+    final opacity = 0.35 + wave * 0.65;
+    return Opacity(
+      opacity: opacity,
+      child: Transform.scale(
+        scale: scale,
+        child: const DecoratedBox(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: AppColors.textSecondary,
+          ),
+          child: SizedBox(width: 6, height: 6),
+        ),
+      ),
+    );
+  }
 }
 
 class _StartupError extends StatelessWidget {

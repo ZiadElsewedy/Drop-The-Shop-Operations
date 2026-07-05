@@ -14,8 +14,12 @@ import 'package:drop/core/theme/app_spacing.dart';
 /// * **breakpoint columns** — a fixed count per tier ([desktopColumns] /
 ///   [ultrawideColumns]); mobile always 1.
 ///
-/// Uses a [Wrap] (not [GridView]) so each card keeps its **natural, variable
-/// height**. Intended to wrap card children inside an existing scroll view.
+/// Lays children out row by row (not a [GridView], so rows can hold a ragged
+/// final count). Within each row, cards **stretch to match the tallest
+/// sibling in that row** — so a short card never sits next to a tall one with
+/// a visible height mismatch — while rows are otherwise free to be as tall or
+/// short as their content needs. Intended to wrap card children inside an
+/// existing scroll view.
 class ResponsiveCardGrid extends StatelessWidget {
   const ResponsiveCardGrid({
     super.key,
@@ -65,14 +69,27 @@ class ResponsiveCardGrid extends StatelessWidget {
 
   Widget _grid(int columns, double maxWidth) {
     final itemWidth = (maxWidth - spacing * (columns - 1)) / columns;
-    return Wrap(
-      spacing: spacing,
-      runSpacing: runSpacing,
-      children: [
-        for (final child in children)
-          SizedBox(width: itemWidth, child: child),
-      ],
-    );
+    final rows = <Widget>[];
+    for (var i = 0; i < children.length; i += columns) {
+      final rowChildren = children.skip(i).take(columns).toList();
+      if (rows.isNotEmpty && runSpacing > 0) {
+        rows.add(SizedBox(height: runSpacing));
+      }
+      rows.add(
+        IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var j = 0; j < rowChildren.length; j++) ...[
+                if (j > 0) SizedBox(width: spacing),
+                SizedBox(width: itemWidth, child: rowChildren[j]),
+              ],
+            ],
+          ),
+        ),
+      );
+    }
+    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows);
   }
 
   @override

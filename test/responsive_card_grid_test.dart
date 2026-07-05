@@ -30,22 +30,27 @@ void main() {
     expect(find.text('c'), findsOneWidget);
   });
 
-  testWidgets('mobile width stays a single column (no Wrap)', (tester) async {
+  testWidgets('mobile width stays a single column (no row grid)',
+      (tester) async {
     await tester.pumpWidget(
         hostAtWidth(500, const ResponsiveCardGrid(children: children)));
-    expect(find.byType(Wrap), findsNothing);
+    expect(find.byType(IntrinsicHeight), findsNothing);
   });
 
-  testWidgets('desktop width lays out in a multi-column Wrap', (tester) async {
+  testWidgets(
+      'desktop width lays out in row-chunked columns that stretch to match',
+      (tester) async {
     await tester.pumpWidget(
         hostAtWidth(1400, const ResponsiveCardGrid(children: children)));
-    expect(find.byType(Wrap), findsOneWidget);
+    // 3 children, 2 desktop columns → 2 rows, each an IntrinsicHeight-wrapped
+    // Row so shorter cards stretch to match a taller row sibling.
+    expect(find.byType(IntrinsicHeight), findsNWidgets(2));
   });
 
   testWidgets('empty children collapse to nothing', (tester) async {
     await tester.pumpWidget(
         hostAtWidth(1400, const ResponsiveCardGrid(children: [])));
-    expect(find.byType(Wrap), findsNothing);
+    expect(find.byType(IntrinsicHeight), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -55,7 +60,7 @@ void main() {
         1200, const ResponsiveCardGrid(maxItemWidth: 400, children: children)));
     // 1200 / 400 = 3 columns → each card well under 400 wide.
     for (final w in tester.widgetList<SizedBox>(find.descendant(
-        of: find.byType(Wrap), matching: find.byType(SizedBox)))) {
+        of: find.byType(IntrinsicHeight), matching: find.byType(SizedBox)))) {
       if (w.width != null) expect(w.width, lessThanOrEqualTo(400));
     }
   });
@@ -64,6 +69,6 @@ void main() {
       (tester) async {
     await tester.pumpWidget(hostAtWidth(
         380, const ResponsiveCardGrid(maxItemWidth: 480, children: children)));
-    expect(find.byType(Wrap), findsNothing);
+    expect(find.byType(IntrinsicHeight), findsNothing);
   });
 }

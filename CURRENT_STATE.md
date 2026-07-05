@@ -11,8 +11,48 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-04 (premium animated cold-start intro)
+**Last updated:** 2026-07-05 (intro polish + grid/undo fixes)
 **Version:** 1.0.0+1 · **Branch:** `feature/report-issue` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Intro polish + card-grid/undo bug fixes (2026-07-05)
+
+Client-only; no Firebase schema, rules, functions, or deploy change.
+
+- **Splash now plays over a fixed 5s** regardless of the Lottie asset's native
+  frame length (`_introDuration` in `splash_page.dart` overrides the
+  controller's duration instead of using `composition.duration`) — swapping
+  the composition later changes its speed, not the launch's wall-clock length.
+- **Premium loading cue is visible for the whole intro**, not just once the
+  animation ends while bootstrap is still pending: `_WaitingIndicator` is now
+  a monochrome 3-dot breathing wave (replacing the bare `CircularProgressIndicator`),
+  shown under the logo from the first frame and only stepping aside for the
+  error state.
+- **Sidebar brand mark now uses `AnimatedDropLogo`** (the light-sweep shimmer)
+  instead of the static `DropLogo` — **this reverses the 2026-07-02 "chrome
+  marks stay static" ruling** for the persistent desktop sidebar specifically
+  (owner-requested 2026-07-05); Splash and Login keep the same treatment they
+  already had. `test/brand_chrome_test.dart` still passes unchanged (it only
+  asserts a `DropLogo` exists somewhere in the tree, and `AnimatedDropLogo`
+  renders one internally).
+- **Fixed uneven card heights** across the admin dashboard and task list grids:
+  `DashboardMetricCard` now reserves its trend line's height even when a card
+  has no trend (via `Visibility(maintainSize: true)`, not `Opacity`, to avoid
+  an extra compositing layer and a stray accessibility node), and
+  `ResponsiveCardGrid` no longer uses a plain `Wrap` — it lays cards out row by
+  row, each row wrapped in `IntrinsicHeight` + `CrossAxisAlignment.stretch`, so
+  a short card never sits next to a taller one at a visibly different height.
+- **Fixed the schedule undo bar sometimes never dismissing:** `SnackBar`'s
+  built-in `duration` pauses while the bar is hovered (desktop) and can be
+  orphaned by a rebuild in between. `manager_schedule_view.dart` now owns the
+  5s dismiss with an explicit, cancellable `Timer` that closes the specific
+  `ScaffoldFeatureController` returned by `showSnackBar` (not the ambient
+  `hideCurrentSnackBar()`, which could otherwise kill an unrelated later
+  snackbar if the user swiped the undo bar away early).
+- Verification: `flutter analyze` — 7 pre-existing infos, 0 new; **406 tests
+  pass** (`test/responsive_card_grid_test.dart` updated for the row-based
+  layout; `test/brand_chrome_test.dart` unchanged and green).
 
 ---
 
@@ -556,8 +596,10 @@ inspected; macOS debug build green). If the Dock caches the old icon:
 (`core/widgets/animated_drop_logo.dart`) — a soft diagonal light band sweeps
 the ~88%-white wordmark once per ~3.2s (ShaderMask srcATop, rests between
 passes, strictly monochrome). Live on the **Splash** lockup (under its
-entrance fade/scale) and the **Login desktop brand panel**; chrome marks stay
-static. `flutter analyze` clean · **268 tests pass** (+1).
+entrance fade/scale) and the **Login desktop brand panel**; chrome marks stayed
+static at the time (superseded 2026-07-05 — the desktop sidebar now uses it
+too; see the entry near the top of this file). `flutter analyze` clean ·
+**268 tests pass** (+1).
 
 ---
 

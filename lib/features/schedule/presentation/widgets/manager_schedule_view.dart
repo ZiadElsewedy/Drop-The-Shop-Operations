@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
@@ -34,7 +36,8 @@ import 'package:drop/features/schedule/presentation/widgets/chip_action_sheet.da
 import 'package:drop/features/schedule/presentation/widgets/schedule_grid.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
 import 'package:drop/features/schedule/presentation/widgets/shift_details_sheet.dart';
-import 'package:drop/features/schedule/presentation/widgets/swap_alert_card.dart' show showSwapQueueSheet;
+import 'package:drop/features/schedule/presentation/widgets/swap_alert_card.dart'
+    show showSwapQueueSheet;
 
 /// The operations-control schedule surface (Phase 7 redesign), shared by the
 /// manager (own branch) and admin (any branch). A weekly **coverage heatmap**
@@ -63,10 +66,22 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
   /// the grid dims. Cleared when the shift filter changes.
   ScheduleInsightKind? _activeInsight;
 
+  /// Drives the undo bar's auto-dismiss explicitly instead of relying on
+  /// [SnackBar]'s built-in `duration` — that timer pauses while the bar is
+  /// hovered (desktop) and can be left orphaned by a rapid rebuild, which is
+  /// why the bar was observed staying on screen well past its 5s window.
+  Timer? _undoDismissTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _init());
+  }
+
+  @override
+  void dispose() {
+    _undoDismissTimer?.cancel();
+    super.dispose();
   }
 
   void _init() {
@@ -128,8 +143,12 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
   }
 
   // ── Controls ───────────────────────────────────────────────────
-  Widget _controls(String branchId, DateTime weekStart, ScheduleCubit cubit,
-      int memberCount) {
+  Widget _controls(
+    String branchId,
+    DateTime weekStart,
+    ScheduleCubit cubit,
+    int memberCount,
+  ) {
     if (context.isDesktop) {
       return _desktopControls(branchId, weekStart, cubit, memberCount);
     }
@@ -138,8 +157,12 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
 
   /// Desktop: a single dense operations toolbar — branch identity on the left,
   /// branch picker, week navigator and shift filter aligned on the right.
-  Widget _desktopControls(String branchId, DateTime weekStart,
-      ScheduleCubit cubit, int memberCount) {
+  Widget _desktopControls(
+    String branchId,
+    DateTime weekStart,
+    ScheduleCubit cubit,
+    int memberCount,
+  ) {
     return Container(
       padding: const EdgeInsets.fromLTRB(40, 16, 40, 16),
       decoration: const BoxDecoration(
@@ -167,31 +190,46 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
       mainAxisSize: MainAxisSize.min,
       children: [
         _weekStepper(
-            Icons.chevron_left_rounded, cubit.previousWeek, 'Previous week'),
+          Icons.chevron_left_rounded,
+          cubit.previousWeek,
+          'Previous week',
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text('Week of',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textTertiary)),
-              Text(ScheduleWeek.rangeLabel(weekStart),
-                  style: AppTypography.label),
+              Text(
+                'Week of',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textTertiary,
+                ),
+              ),
+              Text(
+                ScheduleWeek.rangeLabel(weekStart),
+                style: AppTypography.label,
+              ),
             ],
           ),
         ),
-        _weekStepper(
-            Icons.chevron_right_rounded, cubit.nextWeek, 'Next week'),
+        _weekStepper(Icons.chevron_right_rounded, cubit.nextWeek, 'Next week'),
       ],
     );
   }
 
-  Widget _mobileControls(String branchId, DateTime weekStart,
-      ScheduleCubit cubit, int memberCount) {
+  Widget _mobileControls(
+    String branchId,
+    DateTime weekStart,
+    ScheduleCubit cubit,
+    int memberCount,
+  ) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, AppSpacing.sm,
-          AppSpacing.pagePadding, AppSpacing.md),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding,
+        AppSpacing.sm,
+        AppSpacing.pagePadding,
+        AppSpacing.md,
+      ),
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.darkBorder)),
       ),
@@ -205,23 +243,34 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
           ],
           Row(
             children: [
-              _weekStepper(Icons.chevron_left_rounded, cubit.previousWeek,
-                  'Previous week'),
+              _weekStepper(
+                Icons.chevron_left_rounded,
+                cubit.previousWeek,
+                'Previous week',
+              ),
               Expanded(
                 child: Center(
                   child: Column(
                     children: [
-                      Text('Week of',
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textTertiary)),
-                      Text(ScheduleWeek.rangeLabel(weekStart),
-                          style: AppTypography.label),
+                      Text(
+                        'Week of',
+                        style: AppTypography.caption.copyWith(
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                      Text(
+                        ScheduleWeek.rangeLabel(weekStart),
+                        style: AppTypography.label,
+                      ),
                     ],
                   ),
                 ),
               ),
               _weekStepper(
-                  Icons.chevron_right_rounded, cubit.nextWeek, 'Next week'),
+                Icons.chevron_right_rounded,
+                cubit.nextWeek,
+                'Next week',
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -257,27 +306,34 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     return BlocBuilder<BranchCubit, BranchState>(
       builder: (context, _) {
         final branch = context.read<BranchCubit>().branchById(branchId);
-        final name = branch?.name ??
+        final name =
+            branch?.name ??
             (branchId.isEmpty ? 'No branch selected' : 'Branch');
         // Only show the count once a branch is selected (admin all-branches view
         // has no members until one is picked).
         final subtitle = branchId.isEmpty
             ? 'Weekly schedule'
             : 'Weekly Schedule · $memberCount '
-                '${memberCount == 1 ? 'employee' : 'employees'}';
+                  '${memberCount == 1 ? 'employee' : 'employees'}';
         return Row(
           children: [
             BranchAvatar(
-                logoUrl: branch?.logoUrl, name: name, size: 34, radius: 10),
+              logoUrl: branch?.logoUrl,
+              name: name,
+              size: 34,
+              radius: 10,
+            ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name,
-                      style: AppTypography.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
+                  Text(
+                    name,
+                    style: AppTypography.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                   Text(subtitle, style: AppTypography.caption),
                 ],
               ),
@@ -308,16 +364,21 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
               isExpanded: true,
               hint: Row(
                 children: [
-                  const Icon(Icons.store_mall_directory_outlined,
-                      size: 18, color: AppColors.textTertiary),
+                  const Icon(
+                    Icons.store_mall_directory_outlined,
+                    size: 18,
+                    color: AppColors.textTertiary,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
                   Text('Select a branch', style: AppTypography.body),
                 ],
               ),
               dropdownColor: AppColors.darkSurfaceElevated,
               borderRadius: AppRadius.cardAll,
-              icon: const Icon(Icons.keyboard_arrow_down_rounded,
-                  color: AppColors.textTertiary),
+              icon: const Icon(
+                Icons.keyboard_arrow_down_rounded,
+                color: AppColors.textTertiary,
+              ),
               style: AppTypography.label.copyWith(color: AppColors.textPrimary),
               items: [
                 for (final b in branches)
@@ -395,12 +456,15 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     if (schedule == null) return _emptySchedule();
 
     final orphanCount = brokenSlots(schedule, members).length;
-    final insights =
-        computeScheduleInsights(schedule, members, filter: _filter);
+    final insights = computeScheduleInsights(
+      schedule,
+      members,
+      filter: _filter,
+    );
     // Never leave the grid stuck dim on a stale selection (e.g. the last
     // conflict was just resolved) — an insight with no slots is no filter.
-    final activeInsight = _activeInsight != null &&
-            insights.slotsFor(_activeInsight!).isNotEmpty
+    final activeInsight =
+        _activeInsight != null && insights.slotsFor(_activeInsight!).isNotEmpty
         ? _activeInsight
         : null;
 
@@ -431,13 +495,22 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
       onChipActions: (day, shift, uid) =>
           _openChipActions(schedule, members, day, shift, uid),
       onChipSwapWith: (day, shift, uid) => _openChipActions(
-          schedule, members, day, shift, uid,
-          startAtSwap: true),
+        schedule,
+        members,
+        day,
+        shift,
+        uid,
+        startAtSwap: true,
+      ),
     );
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.pagePadding, AppSpacing.md, AppSpacing.pagePadding, AppSpacing.xl),
+        AppSpacing.pagePadding,
+        AppSpacing.md,
+        AppSpacing.pagePadding,
+        AppSpacing.xl,
+      ),
       children: [
         _insightStrip(insights, activeInsight),
         const SizedBox(height: AppSpacing.md),
@@ -488,11 +561,16 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     }
     // Fact, not quota: emptying the source shift is allowed, but never silent.
     if (MoveValidation.wouldEmptySlot(
-        schedule: schedule, uid: data.uid, day: data.day, shift: data.shift)) {
+      schedule: schedule,
+      uid: data.uid,
+      day: data.day,
+      shift: data.shift,
+    )) {
       final go = await showConfirmDialog(
         context,
         title: 'Leave shift unstaffed?',
-        message: 'Moving $name leaves ${data.day.label} '
+        message:
+            'Moving $name leaves ${data.day.label} '
             '${data.shift.label.toLowerCase()} with no one assigned.',
         confirmLabel: 'Move anyway',
       );
@@ -507,7 +585,8 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     );
     if (ok && mounted) {
       _showUndoSnackbar(
-          'Moved $name to ${toDay.label} ${toShift.label.toLowerCase()}');
+        'Moved $name to ${toDay.label} ${toShift.label.toLowerCase()}',
+      );
     }
   }
 
@@ -564,11 +643,16 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     final user = userForUid(uid, members);
     final name = user == null ? 'This person' : shortName(user);
     if (MoveValidation.wouldEmptySlot(
-        schedule: schedule, uid: uid, day: day, shift: shift)) {
+      schedule: schedule,
+      uid: uid,
+      day: day,
+      shift: shift,
+    )) {
       final go = await showConfirmDialog(
         context,
         title: 'Leave shift unstaffed?',
-        message: 'Removing $name leaves ${day.label} '
+        message:
+            'Removing $name leaves ${day.label} '
             '${shift.label.toLowerCase()} with no one assigned.',
         confirmLabel: 'Remove',
         destructive: true,
@@ -578,7 +662,8 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     final ok = await cubit.remove(day, shift, uid);
     if (ok && mounted) {
       _showUndoSnackbar(
-          'Removed $name from ${day.label} ${shift.label.toLowerCase()}');
+        'Removed $name from ${day.label} ${shift.label.toLowerCase()}',
+      );
     }
   }
 
@@ -602,18 +687,20 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
       policy: _policy(schedule.branchId),
       startAtSwap: startAtSwap,
       onMove: (toDay, toShift) => _moveChip(
-          schedule,
-          members,
-          ChipDragData(uid: uid, day: day, shift: shift),
-          toDay,
-          toShift),
+        schedule,
+        members,
+        ChipDragData(uid: uid, day: day, shift: shift),
+        toDay,
+        toShift,
+      ),
       onExchange: (withUid, withDay, withShift) => _exchangeChips(
-          schedule,
-          members,
-          ChipDragData(uid: uid, day: day, shift: shift),
-          withDay,
-          withShift,
-          withUid),
+        schedule,
+        members,
+        ChipDragData(uid: uid, day: day, shift: shift),
+        withDay,
+        withShift,
+        withUid,
+      ),
       onRemove: () => _removeChip(schedule, members, day, shift, uid),
     );
   }
@@ -622,38 +709,51 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
   /// edit, shown for exactly the cubit's undo window.
   void _showUndoSnackbar(String message) {
     final cubit = context.read<ScheduleCubit>();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const Icon(Icons.check_circle_outline_rounded,
-                  color: AppColors.textPrimary, size: 18),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  message,
-                  style: AppTypography.label
-                      .copyWith(color: AppColors.textPrimary),
+    final messenger = ScaffoldMessenger.of(context);
+    _undoDismissTimer?.cancel();
+    messenger.hideCurrentSnackBar();
+    final controller = messenger.showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(
+              Icons.check_circle_outline_rounded,
+              color: AppColors.textPrimary,
+              size: 18,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textPrimary,
                 ),
               ),
-            ],
-          ),
-          backgroundColor: AppColors.darkSurfaceElevated,
-          behavior: SnackBarBehavior.floating,
-          duration: ScheduleCubit.undoWindow,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-            side: const BorderSide(color: AppColors.darkBorder),
-          ),
-          action: SnackBarAction(
-            label: 'UNDO',
-            textColor: AppColors.primary,
-            onPressed: () => cubit.undoLast(),
-          ),
+            ),
+          ],
         ),
-      );
+        backgroundColor: AppColors.darkSurfaceElevated,
+        behavior: SnackBarBehavior.floating,
+        // No `duration` reliance here — the explicit timer below owns the
+        // dismiss so hovering the bar (or a rebuild in between) can never
+        // leave it stuck on screen past its window.
+        duration: const Duration(days: 1),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: AppColors.darkBorder),
+        ),
+        action: SnackBarAction(
+          label: 'UNDO',
+          textColor: AppColors.primary,
+          onPressed: () => cubit.undoLast(),
+        ),
+      ),
+    );
+    // Closes this specific snackbar instance (a no-op if it's already gone),
+    // rather than `hideCurrentSnackBar()`, which would blindly dismiss
+    // whatever snackbar happens to be showing 5s from now — including an
+    // unrelated one shown in between if the user dismissed this one early.
+    _undoDismissTimer = Timer(ScheduleCubit.undoWindow, controller.close);
   }
 
   /// One-line affordance hint under the grid — drag / switch / right-click /
@@ -661,19 +761,24 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
   Widget _gridHint() {
     final hint = context.isDesktop
         ? 'Drag people between shifts · drop a person on another to switch '
-            'them · right-click for actions · click a cell for details'
+              'them · right-click for actions · click a cell for details'
         : 'Tap a shift to manage · long-press a person for actions · '
-            'swipe for more days';
+              'swipe for more days';
     return Row(
       children: [
-        const Icon(Icons.touch_app_outlined,
-            size: 14, color: AppColors.textTertiary),
+        const Icon(
+          Icons.touch_app_outlined,
+          size: 14,
+          color: AppColors.textTertiary,
+        ),
         const SizedBox(width: 6),
         Expanded(
-          child: Text(hint,
-              style: AppTypography.caption,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis),
+          child: Text(
+            hint,
+            style: AppTypography.caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         const SizedBox(width: 12),
         const DropLogo(height: 13, color: AppColors.textTertiary),
@@ -696,12 +801,18 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.check_circle_outline_rounded,
-                  size: 15, color: AppColors.textSecondary),
+              const Icon(
+                Icons.check_circle_outline_rounded,
+                size: 15,
+                color: AppColors.textSecondary,
+              ),
               const SizedBox(width: 6),
-              Text('Week fully staffed · no conflicts',
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textSecondary)),
+              Text(
+                'Week fully staffed · no conflicts',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ],
           )
         else ...[
@@ -748,18 +859,16 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
       message: selected ? 'Clear highlight' : 'Highlight these shifts',
       waitDuration: const Duration(milliseconds: 600),
       child: GestureDetector(
-        onTap: () => setState(
-            () => _activeInsight = selected ? null : kind),
+        onTap: () => setState(() => _activeInsight = selected ? null : kind),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            color: selected
-                ? AppColors.accentSurface
-                : AppColors.darkSurface,
+            color: selected ? AppColors.accentSurface : AppColors.darkSurface,
             borderRadius: AppRadius.fullAll,
             border: Border.all(
-                color: selected ? AppColors.accentBorder : AppColors.darkBorder),
+              color: selected ? AppColors.accentBorder : AppColors.darkBorder,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -768,20 +877,28 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
                 Container(
                   width: 6,
                   height: 6,
-                  decoration:
-                      BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: dotColor,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 6),
               ],
-              Text('$count ',
-                  style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w700)),
-              Text(label,
-                  style: AppTypography.caption.copyWith(
-                      color: selected
-                          ? AppColors.textPrimary
-                          : AppColors.textSecondary)),
+              Text(
+                '$count ',
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                label,
+                style: AppTypography.caption.copyWith(
+                  color: selected
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                ),
+              ),
             ],
           ),
         ),
@@ -795,8 +912,7 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     return BlocBuilder<ShiftSwapCubit, ShiftSwapState>(
       builder: (context, state) {
         final count = state.maybeWhen(
-          loaded: (swaps, _) =>
-              swaps.where((s) => !s.status.isResolved).length,
+          loaded: (swaps, _) => swaps.where((s) => !s.status.isResolved).length,
           orElse: () => 0,
         );
         if (count == 0) return const SizedBox.shrink();
@@ -816,16 +932,25 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.swap_horiz_rounded,
-                    size: 14, color: AppColors.textPrimary),
+                const Icon(
+                  Icons.swap_horiz_rounded,
+                  size: 14,
+                  color: AppColors.textPrimary,
+                ),
                 const SizedBox(width: 6),
-                Text('$count ',
-                    style: AppTypography.labelSmall.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w700)),
-                Text(count == 1 ? 'swap waiting' : 'swaps waiting',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textSecondary)),
+                Text(
+                  '$count ',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  count == 1 ? 'swap waiting' : 'swaps waiting',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
               ],
             ),
           ),
