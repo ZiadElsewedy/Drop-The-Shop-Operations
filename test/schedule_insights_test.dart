@@ -149,6 +149,25 @@ void main() {
       expect(insights.allClear, isFalse);
     });
 
+    test('last week\'s Saturday night flags this Sunday morning (cross-week '
+        'short rest)', () {
+      final insights = computeScheduleInsights(
+        _schedule({
+          ScheduleDay.sunday: {
+            ScheduleShift.morning: ['u1', 'u2'],
+          },
+        }),
+        members,
+        previousSaturdayNight: {'u1', 'ghost'},
+      );
+
+      expect(insights.shortRestByDay[ScheduleDay.sunday], {'u1'});
+      // Only the Sunday morning slot highlights — last week's Saturday night
+      // isn't on this grid.
+      expect(insights.shortRestSlots,
+          {(ScheduleDay.sunday, ScheduleShift.morning)});
+    });
+
     test('flags people assigned while marked on leave; counts leave entries',
         () {
       final insights = computeScheduleInsights(

@@ -49,12 +49,22 @@ brief) with the visual language, architecture and interactions untouched:
 - Desktop toolbar aligned to the grid's 24px padding (more usable width).
 - Moving/switching someone onto a leave day = confirm-not-block; assign picker
   captions `On leave · <type>`.
+- **Employee parity (same day):** employee My Schedule week rows + today hero
+  name recorded leave (Annual/Sick/Day Off/Leave Requested), show day notes,
+  and every night time label is weekend-aware (`timeRangeOn`; hero countdown,
+  week rows, employee shift sheet, swap exchange preview — previously showed
+  the wrong 23:00 close on weekends). Rostered-while-away days warn "check
+  with your manager".
+- **Cross-week short rest (same day):** `ScheduleCubit` loads last week's
+  Saturday-night crew (parallel, best-effort; cubit context
+  `previousSaturdayNight`) so Saturday night → Sunday morning is flagged by
+  insights + health and in the Final View.
 
-Verification: 48 schedule tests (incl. new `schedule_health_test`,
-`weekly_schedule_model_test`) — full suite **460 pass / 2 pre-existing splash
-failures** (verified on clean tree). `flutter analyze`: 0 new.
-**Follow-ups:** employee-facing leave on My Schedule; employee leave request
-flow (managers mark `pending` manually); cross-week short-rest detection.
+Verification: full suite **463 pass / 2 pre-existing splash failures**
+(verified on clean tree). `flutter analyze`: 0 new.
+**Follow-up (deliberately deferred):** employee leave *request* flow —
+managers record `pending` manually; a request pipeline duplicates swap/Cases
+machinery at this team size.
 
 ---
 

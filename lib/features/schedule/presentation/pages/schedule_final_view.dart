@@ -35,6 +35,7 @@ Future<void> showScheduleFinalView({
   required List<UserEntity> members,
   required BranchEntity? branch,
   ScheduleShift? filter,
+  Set<String> previousSaturdayNight = const {},
 }) {
   return Navigator.of(context, rootNavigator: true).push<void>(
     PageRouteBuilder<void>(
@@ -49,6 +50,7 @@ Future<void> showScheduleFinalView({
           members: members,
           branch: branch,
           filter: filter,
+          previousSaturdayNight: previousSaturdayNight,
         ),
       ),
     ),
@@ -64,12 +66,17 @@ class ScheduleFinalView extends StatefulWidget {
     required this.members,
     required this.branch,
     this.filter,
+    this.previousSaturdayNight = const {},
   });
 
   final WeeklyScheduleEntity schedule;
   final List<UserEntity> members;
   final BranchEntity? branch;
   final ScheduleShift? filter;
+
+  /// Last week's Saturday-night crew — keeps the printed short-rest cues
+  /// consistent with the editor grid across the week boundary.
+  final Set<String> previousSaturdayNight;
 
   @override
   State<ScheduleFinalView> createState() => _ScheduleFinalViewState();
@@ -274,6 +281,7 @@ class _ExportCanvas extends StatelessWidget {
       schedule,
       members,
       filter: widget.filter,
+      previousSaturdayNight: widget.previousSaturdayNight,
     );
     final assignedUids = <String>{};
     var assignmentCount = 0;

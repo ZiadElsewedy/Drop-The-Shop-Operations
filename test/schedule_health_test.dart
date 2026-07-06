@@ -116,6 +116,23 @@ void main() {
       expect(uneven.single.title, contains('Omar'));
     });
 
+    test('last week\'s Saturday night counts toward this week\'s short rests',
+        () {
+      final health = computeScheduleHealth(
+        _schedule({
+          ScheduleDay.sunday: {ScheduleShift.morning: ['u1']},
+        }),
+        [ahmed],
+        previousSaturdayNight: {'u1'},
+      );
+
+      final shortRest = health.findings
+          .where((f) => f.kind == HealthFindingKind.shortRest)
+          .toList();
+      expect(shortRest, hasLength(1));
+      expect(health.score, 90);
+    });
+
     test('an empty schedule is quietly healthy — nothing to advise on', () {
       final health = computeScheduleHealth(_schedule(const {}), [ahmed, omar]);
       expect(health.findings, isEmpty);

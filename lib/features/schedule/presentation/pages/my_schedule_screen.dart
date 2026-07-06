@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/theme/app_colors.dart';
@@ -378,6 +379,21 @@ class _NoScheduleCard extends StatelessWidget {
 
 // ─── Today Hero Card ─────────────────────────────────────────────────────────
 
+/// Employee-facing wording for a leave entry — their own day, stated plainly.
+String _leaveLabel(LeaveType type) => switch (type) {
+      LeaveType.annual => 'Annual Leave',
+      LeaveType.sick => 'Sick Leave',
+      LeaveType.dayOff => 'Day Off',
+      LeaveType.pending => 'Leave Requested',
+    };
+
+IconData _leaveIcon(LeaveType type) => switch (type) {
+      LeaveType.annual => Icons.beach_access_outlined,
+      LeaveType.sick => Icons.medical_services_outlined,
+      LeaveType.dayOff => Icons.event_busy_outlined,
+      LeaveType.pending => Icons.hourglass_empty_rounded,
+    };
+
 class _TodayHeroCard extends StatelessWidget {
   const _TodayHeroCard({
     required this.schedule,
@@ -395,6 +411,8 @@ class _TodayHeroCard extends StatelessWidget {
     final myShifts = schedule.shiftsFor(uid, today);
     final isOff = myShifts.isEmpty;
     final shift = isOff ? null : myShifts.first;
+    final leaveType = schedule.leaveTypeOf(uid, today);
+    final note = schedule.noteFor(today);
 
     // Coworkers on the same shift(s) today.
     final teamUids = <String>{};
@@ -423,7 +441,7 @@ class _TodayHeroCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _buildHeader(shift, isOff),
+          _buildHeader(today, shift, isOff, leaveType, note),
           const Divider(height: 1, color: AppColors.darkBorder),
           _buildTeamRow(teamUsers, managers, isOff),
           const Divider(height: 1, color: AppColors.darkBorder),
@@ -433,13 +451,19 @@ class _TodayHeroCard extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(ScheduleShift? shift, bool isOff) {
+  Widget _buildHeader(
+    ScheduleDay today,
+    ScheduleShift? shift,
+    bool isOff,
+    LeaveType? leaveType,
+    String? note,
+  ) {
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _ShiftIconBox(shift: shift),
+          _ShiftIconBox(shift: shift, leaveType: isOff ? leaveType : null),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -466,12 +490,36 @@ class _TodayHeroCard extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  isOff ? 'Day Off' : '${shift!.label} Shift',
+                  // A leave day names its reason instead of a generic "Day
+                  // Off" — the schedule tells the employee what their manager
+                  // recorded (Schedule 5.0).
+                  isOff
+                      ? (leaveType == null ? 'Day Off' : _leaveLabel(leaveType))
+                      : '${shift!.label} Shift',
                   style: AppTypography.h2,
                 ),
                 if (!isOff) ...[
                   const SizedBox(height: 4),
-                  _CountdownRow(shift: shift!),
+                  _CountdownRow(shift: shift!, day: today),
+                ],
+                if (note != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.sticky_note_2_outlined,
+                          size: 12, color: AppColors.textTertiary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          note,
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ],
             ),
@@ -614,13 +662,18 @@ class _TodayHeroCard extends StatelessWidget {
 // ─── Shift Icon Box ───────────────────────────────────────────────────────────
 
 class _ShiftIconBox extends StatelessWidget {
-  const _ShiftIconBox({this.shift});
+  const _ShiftIconBox({this.shift, this.leaveType});
   final ScheduleShift? shift;
+
+  /// Set on an off day that is a recorded leave — the box shows why.
+  final LeaveType? leaveType;
 
   @override
   Widget build(BuildContext context) {
     final icon = shift == null
-        ? Icons.do_not_disturb_on_outlined
+        ? (leaveType == null
+            ? Icons.do_not_disturb_on_outlined
+            : _leaveIcon(leaveType!))
         : (shift == ScheduleShift.morning
             ? Icons.wb_sunny_rounded
             : Icons.nightlight_rounded);
@@ -641,8 +694,9 @@ class _ShiftIconBox extends StatelessWidget {
 // ─── Countdown Row (time + "In X min" pill) ───────────────────────────────────
 
 class _CountdownRow extends StatelessWidget {
-  const _CountdownRow({required this.shift});
+  const _CountdownRow({required this.shift, required this.day});
   final ScheduleShift shift;
+  final ScheduleDay day;
 
   @override
   Widget build(BuildContext context) {
@@ -653,7 +707,8 @@ class _CountdownRow extends StatelessWidget {
             size: 12, color: AppColors.textTertiary),
         const SizedBox(width: 4),
         Text(
-          shift.timeRange,
+          // Weekend nights (Thu/Fri/Sat) run till 00:30.
+          shift.timeRangeOn(day),
           style: AppTypography.caption
               .copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
         ),
@@ -817,7 +872,7 @@ class _ShiftDetailsSheet extends StatelessWidget {
                 children: [
                   Text('${shift.label} Shift', style: AppTypography.h3),
                   const SizedBox(height: 2),
-                  Text(shift.timeRange,
+                  Text(shift.timeRangeOn(day),
                       style: AppTypography.caption
                           .copyWith(color: AppColors.textTertiary)),
                 ],
@@ -921,16 +976,24 @@ class _WeekDayRow extends StatelessWidget {
     final isToday = day == ScheduleDay.today();
     // weekStart is Sunday = index 0; day.index maps directly.
     final dayDate = weekStart.add(Duration(days: day.index));
+    // The employee's own leave + the manager's day note (Schedule 5.0) — the
+    // week list states them without opening anything.
+    final leaveType = schedule.leaveTypeOf(uid, day);
+    final note = schedule.noteFor(day);
 
     if (shifts.isEmpty) {
-      return _buildRow(context, null, isToday, dayDate);
+      return _buildRow(context, null, isToday, dayDate,
+          leaveType: leaveType, note: note);
     }
 
-    // Multiple shifts on same day → one row each.
+    // Multiple shifts on same day → one row each (day-level extras ride the
+    // first row only, so they never repeat).
     return Column(
-      children: shifts
-          .map((s) => _buildRow(context, s, isToday, dayDate))
-          .toList(),
+      children: [
+        for (final (i, s) in shifts.indexed)
+          _buildRow(context, s, isToday, dayDate,
+              leaveType: i == 0 ? leaveType : null, note: i == 0 ? note : null),
+      ],
     );
   }
 
@@ -938,8 +1001,10 @@ class _WeekDayRow extends StatelessWidget {
     BuildContext context,
     ScheduleShift? shift,
     bool isToday,
-    DateTime dayDate,
-  ) {
+    DateTime dayDate, {
+    LeaveType? leaveType,
+    String? note,
+  }) {
     final isOff = shift == null;
 
     return Container(
@@ -972,7 +1037,9 @@ class _WeekDayRow extends StatelessWidget {
             ),
             child: Icon(
               isOff
-                  ? Icons.remove_circle_outline_rounded
+                  ? (leaveType == null
+                      ? Icons.remove_circle_outline_rounded
+                      : _leaveIcon(leaveType))
                   : (shift == ScheduleShift.morning
                       ? Icons.wb_sunny_outlined
                       : Icons.nightlight_outlined),
@@ -988,15 +1055,46 @@ class _WeekDayRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isOff ? 'Off' : '${shift.label} Shift',
+                  // An off day that is recorded leave names its reason;
+                  // a plain unscheduled day stays "Off".
+                  isOff
+                      ? (leaveType == null ? 'Off' : _leaveLabel(leaveType))
+                      : '${shift.label} Shift',
                   style: AppTypography.label.copyWith(
-                    color: isOff
+                    color: isOff && leaveType == null
                         ? AppColors.textTertiary
                         : AppColors.textPrimary,
                   ),
                 ),
                 if (!isOff)
-                  Text(shift.timeRange, style: AppTypography.caption),
+                  // Weekend nights (Thu/Fri/Sat) run till 00:30.
+                  Text(shift.timeRangeOn(day), style: AppTypography.caption),
+                if (!isOff && leaveType != null)
+                  // Rostered AND marked away — say it, the manager resolves.
+                  Text(
+                    'Also marked ${leaveType.label.toLowerCase()} — '
+                    'check with your manager',
+                    style: AppTypography.caption
+                        .copyWith(color: AppColors.warning),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                if (note != null)
+                  Row(
+                    children: [
+                      const Icon(Icons.sticky_note_2_outlined,
+                          size: 11, color: AppColors.textTertiary),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          note,
+                          style: AppTypography.caption,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),

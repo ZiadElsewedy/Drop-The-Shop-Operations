@@ -6,6 +6,7 @@ import 'package:drop/core/errors/failures.dart';
 import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
+import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
 import 'package:drop/features/schedule/domain/schedule_week.dart';
 import 'schedule_state.dart';
@@ -21,12 +22,20 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   String _branchId = '';
   DateTime _weekStart = ScheduleWeek.currentWeekStart();
+  Set<String> _previousSaturdayNight = const {};
 
   ScheduleCubit(this._repository, this._getUsersByBranch)
       : super(const ScheduleState.initial());
 
   String get branchId => _branchId;
   DateTime get weekStart => _weekStart;
+
+  /// Who worked the **previous week's** Saturday night — refreshed with every
+  /// load and consumed by the insight/health computations so the Saturday
+  /// night → Sunday morning turnaround (the tightest one: weekend nights end
+  /// 00:30) is caught across the week boundary. Kept beside [branchId]/
+  /// [weekStart] as cubit context rather than in the freezed state.
+  Set<String> get previousSaturdayNight => _previousSaturdayNight;
 
   bool get _busy => state.maybeWhen(
         loaded: (_, _, _, _, busy) => busy,
@@ -230,24 +239,50 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   // ── Internals ──────────────────────────────────────────────────
   Future<void> _emitLoaded() async {
     try {
-      final schedule = _branchId.isEmpty
-          ? null
-          : await AppLog.time('schedule', 'getSchedule',
-              () => _repository.getSchedule(_branchId, _weekStart));
-      final members = _branchId.isEmpty
-          ? const <UserEntity>[]
-          : await AppLog.time(
-              'schedule', 'getUsersByBranch', () => _getUsersByBranch(_branchId));
+      if (_branchId.isEmpty) {
+        _previousSaturdayNight = const {};
+        emit(ScheduleState.loaded(
+          branchId: _branchId,
+          weekStart: _weekStart,
+          schedule: null,
+          members: const [],
+        ));
+        return;
+      }
+      // The three reads are independent — fetch in parallel so the extra
+      // previous-week probe never adds a round-trip to the load.
+      final schedule = AppLog.time('schedule', 'getSchedule',
+          () => _repository.getSchedule(_branchId, _weekStart));
+      final members = AppLog.time(
+          'schedule', 'getUsersByBranch', () => _getUsersByBranch(_branchId));
+      final prevNight = _previousSaturdayNightCrew();
+      final results = await Future.wait([schedule, members, prevNight]);
+      _previousSaturdayNight = results[2]! as Set<String>;
       emit(ScheduleState.loaded(
         branchId: _branchId,
         weekStart: _weekStart,
-        schedule: schedule,
-        members: members,
+        schedule: results[0] as WeeklyScheduleEntity?,
+        members: results[1]! as List<UserEntity>,
       ));
     } on Failure catch (e) {
       emit(ScheduleState.error(e.message));
     } catch (_) {
       emit(const ScheduleState.error('Failed to load the schedule.'));
+    }
+  }
+
+  /// Last week's Saturday-night uids — best-effort: a missing previous week
+  /// or a read failure yields an empty set and never fails the main load.
+  Future<Set<String>> _previousSaturdayNightCrew() async {
+    try {
+      final prev = await _repository.getSchedule(
+          _branchId, _weekStart.subtract(const Duration(days: 7)));
+      return prev
+              ?.employeesFor(ScheduleDay.saturday, ScheduleShift.night)
+              .toSet() ??
+          const {};
+    } catch (_) {
+      return const {};
     }
   }
 

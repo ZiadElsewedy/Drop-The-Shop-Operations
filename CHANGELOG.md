@@ -66,15 +66,34 @@ monochrome design language, architecture and interactions; 16-point owner brief.
 - **Width:** the desktop toolbar padding now matches the grid's 24px page
   padding (was 40px) so the toolbar aligns with the week and the schedule uses
   the full desktop width.
+- **Employee parity (same-day follow-up slice):** the employee **My Schedule**
+  now tells the same story as the manager grid — week rows and the today hero
+  name a recorded leave instead of a generic "Off"/"Day Off" (**Annual Leave ·
+  Sick Leave · Day Off · Leave Requested**, matching icon), show the manager's
+  day note, and every night time-label is weekend-aware via
+  `timeRangeOn(day)` (Thu/Fri/Sat = `16:30 – 00:30` — the hero countdown row,
+  week rows, the employee shift sheet and the swap **exchange preview** all
+  updated; previously they showed the wrong 23:00 close on weekends). A person
+  rostered *and* marked away sees "Also marked … — check with your manager".
+- **Cross-week short rest:** `ScheduleCubit` now also loads the **previous
+  week's Saturday-night crew** (third parallel read, best-effort — a missing
+  week or failed read = empty set, never fails the load; exposed as cubit
+  context `previousSaturdayNight`, not in the freezed state). Insights + health
+  consume it, so **Saturday night (ends 00:30!) → Sunday morning** finally
+  counts as a short rest; only the Sunday-morning slot highlights (last week's
+  night isn't on this grid). Threaded into the Final View for consistent
+  printed cues.
 - **Tests:** `schedule_health_test` + `weekly_schedule_model_test` (new),
   `schedule_grid_test` (+4: weekend tags, leave/notes strip + day-tap,
-  presentation, corner count), `schedule_insights_test` (+3),
-  `schedule_final_view_test` (presentation assertions). Full suite: **460
-  pass, 2 fail** (the 2 = pre-existing desktop splash-framing tests, verified
-  failing on a clean tree). `flutter analyze`: 7 pre-existing infos, 0 new.
-- **Not in this slice (follow-ups):** employee-facing leave display on My
-  Schedule, an employee leave *request* flow (managers mark `pending` manually
-  for now), cross-week short-rest detection (Saturday night → next Sunday).
+  presentation, corner count), `schedule_insights_test` (+4 incl. cross-week),
+  `schedule_final_view_test` (presentation assertions), `my_schedule_tab_test`
+  (+1: employee leave/notes/weekend-hours row). Full suite: **463 pass, 2
+  fail** (the 2 = pre-existing desktop splash-framing tests, verified failing
+  on a clean tree). `flutter analyze`: 7 pre-existing infos, 0 new.
+- **Not in this slice (deliberate deferral):** an employee leave *request*
+  flow — managers record `pending` manually after a conversation. A
+  request→approve pipeline would duplicate the swap/Cases machinery for a
+  small team; revisit only if the manual flow proves painful in practice.
 
 ### Changed (2026-07-06 — Living-border orbit: per-state colour palette)
 

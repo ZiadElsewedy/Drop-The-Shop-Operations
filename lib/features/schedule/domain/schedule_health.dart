@@ -55,11 +55,14 @@ class ScheduleHealth {
 /// a branch team) — call it once per build alongside `computeScheduleInsights`.
 ///
 /// [nameOf] renders a person's display name (the view passes its `shortName`
-/// helper so health text matches the grid chips).
+/// helper so health text matches the grid chips). [previousSaturdayNight] —
+/// last week's Saturday-night crew — lets the Sunday-morning turnaround count
+/// as a short rest too.
 ScheduleHealth computeScheduleHealth(
   WeeklyScheduleEntity schedule,
   List<UserEntity> members, {
   String Function(UserEntity user)? nameOf,
+  Set<String> previousSaturdayNight = const {},
 }) {
   String name(UserEntity u) =>
       nameOf?.call(u) ?? (u.displayName?.trim().isNotEmpty == true
@@ -90,6 +93,12 @@ ScheduleHealth computeScheduleHealth(
 
     var shortRests = 0;
     var alternations = 0;
+    // Last week's Saturday night → this Sunday morning (weekend nights end
+    // 00:30, mornings start 08:30 — the tightest turnaround there is).
+    if (previousSaturdayNight.contains(member.uid) &&
+        week.first == ScheduleShift.morning) {
+      shortRests++;
+    }
     for (var d = 1; d < week.length; d++) {
       final prev = week[d - 1];
       final curr = week[d];

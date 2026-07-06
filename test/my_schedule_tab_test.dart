@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
@@ -140,5 +141,64 @@ void main() {
       1.0,
       reason: 'the week must not remount invisible after returning from Swaps',
     );
+  });
+
+  testWidgets(
+      'week rows surface my leave, day notes and weekend closing hours',
+      (tester) async {
+    // Tall viewport so all seven (lazily-built) week rows are mounted.
+    tester.view.physicalSize = const Size(800, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final user = _employee();
+    final weekStart = ScheduleWeek.currentWeekStart();
+    final state = ScheduleState.loaded(
+      branchId: 'b1',
+      weekStart: weekStart,
+      schedule: WeeklyScheduleEntity(
+        id: 'b1_week',
+        branchId: 'b1',
+        weekStart: weekStart,
+        assignments: {
+          // Weekend night — must display the 00:30 close, not 23:00.
+          ScheduleDay.thursday: {
+            ScheduleShift.night: [user.uid],
+          },
+        },
+        leave: {
+          ScheduleDay.monday: {user.uid: LeaveType.sick},
+        },
+        dayNotes: const {ScheduleDay.tuesday: 'Inventory'},
+      ),
+      members: [user],
+    );
+    final scheduleCubit = _FakeScheduleCubit(state);
+    final swapCubit = _FakeShiftSwapCubit();
+    final authCubit = _FakeAuthCubit(user);
+    addTearDown(() async {
+      await scheduleCubit.close();
+      await swapCubit.close();
+      await authCubit.close();
+    });
+
+    await tester.pumpWidget(MultiBlocProvider(
+      providers: [
+        BlocProvider<AuthCubit>.value(value: authCubit),
+        BlocProvider<ScheduleCubit>.value(value: scheduleCubit),
+        BlocProvider<ShiftSwapCubit>.value(value: swapCubit),
+      ],
+      child: const MaterialApp(home: MyScheduleScreen()),
+    ));
+    await tester.pumpAndSettle();
+
+    // Monday names the recorded leave instead of a generic "Off"; Tuesday
+    // shows the manager's note; the Thursday night row states the weekend
+    // close. (`findsAtLeastNWidgets` — the today hero card may duplicate one
+    // of these depending on the real weekday the test runs on.)
+    expect(find.text('Sick Leave'), findsAtLeastNWidgets(1));
+    expect(find.text('Inventory'), findsAtLeastNWidgets(1));
+    expect(find.text('16:30 – 00:30'), findsAtLeastNWidgets(1));
+    expect(find.text('16:30 – 23:00'), findsNothing);
   });
 }

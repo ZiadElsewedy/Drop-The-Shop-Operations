@@ -796,7 +796,7 @@ class _ExchangePreview extends StatelessWidget {
         children: [
           Expanded(
             child: _PreviewSlot(
-                caption: 'You give', shift: yourShift),
+                caption: 'You give', shift: yourShift, day: day),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
@@ -805,7 +805,10 @@ class _ExchangePreview extends StatelessWidget {
           ),
           Expanded(
             child: _PreviewSlot(
-                caption: 'You get', shift: yourShift.opposite, alignEnd: true),
+                caption: 'You get',
+                shift: yourShift.opposite,
+                day: day,
+                alignEnd: true),
           ),
         ],
       ),
@@ -817,11 +820,13 @@ class _PreviewSlot extends StatelessWidget {
   const _PreviewSlot({
     required this.caption,
     required this.shift,
+    required this.day,
     this.alignEnd = false,
   });
 
   final String caption;
   final ScheduleShift shift;
+  final ScheduleDay day;
   final bool alignEnd;
 
   @override
@@ -836,7 +841,8 @@ class _PreviewSlot extends StatelessWidget {
         const SizedBox(height: 4),
         _ShiftPill(shift: shift),
         const SizedBox(height: 4),
-        Text(shift.timeRange, style: AppTypography.caption),
+        // Weekend nights (Thu/Fri/Sat) run till 00:30.
+        Text(shift.timeRangeOn(day), style: AppTypography.caption),
       ],
     );
   }

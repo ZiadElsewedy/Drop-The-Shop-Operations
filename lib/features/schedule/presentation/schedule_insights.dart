@@ -104,10 +104,15 @@ class ScheduleInsights {
 /// open / one-person facts consider only the visible shift; double-booking,
 /// short rest and leave clashes are inherently cross-shift/day-level so they
 /// are always computed over both.
+///
+/// [previousSaturdayNight] — who worked the **previous week's** Saturday
+/// night (from that week's doc, loaded by the cubit) — catches the most
+/// common turnaround of all: Saturday night (ends 00:30!) → Sunday morning.
 ScheduleInsights computeScheduleInsights(
   WeeklyScheduleEntity schedule,
   List<UserEntity> members, {
   ScheduleShift? filter,
+  Set<String> previousSaturdayNight = const {},
 }) {
   final open = <SlotKey>{};
   final onePerson = <SlotKey>{};
@@ -123,7 +128,11 @@ ScheduleInsights computeScheduleInsights(
   var leaveTotal = 0;
 
   final memberUids = {for (final m in members) m.uid};
-  Set<String>? previousNight;
+  // Seeded with last week's Saturday-night crew so Sunday morning is checked
+  // too; orphan uids in the seed are harmless (the intersection with this
+  // week's *valid* morning crew filters them out).
+  Set<String>? previousNight =
+      previousSaturdayNight.isEmpty ? null : previousSaturdayNight;
 
   for (final day in ScheduleDay.values) {
     final morning = validAssignments(
@@ -142,18 +151,20 @@ ScheduleInsights computeScheduleInsights(
       conflictSlots.add((day, ScheduleShift.night));
     }
 
-    // Short rest: last night's crew opening this morning. Cross-week pairs
-    // (Saturday night → next week's Sunday morning) are out of this week's
-    // scope — the previous document isn't loaded here.
+    // Short rest: last night's crew opening this morning. For Sunday the
+    // "last night" lives in the previous week's doc ([previousSaturdayNight])
+    // — its night slot isn't on this grid, so only the morning highlights.
     if (previousNight != null) {
       final tired = morning.intersection(previousNight);
       if (tired.isNotEmpty) {
         shortRestByDay[day] = tired;
         shortRestSlots.add((day, ScheduleShift.morning));
-        shortRestSlots.add((
-          ScheduleDay.values[day.index - 1],
-          ScheduleShift.night,
-        ));
+        if (day.index > 0) {
+          shortRestSlots.add((
+            ScheduleDay.values[day.index - 1],
+            ScheduleShift.night,
+          ));
+        }
       }
     }
     previousNight = night;

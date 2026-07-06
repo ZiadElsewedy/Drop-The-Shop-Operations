@@ -313,6 +313,8 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
               members: members,
               branch: context.read<BranchCubit>().branchById(branchId),
               filter: _filter,
+              previousSaturdayNight:
+                  context.read<ScheduleCubit>().previousSaturdayNight,
             ),
       icon: const Icon(Icons.visibility_outlined, size: 17),
       label: const Text('Final view'),
@@ -497,12 +499,21 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     final orphanCount = brokenSlots(schedule, members).length;
     // Both derivations are single passes over members × 7 days — computed
     // once per build alongside each other, never inside the grid's cells.
+    // The cubit's previous-week Saturday-night crew closes the week boundary
+    // (Saturday night ends 00:30 → Sunday morning).
+    final prevNight = context.read<ScheduleCubit>().previousSaturdayNight;
     final insights = computeScheduleInsights(
       schedule,
       members,
       filter: _filter,
+      previousSaturdayNight: prevNight,
     );
-    final health = computeScheduleHealth(schedule, members, nameOf: shortName);
+    final health = computeScheduleHealth(
+      schedule,
+      members,
+      nameOf: shortName,
+      previousSaturdayNight: prevNight,
+    );
     // Never leave the grid stuck dim on a stale selection (e.g. the last
     // conflict was just resolved) — an insight with no slots is no filter.
     final activeInsight =
