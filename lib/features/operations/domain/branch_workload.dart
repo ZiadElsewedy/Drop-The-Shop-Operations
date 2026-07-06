@@ -56,10 +56,10 @@ BranchWorkload computeBranchWorkload({
         visibleTasks.where((t) => t.assigneeIds.contains(u.uid)).toList();
     var active = 0, overdue = 0, submitted = 0, completedToday = 0;
     for (final t in mine) {
-      if (_isActive(t.status)) {
+      if (isOperationalActiveTask(t)) {
         active++;
-        if (_isOverdue(t, clock)) overdue++;
-      } else if (_isSubmitted(t.status)) {
+        if (isOperationalOverdueTask(t, clock)) overdue++;
+      } else if (isOperationalPendingReviewTask(t)) {
         submitted++;
       } else if (t.status == TaskStatus.approved &&
           t.approvedAt != null &&
@@ -91,10 +91,10 @@ BranchWorkload computeBranchWorkload({
   // Branch summary over the same visible scope.
   var activeTasks = 0, overdueTasks = 0, pendingReviews = 0;
   for (final t in visibleTasks) {
-    if (_isActive(t.status)) {
+    if (isOperationalActiveTask(t)) {
       activeTasks++;
-      if (_isOverdue(t, clock)) overdueTasks++;
-    } else if (_isSubmitted(t.status)) {
+      if (isOperationalOverdueTask(t, clock)) overdueTasks++;
+    } else if (isOperationalPendingReviewTask(t)) {
       pendingReviews++;
     }
   }
@@ -110,19 +110,24 @@ BranchWorkload computeBranchWorkload({
   );
 }
 
-/// Open, employee-actionable work.
-bool _isActive(TaskStatus s) =>
-    s == TaskStatus.pending ||
-    s == TaskStatus.started ||
-    s == TaskStatus.rejected;
+/// Open, employee-actionable work. Public because the KPI drill-downs must use
+/// the exact same definition as the headline count.
+bool isOperationalActiveTask(TaskEntity task) =>
+    task.status == TaskStatus.pending ||
+    task.status == TaskStatus.started ||
+    task.status == TaskStatus.rejected;
 
-/// Done by the employee, awaiting a review decision.
-bool _isSubmitted(TaskStatus s) =>
-    s == TaskStatus.completed || s == TaskStatus.waitingReview;
+/// Done by the employee, awaiting a manager/admin decision.
+bool isOperationalPendingReviewTask(TaskEntity task) =>
+    task.status == TaskStatus.completed ||
+    task.status == TaskStatus.waitingReview;
 
-/// Active work whose deadline has passed.
-bool _isOverdue(TaskEntity t, DateTime clock) =>
-    t.deadline != null && t.deadline!.isBefore(clock);
+/// Active work whose deadline has passed. Review/completed work is never
+/// counted overdue, even if its historical deadline is in the past.
+bool isOperationalOverdueTask(TaskEntity task, DateTime clock) =>
+    isOperationalActiveTask(task) &&
+    task.deadline != null &&
+    task.deadline!.isBefore(clock);
 
 /// The employee's "current" task: the started one (else next-up rework, else
 /// next pending), tie-broken by soonest deadline. Null when nothing is open.
@@ -133,7 +138,7 @@ TaskEntity? _currentTask(List<TaskEntity> mine) {
         TaskStatus.pending => 2,
         _ => 3,
       };
-  final open = mine.where((t) => _isActive(t.status)).toList()
+  final open = mine.where(isOperationalActiveTask).toList()
     ..sort((a, b) {
       final byRank = rank(a.status).compareTo(rank(b.status));
       if (byRank != 0) return byRank;

@@ -11,8 +11,110 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-05 (one-time employee Welcome / onboarding)
-**Version:** 1.0.0+1 · **Branch:** `feature/report-issue` (DROP — monochrome premium desktop UX)
+**Last updated:** 2026-07-06 (living-border orbit — per-state colour palette)
+**Version:** 1.0.0+1 · **Branch:** `feature/ui-tasks` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Recurring shift-task Save freeze fixed (2026-07-05)
+
+Saving from **New Recurring Shift Task** could leave the Operations screen
+dimmed and input-blocked. Root cause: the form was opened with
+`showModalBottomSheet` while the Manage Recurring Shift Tasks sheet was still
+mounted, creating two modal routes/barriers. After Save popped the inner sheet,
+the underlying barrier could remain as an apparently frozen overlay on desktop.
+
+- Add now closes the Manage sheet first and only then presents the form, so
+  there is exactly one modal route at every point. Successful Save returns to
+  Operations rather than exposing the old underlying sheet/barrier.
+- `TaskCubit.createRecurringShiftTemplate` now treats the template persistence
+  as the Save boundary. Today's deterministic instance creation, roster lookup,
+  and notification work start via `unawaited(_materializeTodayInstance)` and no
+  longer hold the Save spinner; the scheduled Cloud Function remains the
+  fallback and the deterministic id still prevents duplicates.
+- Regression test `recurring_shift_task_test.dart` proves Save completes while
+  the follow-up instance write is still pending. Client-only: no schema, rules,
+  function, route, dependency, or deployment change.
+
+---
+
+## ✅ Branch Operations premium KPI drill-downs (2026-07-05)
+
+The four Branch Operations headline cards — **Active tasks · Overdue · Pending
+review · Staff active** — are now real accessible hover/press entry points. Each
+opens a premium, responsive drill in the new reusable
+`operations_metric_screen.dart`, while presenting distinct operational content:
+
+- **Active tasks:** pending/in-progress/rework facts and a prioritized live task grid.
+- **Overdue:** 24h+/high-priority/unassigned facts and oldest-first task triage.
+- **Pending review:** submitted/in-review/proof facts with the existing manager
+  task cards and review workflow.
+- **Staff active:** today's roster split by Morning/Night/Both, reusing premium
+  workload cards and the employee detail drill. "Active" still means **rostered
+  today**; no attendance/clock-in state was invented.
+
+`OperationsMetricScreen` inherits the existing live `BranchOperationsCubit` and
+`TaskCubit` and follows the cockpit's local `Navigator.push` drill pattern. The
+faint bottom-right watermark uses the real `assets/drop_logo.png` through the
+new opt-in `BrandWatermark.assetLogo` mode, while the leading plaque keeps each
+page's metric-specific icon. Existing `BrandWatermark` consumers retain the
+typographic default. The
+three operational task predicates were made public in `branch_workload.dart` and
+are shared by both summary aggregation and detail filtering, so counts cannot
+drift from their pages. No new Cubit/state, query, repository, use case, DI,
+global route, dependency, Firebase schema/rules/function, or deployment.
+
+Verification: `operations_metric_test.dart` + `branch_workload_test.dart` +
+`workload_card_test.dart` — **14 pass**. `flutter analyze`: no new diagnostics
+(8 pre-existing infos in the current dirty tree).
+
+---
+
+## ✅ Communications feed bulk selection (2026-07-05)
+
+The Active and Archived broadcast feeds now support multi-selection: each
+`BroadcastCard` has a checkbox, and a **Select all / Clear all** control targets
+every broadcast in the current view. A responsive second action row appears for
+the selection with confirmation-gated **Archive/Restore** and permanent
+**Delete**; switching feed views clears stale selection, and the controls remain
+disabled while a bulk write is running.
+
+`BroadcastCubit.setArchivedMany` and `deleteBroadcasts` sequence the existing
+permission-checked repository operations, preserving the current Firestore
+contract and realtime feed behavior. Client/presentation + Cubit only: no new
+file, route, model/entity, schema, rule, function, DI wiring, or dependency.
+Focused `broadcast_card_test.dart`: **3 pass**. `flutter analyze`: no new
+diagnostics (8 pre-existing infos in the current dirty tree).
+
+---
+
+## ✅ Living-border orbit — per-state colour palette (2026-07-06)
+
+The `LiveStatusBorder` orbit shows a **per-state persistent colour** (a soft, muted
+palette that blends with the dark dashboard), easing smoothly to the new colour on
+a state change. Replaced the previous amber-persistent + transient-flash model —
+**motion / architecture unchanged, colours only**.
+
+- **Palette** (`liveActivityColor(task)`): pending → **baby blue `#7DD3FC`** ·
+  started → **purple `#A78BFA`** · in review → **amber `#F59E0B`** · rejected →
+  **soft red `#F87171`** · overdue → **orange `#FB923C`** (overrides) · approved /
+  completed → `null` (no orbit). Consts live in `task_card.dart`.
+- **Widget:** dropped `flashColor`/`flashKey` + the flash envelope. `LiveStatusBorder`
+  now takes `color`/`speed`/`pulse`; a `color` change drives a smooth
+  `_Phase.changing` colour ease over `transitionDuration`, then steady (no snap).
+- **Motion kept byte-for-byte:** the corner-eased warp LUT, +8% corner highlight,
+  overdue pulse, comet, inner bloom (no outer glow), two reused controllers, and
+  perf (no rebuilds / no heavy `paint()` allocations).
+- **Per-state speed + pulse:** `liveOrbitSpeed(task)` (1.0/1.2/0.9/1.3, +1.1 overdue);
+  `taskOverdue(task)` → subtle glow-intensity pulse.
+- **Scope:** `TaskCard` + employee `_MinimalCard`/`_HomeTaskCard` (all platforms),
+  plus the Admin **Task Queue card** (`_TaskStatusStrip` — orange when overdue else
+  amber). **Follow-up:** other actionable dashboard cards (Pending Actions, Active
+  Tasks, Waiting Review, Broadcast, Sync chip — blue while syncing). Stat/Analytics
+  cards stay static.
+- **Tests 11**, all green (per-state palette + overdue override, speed, pulse, orbit
+  pass-through / loop / **smooth ease no-snap** / terminal fade). `flutter analyze`
+  0 new. Full suite **445 pass / 2 pre-existing fail** (desktop splash framing).
 
 ---
 

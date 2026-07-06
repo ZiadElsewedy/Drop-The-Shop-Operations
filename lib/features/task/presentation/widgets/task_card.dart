@@ -12,6 +12,7 @@ import 'package:drop/core/widgets/status_badge.dart';
 import 'package:drop/core/widgets/user_avatar.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/presentation/widgets/live_status_border.dart';
 import 'package:drop/features/task/presentation/widgets/task_badge.dart';
 import 'package:drop/features/task/presentation/widgets/task_surface.dart';
 
@@ -91,85 +92,95 @@ class TaskCard extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
-      // The de-flashed task surface lives in one place (TaskSurface) so the card
-      // + details header share it instead of re-declaring the decoration.
-      child: TaskSurface(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Lifecycle badge (NEW / REWORK #n / Rejected / Approved) ──
-            if (taskBadgeFor(task) != null) ...[
-              TaskBadge(task: task),
-              const SizedBox(height: AppSpacing.md),
-            ],
-
-            // ── Status + priority (High only) ───────────────────────
-            Row(
-              children: [
-                _StatusPill(task.status),
-                if (task.priority == TaskPriority.high) ...[
-                  const Spacer(),
-                  const _HighPriorityFlag(),
-                ],
+      // Living-border orbit: a persistent amber accent circling the card border
+      // for any active task; a state change flashes the state colour for one
+      // orbit; overdue adds a subtle pulse; null (settled) → no orbit.
+      child: LiveStatusBorder(
+        color: liveActivityColor(task),
+        speed: liveOrbitSpeed(task),
+        pulse: taskOverdue(task),
+        // Matches TaskSurface's default radius so the orbit rides its border.
+        borderRadius: const BorderRadius.all(Radius.circular(14)),
+        // The de-flashed task surface lives in one place (TaskSurface) so the card
+        // + details header share it instead of re-declaring the decoration.
+        child: TaskSurface(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── Lifecycle badge (NEW / REWORK #n / Rejected / Approved) ──
+              if (taskBadgeFor(task) != null) ...[
+                TaskBadge(task: task),
+                const SizedBox(height: AppSpacing.md),
               ],
-            ),
-            const SizedBox(height: AppSpacing.md),
 
-            // ── Title + description ─────────────────────────────────
-            Text(
-              task.title,
-              style: AppTypography.label.copyWith(
-                color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 16,
-                height: 1.25,
+              // ── Status + priority (High only) ───────────────────────
+              Row(
+                children: [
+                  _StatusPill(task.status),
+                  if (task.priority == TaskPriority.high) ...[
+                    const Spacer(),
+                    const _HighPriorityFlag(),
+                  ],
+                ],
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (description.isNotEmpty) ...[
-              const SizedBox(height: 5),
+              const SizedBox(height: AppSpacing.md),
+
+              // ── Title + description ─────────────────────────────────
               Text(
-                description,
-                style: AppTypography.bodySmall.copyWith(height: 1.4),
-                maxLines: 1,
+                task.title,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                  height: 1.25,
+                ),
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
-            ],
+              if (description.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Text(
+                  description,
+                  style: AppTypography.bodySmall.copyWith(height: 1.4),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
 
-            // ── Signal chips (branch · due · attachments) ───────────
-            if (chips.isNotEmpty) ...[
+              // ── Signal chips (branch · due · attachments) ───────────
+              if (chips.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Wrap(spacing: 6, runSpacing: 6, children: chips),
+              ],
+
+              // ── Progress: a single thin bar, only with a checklist ──
+              if (task.hasChecklist) ...[
+                const SizedBox(height: AppSpacing.md),
+                _ChecklistBar(task: task),
+              ],
+
+              // ── Minimal one-line footer (assignee · by creator) ─────
               const SizedBox(height: AppSpacing.md),
-              Wrap(spacing: 6, runSpacing: 6, children: chips),
-            ],
-
-            // ── Progress: a single thin bar, only with a checklist ──
-            if (task.hasChecklist) ...[
+              const Divider(height: 1, color: AppColors.darkBorder),
               const SizedBox(height: AppSpacing.md),
-              _ChecklistBar(task: task),
-            ],
-
-            // ── Minimal one-line footer (assignee · by creator) ─────
-            const SizedBox(height: AppSpacing.md),
-            const Divider(height: 1, color: AppColors.darkBorder),
-            const SizedBox(height: AppSpacing.md),
-            _AssigneeFooter(
-              task: task,
-              directory: directory,
-              assignedBy: assignedBy,
-              onTap: onAssigneesTap,
-            ),
-
-            // ── Actions ─────────────────────────────────────────────
-            if (actions.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.md),
-              Wrap(
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.xs,
-                children: actions,
+              _AssigneeFooter(
+                task: task,
+                directory: directory,
+                assignedBy: assignedBy,
+                onTap: onAssigneesTap,
               ),
+
+              // ── Actions ─────────────────────────────────────────────
+              if (actions.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.md),
+                Wrap(
+                  spacing: AppSpacing.sm,
+                  runSpacing: AppSpacing.xs,
+                  children: actions,
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -189,19 +200,72 @@ String? _assignedBy(Map<String, UserEntity> directory, TaskEntity task) {
 }
 
 String _roleLabel(UserRole r) => switch (r) {
-      UserRole.admin => 'Admin',
-      UserRole.manager => 'Manager',
-      UserRole.employee => 'Employee',
-    };
+  UserRole.admin => 'Admin',
+  UserRole.manager => 'Manager',
+  UserRole.employee => 'Employee',
+};
 
 bool _isOverdue(TaskEntity task) {
   final d = task.deadline;
   if (d == null) return false;
-  final terminal = task.status == TaskStatus.approved ||
+  final terminal =
+      task.status == TaskStatus.approved ||
       task.status == TaskStatus.completed ||
       task.status == TaskStatus.waitingReview;
   return !terminal && d.isBefore(DateTime.now());
 }
+
+/// The per-state living-border orbit palette — soft, premium, slightly muted so
+/// each colour blends naturally with the dark dashboard (no neon, no excess
+/// saturation). Applied consistently wherever a task's live state is shown.
+const Color _statePending = Color(0xFF7DD3FC); // baby blue
+const Color _stateInProgress = Color(0xFFA78BFA); // purple
+const Color _stateInReview = Color(0xFFF59E0B); // amber
+const Color _stateRejected = Color(0xFFF87171); // soft red
+const Color _stateOverdue = Color(0xFFFB923C); // orange
+
+/// The **per-state** orbit colour for a task ([LiveStatusBorder.color]) — held
+/// persistently while that state lasts, eased smoothly on a state change:
+///
+///   • pending    → baby blue `#7DD3FC`
+///   • started    → purple    `#A78BFA`
+///   • in review  → amber     `#F59E0B`
+///   • rejected   → soft red  `#F87171`
+///   • **overdue** → orange   `#FB923C` — *takes precedence*
+///   • approved / completed → `null` (no orbit; only the static card border)
+///
+/// Overdue (time-critical) wins over the base status colour. Kept public so the
+/// mapping is unit-tested in exactly one place.
+Color? liveActivityColor(TaskEntity task) {
+  if (task.status == TaskStatus.approved ||
+      task.status == TaskStatus.completed) {
+    return null;
+  }
+  if (_isOverdue(task)) return _stateOverdue;
+  return switch (task.status) {
+    TaskStatus.pending => _statePending,
+    TaskStatus.started => _stateInProgress,
+    TaskStatus.waitingReview => _stateInReview,
+    TaskStatus.rejected => _stateRejected,
+    TaskStatus.approved || TaskStatus.completed => null,
+  };
+}
+
+/// Per-state orbit speed multiplier ([LiveStatusBorder.speed]) — subtle
+/// differences so a card's motion hints at its state without changing colour.
+double liveOrbitSpeed(TaskEntity task) {
+  if (_isOverdue(task)) return 1.1; // medium (+ pulse, see [taskOverdue])
+  return switch (task.status) {
+    TaskStatus.pending => 1.0, // slow
+    TaskStatus.started => 1.2, // medium
+    TaskStatus.waitingReview => 0.9, // slightly slow
+    TaskStatus.rejected => 1.3, // slightly fast
+    TaskStatus.approved || TaskStatus.completed => 1.0,
+  };
+}
+
+/// Whether the task is overdue — drives the subtle glow-intensity pulse.
+bool taskOverdue(TaskEntity task) => _isOverdue(task);
 
 const _months = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
@@ -212,16 +276,17 @@ String _dateLabel(DateTime d) => '${d.day} ${_months[d.month - 1]}';
 
 String _bestName(UserEntity u) =>
     (u.displayName != null && u.displayName!.isNotEmpty)
-        ? u.displayName!
-        : u.email;
+    ? u.displayName!
+    : u.email;
 
 /// Resolves a task's assignee uids to users from [directory].
 List<UserEntity> resolveAssignees(
-        TaskEntity task, Map<String, UserEntity> directory) =>
-    [
-      for (final uid in task.assigneeIds)
-        if (directory[uid] != null) directory[uid]!,
-    ];
+  TaskEntity task,
+  Map<String, UserEntity> directory,
+) => [
+  for (final uid in task.assigneeIds)
+    if (directory[uid] != null) directory[uid]!,
+];
 
 // ─── Status pill ────────────────────────────────────────────────────
 
@@ -265,14 +330,13 @@ class _StatusPill extends StatelessWidget {
   }
 
   (String, IconData) _labelIcon(TaskStatus s) => switch (s) {
-        TaskStatus.pending => ('To do', Icons.circle_outlined),
-        TaskStatus.started => ('In progress', Icons.autorenew_rounded),
-        TaskStatus.completed =>
-          ('Completed', Icons.check_circle_outline_rounded),
-        TaskStatus.waitingReview => ('In review', Icons.hourglass_empty_rounded),
-        TaskStatus.approved => ('Approved', Icons.check_circle_rounded),
-        TaskStatus.rejected => ('Needs rework', Icons.replay_rounded),
-      };
+    TaskStatus.pending => ('To do', Icons.circle_outlined),
+    TaskStatus.started => ('In progress', Icons.autorenew_rounded),
+    TaskStatus.completed => ('Completed', Icons.check_circle_outline_rounded),
+    TaskStatus.waitingReview => ('In review', Icons.hourglass_empty_rounded),
+    TaskStatus.approved => ('Approved', Icons.check_circle_rounded),
+    TaskStatus.rejected => ('Needs rework', Icons.replay_rounded),
+  };
 }
 
 /// The only priority signal on the card — shown **only when High** (Medium/Low
@@ -352,7 +416,12 @@ class _BranchChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasLogo = (logoUrl ?? '').isNotEmpty;
     return Container(
-      padding: EdgeInsets.fromLTRB(hasLogo ? 4 : 9, hasLogo ? 4 : 5, 9, hasLogo ? 4 : 5),
+      padding: EdgeInsets.fromLTRB(
+        hasLogo ? 4 : 9,
+        hasLogo ? 4 : 5,
+        9,
+        hasLogo ? 4 : 5,
+      ),
       decoration: BoxDecoration(
         color: AppColors.darkSurfaceElevated,
         borderRadius: BorderRadius.circular(8),
@@ -364,8 +433,11 @@ class _BranchChip extends StatelessWidget {
           if (hasLogo)
             BranchAvatar(logoUrl: logoUrl, name: name, size: 18, radius: 5)
           else
-            const Icon(Icons.store_mall_directory_outlined,
-                size: 13, color: AppColors.textSecondary),
+            const Icon(
+              Icons.store_mall_directory_outlined,
+              size: 13,
+              color: AppColors.textSecondary,
+            ),
           const SizedBox(width: 5),
           ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 180),
@@ -373,8 +445,9 @@ class _BranchChip extends StatelessWidget {
               name,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style:
-                  AppTypography.caption.copyWith(color: AppColors.textSecondary),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -471,11 +544,15 @@ class _AssigneeFooter extends StatelessWidget {
           color: AppColors.darkSurfaceElevated,
           border: Border.all(color: AppColors.darkBorder),
         ),
-        child: const Icon(Icons.schedule_rounded,
-            size: 14, color: AppColors.textTertiary),
+        child: const Icon(
+          Icons.schedule_rounded,
+          size: 14,
+          color: AppColors.textTertiary,
+        ),
       );
-      primary =
-          task.shift == null ? 'Shift task' : '${task.shift!.label} Shift';
+      primary = task.shift == null
+          ? 'Shift task'
+          : '${task.shift!.label} Shift';
     } else if (total == 0) {
       leading = Container(
         width: 26,
@@ -485,8 +562,11 @@ class _AssigneeFooter extends StatelessWidget {
           color: AppColors.darkSurfaceElevated,
           border: Border.all(color: AppColors.darkBorder),
         ),
-        child: const Icon(Icons.person_add_alt_1_outlined,
-            size: 14, color: AppColors.textTertiary),
+        child: const Icon(
+          Icons.person_add_alt_1_outlined,
+          size: 14,
+          color: AppColors.textTertiary,
+        ),
       );
       primary = 'Unassigned';
     } else if (resolved.length == 1 && total == 1) {
@@ -503,8 +583,11 @@ class _AssigneeFooter extends StatelessWidget {
           shape: BoxShape.circle,
           color: AppColors.darkSurfaceElevated,
         ),
-        child: const Icon(Icons.groups_outlined,
-            size: 14, color: AppColors.textTertiary),
+        child: const Icon(
+          Icons.groups_outlined,
+          size: 14,
+          color: AppColors.textTertiary,
+        ),
       );
       primary = '$total assigned';
     }
@@ -527,16 +610,20 @@ class _AssigneeFooter extends StatelessWidget {
                   if (assignedBy != null)
                     TextSpan(
                       text: '  ·  by $assignedBy',
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textTertiary),
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textTertiary,
+                      ),
                     ),
                 ],
               ),
             ),
           ),
           if (onTap != null)
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: AppColors.textTertiary),
+            const Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: AppColors.textTertiary,
+            ),
         ],
       ),
     );

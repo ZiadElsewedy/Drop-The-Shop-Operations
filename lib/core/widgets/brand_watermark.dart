@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/widgets/drop_logo.dart';
 import 'package:drop/core/widgets/drop_wordmark.dart';
 
 /// Overlays a **barely-there** DROP wordmark in the corner of a premium hero —
@@ -15,11 +16,18 @@ class BrandWatermark extends StatelessWidget {
     required this.child,
     this.opacity = 0.04,
     this.fontSize = 88,
+    this.assetLogo = false,
+    this.assetHeight = 92,
   }) : assert(opacity <= 0.05, 'Keep the watermark subtle (≤ 0.05).');
 
   final Widget child;
   final double opacity;
   final double fontSize;
+
+  /// Uses the real `assets/drop_logo.png` artwork instead of the typographic
+  /// [DropWordmark]. Opt-in so established hero compositions do not change.
+  final bool assetLogo;
+  final double assetHeight;
 
   @override
   Widget build(BuildContext context) {
@@ -33,10 +41,15 @@ class BrandWatermark extends StatelessWidget {
           child: IgnorePointer(
             child: Opacity(
               opacity: opacity,
-              child: DropWordmark(
-                fontSize: fontSize,
-                color: AppColors.textPrimary,
-              ),
+              child: assetLogo
+                  ? DropLogo(
+                      height: assetHeight,
+                      color: AppColors.textPrimary,
+                    )
+                  : DropWordmark(
+                      fontSize: fontSize,
+                      color: AppColors.textPrimary,
+                    ),
             ),
           ),
         ),

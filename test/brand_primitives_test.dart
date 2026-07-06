@@ -4,6 +4,7 @@ import 'package:drop/core/widgets/brand_watermark.dart';
 import 'package:drop/core/widgets/drop_auth_mark.dart';
 import 'package:drop/core/widgets/drop_empty_state.dart';
 import 'package:drop/core/widgets/drop_loading_state.dart';
+import 'package:drop/core/widgets/drop_logo.dart';
 import 'package:drop/core/widgets/drop_wordmark.dart';
 
 void main() {
@@ -48,6 +49,19 @@ void main() {
     ));
     expect(find.text('hero content'), findsOneWidget);
     expect(find.text('DROP'), findsOneWidget); // the watermark mark
+  });
+
+  testWidgets('BrandWatermark can use the real asset-backed DROP logo',
+      (tester) async {
+    await tester.pumpWidget(host(
+      const BrandWatermark(
+        assetLogo: true,
+        child: Text('asset hero'),
+      ),
+    ));
+    expect(find.text('asset hero'), findsOneWidget);
+    expect(find.byType(DropLogo), findsOneWidget);
+    expect(find.byType(DropWordmark), findsNothing);
   });
 
   test('BrandWatermark rejects an over-loud opacity', () {

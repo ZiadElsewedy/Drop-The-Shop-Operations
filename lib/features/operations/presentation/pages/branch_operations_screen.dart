@@ -12,6 +12,7 @@ import 'package:drop/core/widgets/responsive_card_grid.dart';
 import 'package:drop/core/widgets/app_snackbar.dart';
 import 'package:drop/core/widgets/brand_watermark.dart';
 import 'package:drop/core/widgets/branch_avatar.dart';
+import 'package:drop/core/widgets/glass_container.dart';
 import 'package:drop/core/widgets/list_skeleton.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/branch/presentation/cubit/branch_cubit.dart';
@@ -22,6 +23,7 @@ import 'package:drop/features/operations/domain/shift_filter.dart';
 import 'package:drop/features/operations/presentation/cubit/branch_operations_cubit.dart';
 import 'package:drop/features/operations/presentation/cubit/branch_operations_state.dart';
 import 'package:drop/features/operations/presentation/pages/employee_detail_screen.dart';
+import 'package:drop/features/operations/presentation/pages/operations_metric_screen.dart';
 import 'package:drop/features/operations/presentation/widgets/workload_card.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/pages/branch_task_list_screen.dart';
@@ -103,6 +105,16 @@ class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
           employee: employee,
           isAdmin: context.isAdmin,
           defaultBranchId: widget.branchId,
+        ),
+      ));
+
+  void _openMetric(OperationsMetric metric) =>
+      Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => OperationsMetricScreen(
+          metric: metric,
+          branchId: widget.branchId,
+          branchName: _branchLabel,
+          isAdmin: context.isAdmin,
         ),
       ));
 
@@ -198,7 +210,10 @@ class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
             filter: filter,
           ),
           const SizedBox(height: AppSpacing.lg),
-          _SummaryHeader(summary: workload.summary),
+          OperationsSummaryHeader(
+            summary: workload.summary,
+            onSelect: _openMetric,
+          ),
           const SizedBox(height: AppSpacing.xl),
           _ShiftToggle(
             value: filter,
@@ -392,20 +407,44 @@ class _MonoHeroBg extends StatelessWidget {
 
 // ─── Summary header (branch health in 3 seconds) ──────────────────────────────
 
-class _SummaryHeader extends StatelessWidget {
-  const _SummaryHeader({required this.summary});
+class OperationsSummaryHeader extends StatelessWidget {
+  const OperationsSummaryHeader({
+    super.key,
+    required this.summary,
+    required this.onSelect,
+  });
+
   final BranchSummary summary;
+  final ValueChanged<OperationsMetric> onSelect;
 
   @override
   Widget build(BuildContext context) {
     final tiles = <Widget>[
-      _StatTile(value: summary.activeTasks, label: 'Active tasks'),
       _StatTile(
-          value: summary.overdueTasks,
-          label: 'Overdue',
-          alert: summary.overdueTasks > 0),
-      _StatTile(value: summary.pendingReviews, label: 'Pending review'),
-      _StatTile(value: summary.staffActive, label: 'Staff active'),
+        value: summary.activeTasks,
+        label: 'Active tasks',
+        icon: Icons.bolt_rounded,
+        onTap: () => onSelect(OperationsMetric.activeTasks),
+      ),
+      _StatTile(
+        value: summary.overdueTasks,
+        label: 'Overdue',
+        icon: Icons.warning_amber_rounded,
+        alert: summary.overdueTasks > 0,
+        onTap: () => onSelect(OperationsMetric.overdue),
+      ),
+      _StatTile(
+        value: summary.pendingReviews,
+        label: 'Pending review',
+        icon: Icons.fact_check_outlined,
+        onTap: () => onSelect(OperationsMetric.pendingReview),
+      ),
+      _StatTile(
+        value: summary.staffActive,
+        label: 'Staff active',
+        icon: Icons.groups_2_outlined,
+        onTap: () => onSelect(OperationsMetric.staffActive),
+      ),
     ];
 
     // Desktop: one tight row of four compact stat tiles (not 2×2 giant cards).
@@ -440,35 +479,65 @@ class _SummaryHeader extends StatelessWidget {
 }
 
 class _StatTile extends StatelessWidget {
-  const _StatTile({required this.value, required this.label, this.alert = false});
+  const _StatTile({
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.onTap,
+    this.alert = false,
+  });
+
   final int value;
   final String label;
+  final IconData icon;
+  final VoidCallback onTap;
   final bool alert;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-          vertical: AppSpacing.md, horizontal: AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+    final color = alert ? AppColors.error : AppColors.textPrimary;
+    return Semantics(
+      button: true,
+      label: 'Open $label',
+      child: GlassContainer(
+        onTap: onTap,
+        padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.md, horizontal: AppSpacing.lg),
         borderRadius: AppRadius.lgAll,
-        border: Border.all(
-            color: alert ? AppColors.error.withAlpha(90) : AppColors.darkBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$value',
-            style: AppTypography.h1.copyWith(
-              fontSize: 26,
-              color: alert ? AppColors.error : AppColors.textPrimary,
+        highlight: alert,
+        accent: AppColors.error,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  '$value',
+                  style: AppTypography.h1.copyWith(
+                    fontSize: 26,
+                    color: color,
+                  ),
+                ),
+                const Spacer(),
+                Icon(Icons.arrow_outward_rounded,
+                    size: 16, color: AppColors.textTertiary),
+              ],
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(label, style: AppTypography.caption),
-        ],
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                Icon(icon, size: 13, color: color.withAlpha(180)),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(label,
+                      style: AppTypography.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

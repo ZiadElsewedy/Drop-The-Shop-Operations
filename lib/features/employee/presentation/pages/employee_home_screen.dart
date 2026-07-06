@@ -28,6 +28,8 @@ import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/cubit/task_state.dart';
 import 'package:drop/features/task/presentation/pages/task_details_screen.dart';
+import 'package:drop/features/task/presentation/widgets/live_status_border.dart';
+import 'package:drop/features/task/presentation/widgets/task_card.dart';
 
 /// Redesigned employee home — a personal operations command center.
 ///
@@ -101,20 +103,24 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           padding: EdgeInsets.zero,
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            EntranceFade(child: _GreetingSection(user: user, now: now)),
+            EntranceFade(
+              child: _GreetingSection(user: user, now: now),
+            ),
 
             // Swap requests — surfaced prominently (only appears when there's one
             // needing this employee's action or one of their own in flight).
             if (user != null)
               Padding(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.pagePadding),
+                  horizontal: AppSpacing.pagePadding,
+                ),
                 child: _SwapRequestsSection(uid: user.uid),
               ),
 
             Padding(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.pagePadding),
+                horizontal: AppSpacing.pagePadding,
+              ),
               child: BlocBuilder<TaskCubit, TaskState>(
                 builder: (context, state) {
                   final snap = state.maybeWhen(
@@ -190,7 +196,8 @@ class _Counts {
     );
   }
 
-  int get total => pending + started + inReview + approved + completed + rejected;
+  int get total =>
+      pending + started + inReview + approved + completed + rejected;
 
   /// Work the employee has handled (done or handed off for review).
   int get finished => approved + completed + inReview;
@@ -237,11 +244,7 @@ class _Dashboard extends StatelessWidget {
         const SizedBox(height: AppSpacing.xl),
         EntranceFade(
           delay: staggerDelay(3),
-          child: _TaskSection(
-            tasks: tasks,
-            busy: busy,
-            directory: directory,
-          ),
+          child: _TaskSection(tasks: tasks, busy: busy, directory: directory),
         ),
       ],
     );
@@ -272,8 +275,18 @@ class _GreetingSection extends StatelessWidget {
   String get _dateLabel {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
   }
@@ -283,8 +296,10 @@ class _GreetingSection extends StatelessWidget {
     final isDay = now.hour >= 6 && now.hour < 19;
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-        AppSpacing.pagePadding, AppSpacing.lg,
-        AppSpacing.pagePadding, AppSpacing.xl,
+        AppSpacing.pagePadding,
+        AppSpacing.lg,
+        AppSpacing.pagePadding,
+        AppSpacing.xl,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,7 +365,9 @@ class _HeroTodayCard extends StatelessWidget {
   String get _summary {
     if (counts.open > 0) {
       final base = '${counts.open} to do';
-      return counts.inReview > 0 ? '$base · ${counts.inReview} in review' : base;
+      return counts.inReview > 0
+          ? '$base · ${counts.inReview} in review'
+          : base;
     }
     if (counts.inReview > 0) return '${counts.inReview} in review';
     if (counts.total > 0) return 'All caught up';
@@ -362,27 +379,27 @@ class _HeroTodayCard extends StatelessWidget {
     return SizedBox(
       width: double.infinity,
       child: AppGlassCard(
-      child: Row(
-        children: [
-          _ProgressRing(
-            finished: counts.finished,
-            total: counts.total,
-            size: 92,
-          ),
-          const SizedBox(width: AppSpacing.lg),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const _ShiftBlock(),
-                const SizedBox(height: AppSpacing.md),
-                _SummaryPill(text: _summary, active: counts.open > 0),
-              ],
+        child: Row(
+          children: [
+            _ProgressRing(
+              finished: counts.finished,
+              total: counts.total,
+              size: 92,
             ),
-          ),
-        ],
-      ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const _ShiftBlock(),
+                  const SizedBox(height: AppSpacing.md),
+                  _SummaryPill(text: _summary, active: counts.open > 0),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -400,14 +417,16 @@ class _ShiftBlock extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
             Skeleton(
-                width: 72,
-                height: 9,
-                borderRadius: BorderRadius.all(Radius.circular(4))),
+              width: 72,
+              height: 9,
+              borderRadius: BorderRadius.all(Radius.circular(4)),
+            ),
             SizedBox(height: 8),
             Skeleton(
-                width: 120,
-                height: 18,
-                borderRadius: BorderRadius.all(Radius.circular(6))),
+              width: 120,
+              height: 18,
+              borderRadius: BorderRadius.all(Radius.circular(6)),
+            ),
           ],
         ),
       ),
@@ -420,13 +439,13 @@ class _ShiftBlock extends StatelessWidget {
     final label = off
         ? 'Off today'
         : isMorning
-            ? 'Morning shift'
-            : 'Night shift';
+        ? 'Morning shift'
+        : 'Night shift';
     final icon = off
         ? Icons.self_improvement_outlined
         : isMorning
-            ? Icons.wb_sunny_outlined
-            : Icons.nightlight_outlined;
+        ? Icons.wb_sunny_outlined
+        : Icons.nightlight_outlined;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -459,8 +478,11 @@ class _ShiftBlock extends StatelessWidget {
           const SizedBox(height: 5),
           Row(
             children: [
-              const Icon(Icons.arrow_forward_rounded,
-                  size: 11, color: AppColors.textTertiary),
+              const Icon(
+                Icons.arrow_forward_rounded,
+                size: 11,
+                color: AppColors.textTertiary,
+              ),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
@@ -491,7 +513,9 @@ class _SummaryPill extends StatelessWidget {
         color: active ? AppColors.primarySurface : AppColors.darkSurface,
         borderRadius: BorderRadius.circular(AppRadius.full),
         border: Border.all(
-          color: active ? AppColors.primary.withAlpha(38) : AppColors.darkBorder,
+          color: active
+              ? AppColors.primary.withAlpha(38)
+              : AppColors.darkBorder,
         ),
       ),
       child: Row(
@@ -557,8 +581,11 @@ class _ProgressRing extends StatelessWidget {
             ),
             child: Center(
               child: total == 0
-                  ? const Icon(Icons.check_rounded,
-                      size: 22, color: AppColors.textTertiary)
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 22,
+                      color: AppColors.textTertiary,
+                    )
                   : Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -599,7 +626,8 @@ class _RingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset(stroke / 2, stroke / 2) &
+    final rect =
+        Offset(stroke / 2, stroke / 2) &
         Size(size.width - stroke, size.height - stroke);
 
     final trackPaint = Paint()
@@ -699,7 +727,9 @@ class _StatChip extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       padding: const EdgeInsets.symmetric(
-          vertical: AppSpacing.md, horizontal: AppSpacing.sm),
+        vertical: AppSpacing.md,
+        horizontal: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: hl ? AppColors.primarySurface : AppColors.darkSurface,
         borderRadius: BorderRadius.circular(14),
@@ -773,8 +803,9 @@ class _TaskSection extends StatelessWidget {
     final active = tasks.where(_isActive).toList()
       ..sort((a, b) {
         // Started first, then by soonest deadline.
-        final byStatus = (b.status == TaskStatus.started ? 1 : 0)
-            .compareTo(a.status == TaskStatus.started ? 1 : 0);
+        final byStatus = (b.status == TaskStatus.started ? 1 : 0).compareTo(
+          a.status == TaskStatus.started ? 1 : 0,
+        );
         if (byStatus != 0) return byStatus;
         final ad = a.deadline, bd = b.deadline;
         if (ad == null && bd == null) return 0;
@@ -873,11 +904,10 @@ class _TaskSection extends StatelessWidget {
         transitionsBuilder: (ctx, anim, _, child) => FadeTransition(
           opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
           child: SlideTransition(
-            position: Tween(
-              begin: const Offset(0, 0.03),
-              end: Offset.zero,
-            ).animate(
-                CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
+            position: Tween(begin: const Offset(0, 0.03), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+                ),
             child: child,
           ),
         ),
@@ -962,82 +992,93 @@ class _HomeTaskCard extends StatelessWidget {
 
     final assignedBy = directory[task.createdBy]?.displayName;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+    // Live-activity sweep (NOT status — the pill owns status). Only actionable
+    // states animate; the margin sits outside the wrapper so the sweep tracks
+    // the card border, not the inter-card gap.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: LiveStatusBorder(
+        color: liveActivityColor(task),
+        speed: liveOrbitSpeed(task),
+        pulse: taskOverdue(task),
         borderRadius: AppRadius.cardAll,
-        border: Border.all(
-          color: isStarted
-              ? AppColors.primary.withAlpha(45)
-              : isRejected
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface,
+            borderRadius: AppRadius.cardAll,
+            border: Border.all(
+              color: isStarted
+                  ? AppColors.primary.withAlpha(45)
+                  : isRejected
                   ? AppColors.error.withAlpha(45)
                   : AppColors.darkBorder,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _Pressable(
-            onTap: onOpen,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          task.title,
-                          style: AppTypography.label.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                            height: 1.3,
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      _StatusPill(task.status),
-                    ],
-                  ),
-                  if ((task.description ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      task.description!,
-                      style: AppTypography.caption.copyWith(height: 1.4),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                  if (task.hasChecklist) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _ChecklistProgressRow(task: task),
-                  ],
-                  if (task.deadline != null ||
-                      assignedBy != null ||
-                      (isRejected &&
-                          (task.reviewNotes ?? '').isNotEmpty)) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    _MetaRow(task: task, assignedBy: assignedBy),
-                  ],
-                ],
-              ),
             ),
           ),
-          _CardFooter(
-            task: task,
-            busy: busy,
-            onOpen: onOpen,
-            onStart: onStart,
-            isStarted: isStarted,
-            isRejected: isRejected,
-            isReview: isReview,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _Pressable(
+                onTap: onOpen,
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              task.title,
+                              style: AppTypography.label.copyWith(
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.w600,
+                                height: 1.3,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          _StatusPill(task.status),
+                        ],
+                      ),
+                      if ((task.description ?? '').isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          task.description!,
+                          style: AppTypography.caption.copyWith(height: 1.4),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                      if (task.hasChecklist) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        _ChecklistProgressRow(task: task),
+                      ],
+                      if (task.deadline != null ||
+                          assignedBy != null ||
+                          (isRejected &&
+                              (task.reviewNotes ?? '').isNotEmpty)) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        _MetaRow(task: task, assignedBy: assignedBy),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              _CardFooter(
+                task: task,
+                busy: busy,
+                onOpen: onOpen,
+                onStart: onStart,
+                isStarted: isStarted,
+                isRejected: isRejected,
+                isReview: isReview,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1104,7 +1145,11 @@ class _CardFooter extends StatelessWidget {
         border: Border(top: BorderSide(color: AppColors.darkBorder)),
       ),
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.sm, AppSpacing.md, AppSpacing.sm),
+        AppSpacing.lg,
+        AppSpacing.sm,
+        AppSpacing.md,
+        AppSpacing.sm,
+      ),
       child: action,
     );
   }
@@ -1133,8 +1178,7 @@ class _ActionButton extends StatelessWidget {
         label: label,
         icon: icon,
         onPressed: onTap,
-        style:
-            primary ? PremiumButtonStyle.filled : PremiumButtonStyle.tonal,
+        style: primary ? PremiumButtonStyle.filled : PremiumButtonStyle.tonal,
       ),
     );
   }
@@ -1218,9 +1262,7 @@ class _ChecklistProgressRow extends StatelessWidget {
     return Row(
       children: [
         Icon(
-          complete
-              ? Icons.check_circle_rounded
-              : Icons.checklist_rounded,
+          complete ? Icons.check_circle_rounded : Icons.checklist_rounded,
           size: 13,
           color: complete ? AppColors.success : AppColors.textTertiary,
         ),
@@ -1274,8 +1316,18 @@ class _MetaRow extends StatelessWidget {
   }
 
   static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   String _relativeDue(DateTime d) {
@@ -1303,7 +1355,9 @@ class _MetaRow extends StatelessWidget {
       children: [
         if (deadline != null)
           _MetaChip(
-            icon: _overdue ? Icons.warning_amber_rounded : Icons.schedule_outlined,
+            icon: _overdue
+                ? Icons.warning_amber_rounded
+                : Icons.schedule_outlined,
             label: _relativeDue(deadline),
             color: _overdue ? AppColors.error : AppColors.textTertiary,
           ),
@@ -1379,7 +1433,9 @@ class _ViewAllRow extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.sm),
         padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.md, horizontal: AppSpacing.lg),
+          vertical: AppSpacing.md,
+          horizontal: AppSpacing.lg,
+        ),
         decoration: BoxDecoration(
           color: emphasized ? AppColors.darkSurface : AppColors.transparent,
           borderRadius: AppRadius.cardAll,
@@ -1398,8 +1454,11 @@ class _ViewAllRow extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 5),
-            const Icon(Icons.arrow_forward_rounded,
-                size: 14, color: AppColors.textTertiary),
+            const Icon(
+              Icons.arrow_forward_rounded,
+              size: 14,
+              color: AppColors.textTertiary,
+            ),
           ],
         ),
       ),
@@ -1464,8 +1523,11 @@ class _EmptyTaskState extends StatelessWidget {
               color: AppColors.darkSurfaceElevated,
               border: Border.all(color: AppColors.darkBorder),
             ),
-            child: const Icon(Icons.inbox_outlined,
-                size: 24, color: AppColors.textTertiary),
+            child: const Icon(
+              Icons.inbox_outlined,
+              size: 24,
+              color: AppColors.textTertiary,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           Text('No tasks yet', style: AppTypography.h3),
@@ -1499,8 +1561,11 @@ class _AllDoneCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              const Icon(Icons.check_circle_rounded,
-                  size: 26, color: AppColors.success),
+              const Icon(
+                Icons.check_circle_rounded,
+                size: 26,
+                color: AppColors.success,
+              ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -1508,8 +1573,9 @@ class _AllDoneCard extends StatelessWidget {
                   children: [
                     Text(
                       'All caught up!',
-                      style: AppTypography.label
-                          .copyWith(color: AppColors.success),
+                      style: AppTypography.label.copyWith(
+                        color: AppColors.success,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -1547,13 +1613,16 @@ class _SwapRequestsSection extends StatelessWidget {
           orElse: () => const <ShiftSwapEntity>[],
         );
         // Needs THIS user's action (a coworker asked them to trade).
-        final incoming =
-            swaps.where((s) => s.targetId == uid && s.status.isPending).toList();
+        final incoming = swaps
+            .where((s) => s.targetId == uid && s.status.isPending)
+            .toList();
         // Their own requests still in flight (waiting on coworker or manager).
         final outgoing = swaps
             .where((s) => s.requesterId == uid && !s.status.isResolved)
             .toList();
-        if (incoming.isEmpty && outgoing.isEmpty) return const SizedBox.shrink();
+        if (incoming.isEmpty && outgoing.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -1610,15 +1679,19 @@ class _IncomingSwapCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(requester,
-                          style: AppTypography.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        requester,
+                        style: AppTypography.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: 2),
-                      Text('${swap.day.label} · wants to swap shifts',
-                          style: AppTypography.caption,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        '${swap.day.label} · wants to swap shifts',
+                        style: AppTypography.caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
@@ -1633,9 +1706,12 @@ class _IncomingSwapCard extends StatelessWidget {
             ),
             if ((swap.note ?? '').isNotEmpty) ...[
               const SizedBox(height: AppSpacing.sm),
-              Text(swap.note!,
-                  style: AppTypography.caption
-                      .copyWith(fontStyle: FontStyle.italic)),
+              Text(
+                swap.note!,
+                style: AppTypography.caption.copyWith(
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
             ],
             const SizedBox(height: AppSpacing.md),
             Row(
@@ -1691,8 +1767,11 @@ class _OutgoingSwapCard extends StatelessWidget {
                     color: AppColors.darkSurfaceElevated,
                     borderRadius: BorderRadius.circular(11),
                   ),
-                  child: const Icon(Icons.swap_horiz_rounded,
-                      size: 18, color: AppColors.textSecondary),
+                  child: const Icon(
+                    Icons.swap_horiz_rounded,
+                    size: 18,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -1701,10 +1780,12 @@ class _OutgoingSwapCard extends StatelessWidget {
                     children: [
                       Text('Your swap request', style: AppTypography.label),
                       const SizedBox(height: 2),
-                      Text(detail,
-                          style: AppTypography.caption,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
+                      Text(
+                        detail,
+                        style: AppTypography.caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),
@@ -1739,7 +1820,9 @@ class _HomeExchangeStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
       decoration: BoxDecoration(
         color: AppColors.darkSurfaceElevated,
         borderRadius: AppRadius.cardAll,
@@ -1750,8 +1833,11 @@ class _HomeExchangeStrip extends StatelessWidget {
           Expanded(child: _slot('You give', giveLabel, false)),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-            child: Icon(Icons.swap_horiz_rounded,
-                size: 16, color: AppColors.textSecondary),
+            child: Icon(
+              Icons.swap_horiz_rounded,
+              size: 16,
+              color: AppColors.textSecondary,
+            ),
           ),
           Expanded(child: _slot('You get', getLabel, true)),
         ],
@@ -1760,20 +1846,25 @@ class _HomeExchangeStrip extends StatelessWidget {
   }
 
   Widget _slot(String caption, String shift, bool alignEnd) => Column(
-        crossAxisAlignment:
-            alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-        children: [
-          Text(caption.toUpperCase(),
-              style: AppTypography.caption.copyWith(
-                  color: AppColors.textTertiary,
-                  fontSize: 9,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 2),
-          Text(shift,
-              style: AppTypography.labelSmall
-                  .copyWith(fontWeight: FontWeight.w700)),
-        ],
-      );
+    crossAxisAlignment: alignEnd
+        ? CrossAxisAlignment.end
+        : CrossAxisAlignment.start,
+    children: [
+      Text(
+        caption.toUpperCase(),
+        style: AppTypography.caption.copyWith(
+          color: AppColors.textTertiary,
+          fontSize: 9,
+          letterSpacing: 0.5,
+        ),
+      ),
+      const SizedBox(height: 2),
+      Text(
+        shift,
+        style: AppTypography.labelSmall.copyWith(fontWeight: FontWeight.w700),
+      ),
+    ],
+  );
 }
 
 class _MiniPill extends StatelessWidget {
@@ -1790,9 +1881,14 @@ class _MiniPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(AppRadius.full),
         border: Border.all(color: color.withAlpha(90)),
       ),
-      child: Text(label,
-          style: AppTypography.caption.copyWith(
-              color: color, fontWeight: FontWeight.w700, fontSize: 10)),
+      child: Text(
+        label,
+        style: AppTypography.caption.copyWith(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 10,
+        ),
+      ),
     );
   }
 }

@@ -22,6 +22,8 @@ class BroadcastCard extends StatelessWidget {
     required this.broadcast,
     required this.onTap,
     this.onAction,
+    this.selected = false,
+    this.onSelected,
   });
 
   final BroadcastEntity broadcast;
@@ -30,6 +32,11 @@ class BroadcastCard extends StatelessWidget {
   /// Optional per-item action handler. When null, the overflow menu is hidden
   /// (e.g. a read-only context).
   final void Function(BroadcastCardAction action)? onAction;
+
+  /// When supplied, shows a feed-selection checkbox. Selection is owned by the
+  /// parent list so it survives lazy card recycling and realtime feed updates.
+  final bool selected;
+  final ValueChanged<bool>? onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -43,12 +50,32 @@ class BroadcastCard extends StatelessWidget {
         opacity: dimmed ? 0.6 : 1,
         child: GlassContainer(
           onTap: onTap,
+          highlight: selected,
+          accent: AppColors.primary,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (onSelected != null) ...[
+                    SizedBox(
+                      width: 32,
+                      height: 40,
+                      child: Checkbox(
+                        key: ValueKey('select-${broadcast.id}'),
+                        value: selected,
+                        onChanged: (value) => onSelected!(value ?? false),
+                        activeColor: AppColors.primary,
+                        checkColor: AppColors.black,
+                        side: const BorderSide(color: AppColors.textTertiary),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                  ],
                   Container(
                     width: 40,
                     height: 40,

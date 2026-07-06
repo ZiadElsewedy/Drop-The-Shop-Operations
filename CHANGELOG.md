@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to **DROP — Operations Management System** (Dart package id
-`fbro`) are recorded here. After every completed feature, append a short summary
+`drop`) are recorded here. After every completed feature, append a short summary
 of what was **added / removed / fixed / refactored**. See
 [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) for architecture.
 
@@ -11,6 +11,130 @@ and [Semantic Versioning](https://semver.org).
 ---
 
 ## [Unreleased]
+
+### Changed (2026-07-06 — Living-border orbit: per-state colour palette)
+
+Reworked the `LiveStatusBorder` colour model back to **per-state persistent
+colours** with a **soft, muted palette** (owner spec — motion / architecture
+unchanged, colours only). The orbit now holds each state's own colour for as long
+as that state lasts and **eases smoothly to the new colour on a state change**
+(no snap), replacing the previous amber-persistent + transient-flash model.
+
+- **Palette** (`liveActivityColor(task)`, all soft + slightly desaturated to blend
+  with the dark dashboard): pending → **baby blue `#7DD3FC`** · started → **purple
+  `#A78BFA`** · in review → **amber `#F59E0B`** · rejected → **soft red `#F87171`**
+  · overdue → **orange `#FB923C`** (*takes precedence*) · approved / completed →
+  `null` (no orbit, only the static border).
+- **Widget:** dropped the transient-flash machinery (`flashColor` / `flashKey` /
+  the amber→state→amber envelope). `LiveStatusBorder` now takes just
+  `color`/`speed`/`pulse`; a `color` change drives a smooth `_Phase.changing`
+  colour ease (`Color.lerp` + `easeInOut`) over `transitionDuration`, then steady.
+  **Every bit of motion is byte-for-byte unchanged** — the corner-eased warp LUT,
+  +8% corner highlight, overdue pulse, comet, inner bloom, controllers, and perf
+  strategy (no rebuilds during animation, no heavy `paint()` allocations).
+- **Call sites** updated (task cards + Admin Task Queue) — removed the flash
+  args; the Task Queue orbit is orange when overdue else amber, from the same
+  shared palette.
+- **Tests** updated (`task_card_live_status_test.dart`, 11): per-state palette +
+  overdue override, per-state speed, pulse, and orbit pass-through / loop /
+  **smooth colour ease (no snap)** / graceful terminal fade-out. `flutter
+  analyze`: 7 pre-existing infos, 0 new. Full suite: **445 pass, 2 fail** (the 2 =
+  pre-existing desktop splash-framing tests).
+
+### Fixed (2026-07-05 — Recurring shift-task Save freeze)
+
+Fixed the app appearing frozen after **Save Recurring Shift Task**. The Manage
+sheet previously opened the Add form as a second modal bottom sheet; after Save,
+the stacked modal barriers could leave the underlying screen dimmed and
+input-blocked. Add now dismisses Manage before presenting the form, guaranteeing
+one modal route/barrier at a time and returning to Operations after Save.
+
+Also removed nonessential post-save latency: template persistence is now the
+Save boundary, while deterministic today-instance creation, roster resolution,
+and assignment notification run best-effort via an unawaited
+`_materializeTodayInstance`. The scheduled generator remains the fallback and
+duplicate prevention is unchanged. Added `recurring_shift_task_test.dart` to
+prove Save does not await a stalled instance write. No schema/rules/function,
+route, dependency, or deploy change.
+
+### Added / Refactored (2026-07-05 — Branch Operations premium KPI drill-downs)
+
+Made all four Branch Operations KPI cards — **Active tasks, Overdue, Pending
+review, Staff active** — accessible premium hover/press entry points. They open
+the new reusable `OperationsMetricScreen` through the cockpit's existing local
+`Navigator.push` pattern, with a distinct branded hero, supporting facts, live
+count and responsive content for each metric: prioritized active tasks,
+oldest-first overdue triage, the review queue, and today's staff roster with
+employee drill-downs. The faint bottom-right hero watermark now renders the
+real asset-backed `DropLogo`, while the leading plaque keeps its metric-specific
+icon; this uses a new opt-in `BrandWatermark.assetLogo` mode so existing branded
+heroes remain unchanged. Staff Active deliberately retains its existing meaning:
+**rostered today**, not clocked in.
+
+Refactored the three task classifications into public pure predicates in
+`branch_workload.dart`, shared by the headline aggregation and detail lists so
+their semantics cannot diverge. The screen reuses the inherited live
+`BranchOperationsCubit` / `TaskCubit`, `ManagerTaskCard`, and `WorkloadCard`.
+No new Cubit/state, backend query, repository/use case, DI, global route,
+dependency, schema/rules/function, or deploy change. Focused Operations suite:
+**14 pass**; `flutter analyze`: no new diagnostics (8 pre-existing infos in the
+current dirty tree).
+
+### Added (2026-07-05 — Communications feed bulk selection)
+
+The Communications Center Active and Archived feeds now provide per-card
+checkboxes and a **Select all / Clear all** control for the current view.
+Selected broadcasts can be confirmation-gated **Archive/Restore** or permanently
+**Delete**d; the responsive action row avoids phone-width overflow, disables
+itself while writes run, and clears selection when switching feed views.
+
+`BroadcastCubit.setArchivedMany` / `deleteBroadcasts` sequence the existing
+single-document repository operations, retaining the same permission and
+realtime-stream behavior. Client/Cubit only: no schema, rules, Cloud Function,
+route, DI, dependency, or new-file change. `broadcast_card_test.dart`: **3 pass**;
+`flutter analyze`: no new diagnostics (8 pre-existing infos in the current dirty
+tree).
+
+### Changed (2026-07-05 — Living-border orbit: amber default + transient state flash)
+
+Refined the `LiveStatusBorder` orbit into a premium **"living border"** per the
+owner's final spec (motion + colours only; no layout/logic change). The orbit is
+now **always a single persistent amber accent** (`#F59E0B`, matching the dashboard
+accent) — state colours are **transient**, flashed for one orbit on a state change,
+then it returns to amber. Reverses the previous per-state persistent colours
+(indigo/emerald/purple) — those are gone; the palette is now amber-family.
+
+- **Persistent accent.** `kLivingBorderAccent` (Amber 400) is the default orbit
+  colour in every steady state; `liveActivityColor(task)` returns it for any active
+  task, `null` when settled (approved/completed → no orbit).
+- **Transient state-change flash.** `liveFlashColor(task)` (all amber-family:
+  Amber 600 started · Amber 300 in-review · Amber-red rejected · Orange overdue) is
+  eased in over ~320 ms, held for **one full orbit**, then eased back to amber and
+  the loop continues in the accent. Driven by the reused `_seq` controller; a
+  `flashKey` (`(status, overdue)`) fires the flash on change.
+- **Per-state speed + overdue pulse.** `liveOrbitSpeed(task)` scales the lap time
+  (pending 1.0 · started 1.2 · review 0.9 · rejected 1.3 · overdue 1.1); overdue
+  adds a very subtle glow-**intensity** pulse (0.7–1.0×), never a speed change.
+- **Premium, non-constant motion.** New corner-eased warp — a per-size **phase→
+  distance LUT** (integrate 1/speed, dipping through each arc) so the head slows
+  slightly into each rounded corner and accelerates back out on the straights;
+  plus a subtle **corner brightness bump** (+8%) as it rounds a corner. Comet: 2 px,
+  80–120 px width-scaled, 30-step tail, round head, inner bloom clipped to the
+  interior (**no outer glow**).
+- **Perf strategy kept** (owner constraint): pass-through when inactive; no
+  per-frame rebuilds; two reused controllers; painter caches its `PathMetric`,
+  corner map + warp LUT by size, reuses its `Paint`s, precomputes the tail falloff.
+- **Dashboard scope (started).** Wired the living border onto the Admin Dashboard
+  **Task Queue card** (`_TaskStatusStrip`): amber orbit while the queue has work
+  needing attention, flashes orange as an overdue count changes, pulses when
+  overdue, no orbit when clear. Remaining actionable cards (Pending Actions, Active
+  Tasks, Waiting Review, Broadcast Sending, Sync chip) are a **follow-up** — the
+  Overview / Analytics / KPI stat cards stay static per spec.
+- **Tests +11** (`task_card_live_status_test.dart` — persistent amber, transient
+  flash colours, per-state speed, overdue pulse, flash key, and orbit
+  pass-through / loop / flash→steady / graceful terminal fade-out). `flutter
+  analyze`: 7 pre-existing infos, 0 new. Full suite: **445 pass, 2 fail** (the 2 =
+  pre-existing desktop splash-framing tests, unrelated).
 
 ### Added (2026-07-05 — One-time employee Welcome / onboarding)
 

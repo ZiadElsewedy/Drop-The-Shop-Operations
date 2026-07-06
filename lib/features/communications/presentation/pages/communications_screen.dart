@@ -36,6 +36,8 @@ class CommunicationsScreen extends StatefulWidget {
 
 class _CommunicationsScreenState extends State<CommunicationsScreen> {
   bool _showArchived = false;
+  bool _bulkBusy = false;
+  final Set<String> _selectedIds = <String>{};
 
   /// Broadcast ids whose entrance animation has already played. Lets the feed
   /// animate each card **once** (on first appearance) and never again — so a live
@@ -69,7 +71,97 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
       case _NavMenu.templates:
         context.push(RouteNames.communicationsTemplates);
       case _NavMenu.toggleArchived:
-        setState(() => _showArchived = !_showArchived);
+        setState(() {
+          _showArchived = !_showArchived;
+          _selectedIds.clear();
+        });
+  }
+}
+  void _toggleSelected(String id, bool selected) {
+    setState(() {
+      if (selected) {
+        _selectedIds.add(id);
+      } else {
+        _selectedIds.remove(id);
+      }
+    });
+  }
+
+  void _toggleSelectAll(List<BroadcastEntity> broadcasts) {
+    final ids = broadcasts.map((b) => b.id).toSet();
+    final allSelected = ids.isNotEmpty && ids.every(_selectedIds.contains);
+    setState(() {
+      if (allSelected) {
+        _selectedIds.removeAll(ids);
+      } else {
+        _selectedIds.addAll(ids);
+      }
+    });
+  }
+
+  Future<void> _bulkArchive(List<BroadcastEntity> broadcasts) async {
+    final selected =
+        broadcasts.where((b) => _selectedIds.contains(b.id)).toList();
+    if (selected.isEmpty || _bulkBusy) return;
+    final archived = !_showArchived;
+    final verb = archived ? 'Archive' : 'Restore';
+    final noun = selected.length == 1 ? 'broadcast' : 'broadcasts';
+    final ok = await showConfirmDialog(
+      context,
+      title: '$verb ${selected.length} $noun?',
+      message: archived
+          ? 'The selected broadcasts will move out of the active feed.'
+          : 'The selected broadcasts will return to the active feed.',
+      confirmLabel: verb,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _bulkBusy = true);
+    final success = await context.read<BroadcastCubit>().setArchivedMany(
+          selected.map((b) => b.id),
+          archived,
+        );
+    if (!mounted) return;
+    setState(() {
+      _bulkBusy = false;
+      if (success) _selectedIds.clear();
+    });
+    if (success) {
+      AppSnackbar.success(
+        context,
+        '${selected.length} ${selected.length == 1 ? 'broadcast' : 'broadcasts'} '
+        '${archived ? 'archived' : 'restored'}',
+      );
+    }
+  }
+
+  Future<void> _bulkDelete(List<BroadcastEntity> broadcasts) async {
+    final selected =
+        broadcasts.where((b) => _selectedIds.contains(b.id)).toList();
+    if (selected.isEmpty || _bulkBusy) return;
+    final noun = selected.length == 1 ? 'broadcast' : 'broadcasts';
+    final ok = await showConfirmDialog(
+      context,
+      title: 'Delete ${selected.length} $noun?',
+      message: 'The selected broadcasts will be permanently removed. '
+          'This can\'t be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _bulkBusy = true);
+    final success = await context
+        .read<BroadcastCubit>()
+        .deleteBroadcasts(selected.map((b) => b.id));
+    if (!mounted) return;
+    setState(() {
+      _bulkBusy = false;
+      if (success) _selectedIds.clear();
+    });
+    if (success) {
+      AppSnackbar.success(
+        context,
+        '${selected.length} ${selected.length == 1 ? 'broadcast' : 'broadcasts'} deleted',
+      );
     }
   }
 
@@ -121,7 +213,10 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
               tooltip: 'Back to feed',
               icon: const Icon(Icons.arrow_back_rounded,
                   color: AppColors.textPrimary),
-              onPressed: () => setState(() => _showArchived = false),
+              onPressed: () => setState(() {
+                _showArchived = false;
+                _selectedIds.clear();
+              }),
             )
           : null,
       actions: [
@@ -189,6 +284,8 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
 
   Widget _feed(List<BroadcastEntity> broadcasts) {
     if (broadcasts.isEmpty) return _emptyState();
+    final visibleIds = broadcasts.map((b) => b.id).toSet();
+    final selectedCount = visibleIds.where(_selectedIds.contains).length;
     return RefreshIndicator(
       onRefresh: _refresh,
       child: ListView.builder(
@@ -200,9 +297,17 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
           AppSpacing.pagePadding,
           AppSpacing.xxxl * 2,
         ),
-        itemCount: broadcasts.length,
+        itemCount: broadcasts.length + 1,
         itemBuilder: (context, i) {
-          final b = broadcasts[i];
+          if (i == 0) {
+            return _selectionBar(
+              broadcasts,
+              selectedCount: selectedCount,
+              allSelected: selectedCount == broadcasts.length,
+            );
+          }
+          final broadcastIndex = i - 1;
+          final b = broadcasts[broadcastIndex];
           // Key by broadcast id (not index) so a stream update that reorders /
           // inserts reuses each card's element instead of shuffling state.
           final card = BroadcastCard(
@@ -210,6 +315,8 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
             broadcast: b,
             onTap: () => _openDetail(b),
             onAction: (a) => _onAction(b, a),
+            selected: _selectedIds.contains(b.id),
+            onSelected: (selected) => _toggleSelected(b.id, selected),
           );
           // Play the entrance exactly once per broadcast. Already-seen cards
           // render bare, so neither a live emit nor a scroll-recycle replays it.
@@ -217,10 +324,79 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
           _entered.add(b.id);
           return EntranceFade(
             key: ValueKey('enter-${b.id}'),
-            delay: staggerDelay(i),
+            delay: staggerDelay(broadcastIndex),
             child: card,
           );
         },
+      ),
+    );
+  }
+
+  Widget _selectionBar(
+    List<BroadcastEntity> broadcasts, {
+    required int selectedCount,
+    required bool allSelected,
+  }) {
+    final hasSelection = selectedCount > 0;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              TextButton.icon(
+                key: const ValueKey('broadcast-select-all'),
+                onPressed:
+                    _bulkBusy ? null : () => _toggleSelectAll(broadcasts),
+                icon: Icon(
+                  allSelected
+                      ? Icons.deselect_rounded
+                      : Icons.select_all_rounded,
+                  size: 18,
+                ),
+                label: Text(allSelected ? 'Clear all' : 'Select all'),
+              ),
+              if (hasSelection) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Text('$selectedCount selected', style: AppTypography.caption),
+              ],
+              if (_bulkBusy) ...[
+                const Spacer(),
+                const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
+            ],
+          ),
+          if (hasSelection) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton.icon(
+                  onPressed: _bulkBusy ? null : () => _bulkArchive(broadcasts),
+                  icon: Icon(
+                    _showArchived
+                        ? Icons.unarchive_outlined
+                        : Icons.archive_outlined,
+                    size: 18,
+                  ),
+                  label: Text(_showArchived ? 'Restore' : 'Archive'),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                TextButton.icon(
+                  onPressed: _bulkBusy ? null : () => _bulkDelete(broadcasts),
+                  style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: const Text('Delete'),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -318,7 +494,10 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
         _panelAction(
           icon: _showArchived ? Icons.inbox_rounded : Icons.archive_outlined,
           label: _showArchived ? 'Active feed' : 'Archived',
-          onTap: () => setState(() => _showArchived = !_showArchived),
+          onTap: () => setState(() {
+            _showArchived = !_showArchived;
+            _selectedIds.clear();
+          }),
         ),
       ],
     );

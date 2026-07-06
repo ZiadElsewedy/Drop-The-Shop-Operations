@@ -29,6 +29,7 @@ import 'package:drop/features/statistics/presentation/cubit/statistics_state.dar
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/cubit/task_state.dart';
+import 'package:drop/features/task/presentation/widgets/live_status_border.dart';
 import 'package:drop/features/task/presentation/widgets/task_feed_section.dart';
 
 /// Admin Home — an operations **command center**. Pulls from live sources
@@ -82,7 +83,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       // On an explicit sync, keep the spin perceptible even when every source
       // answered from cache in a few milliseconds — otherwise the tap feels dead.
       if (force) {
-        final rest = const Duration(milliseconds: 650) -
+        final rest =
+            const Duration(milliseconds: 650) -
             DateTime.now().difference(startedAt);
         if (rest > Duration.zero) await Future<void>.delayed(rest);
       }
@@ -97,11 +99,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _syncButton({bool compact = false}) => _SyncButton(
-        syncing: _syncing,
-        lastSynced: _lastSynced,
-        onSync: () => _load(force: true),
-        compact: compact,
-      );
+    syncing: _syncing,
+    lastSynced: _lastSynced,
+    onSync: () => _load(force: true),
+    compact: compact,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -120,10 +122,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // never replays when a conditional section appears and shifts the trailing
   // sections' positions.
   Widget _sec(String id, int index, Widget child) => EntranceFade(
-        key: ValueKey('admin-sec-$id'),
-        delay: staggerDelay(index),
-        child: child,
-      );
+    key: ValueKey('admin-sec-$id'),
+    delay: staggerDelay(index),
+    child: child,
+  );
 
   /// Stats-only greeting section (scope line) — rebuilds on stats, never on
   /// the task stream.
@@ -137,59 +139,58 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   /// Stats + live counts: subscribes to the task stream via a BlocSelector on
   /// the two derived counts, so an emit that doesn't move them rebuilds nothing.
   Widget _operationalSummary() => _DynamicSection(
-        builder: (s, overdue, reviews) => Column(
-          children: [
-            if (s != null && s.branchesWithoutManagers > 0) ...[
-              _StaffingAlert(
-                branchesWithoutManagers: s.branchesWithoutManagers,
-                onTap: () => context.push(RouteNames.adminManagers),
-              ),
-              const SizedBox(height: AppSpacing.md),
-            ],
-            _TaskStatusStrip(
-              stats: s,
-              overdue: overdue,
-              reviews: reviews,
-              onTap: () => context.push(
-                reviews > 0 && overdue == 0
-                    ? RouteNames.adminReview
-                    : RouteNames.adminTasks,
-              ),
-            ),
-          ],
+    builder: (s, overdue, reviews) => Column(
+      children: [
+        if (s != null && s.branchesWithoutManagers > 0) ...[
+          _StaffingAlert(
+            branchesWithoutManagers: s.branchesWithoutManagers,
+            onTap: () => context.push(RouteNames.adminManagers),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        _TaskStatusStrip(
+          stats: s,
+          overdue: overdue,
+          reviews: reviews,
+          onTap: () => context.push(
+            reviews > 0 && overdue == 0
+                ? RouteNames.adminReview
+                : RouteNames.adminTasks,
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   /// Always rendered — collapses to a quiet confirmation when empty, so the
   /// queue stays discoverable without competing with real risks.
   Widget _pendingHeader() => _PendingSection(
-        builder: (s, overdue, reviews, swaps) {
-          final pending = swaps + reviews + overdue;
-          return AdminSectionHeader(
-            title: 'Pending Actions',
-            subtitle:
-                pending > 0 ? '$pending awaiting you' : 'No queued actions',
-          );
-        },
+    builder: (s, overdue, reviews, swaps) {
+      final pending = swaps + reviews + overdue;
+      return AdminSectionHeader(
+        title: 'Pending Actions',
+        subtitle: pending > 0 ? '$pending awaiting you' : 'No queued actions',
       );
+    },
+  );
 
   Widget _pendingActions() => _PendingSection(
-        builder: (s, overdue, reviews, swaps) => PendingActions(
-          swaps: swaps,
-          reviews: reviews,
-          overdue: overdue,
-          // Straight to the actionable all-branches queue — the cubit is
-          // already streaming loadAll() here. (Pushing the Schedule screen
-          // landed on "Pick a branch" and made the admin hunt for the swap.)
-          onSwaps: () => showSwapQueueSheet(
-            context: context,
-            currentUid: context.currentUser?.uid ?? '',
-            showBranch: true,
-          ),
-          onReviews: () => context.push(RouteNames.adminReview),
-          onOverdue: () => context.push(RouteNames.adminTasks),
-        ),
-      );
+    builder: (s, overdue, reviews, swaps) => PendingActions(
+      swaps: swaps,
+      reviews: reviews,
+      overdue: overdue,
+      // Straight to the actionable all-branches queue — the cubit is
+      // already streaming loadAll() here. (Pushing the Schedule screen
+      // landed on "Pick a branch" and made the admin hunt for the swap.)
+      onSwaps: () => showSwapQueueSheet(
+        context: context,
+        currentUid: context.currentUser?.uid ?? '',
+        showBranch: true,
+      ),
+      onReviews: () => context.push(RouteNames.adminReview),
+      onOverdue: () => context.push(RouteNames.adminTasks),
+    ),
+  );
 
   Widget _mobile(BuildContext context) {
     var i = 0;
@@ -561,8 +562,8 @@ class _SyncButtonState extends State<_SyncButton>
       _spin
           .animateTo(1, duration: const Duration(milliseconds: 220))
           .whenComplete(() {
-        if (mounted) _spin.reset();
-      });
+            if (mounted) _spin.reset();
+          });
     }
   }
 
@@ -582,8 +583,7 @@ class _SyncButtonState extends State<_SyncButton>
       child: Icon(
         Icons.sync_rounded,
         size: 15,
-        color:
-            widget.syncing ? AppColors.textPrimary : AppColors.textSecondary,
+        color: widget.syncing ? AppColors.textPrimary : AppColors.textSecondary,
       ),
     );
 
@@ -672,7 +672,8 @@ class _BranchPulse extends StatelessWidget {
           final branchId = t.branchId;
           if (branchId == null || branchId.isEmpty) continue;
           final prev = byBranch[branchId] ?? (open: 0, review: 0);
-          final isOpen = t.status == TaskStatus.pending ||
+          final isOpen =
+              t.status == TaskStatus.pending ||
               t.status == TaskStatus.started ||
               t.status == TaskStatus.rejected;
           final isReview = t.status == TaskStatus.waitingReview;
@@ -761,7 +762,7 @@ class _StatsSection extends StatelessWidget {
 class _DynamicSection extends StatelessWidget {
   const _DynamicSection({required this.builder});
   final Widget Function(StatisticsEntity? stats, int overdue, int reviews)
-      builder;
+  builder;
 
   @override
   Widget build(BuildContext context) {
@@ -804,7 +805,8 @@ class _PendingSection extends StatelessWidget {
     int overdue,
     int reviews,
     int swaps,
-  ) builder;
+  )
+  builder;
 
   @override
   Widget build(BuildContext context) {
@@ -925,48 +927,48 @@ class _StaffingAlert extends StatelessWidget {
         : '$count branches need a manager';
 
     Widget message() => Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: AppColors.warning.withAlpha(28),
-                borderRadius: BorderRadius.circular(11),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppColors.warning.withAlpha(28),
+            borderRadius: BorderRadius.circular(11),
+          ),
+          child: const Icon(
+            Icons.admin_panel_settings_outlined,
+            size: 21,
+            color: AppColors.warning,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'STAFFING GAP',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.warning,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                ),
               ),
-              child: const Icon(
-                Icons.admin_panel_settings_outlined,
-                size: 21,
-                color: AppColors.warning,
+              const SizedBox(height: AppSpacing.xs),
+              Text(title, style: AppTypography.h3),
+              const SizedBox(height: 2),
+              Text(
+                'Assign branch ownership so schedules, reviews, and cases have a clear owner.',
+                style: AppTypography.bodySmall.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'STAFFING GAP',
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.warning,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(title, style: AppTypography.h3),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Assign branch ownership so schedules, reviews, and cases have a clear owner.',
-                    style: AppTypography.bodySmall.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        );
+            ],
+          ),
+        ),
+      ],
+    );
 
     final action = _InlineAction(label: 'Assign now', onTap: onTap);
 
@@ -1028,22 +1030,22 @@ class _TaskStatusStrip extends StatelessWidget {
     final accent = loading
         ? AppColors.textSecondary
         : overdue > 0
-            ? AppColors.error
-            : reviews > 0
-                ? AppColors.warning
-                : AppColors.success;
+        ? AppColors.error
+        : reviews > 0
+        ? AppColors.warning
+        : AppColors.success;
     final icon = loading
         ? Icons.sync_rounded
         : overdue > 0
-            ? Icons.warning_amber_rounded
-            : reviews > 0
-                ? Icons.rate_review_rounded
-                : Icons.check_circle_rounded;
+        ? Icons.warning_amber_rounded
+        : reviews > 0
+        ? Icons.rate_review_rounded
+        : Icons.check_circle_rounded;
     final title = loading
         ? 'Checking task status'
         : hasIssues
-            ? '$issues task ${issues == 1 ? 'action needs' : 'actions need'} attention'
-            : 'Task queue is clear';
+        ? '$issues task ${issues == 1 ? 'action needs' : 'actions need'} attention'
+        : 'Task queue is clear';
     final facts = <String>[
       if (loading) 'Loading live task health',
       if (overdue > 0) '$overdue overdue',
@@ -1051,79 +1053,94 @@ class _TaskStatusStrip extends StatelessWidget {
       if (!loading && !hasIssues && active > 0) '$active active',
       if (!loading && !hasIssues) 'No overdue work or reviews waiting',
     ];
-    final actionLabel =
-        reviews > 0 && overdue == 0 ? 'Review now' : 'View tasks';
+    final actionLabel = reviews > 0 && overdue == 0
+        ? 'Review now'
+        : 'View tasks';
 
     Widget summary() => Row(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: accent.withAlpha(28),
-                borderRadius: BorderRadius.circular(10),
+      children: [
+        Container(
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: accent.withAlpha(28),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 19, color: accent),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                loading
+                    ? 'UPDATING'
+                    : hasIssues
+                    ? 'TASK QUEUE'
+                    : 'ON TRACK',
+                style: AppTypography.caption.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                ),
               ),
-              child: Icon(icon, size: 19, color: accent),
-            ),
-            const SizedBox(width: AppSpacing.md),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    loading
-                        ? 'UPDATING'
-                        : hasIssues
-                            ? 'TASK QUEUE'
-                            : 'ON TRACK',
-                    style: AppTypography.caption.copyWith(
-                      color: accent,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(title, style: AppTypography.labelLarge),
-                  const SizedBox(height: 2),
-                  Text(
-                    facts.join(' · '),
-                    style: AppTypography.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                ],
+              const SizedBox(height: 2),
+              Text(title, style: AppTypography.labelLarge),
+              const SizedBox(height: 2),
+              Text(
+                facts.join(' · '),
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textSecondary,
+                ),
               ),
-            ),
-          ],
-        );
+            ],
+          ),
+        ),
+      ],
+    );
 
     final action = _InlineAction(label: actionLabel, onTap: onTap);
-    return GlassContainer(
-      onTap: onTap,
-      highlight: hasIssues,
-      accent: accent,
-      elevated: hasIssues,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 480) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+    // Living border: an amber orbit while the queue has work needing attention;
+    // it flashes (orange when something is overdue) as the count changes, and
+    // pulses when overdue. A clear queue shows no orbit. (Radius 20 = the
+    // GlassContainer's default AppRadius.card, so the orbit rides its border.)
+    return LiveStatusBorder(
+      // Orbit colour follows the worst signal: orange when overdue, else amber
+      // (in-review) — from the shared per-state palette. No orbit when clear.
+      color: hasIssues
+          ? (overdue > 0 ? const Color(0xFFFB923C) : kLivingBorderAccent)
+          : null,
+      pulse: overdue > 0,
+      speed: 1.15,
+      borderRadius: const BorderRadius.all(Radius.circular(20)),
+      child: GlassContainer(
+        onTap: onTap,
+        highlight: hasIssues,
+        accent: accent,
+        elevated: hasIssues,
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            if (constraints.maxWidth < 480) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  summary(),
+                  const SizedBox(height: AppSpacing.sm),
+                  Align(alignment: Alignment.centerRight, child: action),
+                ],
+              );
+            }
+            return Row(
               children: [
-                summary(),
-                const SizedBox(height: AppSpacing.sm),
-                Align(alignment: Alignment.centerRight, child: action),
+                Expanded(child: summary()),
+                const SizedBox(width: AppSpacing.lg),
+                action,
               ],
             );
-          }
-          return Row(
-            children: [
-              Expanded(child: summary()),
-              const SizedBox(width: AppSpacing.lg),
-              action,
-            ],
-          );
-        },
+          },
+        ),
       ),
     );
   }
@@ -1164,7 +1181,8 @@ int _overdueCount(List<TaskEntity> tasks) {
   return tasks.where((t) {
     final d = t.deadline;
     if (d == null) return false;
-    final open = t.status == TaskStatus.pending ||
+    final open =
+        t.status == TaskStatus.pending ||
         t.status == TaskStatus.started ||
         t.status == TaskStatus.rejected;
     return open && d.isBefore(now);

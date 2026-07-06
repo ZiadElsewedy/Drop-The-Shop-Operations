@@ -203,6 +203,24 @@ class BroadcastCubit extends Cubit<BroadcastState> {
     }
   }
 
+  /// Applies one lifecycle change to a feed selection. The writes stay on the
+  /// existing repository contract (one document per call); failure is surfaced
+  /// once and the caller can keep the selection intact for a retry.
+  Future<bool> setArchivedMany(Iterable<String> ids, bool archived) async {
+    try {
+      for (final id in ids) {
+        await _repository.setArchived(id, archived);
+      }
+      return true;
+    } on Failure catch (e) {
+      _emitError(e.message);
+      return false;
+    } catch (_) {
+      _emitError('Could not update the selected broadcasts. Please try again.');
+      return false;
+    }
+  }
+
   /// Permanently deletes a broadcast (removes the `broadcasts/{id}` doc). The
   /// feed stream re-emits without it; an error keeps the current feed visible.
   /// Rules permit this only for an admin, the original sender, or the
@@ -214,6 +232,24 @@ class BroadcastCubit extends Cubit<BroadcastState> {
       _emitError(e.message);
     } catch (_) {
       _emitError('Could not delete the broadcast. Please try again.');
+    }
+  }
+
+  /// Permanently deletes every selected broadcast. This deliberately uses the
+  /// repository's existing permission-checked single-document delete instead
+  /// of introducing a second backend path.
+  Future<bool> deleteBroadcasts(Iterable<String> ids) async {
+    try {
+      for (final id in ids) {
+        await _repository.delete(id);
+      }
+      return true;
+    } on Failure catch (e) {
+      _emitError(e.message);
+      return false;
+    } catch (_) {
+      _emitError('Could not delete the selected broadcasts. Please try again.');
+      return false;
     }
   }
 

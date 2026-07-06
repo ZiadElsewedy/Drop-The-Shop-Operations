@@ -67,4 +67,42 @@ void main() {
     await tester.pump();
     expect(tapped, isTrue);
   });
+
+  testWidgets('selection checkbox reports changes and highlights the card',
+      (tester) async {
+    var selected = false;
+    final b = BroadcastEntity(
+      id: 'select-me',
+      title: 'Selectable broadcast',
+      message: 'Bulk actions use this selection.',
+      senderId: 'admin-1',
+      senderName: 'Admin',
+      audience: BroadcastAudience.allBranches,
+      category: 'announcement',
+      createdAt: DateTime.now(),
+    );
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: StatefulBuilder(builder: (context, setState) {
+          return BroadcastCard(
+            broadcast: b,
+            selected: selected,
+            onSelected: (value) => setState(() => selected = value),
+            onTap: () {},
+          );
+        }),
+      ),
+    ));
+
+    final checkbox = find.byKey(const ValueKey('select-select-me'));
+    expect(checkbox, findsOneWidget);
+    expect(tester.widget<Checkbox>(checkbox).value, isFalse);
+
+    await tester.tap(checkbox);
+    await tester.pump();
+
+    expect(selected, isTrue);
+    expect(tester.widget<Checkbox>(checkbox).value, isTrue);
+  });
 }

@@ -23,11 +23,24 @@ Future<void> showManageRecurringShiftTasksSheet({
   required BuildContext context,
   required TaskCubit cubit,
   required String branchId,
-}) =>
-    showSheet(
+}) async {
+  // Never stack one modal sheet on top of another. On desktop/macOS the nested
+  // modal barriers can leave the manage sheet dimmed and input-blocked after the
+  // form pops, which looks like a frozen app. Close Manage first, then present
+  // the form as the only modal route.
+  final action = await showSheet<_RecurringManageAction>(
+    context,
+    _ManageRecurringShiftTasks(cubit: cubit, branchId: branchId),
+  );
+  if (action == _RecurringManageAction.add && context.mounted) {
+    await showSheet<bool>(
       context,
-      _ManageRecurringShiftTasks(cubit: cubit, branchId: branchId),
+      _RecurringShiftTaskForm(cubit: cubit, branchId: branchId),
     );
+  }
+}
+
+enum _RecurringManageAction { add }
 
 class _ManageRecurringShiftTasks extends StatefulWidget {
   const _ManageRecurringShiftTasks({
@@ -82,13 +95,7 @@ class _ManageRecurringShiftTasksState
     }
   }
 
-  Future<void> _add() async {
-    final created = await showSheet<bool>(
-      context,
-      _RecurringShiftTaskForm(cubit: widget.cubit, branchId: widget.branchId),
-    );
-    if (created == true) _reload();
-  }
+  void _add() => Navigator.of(context).pop(_RecurringManageAction.add);
 
   @override
   Widget build(BuildContext context) {

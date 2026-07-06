@@ -951,9 +951,11 @@ class TaskCubit extends Cubit<TaskState> {
     }
   }
 
-  /// Creates a daily/weekly recurring shift-task template, then immediately
-  /// materializes *today's* instance (if due today) so the manager doesn't
-  /// have to wait for the next `generateShiftTaskInstances` Cloud Function run.
+  /// Creates a daily/weekly recurring shift-task template, then starts a
+  /// best-effort materialization of *today's* instance (if due today) without
+  /// blocking the Save UI on the follow-up task/roster/notification I/O. The
+  /// scheduled Cloud Function remains the fallback if that background work
+  /// cannot complete.
   Future<void> createRecurringShiftTemplate({
     required String title,
     String? description,
@@ -978,7 +980,7 @@ class TaskCubit extends Cubit<TaskState> {
         createdBy: _user?.uid,
       ),
     );
-    await _materializeTodayInstance(created);
+    unawaited(_materializeTodayInstance(created));
   }
 
   Future<void> setRecurringTemplateActive(
