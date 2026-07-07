@@ -17,6 +17,12 @@ class AppConstants {
   /// the conversation lives in `cases/{id}/messages`.
   static const String casesCollection = 'cases';
 
+  /// Operations Requests (in-the-moment approvals during the work day). The
+  /// event-driven timeline lives in the subcollection `requests/{id}/events`; a
+  /// monotonic reference sequence lives at `counters/requests`.
+  static const String requestsCollection = 'requests';
+  static const String countersCollection = 'counters';
+
   // ─── Communications Center — Phase 2 ──────────────────────────
   static const String broadcastTemplatesCollection = 'broadcastTemplates';
   static const String broadcastSchedulesCollection = 'broadcastSchedules';
