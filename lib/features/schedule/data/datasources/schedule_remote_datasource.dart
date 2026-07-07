@@ -12,6 +12,7 @@ import 'package:drop/core/errors/exceptions.dart';
 import 'package:drop/features/schedule/data/models/shift_swap_model.dart';
 import 'package:drop/features/schedule/data/models/weekly_schedule_model.dart';
 import 'package:drop/features/schedule/domain/schedule_week.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 
 /// Firestore access for the weekly schedule + shift swaps (Phase 7). Schedules
 /// live at `weekly_schedules/{branchId_yyyy-MM-dd}` (deterministic id → one doc
@@ -49,6 +50,15 @@ abstract class ScheduleRemoteDataSource {
     required ScheduleDay day,
     required String employeeId,
     required LeaveType? type,
+  });
+
+  /// Overrides the [hours] for [day] + [shift] this week; a null [hours] clears
+  /// the override (the slot falls back to [ShiftHours.standard]).
+  Future<void> setShiftHours({
+    required String scheduleId,
+    required ScheduleDay day,
+    required ScheduleShift shift,
+    required ShiftHours? hours,
   });
 
   // ── Shift swaps ──
@@ -218,6 +228,24 @@ class ScheduleRemoteDataSourceImpl implements ScheduleRemoteDataSource {
       });
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to update the leave entry.');
+    }
+  }
+
+  @override
+  Future<void> setShiftHours({
+    required String scheduleId,
+    required ScheduleDay day,
+    required ScheduleShift shift,
+    required ShiftHours? hours,
+  }) async {
+    try {
+      await _schedules.doc(scheduleId).update({
+        'shiftHours.${day.value}.${shift.value}':
+            hours == null ? FieldValue.delete() : hours.toMap(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to update the shift hours.');
     }
   }
 

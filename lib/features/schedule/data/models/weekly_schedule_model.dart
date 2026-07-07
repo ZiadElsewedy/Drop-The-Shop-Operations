@@ -4,11 +4,13 @@ import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 
 /// Firestore (de)serialization for [WeeklyScheduleEntity] — collection
 /// `weekly_schedules/{id}`. The `assignments` map is stored as
-/// `{ <day>: { <shift>: [uid, …] } }`, `dayNotes` as `{ <day>: text }` and
-/// `leave` as `{ <day>: { <uid>: <type> } }`, all with lower-case string keys.
+/// `{ <day>: { <shift>: [uid, …] } }`, `dayNotes` as `{ <day>: text }`,
+/// `leave` as `{ <day>: { <uid>: <type> } }`, and `shiftHours` overrides as
+/// `{ <day>: { <shift>: { start, end } } }`, all with lower-case string keys.
 class WeeklyScheduleModel {
   final String id;
   final String branchId;
@@ -16,6 +18,7 @@ class WeeklyScheduleModel {
   final Map<ScheduleDay, Map<ScheduleShift, List<String>>> assignments;
   final Map<ScheduleDay, String> dayNotes;
   final Map<ScheduleDay, Map<String, LeaveType>> leave;
+  final Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> shiftHours;
   final String? createdBy;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -27,6 +30,7 @@ class WeeklyScheduleModel {
     this.assignments = const {},
     this.dayNotes = const {},
     this.leave = const {},
+    this.shiftHours = const {},
     this.createdBy,
     this.createdAt,
     this.updatedAt,
@@ -64,6 +68,18 @@ class WeeklyScheduleModel {
       };
       if (entries.isNotEmpty) leave[day] = entries;
     }
+    final rawHours = map['shiftHours'] as Map<String, dynamic>? ?? const {};
+    final shiftHours = <ScheduleDay, Map<ScheduleShift, ShiftHours>>{};
+    for (final day in ScheduleDay.values) {
+      final dayMap = rawHours[day.value] as Map<String, dynamic>?;
+      if (dayMap == null) continue;
+      final entries = <ScheduleShift, ShiftHours>{};
+      for (final shift in ScheduleShift.values) {
+        final hours = ShiftHours.fromMap(dayMap[shift.value]);
+        if (hours != null) entries[shift] = hours;
+      }
+      if (entries.isNotEmpty) shiftHours[day] = entries;
+    }
     return WeeklyScheduleModel(
       id: id ?? map['id'] as String? ?? '',
       branchId: map['branchId'] as String? ?? '',
@@ -72,6 +88,7 @@ class WeeklyScheduleModel {
       assignments: assignments,
       dayNotes: dayNotes,
       leave: leave,
+      shiftHours: shiftHours,
       createdBy: map['createdBy'] as String?,
       createdAt: map.date('createdAt'),
       updatedAt: map.date('updatedAt'),
@@ -86,6 +103,7 @@ class WeeklyScheduleModel {
         assignments: e.assignments,
         dayNotes: e.dayNotes,
         leave: e.leave,
+        shiftHours: e.shiftHours,
         createdBy: e.createdBy,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
@@ -135,6 +153,14 @@ class WeeklyScheduleModel {
                   person.key: person.value.value,
               },
           },
+        if (shiftHours.isNotEmpty)
+          'shiftHours': {
+            for (final entry in shiftHours.entries)
+              entry.key.value: {
+                for (final shiftEntry in entry.value.entries)
+                  shiftEntry.key.value: shiftEntry.value.toMap(),
+              },
+          },
         'createdBy': createdBy,
       };
 
@@ -145,6 +171,7 @@ class WeeklyScheduleModel {
         assignments: assignments,
         dayNotes: dayNotes,
         leave: leave,
+        shiftHours: shiftHours,
         createdBy: createdBy,
         createdAt: createdAt,
         updatedAt: updatedAt,

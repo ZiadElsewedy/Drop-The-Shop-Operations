@@ -2,6 +2,7 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 
 part 'weekly_schedule_entity.freezed.dart';
 
@@ -38,6 +39,14 @@ class WeeklyScheduleEntity with _$WeeklyScheduleEntity {
     /// per shift — a person on leave is away for the whole day.
     @Default(<ScheduleDay, Map<String, LeaveType>>{})
     Map<ScheduleDay, Map<String, LeaveType>> leave,
+
+    /// Per-week **shift-hours overrides**: `day → shift → hours`. Only slots
+    /// that differ from [ShiftHours.standard] are stored — an empty map means
+    /// the whole week runs standard hours. This is where configurable end times
+    /// live (weekend lateness, Ramadan, holidays…): read through [hoursFor],
+    /// never from a hardcoded weekend rule.
+    @Default(<ScheduleDay, Map<ScheduleShift, ShiftHours>>{})
+    Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> shiftHours,
 
     /// uid of the manager/admin who created the schedule.
     String? createdBy,
@@ -89,6 +98,17 @@ class WeeklyScheduleEntity with _$WeeklyScheduleEntity {
 
   /// [uid]'s leave on [day], or null when they're available.
   LeaveType? leaveTypeOf(String uid, ScheduleDay day) => leaveOn(day)[uid];
+
+  /// The **configured hours** for [day] + [shift] — this week's override if the
+  /// manager set one, else the standing [ShiftHours.standard]. The single entry
+  /// point for every time display, countdown and midnight computation; nothing
+  /// should read a hardcoded weekend end time.
+  ShiftHours hoursFor(ScheduleDay day, ScheduleShift shift) =>
+      shiftHours[day]?[shift] ?? ShiftHours.standard(day, shift);
+
+  /// Whether [day]/[shift] carries a custom override (vs. the standing default).
+  bool hasHoursOverride(ScheduleDay day, ScheduleShift shift) =>
+      shiftHours[day]?[shift] != null;
 
   /// [uid]'s next assigned slot strictly **after** [day] within this week, or
   /// null when the week holds no further shifts. Drives the "Next shift · …"

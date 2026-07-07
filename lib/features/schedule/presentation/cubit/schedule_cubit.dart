@@ -9,6 +9,7 @@ import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
 import 'package:drop/features/schedule/domain/schedule_week.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 import 'schedule_state.dart';
 
 /// Drives the weekly-schedule view for managers (own branch), admins (any
@@ -209,6 +210,21 @@ class ScheduleCubit extends Cubit<ScheduleState> {
             day: day,
             employeeId: uid,
             type: type,
+          ));
+
+  /// Overrides the [hours] for [day] + [shift] this week; null [hours] clears
+  /// the override (the slot falls back to [ShiftHours.standard]). Configurable
+  /// shift times — replaces the old hardcoded weekend end.
+  Future<bool> setShiftHours(
+    ScheduleDay day,
+    ScheduleShift shift,
+    ShiftHours? hours,
+  ) =>
+      _mutate(() => _repository.setShiftHours(
+            scheduleId: ScheduleWeek.docId(_branchId, _weekStart),
+            day: day,
+            shift: shift,
+            hours: hours,
           ));
 
   // ── Undo (Schedule 4.0) ────────────────────────────────────────
