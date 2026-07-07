@@ -30,6 +30,19 @@ enum ScheduleShift {
           ? '16:30 – 00:30'
           : timeRange;
 
+  /// Shift start as minutes past midnight (08:30 → 510 · 16:30 → 990) — the
+  /// structured counterpart of [timeRange]. Keep in sync with the display
+  /// strings above.
+  int get startMinutes => this == ScheduleShift.morning ? 510 : 990;
+
+  /// Shift end as minutes past the **slot day's** midnight. Weekend nights end
+  /// 00:30 the next calendar day, so their value is past 24h (1470) — callers
+  /// adding it as a [Duration] roll into the next day automatically. Keep in
+  /// sync with [timeRangeOn].
+  int endMinutesOn(ScheduleDay day) => this == ScheduleShift.morning
+      ? 990
+      : (day.isWeekend ? 1470 : 1380);
+
   /// Parses the stored string; unknown/missing → [morning].
   static ScheduleShift fromString(String? raw) =>
       raw == 'night' ? ScheduleShift.night : ScheduleShift.morning;

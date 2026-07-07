@@ -132,8 +132,12 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _sectionLabel('Day note'),
-                    const SizedBox(height: AppSpacing.xs),
+                    _sectionLabel('Day notes'),
+                    const SizedBox(height: 2),
+                    Text('One instruction per line — each becomes a bullet '
+                        'for the team.',
+                        style: AppTypography.caption),
+                    const SizedBox(height: AppSpacing.sm),
                     _noteField(context),
                     const SizedBox(height: AppSpacing.lg),
                     _sectionLabel(
@@ -251,15 +255,17 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
         return TextField(
           controller: _noteController,
           enabled: widget.canEdit,
-          maxLines: 2,
-          minLines: 1,
-          maxLength: 120,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => _saveNote(context),
+          // Multi-line: Enter inserts a new line (each becomes a bullet); the
+          // explicit save button commits. Roomy cap for a full day briefing.
+          minLines: 3,
+          maxLines: 8,
+          maxLength: 600,
+          keyboardType: TextInputType.multiline,
           style: AppTypography.body,
           decoration: InputDecoration(
             hintText: widget.canEdit
-                ? 'e.g. Inventory · Big delivery · Sale event'
+                ? 'Arrive 15 min early\nInventory count before opening\n'
+                    'Ahmed covers the fitting room'
                 : 'No note for this day',
             counterText: '',
             suffixIcon: !widget.canEdit || !dirty

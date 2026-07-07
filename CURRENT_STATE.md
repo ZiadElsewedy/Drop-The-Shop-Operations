@@ -11,8 +11,66 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-06 (Task Details activity timeline rework · Schedule 5.0)
+**Last updated:** 2026-07-07 (Multi-line day notes + premium employee shift sheet)
 **Version:** 1.0.0+1 · **Branch:** `feature/ui-tasks` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Multi-line day notes + premium employee shift sheet (2026-07-07)
+
+Owner-directed, mockup-driven enhancement inside the frozen premium UI:
+
+- **Day note = multi-line briefing → bullets**, no schema change. `dayNotes`
+  stays one string; managers write one instruction per line
+  (`WeeklyScheduleEntity.noteLinesFor`). Manager entry now 3–8 lines, cap
+  120 → 600, Enter = newline. No Firestore rules change (no length constraint).
+- **Cards stay glanceable:** today hero + week rows show a **"Note / N notes"
+  indicator**, never the note text (owner: don't duplicate notes on the card).
+- **Premium tap-to-open shift sheet** (`_ShiftDetailsSheet` rebuilt): day ·
+  shift · **arrow time `16:30 → 00:30`** · **notes as bullets** (un-truncated) ·
+  manager · team · **Swap Shift** when eligible. Off/leave days → note +
+  manager only.
+- **Rows/hero tap → the sheet**; inline `Swap`/`Today`/`Past`/`—` fillers
+  removed from week rows (Swap now lives in the sheet), chevron marks a
+  tappable row. `_arrowRange` gives employee surfaces the arrow separator;
+  the manager/admin/desktop grid keeps the en-dash (frozen, out of scope).
+
+Verification: `flutter analyze` 0 new; suite **489 pass / 2 pre-existing
+splash failures**. Test gotcha unchanged: the countdown pill owns a minute
+Timer — My Week tests must unmount the tree before finishing.
+
+---
+
+## ✅ Employee My Week — premium UI kept by owner ruling + live improvements (2026-07-07)
+
+⚠️ **Owner ruling: the premium hero/week-cards My Week UI is THE employee
+schedule UI on every tier — do NOT redesign it.** An answer-first minimal
+rework was built and reverted the same session (the owner wants visible craft,
+not reduction); the mobile schedule UI is **frozen except for incremental
+improvements** inside its design language. The functional wins were kept:
+
+- **Live shift-status pill** in the hero (`In 4h 30m` always / `On now · till
+  00:30` / quiet `Ended`), minute-aligned tick so it never goes stale.
+- **Structural midnight math:** `ScheduleShift.startMinutes`/`endMinutesOn` +
+  pure [`shift_window.dart`](lib/features/schedule/domain/shift_window.dart) —
+  weekend nights stay **active past midnight till 00:30**, and during the
+  00:00–00:30 tail the hero keeps showing the running night shift instead of
+  flipping to "Day Off" (Sat→Sun seam via `ScheduleCubit.previousSaturdayNight`;
+  test fakes must stub that getter — `implements`-fakes throw on concrete
+  members).
+- **Swap-on-today fixed:** the week row's "Today" pill no longer blocks the
+  Swap action while today's shift is still in the future.
+- **Next-shift line** on off/leave heroes (`WeeklyScheduleEntity.nextShiftAfter`).
+- **Day notes never truncate** (hero + week rows wrap in full).
+- **Swaps tab warning dot (phones)** while a pending swap on a still-future
+  slot awaits the user's answer (stale requests filtered via `SwapEligibility`).
+
+Verification: `flutter analyze` 0 new; suite **487 pass / 2 pre-existing
+splash failures**. Test gotcha: the countdown pill owns a minute Timer —
+every My Week test must unmount the tree before finishing.
+**Deferred:** Employee Home generic "Off today" when leave exists (follow-up
+task spawned); next-week visibility + schedule-change push notifications
+discussed and parked pending owner priority.
 
 ---
 

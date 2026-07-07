@@ -12,6 +12,84 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-07-07 — Multi-line day notes + premium employee shift sheet)
+
+Owner-directed enhancement (mockup-driven, inside the frozen premium UI): the
+day note becomes a **multi-line briefing shown as bullets**, and the employee's
+tap-to-open shift sheet is upgraded to the mockup (day · shift · arrow time ·
+notes bullets · manager · team · **Swap Shift**).
+
+- **Notes are now multi-line, no schema change.** `dayNotes.<day>` stays a
+  single string; the manager types **one instruction per line** and each line
+  renders as a bullet (`WeeklyScheduleEntity.noteLinesFor`, unit-tested).
+  Manager entry (`day_details_sheet.dart`) is now a 3–8 line field, cap raised
+  120 → 600 chars, Enter inserts a newline, explicit save. No Firestore rules
+  change (verified: no note-length constraint).
+- **Cards stay clean and glanceable.** The full note text is no longer printed
+  on the today hero or week rows — each shows a quiet **"Note / N notes"
+  indicator** instead; the full bulleted note lives only in the sheet (owner
+  ruling: don't duplicate notes on the card).
+- **Premium shift sheet** (`_ShiftDetailsSheet` rebuilt): day + shift title,
+  **arrow time `16:30 → 00:30`**, **Notes as bullets** (un-truncated), manager,
+  teammates, and a **Swap Shift** button when the slot is still requestable and
+  a coworker holds the opposite shift. Handles off/leave days too (note +
+  manager, no time/team/swap).
+- **Rows/hero are now tappable → the sheet.** The inline `Swap`/`Today`/`Past`/
+  `—` trailing widgets are gone from the week rows (Swap moved into the sheet);
+  a chevron marks a row that opens details. Plain off days with nothing to show
+  stay inert.
+- **Arrow time on employee surfaces:** `_arrowRange` renders `16:30 → 00:30`
+  on the hero countdown, week rows and sheet; the manager/admin/desktop grid
+  keeps the en-dash `ScheduleShift.timeRangeOn` (frozen, out of scope).
+
+Tests: `noteLinesFor` split cases + reworked widget tests (note indicator on
+card / bullets in the sheet, arrow times, Swap offered in the sheet on today's
+future shift, clean rows). Suite: **489 pass / 2 pre-existing splash
+failures**. `flutter analyze`: 0 new.
+
+### Changed (2026-07-07 — Employee My Week: premium UI kept by owner ruling + live improvements)
+
+An answer-first minimal rework of the employee My Week tab was built and
+**reverted the same session by owner ruling** — the premium hero/week-cards UI
+is THE employee schedule UI on every tier, and the owner wants **visible
+craft, not reduction** ("something that clearly had work spent on it"). The
+mobile schedule UI is now **frozen except for incremental improvements** inside
+its design language. The functional wins from the rework were kept and folded
+into the premium UI:
+
+- **Added — live shift-status pill** (hero countdown row): `In 4h 30m` before
+  the shift (always, not only <2h; `In 2d` beyond 48h), `On now · till 00:30`
+  while it runs, quiet `Ended` after — re-rendered on a minute-aligned tick so
+  it never goes stale.
+- **Fixed — weekend/midnight time math is structural:**
+  `ScheduleShift.startMinutes`/`endMinutesOn` + pure
+  [`shift_window.dart`](lib/features/schedule/domain/shift_window.dart)
+  (start/end/phase on `[start, end)`, spill detection; unit-tested). Weekend
+  nights are **active past midnight until 00:30** (naive same-day math read
+  "ended" all evening), and during the 00:00–00:30 tail the hero **keeps
+  showing the running night shift** instead of flipping to "Day Off" — the
+  Sat→Sun tail crosses the week seam via `ScheduleCubit.previousSaturdayNight`.
+- **Fixed — today's still-future shift is swappable:** the week row's
+  redundant "Today" pill no longer eats the action slot when the shift hasn't
+  started (the row is already highlighted + filled day chip); it still shows
+  for today's started shift.
+- **Added — "Next shift · Thursday Night · 16:30"** line on off/leave-day
+  heroes (new `WeeklyScheduleEntity.nextShiftAfter`, unit-tested); says
+  "No more shifts this week" when the week is done.
+- **Fixed — day notes never truncate:** hero + week-row notes wrap in full
+  (were single-line ellipsized 11px captions) — notes are first-class.
+- **Added — Swaps tab warning dot (phones):** while a pending swap on a
+  **still-future** slot targets the user (stale requests filtered via
+  `SwapEligibility`, so an unanswered old request never nags).
+
+Tests: `shift_window_test.dart` (midnight rollover, phases, spill window) +
+reworked `my_schedule_tab_test.dart` (swap-on-today via a next-week fixture,
+un-truncated notes, exact leave + next-shift line, tab-dot show/stale, both
+legacy regression tests kept; every test unmounts — the countdown pill owns a
+minute Timer). Suite: **487 pass / 2 pre-existing splash failures**.
+Deferred as before: Employee Home generic "Off today" when leave exists
+(follow-up task spawned).
+
 ### Changed (2026-07-06 — Task Details activity timeline rework: hero head + ledger rows)
 
 The Task Details **activity timeline** was rebuilt from a stack of heavy

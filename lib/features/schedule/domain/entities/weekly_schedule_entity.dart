@@ -70,10 +70,35 @@ class WeeklyScheduleEntity with _$WeeklyScheduleEntity {
     return (note == null || note.trim().isEmpty) ? null : note;
   }
 
+  /// The day note split into its individual instruction lines (trimmed, blanks
+  /// dropped) — one bullet each. A note is a single stored string; managers
+  /// write one instruction per line and each becomes a bullet. Empty when
+  /// there is no note.
+  List<String> noteLinesFor(ScheduleDay day) {
+    final note = noteFor(day);
+    if (note == null) return const [];
+    return [
+      for (final line in note.split('\n'))
+        if (line.trim().isNotEmpty) line.trim(),
+    ];
+  }
+
   /// Everyone away on [day] (`uid → leave type`; never null).
   Map<String, LeaveType> leaveOn(ScheduleDay day) =>
       leave[day] ?? const <String, LeaveType>{};
 
   /// [uid]'s leave on [day], or null when they're available.
   LeaveType? leaveTypeOf(String uid, ScheduleDay day) => leaveOn(day)[uid];
+
+  /// [uid]'s next assigned slot strictly **after** [day] within this week, or
+  /// null when the week holds no further shifts. Drives the "Next shift · …"
+  /// line on off/leave days.
+  (ScheduleDay, ScheduleShift)? nextShiftAfter(String uid, ScheduleDay day) {
+    for (final d in ScheduleDay.values) {
+      if (d.index <= day.index) continue;
+      final shifts = shiftsFor(uid, d);
+      if (shifts.isNotEmpty) return (d, shifts.first);
+    }
+    return null;
+  }
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/enums/leave_type.dart';
@@ -12,18 +14,28 @@ import 'package:drop/core/widgets/drop_loading_state.dart';
 import 'package:drop/core/widgets/user_avatar.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/core/responsive/breakpoints.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/swap_eligibility.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_state.dart';
+import 'package:drop/features/schedule/domain/shift_window.dart';
 import 'package:drop/features/schedule/presentation/cubit/shift_swap_cubit.dart';
+import 'package:drop/features/schedule/presentation/cubit/shift_swap_state.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
 import 'package:drop/features/schedule/presentation/widgets/swap_view.dart';
 
-/// Employee schedule screen — premium redesign. Two tabs: "My Week" (greeting,
+/// Employee schedule screen — premium design. Two tabs: "My Week" (greeting,
 /// today's hero card with shift / manager / team, and the full week list with
 /// per-slot Swap actions) and "Swaps". Entrance and refresh both stagger-animate
 /// the content sections in with FadeTransition + SlideTransition.
+///
+/// ⚠️ **Owner ruling (2026-07-07): this premium hero/week-cards UI is THE
+/// employee schedule UI on every tier — do NOT redesign it again.** An
+/// answer-first minimal rework was built and reverted the same day (the owner
+/// wants visible craft, not reduction). Only incremental improvements inside
+/// this design language are allowed — e.g. the live countdown states, the
+/// next-shift line, un-truncated notes and the swap-on-today fix below.
 class MyScheduleScreen extends StatefulWidget {
   const MyScheduleScreen({super.key});
 
@@ -47,6 +59,10 @@ class _MyScheduleScreenState extends State<MyScheduleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Device identity, not window class: a phone rotated to landscape must not
+    // flip to the legacy tablet body mid-session.
+    final phone =
+        MediaQuery.sizeOf(context).shortestSide < Breakpoints.tablet;
     return DefaultTabController(
       length: 2,
       child: AdaptiveScaffold(
@@ -60,15 +76,15 @@ class _MyScheduleScreenState extends State<MyScheduleScreen> {
             onPressed: _load,
           ),
         ],
-        bottom: const TabBar(
+        bottom: TabBar(
           labelColor: AppColors.textPrimary,
           unselectedLabelColor: AppColors.textTertiary,
           indicatorColor: AppColors.primary,
           indicatorSize: TabBarIndicatorSize.label,
           indicatorWeight: 2,
           tabs: [
-            Tab(text: 'My Week'),
-            Tab(text: 'Swaps'),
+            const Tab(text: 'My Week'),
+            Tab(child: _SwapsTabLabel(showDot: phone)),
           ],
         ),
         body: TabBarView(
@@ -84,6 +100,51 @@ class _MyScheduleScreenState extends State<MyScheduleScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The Swaps tab label — on phones it carries a small warning dot while a swap
+/// on a **still-future** slot awaits this user's answer, so an actionable
+/// request is never invisible behind the tab. Stale pending requests (their
+/// slot already passed) are filtered out and never nag. Plain label on
+/// tablet/desktop.
+class _SwapsTabLabel extends StatelessWidget {
+  const _SwapsTabLabel({required this.showDot});
+  final bool showDot;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!showDot) return const Text('Swaps');
+    final uid = context.currentUser?.uid ?? '';
+    return BlocBuilder<ShiftSwapCubit, ShiftSwapState>(
+      builder: (context, state) {
+        final needsAnswer = state.maybeWhen(
+          loaded: (swaps, _) => swaps.any((s) =>
+              s.targetId == uid &&
+              s.status.isPending &&
+              SwapEligibility.isRequestable(s.weekStart, s.day, s.shift)),
+          orElse: () => false,
+        );
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Swaps'),
+            if (needsAnswer) ...[
+              const SizedBox(width: 6),
+              Container(
+                key: const Key('swaps-tab-dot'),
+                width: 6,
+                height: 6,
+                decoration: const BoxDecoration(
+                  color: AppColors.warning,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -218,6 +279,9 @@ class _MyWeekTabState extends State<_MyWeekTab>
                   schedule: schedule,
                   members: members,
                   uid: uid,
+                  weekStart: weekStart,
+                  onSwap: (d, s) =>
+                      _requestSwap(context, schedule, members, user, d, s),
                 ),
               ),
             ),
@@ -394,32 +458,141 @@ IconData _leaveIcon(LeaveType type) => switch (type) {
       LeaveType.pending => Icons.hourglass_empty_rounded,
     };
 
+/// Employee-facing time range with an **arrow** separator (e.g. `16:30 →
+/// 00:30`), weekend-aware. Owner-preferred form for the employee surfaces; the
+/// manager/admin/desktop grid keeps the en-dash [ScheduleShift.timeRangeOn].
+String _arrowRange(ScheduleShift shift, ScheduleDay day) =>
+    shift.timeRangeOn(day).replaceAll('–', '→');
+
+/// A quiet "has notes" indicator for the glanceable cards — the full bulleted
+/// note lives in the tap-to-open shift sheet, never duplicated on the card
+/// (owner ruling, 2026-07-07). Monochrome; the 📝 in mockups maps to the
+/// app's Material sticky-note glyph.
+class _NoteIndicator extends StatelessWidget {
+  const _NoteIndicator({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppColors.darkBg,
+        borderRadius: AppRadius.fullAll,
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.sticky_note_2_outlined,
+              size: 12, color: AppColors.textSecondary),
+          const SizedBox(width: 4),
+          Text(
+            count <= 1 ? 'Note' : '$count notes',
+            style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Opens the employee's read-only shift/day sheet — the premium detail surface
+/// the glanceable cards route into: day + shift, arrow time, the day's notes as
+/// bullets, manager, teammates, and a **Swap Shift** action when eligible.
+/// [shift] is null for an off/leave day (no time/team/swap; note + manager
+/// only). [onSwap] fires the branch's swap-request flow for (day, shift).
+void showEmployeeShiftSheet({
+  required BuildContext context,
+  required ScheduleDay day,
+  required ScheduleShift? shift,
+  required DateTime weekStart,
+  required WeeklyScheduleEntity schedule,
+  required List<UserEntity> members,
+  required String uid,
+  required LeaveType? leaveType,
+  required void Function(ScheduleDay, ScheduleShift) onSwap,
+}) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: AppColors.darkSurface,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (_) => _ShiftDetailsSheet(
+      day: day,
+      shift: shift,
+      weekStart: weekStart,
+      schedule: schedule,
+      members: members,
+      uid: uid,
+      leaveType: leaveType,
+      onSwap: onSwap,
+    ),
+  );
+}
+
 class _TodayHeroCard extends StatelessWidget {
   const _TodayHeroCard({
     required this.schedule,
     required this.members,
     required this.uid,
+    required this.weekStart,
+    required this.onSwap,
   });
 
   final WeeklyScheduleEntity schedule;
   final List<UserEntity> members;
   final String uid;
+  final DateTime weekStart;
+  final void Function(ScheduleDay, ScheduleShift) onSwap;
 
   @override
   Widget build(BuildContext context) {
     final today = ScheduleDay.today();
     final myShifts = schedule.shiftsFor(uid, today);
-    final isOff = myShifts.isEmpty;
-    final shift = isOff ? null : myShifts.first;
     final leaveType = schedule.leaveTypeOf(uid, today);
     final note = schedule.noteFor(today);
 
-    // Coworkers on the same shift(s) today.
+    // Post-midnight weekend tail (00:00–00:30): yesterday's night shift is
+    // still running — the hero keeps showing IT instead of flipping to "Day
+    // Off"/tomorrow while the employee is standing in the shop. The Saturday →
+    // Sunday tail crosses the week seam, known via the cubit's
+    // previousSaturdayNight context (read lazily, only inside the window).
+    final spillDay = ShiftWindow.spillingNightFrom(DateTime.now());
+    ScheduleDay? activeSpill;
+    if (spillDay != null) {
+      final onIt = spillDay == ScheduleDay.saturday
+          ? context.read<ScheduleCubit>().previousSaturdayNight.contains(uid)
+          : schedule.isAssigned(uid, spillDay, ScheduleShift.night);
+      if (onIt) activeSpill = spillDay;
+    }
+
+    final isOff = activeSpill == null && myShifts.isEmpty;
+    final shift = activeSpill != null
+        ? ScheduleShift.night
+        : (isOff ? null : myShifts.first);
+    // The (day, week) that anchors the shown shift's clock times and phase —
+    // during a spill it's yesterday's slot (previous week for the Sat→Sun tail).
+    final displayDay = activeSpill ?? today;
+    final phaseWeekStart = activeSpill == ScheduleDay.saturday
+        ? weekStart.subtract(const Duration(days: 7))
+        : weekStart;
+
+    // Coworkers on the same shift(s).
     final teamUids = <String>{};
-    for (final s in myShifts) {
-      teamUids.addAll(
-        schedule.employeesFor(today, s).where((u) => u != uid),
-      );
+    if (activeSpill != null) {
+      teamUids.addAll(schedule
+          .employeesFor(displayDay, ScheduleShift.night)
+          .where((u) => u != uid));
+    } else {
+      for (final s in myShifts) {
+        teamUids.addAll(
+          schedule.employeesFor(today, s).where((u) => u != uid),
+        );
+      }
     }
     final teamUsers = teamUids
         .map((t) => userForUid(t, members))
@@ -441,11 +614,13 @@ class _TodayHeroCard extends StatelessWidget {
       ),
       child: Column(
         children: [
-          _buildHeader(today, shift, isOff, leaveType, note),
+          _buildHeader(today, displayDay, phaseWeekStart, shift, isOff,
+              leaveType, note),
           const Divider(height: 1, color: AppColors.darkBorder),
           _buildTeamRow(teamUsers, managers, isOff),
           const Divider(height: 1, color: AppColors.darkBorder),
-          _buildDetailsRow(context, today, shift, teamUsers, managers),
+          _buildDetailsRow(
+              context, displayDay, phaseWeekStart, shift, leaveType, note),
         ],
       ),
     );
@@ -453,6 +628,8 @@ class _TodayHeroCard extends StatelessWidget {
 
   Widget _buildHeader(
     ScheduleDay today,
+    ScheduleDay displayDay,
+    DateTime phaseWeekStart,
     ScheduleShift? shift,
     bool isOff,
     LeaveType? leaveType,
@@ -500,26 +677,35 @@ class _TodayHeroCard extends StatelessWidget {
                 ),
                 if (!isOff) ...[
                   const SizedBox(height: 4),
-                  _CountdownRow(shift: shift!, day: today),
+                  _CountdownRow(
+                      shift: shift!,
+                      day: displayDay,
+                      weekStart: phaseWeekStart),
                 ],
-                if (note != null) ...[
-                  const SizedBox(height: 6),
+                if (isOff) ...[
+                  // The off/leave answer's natural follow-up — "so when do I
+                  // work next?" — from the already-loaded week.
+                  const SizedBox(height: 4),
                   Row(
                     children: [
-                      const Icon(Icons.sticky_note_2_outlined,
+                      const Icon(Icons.event_outlined,
                           size: 12, color: AppColors.textTertiary),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(
-                          note,
+                          _nextShiftLabel(today),
                           style: AppTypography.caption
                               .copyWith(color: AppColors.textSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],
                   ),
+                ],
+                if (note != null) ...[
+                  const SizedBox(height: 8),
+                  // Glanceable indicator only — the full bulleted note lives in
+                  // the tap-to-open sheet below (owner ruling, 2026-07-07).
+                  _NoteIndicator(count: schedule.noteLinesFor(displayDay).length),
                 ],
               ],
             ),
@@ -527,6 +713,13 @@ class _TodayHeroCard extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _nextShiftLabel(ScheduleDay today) {
+    final next = schedule.nextShiftAfter(uid, today);
+    if (next == null) return 'No more shifts this week';
+    final start = next.$2.timeRangeOn(next.$1).split('–').first.trim();
+    return 'Next shift · ${next.$1.label} ${next.$2.label} · $start';
   }
 
   Widget _buildTeamRow(
@@ -599,15 +792,28 @@ class _TodayHeroCard extends StatelessWidget {
 
   Widget _buildDetailsRow(
     BuildContext context,
-    ScheduleDay today,
+    ScheduleDay displayDay,
+    DateTime phaseWeekStart,
     ScheduleShift? shift,
-    List<UserEntity> team,
-    List<UserEntity> managers,
+    LeaveType? leaveType,
+    String? note,
   ) {
+    // There's a sheet worth opening whenever the day has a shift or a note.
+    final hasSheet = shift != null || note != null;
     return InkWell(
-      onTap: shift == null
+      onTap: !hasSheet
           ? null
-          : () => _showShiftDetails(context, today, shift, team, managers),
+          : () => showEmployeeShiftSheet(
+                context: context,
+                day: displayDay,
+                shift: shift,
+                weekStart: phaseWeekStart,
+                schedule: schedule,
+                members: members,
+                uid: uid,
+                leaveType: leaveType,
+                onSwap: onSwap,
+              ),
       borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(AppRadius.card)),
       child: Padding(
@@ -615,42 +821,21 @@ class _TodayHeroCard extends StatelessWidget {
             horizontal: AppSpacing.lg, vertical: AppSpacing.md),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today_outlined,
+            Icon(shift != null ? Icons.calendar_today_outlined : Icons.notes_rounded,
                 size: 15, color: AppColors.textSecondary),
             const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
-                'View Shift Details',
+                shift != null ? 'View shift details' : 'View day details',
                 style: AppTypography.label
                     .copyWith(color: AppColors.textSecondary),
               ),
             ),
-            const Icon(Icons.chevron_right_rounded,
-                size: 18, color: AppColors.textTertiary),
+            if (hasSheet)
+              const Icon(Icons.chevron_right_rounded,
+                  size: 18, color: AppColors.textTertiary),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showShiftDetails(
-    BuildContext context,
-    ScheduleDay day,
-    ScheduleShift shift,
-    List<UserEntity> team,
-    List<UserEntity> managers,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppColors.darkSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (_) => _ShiftDetailsSheet(
-        day: day,
-        shift: shift,
-        team: team,
-        managers: managers,
       ),
     );
   }
@@ -691,62 +876,125 @@ class _ShiftIconBox extends StatelessWidget {
   }
 }
 
-// ─── Countdown Row (time + "In X min" pill) ───────────────────────────────────
+// ─── Countdown Row (time + live shift-status pill) ────────────────────────────
 
-class _CountdownRow extends StatelessWidget {
-  const _CountdownRow({required this.shift, required this.day});
+/// Time range + a live status pill: `In 4h 30m` before the shift, `On now ·
+/// till 00:30` while it runs (weekend nights correctly stay "on" past midnight
+/// until 00:30 — the phase comes from [ShiftWindow], never from same-day clock
+/// math), and a quiet `Ended` after. Re-renders on a minute-aligned tick so
+/// the countdown is never stale.
+class _CountdownRow extends StatefulWidget {
+  const _CountdownRow({
+    required this.shift,
+    required this.day,
+    required this.weekStart,
+  });
+
   final ScheduleShift shift;
   final ScheduleDay day;
 
+  /// The week anchoring this (day, shift) slot — during the post-midnight
+  /// Saturday-night tail this is the *previous* week's Sunday.
+  final DateTime weekStart;
+
+  @override
+  State<_CountdownRow> createState() => _CountdownRowState();
+}
+
+class _CountdownRowState extends State<_CountdownRow> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleTick();
+  }
+
+  /// Self-rescheduling tick aligned to the wall-clock minute, so "In 45m"
+  /// counts down honestly instead of freezing at its mount-time value.
+  void _scheduleTick() {
+    _tick?.cancel();
+    _tick = Timer(Duration(seconds: 61 - DateTime.now().second), () {
+      if (!mounted) return;
+      setState(() {});
+      _scheduleTick();
+    });
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final countdown = _countdown(shift);
+    final now = DateTime.now();
+    final phase =
+        ShiftWindow.phase(widget.weekStart, widget.day, widget.shift, now);
+    final (label, ended) = switch (phase) {
+      ShiftPhase.upcoming => (
+          _countdown(
+              ShiftWindow.start(widget.weekStart, widget.day, widget.shift),
+              now),
+          false
+        ),
+      ShiftPhase.active => (
+          'On now · till ${widget.shift.timeRangeOn(widget.day).split('–').last.trim()}',
+          false
+        ),
+      ShiftPhase.finished => ('Ended', true),
+    };
+
     return Row(
       children: [
         const Icon(Icons.access_time_rounded,
             size: 12, color: AppColors.textTertiary),
         const SizedBox(width: 4),
         Text(
-          // Weekend nights (Thu/Fri/Sat) run till 00:30.
-          shift.timeRangeOn(day),
+          // Weekend nights (Thu/Fri/Sat) run till 00:30. Arrow form on the
+          // employee surfaces.
+          _arrowRange(widget.shift, widget.day),
           style: AppTypography.caption
               .copyWith(color: AppColors.textSecondary, fontWeight: FontWeight.w500),
         ),
-        if (countdown != null) ...[
-          const SizedBox(width: AppSpacing.sm),
-          Container(
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
             decoration: BoxDecoration(
-              color: AppColors.primarySurface,
+              color: ended
+                  ? AppColors.darkSurfaceElevated
+                  : AppColors.primarySurface,
               borderRadius: AppRadius.fullAll,
-              border: Border.all(color: AppColors.primary.withAlpha(40)),
+              border: Border.all(
+                  color: ended
+                      ? AppColors.darkBorder
+                      : AppColors.primary.withAlpha(40)),
             ),
             child: Text(
-              countdown,
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: AppTypography.caption.copyWith(
-                color: AppColors.primary,
+                color: ended ? AppColors.textTertiary : AppColors.primary,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-        ],
+        ),
       ],
     );
   }
 
-  static String? _countdown(ScheduleShift shift) {
-    final startStr = shift.timeRange.split('–').first.trim();
-    final parts = startStr.split(':');
-    if (parts.length != 2) return null;
-    final h = int.tryParse(parts[0]);
-    final m = int.tryParse(parts[1]);
-    if (h == null || m == null) return null;
-    final now = DateTime.now();
-    final start = DateTime(now.year, now.month, now.day, h, m);
+  static String _countdown(DateTime start, DateTime now) {
     final diff = start.difference(now);
-    if (diff.isNegative || diff.inMinutes == 0) return null;
-    if (diff.inMinutes < 120) return 'In ${diff.inMinutes}m';
-    return null;
+    if (diff.inHours >= 48) return 'In ${diff.inDays}d';
+    if (diff.inHours >= 1) {
+      final m = diff.inMinutes % 60;
+      return m == 0 ? 'In ${diff.inHours}h' : 'In ${diff.inHours}h ${m}m';
+    }
+    return 'In ${diff.inMinutes < 1 ? 1 : diff.inMinutes}m';
   }
 }
 
@@ -829,70 +1077,192 @@ class _TeamAvatars extends StatelessWidget {
 
 // ─── Shift Details Bottom Sheet ───────────────────────────────────────────────
 
+/// The employee's read-only detail surface for a day (the tap-to-open premium
+/// sheet from the glanceable cards): day + shift, arrow time, the manager's
+/// note as bullets, manager, teammates, and a **Swap Shift** action when the
+/// slot is still requestable. [shift] is null for an off/leave day — then it's
+/// a day/note view (no time, team or swap).
 class _ShiftDetailsSheet extends StatelessWidget {
   const _ShiftDetailsSheet({
     required this.day,
     required this.shift,
-    required this.team,
-    required this.managers,
+    required this.weekStart,
+    required this.schedule,
+    required this.members,
+    required this.uid,
+    required this.leaveType,
+    required this.onSwap,
   });
 
   final ScheduleDay day;
-  final ScheduleShift shift;
-  final List<UserEntity> team;
-  final List<UserEntity> managers;
+  final ScheduleShift? shift;
+  final DateTime weekStart;
+  final WeeklyScheduleEntity schedule;
+  final List<UserEntity> members;
+  final String uid;
+  final LeaveType? leaveType;
+  final void Function(ScheduleDay, ScheduleShift) onSwap;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = shift;
+    final noteLines = schedule.noteLinesFor(day);
+    final team = s == null
+        ? const <UserEntity>[]
+        : schedule
+            .employeesFor(day, s)
+            .where((u) => u != uid)
+            .map((u) => userForUid(u, members))
+            .whereType<UserEntity>()
+            .toList();
+    final managers =
+        members.where((m) => m.role.isManager || m.role.isAdmin).toList();
+    final canSwap = s != null &&
+        SwapEligibility.isRequestable(weekStart, day, s) &&
+        schedule.employeesFor(day, s.opposite).any((u) => u != uid);
+
+    final title = s != null
+        ? '${s.label} Shift'
+        : (leaveType != null ? _leaveLabel(leaveType!) : 'Day Off');
+    final subtitle = s != null
+        ? '${day.label} · ${_arrowRange(s, day)}'
+        : day.label;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.pagePadding, AppSpacing.lg, AppSpacing.pagePadding, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: const BoxDecoration(
+                  color: AppColors.darkBorder,
+                  borderRadius: AppRadius.fullAll,
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            // Header — day / shift / arrow time
+            Row(
+              children: [
+                _ShiftIconBox(
+                    shift: shift, leaveType: shift == null ? leaveType : null),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: AppTypography.h3),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          if (s != null) ...[
+                            const Icon(Icons.access_time_rounded,
+                                size: 13, color: AppColors.textTertiary),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(subtitle,
+                              style: AppTypography.caption
+                                  .copyWith(color: AppColors.textTertiary)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // Notes as bullets — the full note, never hidden or truncated.
+            if (noteLines.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xl),
+              Row(
+                children: [
+                  const Icon(Icons.sticky_note_2_outlined,
+                      size: 15, color: AppColors.textSecondary),
+                  const SizedBox(width: 6),
+                  Text('Notes', style: AppTypography.caption),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              for (final line in noteLines) _NoteBullet(text: line),
+            ],
+            const SizedBox(height: AppSpacing.xl),
+            if (managers.isNotEmpty) ...[
+              Text('Manager', style: AppTypography.caption),
+              const SizedBox(height: AppSpacing.sm),
+              _MemberTile(user: managers.first),
+              const SizedBox(height: AppSpacing.lg),
+            ],
+            if (s != null)
+              if (team.isNotEmpty) ...[
+                Text('Team on this shift', style: AppTypography.caption),
+                const SizedBox(height: AppSpacing.sm),
+                ...team.map((u) => _MemberTile(user: u)),
+              ] else
+                Text('You are the only one on this shift.',
+                    style: AppTypography.body),
+            if (canSwap) ...[
+              const SizedBox(height: AppSpacing.xl),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    onSwap(day, shift!);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.darkBorder),
+                    padding:
+                        const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: AppRadius.buttonAll),
+                  ),
+                  icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                  label: const Text('Swap Shift'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One note line as a bullet — the manager writes one instruction per line.
+class _NoteBullet extends StatelessWidget {
+  const _NoteBullet({required this.text});
+  final String text;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.pagePadding, AppSpacing.lg, AppSpacing.pagePadding, 40),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle
-          Center(
+          Padding(
+            padding: const EdgeInsets.only(top: 7, right: 10),
             child: Container(
-              width: 40,
+              width: 4,
               height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.darkBorder,
-                borderRadius: AppRadius.fullAll,
+              decoration: const BoxDecoration(
+                color: AppColors.textSecondary,
+                shape: BoxShape.circle,
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
-            children: [
-              _ShiftIconBox(shift: shift),
-              const SizedBox(width: AppSpacing.md),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${shift.label} Shift', style: AppTypography.h3),
-                  const SizedBox(height: 2),
-                  Text(shift.timeRangeOn(day),
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textTertiary)),
-                ],
-              ),
-            ],
+          Expanded(
+            child: Text(
+              text,
+              style: AppTypography.body.copyWith(color: AppColors.textPrimary),
+            ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          if (managers.isNotEmpty) ...[
-            Text('Manager', style: AppTypography.caption),
-            const SizedBox(height: AppSpacing.sm),
-            _MemberTile(user: managers.first),
-            const SizedBox(height: AppSpacing.lg),
-          ],
-          if (team.isNotEmpty) ...[
-            Text('Team on this shift', style: AppTypography.caption),
-            const SizedBox(height: AppSpacing.sm),
-            ...team.map((u) => _MemberTile(user: u)),
-          ] else
-            Text('You are the only one on this shift.',
-                style: AppTypography.body),
         ],
       ),
     );
@@ -1006,9 +1376,13 @@ class _WeekDayRow extends StatelessWidget {
     String? note,
   }) {
     final isOff = shift == null;
+    final uid = user?.uid ?? '';
+    final noteCount = note == null ? 0 : schedule.noteLinesFor(day).length;
+    // A row opens the sheet when there's a shift to detail or a note to read.
+    // Plain off days stay glanceable and inert (owner: keep cards clean).
+    final hasSheet = shift != null || note != null;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+    final row = Container(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md, vertical: AppSpacing.md),
       decoration: BoxDecoration(
@@ -1049,7 +1423,7 @@ class _WeekDayRow extends StatelessWidget {
           ),
           const SizedBox(width: AppSpacing.md),
 
-          // ── Shift name + time ─────────────────────────────────
+          // ── Shift name + time + note indicator ────────────────
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1067,8 +1441,8 @@ class _WeekDayRow extends StatelessWidget {
                   ),
                 ),
                 if (!isOff)
-                  // Weekend nights (Thu/Fri/Sat) run till 00:30.
-                  Text(shift.timeRangeOn(day), style: AppTypography.caption),
+                  // Weekend nights (Thu/Fri/Sat) run till 00:30 — arrow form.
+                  Text(_arrowRange(shift, day), style: AppTypography.caption),
                 if (!isOff && leaveType != null)
                   // Rostered AND marked away — say it, the manager resolves.
                   Text(
@@ -1079,96 +1453,51 @@ class _WeekDayRow extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                if (note != null)
-                  Row(
-                    children: [
-                      const Icon(Icons.sticky_note_2_outlined,
-                          size: 11, color: AppColors.textTertiary),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: Text(
-                          note,
-                          style: AppTypography.caption,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
+                if (note != null) ...[
+                  const SizedBox(height: 6),
+                  // Indicator only — the bullets live in the tap-to-open sheet.
+                  _NoteIndicator(count: noteCount),
+                ],
               ],
             ),
           ),
 
-          // ── Action: Swap / Today / — ──────────────────────────
-          if (isOff)
-            const SizedBox(
-              width: 40,
-              child: Text('—',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                      color: AppColors.textTertiary, fontSize: 16)),
-            )
-          else if (isToday)
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: AppRadius.fullAll,
-              ),
-              child: Text(
-                'Today',
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.onPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            )
-          else if (_canSwap(shift))
-            GestureDetector(
-              onTap: () => onSwap(day, shift),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.darkSurfaceElevated,
-                  borderRadius: AppRadius.fullAll,
-                  border: Border.all(color: AppColors.darkBorder),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.swap_horiz_rounded,
-                        size: 15, color: AppColors.textPrimary),
-                    const SizedBox(width: 5),
-                    Text(
-                      'Swap',
-                      style: AppTypography.caption.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            // Past / in-progress shift — not swappable, so don't offer it.
-            SizedBox(
-              width: 44,
-              child: Text('Past',
-                  textAlign: TextAlign.center,
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textTertiary)),
+          // ── Affordance: chevron when the row opens a sheet ────
+          if (hasSheet)
+            const Padding(
+              padding: EdgeInsets.only(left: AppSpacing.sm),
+              child: Icon(Icons.chevron_right_rounded,
+                  size: 18, color: AppColors.textTertiary),
             ),
         ],
       ),
     );
-  }
 
-  /// A shift is swappable only while its start is still in the future — keep the
-  /// offered action in lock-step with [SwapEligibility] (no swap on a past slot).
-  bool _canSwap(ScheduleShift? shift) =>
-      shift != null && SwapEligibility.isRequestable(weekStart, day, shift);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: hasSheet
+          ? Material(
+              color: Colors.transparent,
+              borderRadius: AppRadius.cardAll,
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => showEmployeeShiftSheet(
+                  context: context,
+                  day: day,
+                  shift: shift,
+                  weekStart: weekStart,
+                  schedule: schedule,
+                  members: members,
+                  uid: uid,
+                  leaveType: leaveType,
+                  onSwap: onSwap,
+                ),
+                child: row,
+              ),
+            )
+          : row,
+    );
+  }
 }
 
 // ─── Day Chip ─────────────────────────────────────────────────────────────────
