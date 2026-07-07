@@ -2182,8 +2182,9 @@ exports.onRequestCreated = onDocumentCreated(`${REQUESTS}/{requestId}`, async (e
   const approvers = await resolveRequestApprovers(data, requesterUid);
   await writeRequestNotifications(approvers, {
     type: "requestSubmitted",
-    title: "New Request",
-    body: summary || "A new request needs your approval",
+    title: "New approval request",
+    body: summary ||
+      `${String(data.requesterName || "An employee")} asked for your approval`,
     requestId,
     senderUid: requesterUid,
   });

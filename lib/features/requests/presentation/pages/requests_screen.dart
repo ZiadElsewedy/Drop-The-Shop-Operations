@@ -54,7 +54,11 @@ class _RequestsScreenState extends State<RequestsScreen> {
     final user = context.currentUser;
     return AdaptiveScaffold(
       title: 'Requests',
-      subtitle: _isApprover ? 'Approvals across your operation' : 'My requests',
+      subtitle: context.isManager
+          ? 'Approval requests from your branch'
+          : context.isAdmin
+              ? 'Approval requests across every branch'
+              : 'Your approval requests',
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => context.push(RouteNames.requestsCreate),
         backgroundColor: AppColors.primary,
@@ -150,7 +154,7 @@ class _Body extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           if (filtered.isEmpty)
-            _EmptyState(hasAny: requests.isNotEmpty, isApprover: isApprover)
+            _EmptyState(hasAny: requests.isNotEmpty)
           else
             ..._rows(context, filtered),
         ],
@@ -295,21 +299,29 @@ class _ArchiveDivider extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.hasAny, required this.isApprover});
+  const _EmptyState({required this.hasAny});
   final bool hasAny;
-  final bool isApprover;
 
   @override
   Widget build(BuildContext context) {
+    final String message;
+    if (hasAny) {
+      message = 'No requests match this filter.';
+    } else if (context.isManager) {
+      message =
+          'When someone on your branch asks for your approval, it shows up here.';
+    } else if (context.isAdmin) {
+      message = 'Approval requests from every branch show up here.';
+    } else {
+      message =
+          'Need to leave early, use your staff discount, or get the OK on '
+          'something? Send your manager a request.';
+    }
     return Padding(
       padding: const EdgeInsets.only(top: AppSpacing.xxxl),
       child: DropEmptyState(
         title: hasAny ? 'Nothing here' : 'No requests yet',
-        message: hasAny
-            ? 'No requests match this filter.'
-            : isApprover
-                ? 'When your team files a request, it lands here for approval.'
-                : 'Need something approved? File a request in seconds.',
+        message: message,
       ),
     );
   }

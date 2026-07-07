@@ -81,8 +81,9 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
     final type = _type;
     return AdaptiveScaffold(
       title: type == null ? 'New Request' : type.label,
-      subtitle:
-          type == null ? 'What do you need approved?' : 'Add a short reason',
+      subtitle: type == null
+          ? 'What do you need your manager to approve?'
+          : 'Add a short reason',
       contentMaxWidth: 640,
       leading: type != null && widget.initialType == null
           ? IconButton(
@@ -111,7 +112,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
       children: [
         _TypeSummary(type: type),
         const SizedBox(height: AppSpacing.xl),
-        Text('Message',
+        Text('Message to your manager',
             style: AppTypography.label.copyWith(
                 color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
         const SizedBox(height: AppSpacing.sm),
@@ -123,7 +124,7 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
           textCapitalization: TextCapitalization.sentences,
           style: AppTypography.body.copyWith(color: AppColors.textPrimary),
           decoration: InputDecoration(
-            hintText: 'What do you need, and why? Keep it short.',
+            hintText: 'Tell your manager what you need, and why. Keep it short.',
             hintStyle:
                 AppTypography.body.copyWith(color: AppColors.textTertiary),
             filled: true,

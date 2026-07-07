@@ -38,11 +38,11 @@ enum RequestType {
         RequestType.giftApproval => 'Give a customer a complimentary gift',
         RequestType.stockRequest => 'Pull stock from another branch',
         RequestType.maintenance => 'Report something broken or unsafe',
-        RequestType.customerIssue => 'Escalate a customer situation',
-        RequestType.cashRequest => 'Request a cash float or change',
+        RequestType.customerIssue => 'Get your manager\'s help with a customer',
+        RequestType.cashRequest => 'Ask for a cash float or change',
         RequestType.equipmentRequest => 'Ask for a tool or device',
-        RequestType.branchSupport => 'Request help or cover from another branch',
-        RequestType.other => 'Something else that needs approval',
+        RequestType.branchSupport => 'Ask another branch for help or cover',
+        RequestType.other => 'Anything else that needs a manager\'s OK',
       };
 
   /// Parses the stored string; unknown/missing → [other] (the neutral catch-all).
