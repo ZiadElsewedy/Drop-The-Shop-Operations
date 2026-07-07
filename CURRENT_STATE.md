@@ -11,8 +11,64 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-07 (Configurable shift hours — end times are data)
-**Version:** 1.0.0+1 · **Branch:** `feature/ui-tasks` (DROP — monochrome premium desktop UX)
+**Last updated:** 2026-07-07 (Work-type framework — polymorphic tasks)
+**Version:** 1.0.0+1 · **Branch:** `feature/work-management-system` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Work-type framework — polymorphic tasks (2026-07-07)
+
+A task is no longer just title + description + checklist. Each **operational work
+type owns its own fields, milestones and rules** behind a Strategy + Registry, so
+**adding a new kind of work is one definition file + one line in the registry** —
+no `switch`, no screen edits, no rules change (Open/Closed).
+
+- **Domain kernel** — `lib/features/task/domain/work_types/`, Flutter-free +
+  unit-testable. `WorkTypeDefinition` (Strategy) + `BaseWorkType` (parity
+  defaults, override-only-what-differs); `WorkTypeRegistry` resolves by a stable
+  string id, **unknown/legacy/null → `general`** (safe rollback, no migration).
+  Supporting value objects: `WorkFieldSpec`/`WorkFieldKind` (9 kinds,
+  self-validating; `capturedAtCompletion` → `setupFields`/`completionFields`),
+  `WorkContext` (entity-decoupled live snapshot), `WorkDraft` (create-time),
+  `WorkEvent` (per-type milestones that ride `activityLog.status` — **no
+  `TaskStatus` enum growth**), `ReviewDisposition` (`standard`/`fastTrack`),
+  `WorkValidation`. `TaskWorkX` extension is the one adapter between entity and
+  kernel.
+- **5 real types** (each its own file in `definitions/`): **General** (parity),
+  **Transfer/Handover** (dispatch→receive handshake, proof-on-dispatch,
+  peer-confirmed fast-track), **Purchase/Errand** (budget vs spend, receipt,
+  over-budget/reimbursement → standard review), **Inventory Count** (variance,
+  discrepancy-must-be-explained, reconciled → fast-track), **Inspection** (reuses
+  the checklist as points marked pass/warn/fail, any fail → standard review).
+- **Persistence (additive, no migration):** `TaskEntity`/`TaskModel` gained
+  `workType` (string, default `general`) + `data` (`Map<String,dynamic>`;
+  `DateTime ↔ Timestamp` converted, recursing nested maps). Old docs default
+  cleanly.
+- **Dynamic create form** — `WorkTypePicker` (chips) + `DynamicWorkForm` (9 field
+  kinds, inline setup errors) in the create sheet; `work_type_presenter.dart`
+  maps id→monochrome icon (id-keyed with a fallback, so a new type needs no
+  presenter edit). Type is locked in edit mode.
+- **Adaptive details** — `WorkTypePanel` (both layouts) shows the summary/metric,
+  a manager **"Auto-approvable"** hint, read-only setup fields, the **inspection
+  pass/warn/fail** marker (red only for the fail case), employee **completion
+  capture** (counted qty / amount spent, buffered → Save), and the **milestone
+  spine** (Log next step). The plain checklist is suppressed when a type owns it
+  (`usesChecklistAsPoints`).
+- **Workflow** — submit routes through `validateSubmission` (proof-in-flight
+  counted); reconciled/OK work fast-tracks to the top of Pending Review. New
+  cubit methods `updateWorkData` + `logWorkEvent` (single writes; **permitted for
+  an assignee by the existing denylist rules — no rules change**).
+- **Rules note:** the deployed `tasks` update rule is a denylist (assignee may
+  write any non-frozen field), so employee `data`/milestone writes need **no
+  rules deploy**.
+- **Tests:** `work_type_registry_test.dart` (22), `task_model_work_type_test.dart`,
+  `dynamic_work_form_test.dart` (8), `work_type_panel_test.dart` (4),
+  `task_submission_gate_test.dart` (2). Full suite green (the only 2 failures are
+  the pre-existing splash-centering geometry tests, unrelated).
+- **Not built (by design):** recurring *shift templates* stay General-only for
+  now (guarded — no silent drop; templates don't yet carry a work type);
+  cross-user Transfer receiver-identity confirmation and a server-side
+  reimbursement payout are future extensions.
 
 ---
 

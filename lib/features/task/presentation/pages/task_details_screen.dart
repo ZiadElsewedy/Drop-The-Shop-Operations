@@ -22,6 +22,7 @@ import 'package:drop/features/auth/presentation/widgets/app_button.dart';
 import 'package:drop/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:drop/features/task/domain/entities/checklist_item.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/domain/work_types/task_work_x.dart';
 import 'package:drop/features/task/presentation/attachment_format.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/cubit/task_state.dart';
@@ -33,6 +34,8 @@ import 'package:drop/features/task/presentation/widgets/submission_loading_overl
 import 'package:drop/features/task/presentation/widgets/task_action_sheets.dart';
 import 'package:drop/features/task/presentation/widgets/task_card.dart';
 import 'package:drop/features/task/presentation/widgets/task_surface.dart';
+import 'package:drop/features/task/presentation/widgets/work_type_panel.dart';
+import 'package:drop/features/task/presentation/work_type_presenter.dart';
 
 /// Full-screen task details for all roles. Employees work through their
 /// checklist and submit proof here. Managers see full context + review controls.
@@ -242,6 +245,21 @@ class _DetailsView extends StatelessWidget {
             const SizedBox(height: AppSpacing.xl),
           ],
 
+          // ── Work type (adaptive) ───────────────────────────────
+          if (WorkTypePanel.hasContentFor(task)) ...[
+            _Section(
+              icon: WorkTypePresenter.iconFor(task.workType),
+              title: task.workDefinition.label,
+              child: WorkTypePanel(
+                task: task,
+                cubit: cubit,
+                interactive: isEmployee && task.status == TaskStatus.started,
+                showReviewHint: isManagerOrAdmin,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+          ],
+
           // ── Reference images (manager-attached) ────────────────
           if (task.hasReferences) ...[
             _Section(
@@ -269,7 +287,7 @@ class _DetailsView extends StatelessWidget {
           ],
 
           // ── Checklist ──────────────────────────────────────────
-          if (task.hasChecklist) ...[
+          if (task.hasChecklist && !task.workDefinition.usesChecklistAsPoints) ...[
             _Section(
               icon: Icons.checklist_rounded,
               title: 'Checklist',
@@ -407,6 +425,20 @@ class _DetailsView extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
+              if (WorkTypePanel.hasContentFor(task)) ...[
+                _Section(
+                  icon: WorkTypePresenter.iconFor(task.workType),
+                  title: task.workDefinition.label,
+                  child: WorkTypePanel(
+                    task: task,
+                    cubit: cubit,
+                    interactive:
+                        isEmployee && task.status == TaskStatus.started,
+                    showReviewHint: isManagerOrAdmin,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xl),
+              ],
               if (task.hasReferences) ...[
                 _Section(
                   icon: Icons.image_outlined,
@@ -420,7 +452,7 @@ class _DetailsView extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              if (task.hasChecklist) ...[
+              if (task.hasChecklist && !task.workDefinition.usesChecklistAsPoints) ...[
                 _Section(
                   icon: Icons.checklist_rounded,
                   title: 'Checklist',

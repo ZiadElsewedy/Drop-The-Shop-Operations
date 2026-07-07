@@ -16,6 +16,8 @@ import 'package:drop/core/widgets/live_list_item.dart';
 import 'package:drop/core/widgets/responsive_card_grid.dart';
 import 'package:drop/core/widgets/user_avatar.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/domain/work_types/task_work_x.dart';
+import 'package:drop/features/task/domain/work_types/work_review.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/cubit/task_state.dart';
 import 'package:drop/features/task/presentation/widgets/manager_task_card.dart';
@@ -280,24 +282,40 @@ class _PendingReviewScreenState extends State<PendingReviewScreen> {
         ),
       );
     }
+    // The "manager fast-path": work the type says already checks out (a
+    // reconciled count, an inspection with no failures, a within-budget errand)
+    // floats to the top for one-tap approval. A stable partition preserves the
+    // existing stream order within each group.
+    bool isFast(TaskEntity t) =>
+        t.workDefinition.reviewDisposition(t.workContext) ==
+        ReviewDisposition.fastTrack;
+    final ordered = [
+      for (final t in mine) if (isFast(t)) t,
+      for (final t in mine) if (!isFast(t)) t,
+    ];
+    final fastCount = mine.where(isFast).length;
     return ListView(
       key: const PageStorageKey('pr-leaf'),
       padding: const EdgeInsets.all(AppSpacing.pagePadding),
       children: [
+        if (fastCount > 0) ...[
+          _FastTrackNote(count: fastCount),
+          const SizedBox(height: AppSpacing.md),
+        ],
         ResponsiveCardGrid(
           runSpacing: 0, // ManagerTaskCard (via TaskCard) carries its own margin
           maxItemWidth: 480,
           children: [
-            for (var i = 0; i < mine.length; i++)
+            for (var i = 0; i < ordered.length; i++)
               LiveListItem(
-                key: ValueKey('t:${mine[i].id}'),
-                isNew: freshIds.contains(mine[i].id),
+                key: ValueKey('t:${ordered[i].id}'),
+                isNew: freshIds.contains(ordered[i].id),
                 entranceDelay: Duration(milliseconds: i * 40),
                 child: ManagerTaskCard(
-                  task: mine[i],
+                  task: ordered[i],
                   directory: cubit.directory,
                   isAdmin: true,
-                  defaultBranchId: mine[i].branchId ?? '',
+                  defaultBranchId: ordered[i].branchId ?? '',
                 ),
               ),
           ],
@@ -436,6 +454,41 @@ class _DrillRow extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           const Icon(Icons.chevron_right_rounded,
               size: 20, color: AppColors.textTertiary),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Fast-path note: reconciled / passed / within-budget work sorts first ──
+class _FastTrackNote extends StatelessWidget {
+  const _FastTrackNote({required this.count});
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bolt_rounded,
+              size: 18, color: AppColors.textSecondary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(
+              count == 1
+                  ? '1 task is ready to fast-track — it already checks out.'
+                  : '$count tasks are ready to fast-track — they already check out.',
+              style: AppTypography.caption
+                  .copyWith(color: AppColors.textSecondary),
+            ),
+          ),
         ],
       ),
     );

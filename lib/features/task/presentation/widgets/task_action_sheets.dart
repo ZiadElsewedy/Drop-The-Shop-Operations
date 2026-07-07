@@ -21,9 +21,12 @@ import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/domain/entities/task_template_entity.dart';
 import 'package:drop/features/task/presentation/attachment_format.dart';
+import 'package:drop/features/task/domain/work_types/work_draft.dart';
+import 'package:drop/features/task/domain/work_types/work_type_registry.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/widgets/attachment_gallery.dart';
 import 'package:drop/features/task/presentation/widgets/attachment_picker.dart';
+import 'package:drop/features/task/presentation/widgets/dynamic_work_form.dart';
 
 /// Create or edit a task (manager/admin). For a manager the branch is fixed to
 /// [defaultBranchId]; an admin **picks** an existing branch from a dropdown
@@ -147,6 +150,15 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
       text: widget.existing?.description ?? widget.prefill?.description ?? '');
   late TaskPriority _priority =
       widget.existing?.priority ?? widget.prefill?.priority ?? TaskPriority.normal;
+
+  /// Work-type selection + its schema-driven field values. The type is chosen on
+  /// a new task (locked when editing — a task's kind never changes mid-life);
+  /// [_workData] holds the values for the type's dynamic fields, seeded from an
+  /// existing task and reset when the type changes.
+  late String _workType = widget.existing?.workType ?? 'general';
+  late Map<String, dynamic> _workData = {...?widget.existing?.data};
+  Map<String, String> _workFieldErrors = const {};
+
   late DateTime? _deadline = widget.existing?.deadline;
   late RecurrenceFrequency _recurrence =
       widget.existing?.recurrence?.frequency ?? RecurrenceFrequency.none;
@@ -309,6 +321,22 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     final description = _desc.text.trim().isEmpty ? null : _desc.text.trim();
     final checklist = _buildChecklist();
 
+    // Work-type setup gate — each type validates its own fields (a general task
+    // declares none, so this is a no-op for it).
+    final workDef = WorkTypeRegistry.instance.byId(_workType);
+    final setup = workDef.validateSetup(WorkDraft(
+      data: _workData,
+      checklistCount: checklist.length,
+      assigneeCount: _assignees.length,
+    ));
+    if (!setup.ok) {
+      setState(() {
+        _workFieldErrors = setup.fieldErrors;
+        _error = setup.firstError;
+      });
+      return;
+    }
+
     final existing = widget.existing;
     if (existing == null) {
       if (_assignmentType == TaskAssignmentType.shift) {
@@ -317,6 +345,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             title: title,
             description: description,
             type: TaskType.daily,
+            workType: _workType,
+            data: _workData,
             priority: _priority,
             branchId: branchId,
             deadline: _deadline,
@@ -327,6 +357,15 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             instanceDate: _deadline,
           );
         } else {
+          // Recurring shift templates generate general instances; a specialised
+          // work type would be silently dropped, so require General here (until
+          // templates learn to carry a work type).
+          if (_workType != 'general') {
+            setState(() => _error =
+                'Recurring shift templates support General tasks only for now — '
+                'choose "Once", or set the work type to General.');
+            return;
+          }
           widget.cubit.createRecurringShiftTemplate(
             title: title,
             description: description,
@@ -351,6 +390,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
           title: title,
           description: description,
           type: inferredType,
+          workType: _workType,
+          data: _workData,
           priority: _priority,
           branchId: branchId,
           deadline: _deadline,
@@ -368,6 +409,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
         existing.copyWith(
           title: title,
           description: description,
+          workType: _workType,
+          data: _workData,
           priority: _priority,
           branchId: branchId,
           deadline: _deadline,
@@ -409,6 +452,24 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             autofocus: true,
           ),
           const SizedBox(height: AppSpacing.md),
+          // Work type — picking the kind of work regenerates the type-specific
+          // fields below it. Locked in edit mode.
+          WorkTypePicker(
+            value: _workType,
+            enabled: widget.existing == null,
+            onChanged: (id) => setState(() {
+              _workType = id;
+              _workData = {}; // fields differ per type
+              _workFieldErrors = const {};
+            }),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          DynamicWorkForm(
+            definition: WorkTypeRegistry.instance.byId(_workType),
+            initialData: _workData,
+            errors: _workFieldErrors,
+            onChanged: (data) => _workData = data,
+          ),
           AppTextField(
             controller: _desc,
             label: 'Description (optional)',

@@ -12,6 +12,80 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-07-07 — Work-type framework: polymorphic tasks (complete: domain · persistence · create · details · workflow))
+
+A task is no longer "title + description + checklist." Each **operational work
+type owns its own fields, milestones and rules** behind a Strategy + Registry, so
+adding a completely new kind of work is **one definition file + one line in the
+registry** — no `switch`, no screen edits, no rules change (Open/Closed). Ships
+end-to-end: the domain framework, its persistence seam, the dynamic create form,
+the adaptive details screen, and the cubit workflow wiring.
+
+- **Workflow wiring:** the employee's "Submit for review" now routes through the
+  type's `validateSubmission` (`completeAndSubmit` counts proof being uploaded
+  *now* via `WorkContext.withPendingProof`; `submitForReview` too) — an inventory
+  count can't submit without a counted qty, a transfer without its handover
+  photo, an inspection until every point is marked (this also *fixes* inspections,
+  which the old checklist-completed gate would have wrongly blocked). The
+  **manager fast-path**: reconciled / passed / within-budget work (`fastTrack`
+  disposition) floats to the top of the Pending Review leaf with a "ready to
+  fast-track" note. Tests: `task_submission_gate_test.dart` (gate blocks/passes).
+
+- **Adaptive details screen** (`work_type_panel.dart`): a `WorkTypePanel`
+  injected into both mobile + desktop layouts renders, driven entirely by the
+  definition (the screen never branches on type): the type summary/metric, a
+  manager **"Auto-approvable"** fast-path hint (`reviewDisposition`), read-only
+  captured setup fields, the **inspection pass/warning/fail** point marker
+  (monochrome; red only for the failure case), employee **completion capture**
+  (counted qty / amount spent, buffered → Save, reusing `DynamicWorkForm`), and
+  the **milestone spine** (Transfer's Dispatched → Received with a compact "Log"
+  action). The plain checklist section is suppressed when a type owns it
+  (`usesChecklistAsPoints`). New cubit methods `updateWorkData` (merge into
+  `data`) + `logWorkEvent` (milestone → `activityLog`), each a single
+  `_updateTask` write — **permitted for an assignee by the existing denylist
+  rules, no rules change**. Setup-vs-completion field split (`capturedAtCompletion`
+  → `setupFields`/`completionFields`) so the create form no longer shows the
+  manager employee-captured fields. 7 panel widget tests.
+
+- **Dynamic create form** (`dynamic_work_form.dart`, `work_type_presenter.dart`):
+  the create sheet gained a monochrome **`WorkTypePicker`** (chips over
+  `WorkTypeRegistry.all`, locked in edit mode) and a **`DynamicWorkForm`** that
+  renders one input per `WorkFieldSpec` for all 9 field kinds
+  (text/multiline/number/integer/currency/date/time/toggle/select), reports a
+  `Map<String,dynamic>` up, and highlights `validateSetup` field errors inline.
+  Wired additively into the existing premium sheet (title → type → dynamic fields
+  → …); `TaskCubit.createTask` now takes `workType`/`data`; recurring shift
+  templates stay General-only for now (guarded, no silent drop). 7 widget tests.
+
+- **Work-type kernel** (`domain/work_types/`, Flutter-free + unit-testable):
+  - `WorkTypeDefinition` (Strategy) + `BaseWorkType` (parity defaults — a type
+    overrides only what differs); `WorkTypeRegistry` (Registry/Factory) resolves
+    by a stable string id, **unknown/legacy/null → `general`** (safe rollback, no
+    migration).
+  - `WorkFieldSpec` / `WorkFieldKind` (9 kinds; self-validating), `WorkContext`
+    (entity-decoupled live snapshot), `WorkDraft` (create-time snapshot),
+    `WorkEvent` (per-type **timeline milestones** layered on the generic
+    `activityLog.status` — no `TaskStatus` enum growth), `ReviewDisposition`
+    (`standard`/`fastTrack` — the **manager fast-path**), `WorkValidation`.
+- **5 real operational types**, each a self-contained file with full behaviour
+  (fields · timeline · setup+submission gates · progress · review disposition ·
+  proof · summary · analytics): **General** (parity), **Transfer/Handover**
+  (dispatch→receive handshake, proof-on-dispatch, peer-confirmed fast-track),
+  **Purchase/Errand** (budget vs. spend, receipt proof, over-budget/reimbursement
+  → standard review), **Inventory Count** (variance, discrepancy-must-be-explained
+  gate, reconciled → fast-track), **Inspection** (reuses the generic checklist as
+  points, per-point pass/warning/fail in `data`, any fail → standard review).
+- **Persistence (additive, backward-safe):** `TaskEntity`/`TaskModel` gain
+  `workType` (string, default `general`) + `data` (`Map<String,dynamic>`, keyed by
+  field key). The model converts `DateTime ↔ Timestamp` inside `data` (recursing
+  nested maps/lists). Old docs default cleanly; **no migration**. Single adapter
+  `TaskWorkX` (`workDefinition`/`workContext`/`workDraft`) is the only seam
+  between the entity and the kernel.
+- **Tests:** `work_type_registry_test.dart` (22 — resolution/fallback + all 5
+  types' divergent behaviour), `task_model_work_type_test.dart` (round-trip incl.
+  DateTime, nested maps, legacy back-compat, adapter). Existing task suite green
+  (zero regressions).
+
 ### Added (2026-07-07 — Configurable shift hours (end times are data, not code))
 
 The night-shift close is no longer a hardcoded `weekend → 00:30`; shift hours are

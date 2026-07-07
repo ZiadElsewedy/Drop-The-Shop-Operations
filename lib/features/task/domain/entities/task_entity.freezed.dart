@@ -21,6 +21,17 @@ mixin _$TaskEntity {
   String get title => throw _privateConstructorUsedError;
   String? get description => throw _privateConstructorUsedError;
   TaskType get type => throw _privateConstructorUsedError;
+
+  /// The **operational kind** of this work (Registry-backed — see
+  /// `WorkTypeRegistry`). A stable string id (`general`, `transfer`,
+  /// `purchaseErrand`, `inventoryCount`, `inspection`, …) resolved to a
+  /// `WorkTypeDefinition` that owns this task's dynamic fields, milestones,
+  /// completion gate, review disposition and analytics. Orthogonal to [type]
+  /// (`daily`/`special`), which is a cadence tag. A missing / unknown id
+  /// resolves to `general`, so old docs and rolled-back types never break (see
+  /// the `TaskWorkX` adapter). Defaults to `general` for every task that
+  /// predates work types — no migration needed.
+  String get workType => throw _privateConstructorUsedError;
   TaskStatus get status => throw _privateConstructorUsedError;
   TaskPriority get priority => throw _privateConstructorUsedError;
 
@@ -41,6 +52,13 @@ mixin _$TaskEntity {
   /// Storage at `tasks/{id}/attachments/{attId}.<ext>` like all task media.
   List<TaskAttachment> get referenceAttachments =>
       throw _privateConstructorUsedError;
+
+  /// Schema-driven values for this work type's dynamic fields, keyed by
+  /// `WorkFieldSpec.key` (e.g. an inventory count's `expectedQty`/`countedQty`,
+  /// a purchase's `budget`/`spentAmount`, an inspection's per-point `results`).
+  /// Empty for a general task. Persists at `tasks/{id}.data`; the model
+  /// converts any `DateTime` values to/from `Timestamp` on the boundary.
+  Map<String, dynamic> get data => throw _privateConstructorUsedError;
 
   /// uid of the manager/admin who created the task.
   String? get createdBy => throw _privateConstructorUsedError;
@@ -149,12 +167,14 @@ abstract class $TaskEntityCopyWith<$Res> {
     String title,
     String? description,
     TaskType type,
+    String workType,
     TaskStatus status,
     TaskPriority priority,
     String? branchId,
     List<String> assigneeIds,
     List<ChecklistItem> checklist,
     List<TaskAttachment> referenceAttachments,
+    Map<String, dynamic> data,
     String? createdBy,
     String? assignedShiftId,
     ScheduleShift? shift,
@@ -203,12 +223,14 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? title = null,
     Object? description = freezed,
     Object? type = null,
+    Object? workType = null,
     Object? status = null,
     Object? priority = null,
     Object? branchId = freezed,
     Object? assigneeIds = null,
     Object? checklist = null,
     Object? referenceAttachments = null,
+    Object? data = null,
     Object? createdBy = freezed,
     Object? assignedShiftId = freezed,
     Object? shift = freezed,
@@ -252,6 +274,10 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.type
                 : type // ignore: cast_nullable_to_non_nullable
                       as TaskType,
+            workType: null == workType
+                ? _value.workType
+                : workType // ignore: cast_nullable_to_non_nullable
+                      as String,
             status: null == status
                 ? _value.status
                 : status // ignore: cast_nullable_to_non_nullable
@@ -276,6 +302,10 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.referenceAttachments
                 : referenceAttachments // ignore: cast_nullable_to_non_nullable
                       as List<TaskAttachment>,
+            data: null == data
+                ? _value.data
+                : data // ignore: cast_nullable_to_non_nullable
+                      as Map<String, dynamic>,
             createdBy: freezed == createdBy
                 ? _value.createdBy
                 : createdBy // ignore: cast_nullable_to_non_nullable
@@ -406,12 +436,14 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     String title,
     String? description,
     TaskType type,
+    String workType,
     TaskStatus status,
     TaskPriority priority,
     String? branchId,
     List<String> assigneeIds,
     List<ChecklistItem> checklist,
     List<TaskAttachment> referenceAttachments,
+    Map<String, dynamic> data,
     String? createdBy,
     String? assignedShiftId,
     ScheduleShift? shift,
@@ -460,12 +492,14 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? title = null,
     Object? description = freezed,
     Object? type = null,
+    Object? workType = null,
     Object? status = null,
     Object? priority = null,
     Object? branchId = freezed,
     Object? assigneeIds = null,
     Object? checklist = null,
     Object? referenceAttachments = null,
+    Object? data = null,
     Object? createdBy = freezed,
     Object? assignedShiftId = freezed,
     Object? shift = freezed,
@@ -509,6 +543,10 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.type
             : type // ignore: cast_nullable_to_non_nullable
                   as TaskType,
+        workType: null == workType
+            ? _value.workType
+            : workType // ignore: cast_nullable_to_non_nullable
+                  as String,
         status: null == status
             ? _value.status
             : status // ignore: cast_nullable_to_non_nullable
@@ -533,6 +571,10 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value._referenceAttachments
             : referenceAttachments // ignore: cast_nullable_to_non_nullable
                   as List<TaskAttachment>,
+        data: null == data
+            ? _value._data
+            : data // ignore: cast_nullable_to_non_nullable
+                  as Map<String, dynamic>,
         createdBy: freezed == createdBy
             ? _value.createdBy
             : createdBy // ignore: cast_nullable_to_non_nullable
@@ -642,12 +684,14 @@ class _$TaskEntityImpl extends _TaskEntity {
     required this.title,
     this.description,
     this.type = TaskType.daily,
+    this.workType = 'general',
     this.status = TaskStatus.pending,
     this.priority = TaskPriority.normal,
     this.branchId,
     final List<String> assigneeIds = const <String>[],
     final List<ChecklistItem> checklist = const <ChecklistItem>[],
     final List<TaskAttachment> referenceAttachments = const <TaskAttachment>[],
+    final Map<String, dynamic> data = const <String, dynamic>{},
     this.createdBy,
     this.assignedShiftId,
     this.shift,
@@ -675,6 +719,7 @@ class _$TaskEntityImpl extends _TaskEntity {
   }) : _assigneeIds = assigneeIds,
        _checklist = checklist,
        _referenceAttachments = referenceAttachments,
+       _data = data,
        _activityLog = activityLog,
        super._();
 
@@ -687,6 +732,19 @@ class _$TaskEntityImpl extends _TaskEntity {
   @override
   @JsonKey()
   final TaskType type;
+
+  /// The **operational kind** of this work (Registry-backed — see
+  /// `WorkTypeRegistry`). A stable string id (`general`, `transfer`,
+  /// `purchaseErrand`, `inventoryCount`, `inspection`, …) resolved to a
+  /// `WorkTypeDefinition` that owns this task's dynamic fields, milestones,
+  /// completion gate, review disposition and analytics. Orthogonal to [type]
+  /// (`daily`/`special`), which is a cadence tag. A missing / unknown id
+  /// resolves to `general`, so old docs and rolled-back types never break (see
+  /// the `TaskWorkX` adapter). Defaults to `general` for every task that
+  /// predates work types — no migration needed.
+  @override
+  @JsonKey()
+  final String workType;
   @override
   @JsonKey()
   final TaskStatus status;
@@ -743,6 +801,26 @@ class _$TaskEntityImpl extends _TaskEntity {
       return _referenceAttachments;
     // ignore: implicit_dynamic_type
     return EqualUnmodifiableListView(_referenceAttachments);
+  }
+
+  /// Schema-driven values for this work type's dynamic fields, keyed by
+  /// `WorkFieldSpec.key` (e.g. an inventory count's `expectedQty`/`countedQty`,
+  /// a purchase's `budget`/`spentAmount`, an inspection's per-point `results`).
+  /// Empty for a general task. Persists at `tasks/{id}.data`; the model
+  /// converts any `DateTime` values to/from `Timestamp` on the boundary.
+  final Map<String, dynamic> _data;
+
+  /// Schema-driven values for this work type's dynamic fields, keyed by
+  /// `WorkFieldSpec.key` (e.g. an inventory count's `expectedQty`/`countedQty`,
+  /// a purchase's `budget`/`spentAmount`, an inspection's per-point `results`).
+  /// Empty for a general task. Persists at `tasks/{id}.data`; the model
+  /// converts any `DateTime` values to/from `Timestamp` on the boundary.
+  @override
+  @JsonKey()
+  Map<String, dynamic> get data {
+    if (_data is EqualUnmodifiableMapView) return _data;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableMapView(_data);
   }
 
   /// uid of the manager/admin who created the task.
@@ -871,7 +949,7 @@ class _$TaskEntityImpl extends _TaskEntity {
 
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, workType: $workType, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, data: $data, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt)';
   }
 
   @override
@@ -884,6 +962,8 @@ class _$TaskEntityImpl extends _TaskEntity {
             (identical(other.description, description) ||
                 other.description == description) &&
             (identical(other.type, type) || other.type == type) &&
+            (identical(other.workType, workType) ||
+                other.workType == workType) &&
             (identical(other.status, status) || other.status == status) &&
             (identical(other.priority, priority) ||
                 other.priority == priority) &&
@@ -901,6 +981,7 @@ class _$TaskEntityImpl extends _TaskEntity {
               other._referenceAttachments,
               _referenceAttachments,
             ) &&
+            const DeepCollectionEquality().equals(other._data, _data) &&
             (identical(other.createdBy, createdBy) ||
                 other.createdBy == createdBy) &&
             (identical(other.assignedShiftId, assignedShiftId) ||
@@ -958,12 +1039,14 @@ class _$TaskEntityImpl extends _TaskEntity {
     title,
     description,
     type,
+    workType,
     status,
     priority,
     branchId,
     const DeepCollectionEquality().hash(_assigneeIds),
     const DeepCollectionEquality().hash(_checklist),
     const DeepCollectionEquality().hash(_referenceAttachments),
+    const DeepCollectionEquality().hash(_data),
     createdBy,
     assignedShiftId,
     shift,
@@ -1005,12 +1088,14 @@ abstract class _TaskEntity extends TaskEntity {
     required final String title,
     final String? description,
     final TaskType type,
+    final String workType,
     final TaskStatus status,
     final TaskPriority priority,
     final String? branchId,
     final List<String> assigneeIds,
     final List<ChecklistItem> checklist,
     final List<TaskAttachment> referenceAttachments,
+    final Map<String, dynamic> data,
     final String? createdBy,
     final String? assignedShiftId,
     final ScheduleShift? shift,
@@ -1046,6 +1131,18 @@ abstract class _TaskEntity extends TaskEntity {
   String? get description;
   @override
   TaskType get type;
+
+  /// The **operational kind** of this work (Registry-backed — see
+  /// `WorkTypeRegistry`). A stable string id (`general`, `transfer`,
+  /// `purchaseErrand`, `inventoryCount`, `inspection`, …) resolved to a
+  /// `WorkTypeDefinition` that owns this task's dynamic fields, milestones,
+  /// completion gate, review disposition and analytics. Orthogonal to [type]
+  /// (`daily`/`special`), which is a cadence tag. A missing / unknown id
+  /// resolves to `general`, so old docs and rolled-back types never break (see
+  /// the `TaskWorkX` adapter). Defaults to `general` for every task that
+  /// predates work types — no migration needed.
+  @override
+  String get workType;
   @override
   TaskStatus get status;
   @override
@@ -1071,6 +1168,14 @@ abstract class _TaskEntity extends TaskEntity {
   /// Storage at `tasks/{id}/attachments/{attId}.<ext>` like all task media.
   @override
   List<TaskAttachment> get referenceAttachments;
+
+  /// Schema-driven values for this work type's dynamic fields, keyed by
+  /// `WorkFieldSpec.key` (e.g. an inventory count's `expectedQty`/`countedQty`,
+  /// a purchase's `budget`/`spentAmount`, an inspection's per-point `results`).
+  /// Empty for a general task. Persists at `tasks/{id}.data`; the model
+  /// converts any `DateTime` values to/from `Timestamp` on the boundary.
+  @override
+  Map<String, dynamic> get data;
 
   /// uid of the manager/admin who created the task.
   @override

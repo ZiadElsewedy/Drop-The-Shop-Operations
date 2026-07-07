@@ -31,6 +31,16 @@ class TaskEntity with _$TaskEntity {
     required String title,
     String? description,
     @Default(TaskType.daily) TaskType type,
+    /// The **operational kind** of this work (Registry-backed — see
+    /// `WorkTypeRegistry`). A stable string id (`general`, `transfer`,
+    /// `purchaseErrand`, `inventoryCount`, `inspection`, …) resolved to a
+    /// `WorkTypeDefinition` that owns this task's dynamic fields, milestones,
+    /// completion gate, review disposition and analytics. Orthogonal to [type]
+    /// (`daily`/`special`), which is a cadence tag. A missing / unknown id
+    /// resolves to `general`, so old docs and rolled-back types never break (see
+    /// the `TaskWorkX` adapter). Defaults to `general` for every task that
+    /// predates work types — no migration needed.
+    @Default('general') String workType,
     @Default(TaskStatus.pending) TaskStatus status,
     @Default(TaskPriority.normal) TaskPriority priority,
     /// Owning branch (admin: any · manager: own branch).
@@ -46,6 +56,12 @@ class TaskEntity with _$TaskEntity {
     /// submission [ActivityEntry] (and the legacy [proofImageUrl]). Stored in
     /// Storage at `tasks/{id}/attachments/{attId}.<ext>` like all task media.
     @Default(<TaskAttachment>[]) List<TaskAttachment> referenceAttachments,
+    /// Schema-driven values for this work type's dynamic fields, keyed by
+    /// `WorkFieldSpec.key` (e.g. an inventory count's `expectedQty`/`countedQty`,
+    /// a purchase's `budget`/`spentAmount`, an inspection's per-point `results`).
+    /// Empty for a general task. Persists at `tasks/{id}.data`; the model
+    /// converts any `DateTime` values to/from `Timestamp` on the boundary.
+    @Default(<String, dynamic>{}) Map<String, dynamic> data,
     /// uid of the manager/admin who created the task.
     String? createdBy,
     /// Optional shift this task belongs to (references `shifts/{shiftId}`).
