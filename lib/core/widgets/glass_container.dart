@@ -60,24 +60,38 @@ class _GlassContainerState extends State<GlassContainer> {
   Widget build(BuildContext context) {
     final accent = widget.accent ?? AppColors.warning;
     final glow = widget.glow;
+    // A tappable card lifts on hover: the border warms, the surface rises a
+    // couple of pixels and its depth shadow deepens — the pointer feedback that
+    // separates a native desktop app from a projected phone screen. Honoured
+    // only when motion is allowed.
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final lifted = _hovered && !reduceMotion && widget.onTap != null;
     final borderColor = widget.highlight
-        ? accent.withAlpha(140)
+        ? accent.withAlpha(lifted ? 180 : 140)
         : glow != null
-            ? glow.withAlpha(90) // faint semantic border tint
+            ? glow.withAlpha(lifted ? 130 : 90) // faint semantic border tint
             : (_hovered ? AppColors.textTertiary : AppColors.darkBorder);
 
     final shadows = <BoxShadow>[
       if (widget.elevated)
         BoxShadow(
-          color: AppColors.black.withAlpha(40),
-          blurRadius: 16,
-          offset: const Offset(0, 6),
+          color: AppColors.black.withAlpha(lifted ? 70 : 40),
+          blurRadius: lifted ? 26 : 16,
+          offset: Offset(0, lifted ? 12 : 6),
+        )
+      // A flat tile stays shadowless at rest but gains soft depth on hover, so
+      // its lift reads as "picked up" rather than floating.
+      else if (lifted)
+        BoxShadow(
+          color: AppColors.black.withAlpha(55),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
         ),
       // Subtle coloured halo for a status card — soft, never neon.
       if (glow != null)
         BoxShadow(
-          color: glow.withAlpha(48),
-          blurRadius: 24,
+          color: glow.withAlpha(lifted ? 64 : 48),
+          blurRadius: lifted ? 30 : 24,
           spreadRadius: -4,
           offset: const Offset(0, 4),
         ),
@@ -88,7 +102,10 @@ class _GlassContainerState extends State<GlassContainer> {
       duration: const Duration(milliseconds: 100),
       curve: Curves.easeOut,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
+        transformAlignment: Alignment.center,
         padding: widget.padding,
         decoration: BoxDecoration(
           gradient: const LinearGradient(

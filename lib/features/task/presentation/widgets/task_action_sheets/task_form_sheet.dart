@@ -546,22 +546,6 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             ),
           ),
 
-          // ── Reference: "what good looks like" ───────────────────────────
-          section(
-            label: 'Reference',
-            icon: Icons.image_outlined,
-            child: AttachmentPickerField(
-              attachments: _newRefs,
-              allowVideo: false,
-              title: 'Reference images',
-              hint: 'Attach photos showing how this should look — the employee '
-                  'sees them before starting. Photos are compressed before upload.',
-              existing: _existingRefs,
-              onRemoveExisting: (a) => setState(() => _existingRefs.remove(a)),
-              onChanged: (list) => setState(() => _newRefs = list),
-            ),
-          ),
-
           // ── Assignment: branch, mode, and who ───────────────────────────
           section(
               label: 'Assignment',
@@ -630,28 +614,13 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             ],
           )),
 
-          // ── Scheduling: priority, deadline, cadence ─────────────────────
+          // ── Schedule: when the work starts and is due ───────────────────
           section(
-              label: 'Scheduling',
+              label: 'Schedule',
               icon: Icons.event_note_outlined,
               child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const _FieldCaption('Priority'),
-              const SizedBox(height: AppSpacing.sm),
-              _Segmented<TaskPriority>(
-                value: _priority,
-                onChanged: (v) => setState(() => _priority = v),
-                segments: const [
-                  _Seg(TaskPriority.low, 'Low',
-                      icon: Icons.arrow_downward_rounded),
-                  _Seg(TaskPriority.normal, 'Normal',
-                      icon: Icons.remove_rounded),
-                  _Seg(TaskPriority.high, 'High',
-                      icon: Icons.priority_high_rounded),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
               if (_mixedShifts) ...[
                 _MixedShiftChooser(
                   onPick: (shift) => setState(() {
@@ -681,6 +650,30 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                 onReset: _scheduleSource == null ? null : _resetToSource,
                 warning: _scheduleWarning,
                 error: _scheduleError,
+              ),
+            ],
+          )),
+
+          // ── Review: how it's prioritised and whether it repeats ─────────
+          section(
+              label: 'Review',
+              icon: Icons.fact_check_outlined,
+              child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _FieldCaption('Priority'),
+              const SizedBox(height: AppSpacing.sm),
+              _Segmented<TaskPriority>(
+                value: _priority,
+                onChanged: (v) => setState(() => _priority = v),
+                segments: const [
+                  _Seg(TaskPriority.low, 'Low',
+                      icon: Icons.arrow_downward_rounded),
+                  _Seg(TaskPriority.normal, 'Normal',
+                      icon: Icons.remove_rounded),
+                  _Seg(TaskPriority.high, 'High',
+                      icon: Icons.priority_high_rounded),
+                ],
               ),
               // Recurrence (new tasks only) — shift mode gets its own
               // Once/Daily/Weekly picker (daily/weekly saves as a recurring
@@ -712,6 +705,22 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
               ],
             ],
           )),
+
+          // ── Attachments: "what good looks like" ─────────────────────────
+          section(
+            label: 'Attachments',
+            icon: Icons.image_outlined,
+            child: AttachmentPickerField(
+              attachments: _newRefs,
+              allowVideo: false,
+              title: 'Reference images',
+              hint: 'Attach photos showing how this should look — the employee '
+                  'sees them before starting. Photos are compressed before upload.',
+              existing: _existingRefs,
+              onRemoveExisting: (a) => setState(() => _existingRefs.remove(a)),
+              onChanged: (list) => setState(() => _newRefs = list),
+            ),
+          ),
 
           // ── Validation + submit ─────────────────────────────────────────
           _FormErrorBanner(message: _error),

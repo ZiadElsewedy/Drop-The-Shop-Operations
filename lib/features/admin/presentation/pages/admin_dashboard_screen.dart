@@ -690,8 +690,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
 /// The single, prominent primary action of the hero — a filled monochrome
 /// button (white accent · dark label). The V2 "one primary action" rule: every
-/// module hero has at most one of these.
-class _PrimaryCta extends StatelessWidget {
+/// module hero has at most one of these. It carries a soft key-light shadow so
+/// it reads as *the* action, and responds to hover (a whisper of lift) and press
+/// (a subtle scale) — the tactile feedback of a premium control.
+class _PrimaryCta extends StatefulWidget {
   const _PrimaryCta({
     required this.icon,
     required this.label,
@@ -703,32 +705,60 @@ class _PrimaryCta extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
+  State<_PrimaryCta> createState() => _PrimaryCtaState();
+}
+
+class _PrimaryCtaState extends State<_PrimaryCta> {
+  bool _hovered = false;
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final lifted = _hovered && !reduceMotion;
     return Semantics(
       button: true,
-      label: label,
-      child: Material(
-        color: AppColors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.buttonAll,
-          child: Ink(
-            decoration: const BoxDecoration(
-              color: AppColors.accent,
-              borderRadius: AppRadius.buttonAll,
-            ),
-            child: Padding(
+      label: widget.label,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onTapDown: (_) => setState(() => _pressed = true),
+          onTapUp: (_) => setState(() => _pressed = false),
+          onTapCancel: () => setState(() => _pressed = false),
+          child: AnimatedScale(
+            scale: _pressed ? 0.97 : 1.0,
+            duration: const Duration(milliseconds: 110),
+            curve: Curves.easeOut,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
+              transform: Matrix4.translationValues(0, lifted ? -1 : 0, 0),
+              transformAlignment: Alignment.center,
               padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
-                vertical: AppSpacing.md,
+                vertical: 14,
+              ),
+              decoration: BoxDecoration(
+                color: lifted ? AppColors.accentHover : AppColors.accent,
+                borderRadius: AppRadius.buttonAll,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.black.withAlpha(lifted ? 90 : 55),
+                    blurRadius: lifted ? 22 : 14,
+                    offset: Offset(0, lifted ? 8 : 5),
+                  ),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(icon, size: 18, color: AppColors.onAccent),
+                  Icon(widget.icon, size: 18, color: AppColors.onAccent),
                   const SizedBox(width: AppSpacing.sm),
                   Text(
-                    label,
+                    widget.label,
                     style: AppTypography.label.copyWith(
                       color: AppColors.onAccent,
                       fontWeight: FontWeight.w600,

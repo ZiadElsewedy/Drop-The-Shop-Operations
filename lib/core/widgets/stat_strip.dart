@@ -32,6 +32,7 @@ class StatStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (stats.isEmpty) return const SizedBox.shrink();
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
     return GlassContainer(
       elevated: false,
       padding: const EdgeInsets.symmetric(
@@ -42,42 +43,67 @@ class StatStrip extends StatelessWidget {
         builder: (context, constraints) {
           // Enough room for every stat side-by-side? Otherwise wrap to 2-up.
           final fitsOneRow = constraints.maxWidth >= stats.length * 118;
-          return fitsOneRow ? _row(stats) : _grid(stats);
+          return fitsOneRow
+              ? _row(stats, reduceMotion)
+              : _grid(stats, reduceMotion);
         },
       ),
     );
   }
 
-  Widget _cell(Stat s, {TextAlign align = TextAlign.start}) {
+  Widget _cell(
+    Stat s,
+    bool reduceMotion, {
+    TextAlign align = TextAlign.start,
+  }) {
     final cross = align == TextAlign.center
         ? CrossAxisAlignment.center
         : CrossAxisAlignment.start;
+    final valueStyle = AppTypography.h2.copyWith(
+      color: s.tone ?? AppColors.textPrimary,
+      fontWeight: FontWeight.w700,
+      letterSpacing: -0.5,
+    );
     return Column(
       crossAxisAlignment: cross,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          s.value,
-          textAlign: align,
-          style: AppTypography.h3.copyWith(
-            color: s.tone ?? AppColors.textPrimary,
-            fontWeight: FontWeight.w700,
+        // A value that moves cross-fades to its new figure rather than snapping,
+        // so a live "Today" number feels alive without a distracting count-up.
+        AnimatedSwitcher(
+          duration:
+              reduceMotion ? Duration.zero : const Duration(milliseconds: 320),
+          transitionBuilder: (child, anim) => FadeTransition(
+            opacity: anim,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.35),
+                end: Offset.zero,
+              ).animate(anim),
+              child: child,
+            ),
+          ),
+          child: Text(
+            s.value,
+            key: ValueKey('${s.label}:${s.value}'),
+            textAlign: align,
+            style: valueStyle,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 3),
         Text(
           s.label,
           textAlign: align,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+          style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
         ),
       ],
     );
   }
 
   /// A single row with hairline dividers between cells.
-  Widget _row(List<Stat> stats) {
+  Widget _row(List<Stat> stats, bool reduceMotion) {
     final children = <Widget>[];
     for (var i = 0; i < stats.length; i++) {
       if (i > 0) {
@@ -90,23 +116,23 @@ class StatStrip extends StatelessWidget {
           ),
         );
       }
-      children.add(Expanded(child: _cell(stats[i])));
+      children.add(Expanded(child: _cell(stats[i], reduceMotion)));
     }
     return Row(crossAxisAlignment: CrossAxisAlignment.center, children: children);
   }
 
   /// A two-column wrap for narrow widths (no vertical dividers).
-  Widget _grid(List<Stat> stats) {
+  Widget _grid(List<Stat> stats, bool reduceMotion) {
     return Column(
       children: [
         for (var i = 0; i < stats.length; i += 2) ...[
           if (i > 0) const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              Expanded(child: _cell(stats[i])),
+              Expanded(child: _cell(stats[i], reduceMotion)),
               const SizedBox(width: AppSpacing.md),
               if (i + 1 < stats.length)
-                Expanded(child: _cell(stats[i + 1]))
+                Expanded(child: _cell(stats[i + 1], reduceMotion))
               else
                 const Spacer(),
             ],

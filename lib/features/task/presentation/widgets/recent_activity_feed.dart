@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/app_motion.dart';
+import 'package:drop/core/widgets/live_list_item.dart';
 import 'package:drop/features/task/domain/active_window.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
@@ -54,18 +56,35 @@ class RecentActivityFeed extends StatelessWidget {
             final shown = active.take(limit).toList();
 
             if (shown.isEmpty) return const _AllClear();
+            final reduceMotion = MediaQuery.of(context).disableAnimations;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                for (final t in shown)
+                for (final (i, t) in shown.indexed)
                   Padding(
                     key: ValueKey('activity:${t.id}'),
                     padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                    child: TaskActivityCard(
-                      task: t,
-                      directory: directory,
-                      branchName: branchNames[t.branchId],
-                    ),
+                    // Each row enters once (fade + rise) and never replays on a
+                    // stream emit — keyed element reuse means only a genuinely
+                    // new task mounts + animates in, so a live insert slides in
+                    // naturally while the settled rows stay put. Staggered on the
+                    // first load; a fresh arrival (newest-first ⇒ index 0) plays
+                    // immediately.
+                    child: reduceMotion
+                        ? TaskActivityCard(
+                            task: t,
+                            directory: directory,
+                            branchName: branchNames[t.branchId],
+                          )
+                        : LiveListItem(
+                            entranceDelay: staggerDelay(i),
+                            highlightRadius: 20,
+                            child: TaskActivityCard(
+                              task: t,
+                              directory: directory,
+                              branchName: branchNames[t.branchId],
+                            ),
+                          ),
                   ),
               ],
             );

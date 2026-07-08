@@ -60,7 +60,7 @@ class ActivityCard extends StatelessWidget {
       onTap: onTap,
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.lg,
-        vertical: AppSpacing.md,
+        vertical: 14,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -90,7 +90,7 @@ class ActivityCard extends StatelessWidget {
                         Icon(
                           subtitleIcon,
                           size: 12,
-                          color: AppColors.textTertiary,
+                          color: AppColors.textQuaternary,
                         ),
                         const SizedBox(width: 4),
                       ],
@@ -118,11 +118,11 @@ class ActivityCard extends StatelessWidget {
               children: [
                 ?trailing,
                 if (meta != null) ...[
-                  if (trailing != null) const SizedBox(height: 5),
+                  if (trailing != null) const SizedBox(height: 6),
                   Text(
                     meta!,
                     style: AppTypography.caption.copyWith(
-                      color: AppColors.textTertiary,
+                      color: AppColors.textQuaternary,
                     ),
                   ),
                 ],

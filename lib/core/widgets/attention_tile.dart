@@ -68,49 +68,73 @@ class AttentionTile extends StatelessWidget {
         accent: tint,
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 96),
+          constraints: const BoxConstraints(minHeight: 116),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: glyphTint.withAlpha(active ? 30 : 20),
-                  borderRadius: BorderRadius.circular(11),
-                ),
-                child: Icon(icon, size: 20, color: glyphTint),
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: glyphTint.withAlpha(active ? 34 : 18),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: active
+                            ? glyphTint.withAlpha(60)
+                            : AppColors.transparent,
+                      ),
+                    ),
+                    child: Icon(icon, size: 21, color: glyphTint),
+                  ),
+                  const Spacer(),
+                  // A quiet "go triage" affordance — present only when there's
+                  // work, so a clear tile reads calm and an actionable one
+                  // signals it can be opened.
+                  if (active)
+                    Icon(
+                      Icons.arrow_outward_rounded,
+                      size: 18,
+                      color: AppColors.textTertiary,
+                    ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
               AnimatedCount(
                 value: count,
                 duration: reduceMotion
                     ? Duration.zero
-                    : const Duration(milliseconds: 600),
-                style: AppTypography.h1.copyWith(
-                  fontSize: 30,
+                    : const Duration(milliseconds: 650),
+                style: AppTypography.display.copyWith(
+                  fontSize: 38,
+                  height: 1.0,
+                  letterSpacing: -1.2,
                   color:
-                      active ? AppColors.textPrimary : AppColors.textTertiary,
+                      active ? AppColors.textPrimary : AppColors.textQuaternary,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: AppTypography.labelSmall.copyWith(
-                  color: AppColors.textPrimary,
+                style: AppTypography.label.copyWith(
+                  color: active
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               if (sublabel != null) ...[
-                const SizedBox(height: 1),
+                const SizedBox(height: 2),
                 Text(
                   sublabel!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: AppColors.textTertiary,
                   ),
                 ),
               ],
