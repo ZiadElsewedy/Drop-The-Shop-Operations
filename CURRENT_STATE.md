@@ -31,6 +31,21 @@ implement any action in this phase.
 
 ---
 
+## 🛡️ Production Readiness Audit (`core/optimization`, 2026-07-08)
+
+**Report-first reliability audit → `docs/PRODUCTION_READINESS_AUDIT.md`. Verdict:
+already well-hardened, zero critical/high defects.** No memory leaks (flagged
+controllers are param-owned / correct merge teardown); every cubit `.listen()`
+has `onError`→`.error` with `!_hasSnapshot` guard; Firebase/Timeout→honest
+`ServerException`; loading/error/empty + retry everywhere; offline persistence +
+`count()` fallback; 4 crash funnels + release breadcrumbs. **Only fix implemented
+(M1):** the 6 intentional best-effort `catch (_) {}` swallows (branch-name /
+directory / seen-dot) now log via `AppLog.warning` for crash-report breadcrumbs
+(control flow unchanged; analyzer clean; suite unchanged). Deferred: M2
+(`developer.log`→`AppLog` consistency, 35 sites). Don't re-add silent swallows.
+
+---
+
 ## ⚡ Sprint 2 — Render/Rebuild audit + const pass (`core/optimization`, 2026-07-08)
 
 **Rendering perf, pixel-perfect, zero behavior change.** Audit

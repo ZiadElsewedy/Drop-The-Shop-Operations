@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/enums/request_type.dart';
+import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/core/errors/failures.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/branch/domain/repositories/branch_repository.dart';
@@ -121,7 +122,9 @@ class RequestsListCubit extends Cubit<RequestsListState> {
           loaded: (s) => emit(s.copyWith(branchNames: Map.of(_branchNames))),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLog.warning('requests', 'branch-name enrichment failed: $e');
+    }
   }
 
   // ─── Filing a request (employees only — the UI gates the entry point) ──

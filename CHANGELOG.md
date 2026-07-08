@@ -12,6 +12,32 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Hardening (2026-07-08 — Production Readiness Audit, `core/optimization`)
+
+Reliability audit — **report first, then only provably-safe fixes.** New
+`docs/PRODUCTION_READINESS_AUDIT.md` covers reliability, error handling,
+lifecycle, leaks, offline, disposal, logging, retry, loading/error/empty states,
+Firebase exceptions. **Verdict: already well-hardened** — zero critical/high
+defects. Confirmed healthy (documented so they're defended): no memory leaks
+(every flagged controller is param-owned or a correct stream-merge teardown);
+**every** cubit `.listen()` has `onError` → `.error` state with an
+`if (!_hasSnapshot)` guard (no data-clobber, no stuck-loading); Firebase/Timeout
+→ honest `ServerException` messages; loading/error/empty states + retry across 38
+screens; offline persistence + `count()` cache fallback; 4 crash funnels +
+release breadcrumbs; 0 `print()`.
+
+- **Implemented (M1) — observability for best-effort swallows:** the 6
+  intentional `catch (_) {}` enrichment sites (branch-name / member-directory /
+  seen-dot persistence in `task_cubit`, `case_list_cubit`, `requests_list_cubit`,
+  `case_seen_store`) now route through `AppLog.warning` so a **persistent** silent
+  failure leaves a crash-report breadcrumb. Control flow unchanged (still caught,
+  non-fatal). Analyzer clean; suite unchanged (same 3 pre-existing, unrelated
+  failures).
+- **Recommended, not implemented:** M2 — 35 `developer.log` calls bypass
+  `AppLog` breadcrumbs (staged consistency pass). Lows: static-service timer
+  cancel, one release `debugPrint` in splash, no `.empty` state factory (handled
+  at widget layer). Not done blind — codebase is otherwise production-ready.
+
 ### Performance (2026-07-08 — Sprint 2: Render/Rebuild audit + const pass, `core/optimization`)
 
 Rendering-performance sprint — **pixel-perfect, zero behavior/UX/feature/backend

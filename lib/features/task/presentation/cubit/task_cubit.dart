@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/core/enums/notification_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
@@ -264,7 +265,9 @@ class TaskCubit extends Cubit<TaskState> {
           loaded: (s) => emit(s.copyWith(directory: Map.of(_directory))),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLog.warning('task', 'branch-name enrichment failed: $e');
+    }
   }
 
   Future<void> _ensureDirectory(List<TaskEntity> tasks) async {
@@ -283,7 +286,9 @@ class TaskCubit extends Cubit<TaskState> {
           _directory[u.uid] = u;
           changed = true;
         }
-      } catch (_) {}
+      } catch (e) {
+        AppLog.warning('task', 'member-directory enrichment failed: $e');
+      }
     }
     if (changed && !isClosed) {
       state.mapOrNull(
