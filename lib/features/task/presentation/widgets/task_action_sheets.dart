@@ -9,7 +9,7 @@ import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
-import 'package:drop/features/auth/presentation/widgets/app_dropdown_field.dart';
+import 'package:drop/core/widgets/app_motion.dart';
 import 'package:drop/core/widgets/user_avatar.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/auth/presentation/widgets/app_button.dart';
@@ -21,9 +21,12 @@ import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/domain/entities/task_template_entity.dart';
 import 'package:drop/features/task/presentation/attachment_format.dart';
+import 'package:drop/features/task/domain/work_types/work_draft.dart';
+import 'package:drop/features/task/domain/work_types/work_type_registry.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/widgets/attachment_gallery.dart';
 import 'package:drop/features/task/presentation/widgets/attachment_picker.dart';
+import 'package:drop/features/task/presentation/widgets/dynamic_work_form.dart';
 
 /// Create or edit a task (manager/admin). For a manager the branch is fixed to
 /// [defaultBranchId]; an admin **picks** an existing branch from a dropdown
@@ -147,6 +150,15 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
       text: widget.existing?.description ?? widget.prefill?.description ?? '');
   late TaskPriority _priority =
       widget.existing?.priority ?? widget.prefill?.priority ?? TaskPriority.normal;
+
+  /// Work-type selection + its schema-driven field values. The type is chosen on
+  /// a new task (locked when editing — a task's kind never changes mid-life);
+  /// [_workData] holds the values for the type's dynamic fields, seeded from an
+  /// existing task and reset when the type changes.
+  late String _workType = widget.existing?.workType ?? 'general';
+  late Map<String, dynamic> _workData = {...?widget.existing?.data};
+  Map<String, String> _workFieldErrors = const {};
+
   late DateTime? _deadline = widget.existing?.deadline;
   late RecurrenceFrequency _recurrence =
       widget.existing?.recurrence?.frequency ?? RecurrenceFrequency.none;
@@ -309,6 +321,22 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     final description = _desc.text.trim().isEmpty ? null : _desc.text.trim();
     final checklist = _buildChecklist();
 
+    // Work-type setup gate — each type validates its own fields (a general task
+    // declares none, so this is a no-op for it).
+    final workDef = WorkTypeRegistry.instance.byId(_workType);
+    final setup = workDef.validateSetup(WorkDraft(
+      data: _workData,
+      checklistCount: checklist.length,
+      assigneeCount: _assignees.length,
+    ));
+    if (!setup.ok) {
+      setState(() {
+        _workFieldErrors = setup.fieldErrors;
+        _error = setup.firstError;
+      });
+      return;
+    }
+
     final existing = widget.existing;
     if (existing == null) {
       if (_assignmentType == TaskAssignmentType.shift) {
@@ -317,6 +345,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             title: title,
             description: description,
             type: TaskType.daily,
+            workType: _workType,
+            data: _workData,
             priority: _priority,
             branchId: branchId,
             deadline: _deadline,
@@ -327,6 +357,15 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
             instanceDate: _deadline,
           );
         } else {
+          // Recurring shift templates generate general instances; a specialised
+          // work type would be silently dropped, so require General here (until
+          // templates learn to carry a work type).
+          if (_workType != 'general') {
+            setState(() => _error =
+                'Recurring shift templates support General tasks only for now — '
+                'choose "Once", or set the work type to General.');
+            return;
+          }
           widget.cubit.createRecurringShiftTemplate(
             title: title,
             description: description,
@@ -351,6 +390,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
           title: title,
           description: description,
           type: inferredType,
+          workType: _workType,
+          data: _workData,
           priority: _priority,
           branchId: branchId,
           deadline: _deadline,
@@ -368,6 +409,8 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
         existing.copyWith(
           title: title,
           description: description,
+          workType: _workType,
+          data: _workData,
           priority: _priority,
           branchId: branchId,
           deadline: _deadline,
@@ -396,158 +439,222 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final isNew = widget.existing == null;
+    final shiftMode = _assignmentType == TaskAssignmentType.shift;
+
+    // Each section (its group divider + content) fades + lifts in with a gentle
+    // stagger, so opening the sheet feels like a workflow assembling rather than
+    // a static form appearing.
+    var step = 0;
+    Widget section({String? label, IconData? icon, required Widget child}) {
+      final body = label == null
+          ? child
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [_SectionLabel(label, icon: icon), child],
+            );
+      return EntranceFade(delay: staggerDelay(step++), child: body);
+    }
+
     return SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SheetTitle(widget.existing == null ? 'New Task' : 'Edit Task'),
-          AppTextField(
-            controller: _title,
-            label: 'Title',
-            prefixIcon: Icons.title_rounded,
-            autofocus: true,
+          _SheetHeader(
+            title: isNew ? 'New Task' : 'Edit Task',
+            subtitle: isNew
+                ? 'Compose the work, then choose who runs it.'
+                : 'Update this task.',
           ),
-          const SizedBox(height: AppSpacing.md),
-          AppTextField(
-            controller: _desc,
-            label: 'Description (optional)',
-            prefixIcon: Icons.notes_rounded,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          // Reference images — "what good looks like" the employee sees before
-          // starting (images only; distinct from their proof on submission).
-          AttachmentPickerField(
-            attachments: _newRefs,
-            allowVideo: false,
-            title: 'Reference images',
-            hint:
-                'Attach photos showing how this should look — the employee sees '
-                'them before starting. Photos are compressed before upload.',
-            existing: _existingRefs,
-            onRemoveExisting: (a) =>
-                setState(() => _existingRefs.remove(a)),
-            onChanged: (list) => setState(() => _newRefs = list),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _InlineChecklistEditor(
-            controllers: _itemControllers,
-            required: _itemRequired,
-            onAdd: _addChecklistItem,
-            onRemove: _removeChecklistItem,
-            onToggleRequired: _toggleRequired,
-          ),
-          if (widget.isAdmin) ...[
-            const SizedBox(height: AppSpacing.md),
-            _BranchDropdown(
-              future: _branchesFuture,
-              value: _branchId,
-              onChanged: (v) => setState(() {
-                _branchId = v;
-                _assignees.clear(); // employees differ per branch
-                _syncEmployeesFuture();
-              }),
-            ),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          if (widget.existing == null) ...[
-            _AssignedToPicker(
-              value: _assignmentType,
-              onChanged: (t) => setState(() => _assignmentType = t),
-            ),
-            const SizedBox(height: AppSpacing.md),
-          ],
-          if (_assignmentType != TaskAssignmentType.shift)
-            _AssigneePicker(
-              future: _employeesFuture,
-              selected: _assignees,
-              onToggle: (uid) => setState(() {
-                _assignees.contains(uid)
-                    ? _assignees.remove(uid)
-                    : _assignees.add(uid);
-              }),
-              onToggleAll: (all) => setState(() {
-                final ids = all.map((u) => u.uid);
-                if (ids.every(_assignees.contains)) {
-                  _assignees.removeAll(ids);
-                } else {
-                  _assignees.addAll(ids);
-                }
-              }),
-            )
-          else
-            ShiftChipPicker(
-              value: _shift,
-              onChanged: (s) => setState(() => _shift = s),
-            ),
-          const SizedBox(height: AppSpacing.md),
-          _Dropdown<TaskPriority>(
-            label: 'Priority',
-            value: _priority,
-            items: TaskPriority.values,
-            labelOf: (p) => p.value,
-            onChanged: (v) => setState(() => _priority = v),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          InkWell(
-            onTap: _pickDeadline,
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.lg, vertical: AppSpacing.lg),
-              decoration: BoxDecoration(
-                color: AppColors.darkSurface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.darkBorder),
+
+          // ── Overview: the defining choice, then the essentials ──────────
+          section(child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Work type — the hero choice; regenerates the type-specific
+              // fields below it. Locked (static card) in edit mode.
+              WorkTypePicker(
+                value: _workType,
+                enabled: isNew,
+                onChanged: (id) => setState(() {
+                  _workType = id;
+                  _workData = {}; // fields differ per type
+                  _workFieldErrors = const {};
+                }),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.event_outlined,
-                      size: 20, color: AppColors.textTertiary),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Text(
-                      _deadline == null
-                          ? 'Set deadline (optional)'
-                          : 'Deadline: ${_dateLabel(_deadline!)}',
-                      style: AppTypography.body,
-                    ),
-                  ),
-                  if (_deadline != null)
-                    GestureDetector(
-                      onTap: () => setState(() => _deadline = null),
-                      child: const Icon(Icons.close_rounded,
-                          size: 18, color: AppColors.textTertiary),
-                    ),
+              const SizedBox(height: AppSpacing.md),
+              AppTextField(
+                controller: _title,
+                label: 'Title',
+                prefixIcon: Icons.title_rounded,
+                autofocus: true,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              // Type-specific fields (collapses to nothing for a general task).
+              DynamicWorkForm(
+                definition: WorkTypeRegistry.instance.byId(_workType),
+                initialData: _workData,
+                errors: _workFieldErrors,
+                onChanged: (data) => _workData = data,
+              ),
+              AppTextField(
+                controller: _desc,
+                label: 'Description (optional)',
+                prefixIcon: Icons.notes_rounded,
+                maxLines: 4,
+                minLines: 1,
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+              ),
+            ],
+          )),
+
+          // ── Steps: the checklist builder ────────────────────────────────
+          section(
+            label: 'Steps',
+            icon: Icons.checklist_rounded,
+            child: _ChecklistBuilder(
+              controllers: _itemControllers,
+              required: _itemRequired,
+              onAdd: _addChecklistItem,
+              onRemove: _removeChecklistItem,
+              onToggleRequired: _toggleRequired,
+            ),
+          ),
+
+          // ── Reference: "what good looks like" ───────────────────────────
+          section(
+            label: 'Reference',
+            icon: Icons.image_outlined,
+            child: AttachmentPickerField(
+              attachments: _newRefs,
+              allowVideo: false,
+              title: 'Reference images',
+              hint: 'Attach photos showing how this should look — the employee '
+                  'sees them before starting. Photos are compressed before upload.',
+              existing: _existingRefs,
+              onRemoveExisting: (a) => setState(() => _existingRefs.remove(a)),
+              onChanged: (list) => setState(() => _newRefs = list),
+            ),
+          ),
+
+          // ── Assignment: branch, mode, and who ───────────────────────────
+          section(
+              label: 'Assignment',
+              icon: Icons.group_outlined,
+              child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (widget.isAdmin) ...[
+                _BranchField(
+                  future: _branchesFuture,
+                  value: _branchId,
+                  onChanged: (v) => setState(() {
+                    _branchId = v;
+                    _assignees.clear(); // employees differ per branch
+                    _syncEmployeesFuture();
+                  }),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (isNew) ...[
+                const _FieldCaption('Assigned to'),
+                const SizedBox(height: AppSpacing.sm),
+                _Segmented<TaskAssignmentType>(
+                  value: _assignmentType,
+                  onChanged: (t) => setState(() => _assignmentType = t),
+                  segments: [
+                    for (final t in TaskAssignmentType.values)
+                      _Seg(t, t.label, icon: _assignmentIcon(t)),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              if (shiftMode)
+                ShiftChipPicker(
+                  value: _shift,
+                  onChanged: (s) => setState(() => _shift = s),
+                )
+              else
+                _AssigneeField(
+                  future: _employeesFuture,
+                  selected: _assignees,
+                  onChanged: (next) => setState(() {
+                    _assignees
+                      ..clear()
+                      ..addAll(next);
+                  }),
+                ),
+            ],
+          )),
+
+          // ── Scheduling: priority, deadline, cadence ─────────────────────
+          section(
+              label: 'Scheduling',
+              icon: Icons.event_note_outlined,
+              child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _FieldCaption('Priority'),
+              const SizedBox(height: AppSpacing.sm),
+              _Segmented<TaskPriority>(
+                value: _priority,
+                onChanged: (v) => setState(() => _priority = v),
+                segments: const [
+                  _Seg(TaskPriority.low, 'Low',
+                      icon: Icons.arrow_downward_rounded),
+                  _Seg(TaskPriority.normal, 'Normal',
+                      icon: Icons.remove_rounded),
+                  _Seg(TaskPriority.high, 'High',
+                      icon: Icons.priority_high_rounded),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          // Recurrence picker (new tasks only) — shift mode gets its own
-          // Once/Daily/Weekly picker instead (daily/weekly saves as a
-          // recurring shift-task template rather than a single task).
-          if (widget.existing == null)
-            if (_assignmentType == TaskAssignmentType.shift)
-              ShiftRepeatPicker(
-                value: _shiftRepeat,
-                onChanged: (v) => setState(() => _shiftRepeat = v),
-                weekday: _shiftWeekday,
-                onWeekdayChanged: (w) => setState(() => _shiftWeekday = w),
-              )
-            else
-              _RecurrencePicker(
-                value: _recurrence,
-                onChanged: (v) => setState(() => _recurrence = v),
+              const SizedBox(height: AppSpacing.md),
+              _DeadlineField(
+                value: _deadline,
+                onPick: _pickDeadline,
+                onQuick: (d) => setState(() => _deadline = d),
+                onClear: () => setState(() => _deadline = null),
               ),
-          if (_error != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            Text(_error!,
-                style: AppTypography.caption.copyWith(color: AppColors.error)),
-          ],
+              // Recurrence (new tasks only) — shift mode gets its own
+              // Once/Daily/Weekly picker (daily/weekly saves as a recurring
+              // shift-task template rather than a single task).
+              if (isNew) ...[
+                const SizedBox(height: AppSpacing.md),
+                if (shiftMode)
+                  ShiftRepeatPicker(
+                    value: _shiftRepeat,
+                    onChanged: (v) => setState(() => _shiftRepeat = v),
+                    weekday: _shiftWeekday,
+                    onWeekdayChanged: (w) =>
+                        setState(() => _shiftWeekday = w),
+                  )
+                else ...[
+                  const _FieldCaption('Repeats'),
+                  const SizedBox(height: AppSpacing.sm),
+                  _Segmented<RecurrenceFrequency>(
+                    value: _recurrence,
+                    onChanged: (v) => setState(() => _recurrence = v),
+                    segments: const [
+                      _Seg(RecurrenceFrequency.none, 'None'),
+                      _Seg(RecurrenceFrequency.daily, 'Daily'),
+                      _Seg(RecurrenceFrequency.weekly, 'Weekly'),
+                      _Seg(RecurrenceFrequency.monthly, 'Monthly'),
+                    ],
+                  ),
+                ],
+              ],
+            ],
+          )),
+
+          // ── Validation + submit ─────────────────────────────────────────
+          _FormErrorBanner(message: _error),
           const SizedBox(height: AppSpacing.xl),
           AppButton(
-            label: widget.existing == null ? 'Create Task' : 'Save Changes',
+            label: isNew ? 'Create Task' : 'Save Changes',
+            icon: const Icon(Icons.check_rounded,
+                size: 20, color: AppColors.onAccent),
             onPressed: _save,
           ),
         ],
@@ -555,14 +662,18 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
     );
   }
 
-  static String _dateLabel(DateTime d) =>
-      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  static IconData _assignmentIcon(TaskAssignmentType t) => switch (t) {
+        TaskAssignmentType.individual => Icons.person_outline_rounded,
+        TaskAssignmentType.team => Icons.groups_2_outlined,
+        TaskAssignmentType.shift => Icons.schedule_rounded,
+      };
 }
 
 /// Branch picker for the admin task form — loads active branches from Firestore
-/// and presents them as a dropdown of branch ids (label = name · location).
-class _BranchDropdown extends StatelessWidget {
-  const _BranchDropdown({
+/// and surfaces the choice as a premium summary tile that opens a searchable
+/// chooser sheet (never a bare dropdown, so a long branch list stays scannable).
+class _BranchField extends StatelessWidget {
+  const _BranchField({
     required this.future,
     required this.value,
     required this.onChanged,
@@ -572,6 +683,11 @@ class _BranchDropdown extends StatelessWidget {
   final String? value;
   final ValueChanged<String?> onChanged;
 
+  static String _label(BranchEntity b) =>
+      (b.location == null || b.location!.isEmpty)
+          ? b.name
+          : '${b.name} · ${b.location}';
+
   @override
   Widget build(BuildContext context) {
     return FutureBuilder<List<BranchEntity>>(
@@ -579,39 +695,190 @@ class _BranchDropdown extends StatelessWidget {
       builder: (context, snap) {
         final loading = snap.connectionState != ConnectionState.done;
         final branches = snap.data ?? const <BranchEntity>[];
-        return AppDropdownField<String>(
-          value: branches.any((b) => b.id == value) ? value : null,
-          prefixIcon: Icons.store_mall_directory_outlined,
-          hint: 'Select a branch',
+        BranchEntity? selected;
+        for (final b in branches) {
+          if (b.id == value) selected = b;
+        }
+        final ready = !loading && branches.isNotEmpty;
+        return _PickerTile(
+          icon: Icons.store_mall_directory_outlined,
+          label: 'Branch',
+          value: selected == null ? null : _label(selected),
           placeholder: loading
               ? 'Loading branches…'
               : branches.isEmpty
                   ? 'No branches — create one first'
-                  : null,
-          items: [
-            for (final b in branches)
-              DropdownMenuItem<String>(
-                value: b.id,
-                child: Text(
-                  b.location == null || b.location!.isEmpty
-                      ? b.name
-                      : '${b.name} · ${b.location}',
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  : 'Select a branch',
+          enabled: ready,
+          onTap: () async {
+            final picked = await showModalBottomSheet<String>(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: AppColors.darkSurface,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
               ),
-          ],
-          onChanged: onChanged,
+              builder: (_) =>
+                  _BranchPickerSheet(branches: branches, selectedId: value),
+            );
+            if (picked != null) onChanged(picked);
+          },
         );
       },
     );
   }
 }
 
-/// Inline checklist editor used inside the task creation / edit form.
-/// The parent [_TaskFormSheetState] owns all state (controllers, required flags,
+/// Searchable branch chooser opened from [_BranchField].
+class _BranchPickerSheet extends StatefulWidget {
+  const _BranchPickerSheet({required this.branches, required this.selectedId});
+  final List<BranchEntity> branches;
+  final String? selectedId;
+
+  @override
+  State<_BranchPickerSheet> createState() => _BranchPickerSheetState();
+}
+
+class _BranchPickerSheetState extends State<_BranchPickerSheet> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _query.trim().toLowerCase();
+    final items = q.isEmpty
+        ? widget.branches
+        : [
+            for (final b in widget.branches)
+              if ('${b.name} ${b.location ?? ''}'.toLowerCase().contains(q)) b,
+          ];
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding,
+        AppSpacing.md,
+        AppSpacing.pagePadding,
+        MediaQuery.of(context).viewInsets.bottom +
+            MediaQuery.of(context).padding.bottom +
+            AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SheetHandle(),
+          const SizedBox(height: AppSpacing.sm),
+          Text('Select branch', style: AppTypography.h3),
+          const SizedBox(height: 2),
+          Text('Where this work happens', style: AppTypography.caption),
+          const SizedBox(height: AppSpacing.md),
+          if (widget.branches.length > 6) ...[
+            AppTextField(
+              controller: _search,
+              label: 'Search branches',
+              prefixIcon: Icons.search_rounded,
+              textInputAction: TextInputAction.search,
+              onChanged: (s) => setState(() => _query = s),
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: items.length,
+              separatorBuilder: (_, _) =>
+                  const SizedBox(height: AppSpacing.sm),
+              itemBuilder: (context, i) {
+                final b = items[i];
+                return _BranchRow(
+                  branch: b,
+                  selected: b.id == widget.selectedId,
+                  onTap: () => Navigator.of(context).pop(b.id),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BranchRow extends StatelessWidget {
+  const _BranchRow({
+    required this.branch,
+    required this.selected,
+    required this.onTap,
+  });
+  final BranchEntity branch;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasLocation =
+        branch.location != null && branch.location!.isNotEmpty;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.lgAll,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primarySurface
+              : AppColors.darkSurfaceElevated,
+          borderRadius: AppRadius.lgAll,
+          border: Border.all(
+              color: selected ? AppColors.primary : AppColors.darkBorder),
+        ),
+        child: Row(
+          children: [
+            const _LeadIcon(icon: Icons.store_mall_directory_outlined),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(branch.name,
+                      style: AppTypography.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  if (hasLocation) ...[
+                    const SizedBox(height: 1),
+                    Text(branch.location!,
+                        style: AppTypography.caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Icon(
+              selected
+                  ? Icons.check_circle_rounded
+                  : Icons.radio_button_unchecked_rounded,
+              size: 20,
+              color: selected ? AppColors.primary : AppColors.textTertiary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Premium checklist builder used inside the task creation / edit form — turns
+/// the work into numbered, ordered steps (each optionally *required*). The
+/// parent [_TaskFormSheetState] owns all state (controllers, required flags,
 /// ids); this widget is stateless and just renders + calls back.
-class _InlineChecklistEditor extends StatelessWidget {
-  const _InlineChecklistEditor({
+class _ChecklistBuilder extends StatelessWidget {
+  const _ChecklistBuilder({
     required this.controllers,
     required this.required,
     required this.onAdd,
@@ -627,95 +894,89 @@ class _InlineChecklistEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final empty = controllers.isEmpty;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: AppColors.darkSurfaceElevated,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: AppRadius.lgAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header row
           Row(
             children: [
-              const Icon(Icons.checklist_rounded,
-                  size: 16, color: AppColors.textTertiary),
-              const SizedBox(width: AppSpacing.sm),
-              Text('Checklist', style: AppTypography.labelSmall),
-              if (controllers.isNotEmpty) ...[
+              Text('Break the work into steps',
+                  style: AppTypography.labelSmall
+                      .copyWith(color: AppColors.textSecondary)),
+              if (!empty) ...[
                 const SizedBox(width: AppSpacing.sm),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: AppColors.darkBg,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppColors.darkBorder),
-                  ),
-                  child: Text('${controllers.length}',
-                      style: AppTypography.caption),
-                ),
+                _CountPill(controllers.length),
               ],
-              const Spacer(),
-              GestureDetector(
-                onTap: onAdd,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm, vertical: 4),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppColors.darkBorder),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.add_rounded,
-                          size: 14, color: AppColors.textSecondary),
-                      const SizedBox(width: 3),
-                      Text('Add step',
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textSecondary)),
-                    ],
-                  ),
-                ),
-              ),
             ],
           ),
-          // Items
-          if (controllers.isEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text('No steps yet. Tap "Add step" to build the checklist.',
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textTertiary)),
-          ] else ...[
-            const SizedBox(height: AppSpacing.md),
-            for (var i = 0; i < controllers.length; i++)
-              _ChecklistItemRow(
-                key: ValueKey('ci_$i'),
-                controller: controllers[i],
-                isRequired: required[i],
-                onToggleRequired: () => onToggleRequired(i),
-                onRemove: () => onRemove(i),
-              ),
-          ],
+          // Animated so adding / removing a step glides instead of snapping.
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: empty
+                ? const _ChecklistEmpty()
+                : Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.md),
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < controllers.length; i++)
+                          _StepRow(
+                            key: ValueKey('ci_$i'),
+                            index: i + 1,
+                            controller: controllers[i],
+                            isRequired: required[i],
+                            onToggleRequired: () => onToggleRequired(i),
+                            onRemove: () => onRemove(i),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          _AddStepButton(onTap: onAdd),
         ],
       ),
     );
   }
 }
 
-/// A single editable row inside [_InlineChecklistEditor].
-class _ChecklistItemRow extends StatelessWidget {
-  const _ChecklistItemRow({
+/// Empty state for the checklist builder — a quiet nudge, never a wall of text.
+class _ChecklistEmpty extends StatelessWidget {
+  const _ChecklistEmpty();
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.sm),
+      child: Text(
+        'Optional — add ordered steps the employee ticks off as they work.',
+        style:
+            AppTypography.caption.copyWith(color: AppColors.textTertiary),
+      ),
+    );
+  }
+}
+
+/// A single editable, numbered step inside [_ChecklistBuilder].
+class _StepRow extends StatelessWidget {
+  const _StepRow({
     super.key,
+    required this.index,
     required this.controller,
     required this.isRequired,
     required this.onToggleRequired,
     required this.onRemove,
   });
 
+  final int index;
   final TextEditingController controller;
   final bool isRequired;
   final VoidCallback onToggleRequired;
@@ -727,60 +988,77 @@ class _ChecklistItemRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
         children: [
-          const Icon(Icons.drag_indicator_rounded,
-              size: 18, color: AppColors.darkBorder),
-          const SizedBox(width: 4),
+          // Step number — a quiet ordinal badge instead of a fake drag handle.
+          Container(
+            width: 24,
+            height: 24,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.darkBg,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.darkBorder),
+            ),
+            child: Text('$index',
+                style: AppTypography.caption
+                    .copyWith(color: AppColors.textSecondary)),
+          ),
+          const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: TextField(
               controller: controller,
-              style: AppTypography.bodySmall,
+              style: AppTypography.bodySmall
+                  .copyWith(color: AppColors.textPrimary),
               decoration: InputDecoration(
-                hintText: 'Step description…',
+                hintText: 'Describe this step…',
                 hintStyle: AppTypography.bodySmall
                     .copyWith(color: AppColors.textTertiary),
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.md, vertical: 10),
                 filled: true,
                 fillColor: AppColors.darkBg,
+                isDense: true,
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.smAll,
                   borderSide: const BorderSide(color: AppColors.darkBorder),
                 ),
                 enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.smAll,
                   borderSide: const BorderSide(color: AppColors.darkBorder),
                 ),
                 focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: AppRadius.smAll,
                   borderSide:
                       const BorderSide(color: AppColors.textSecondary),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 6),
-          // Required toggle: filled star = required, outline = optional
+          const SizedBox(width: AppSpacing.xs),
+          // Required toggle: filled star = required, outline = optional.
           Tooltip(
             message: isRequired
                 ? 'Required — tap to make optional'
                 : 'Optional — tap to make required',
-            child: GestureDetector(
-              onTap: onToggleRequired,
-              child: Icon(
-                isRequired
-                    ? Icons.star_rounded
-                    : Icons.star_outline_rounded,
+            child: IconButton(
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+              onPressed: onToggleRequired,
+              icon: Icon(
+                isRequired ? Icons.star_rounded : Icons.star_outline_rounded,
                 size: 18,
                 color: isRequired
-                    ? AppColors.textSecondary
+                    ? AppColors.textPrimary
                     : AppColors.textTertiary,
               ),
             ),
           ),
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: onRemove,
-            child: const Icon(Icons.close_rounded,
+          IconButton(
+            visualDensity: VisualDensity.compact,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 32, height: 32),
+            onPressed: onRemove,
+            icon: const Icon(Icons.close_rounded,
                 size: 18, color: AppColors.textTertiary),
           ),
         ],
@@ -789,166 +1067,375 @@ class _ChecklistItemRow extends StatelessWidget {
   }
 }
 
-/// Assign-on-create picker shown inside the task form — select one or more of
-/// the branch's employees as you create the task (no more "create, then assign").
-/// State (the selected set + the loaded future) lives on [_TaskFormSheetState];
-/// this widget renders + calls back.
-class _AssigneePicker extends StatelessWidget {
-  const _AssigneePicker({
+/// Full-width dashed "add a step" affordance at the foot of the builder.
+class _AddStepButton extends StatelessWidget {
+  const _AddStepButton({required this.onTap});
+  final VoidCallback onTap;
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: AppRadius.smAll,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: AppColors.darkBg,
+          borderRadius: AppRadius.smAll,
+          border: Border.all(color: AppColors.darkBorder),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.add_rounded,
+                size: 16, color: AppColors.textSecondary),
+            const SizedBox(width: AppSpacing.sm),
+            Text('Add step',
+                style: AppTypography.labelSmall
+                    .copyWith(color: AppColors.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A small count chip (e.g. `3`) used by section builders.
+class _CountPill extends StatelessWidget {
+  const _CountPill(this.count);
+  final int count;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+      decoration: BoxDecoration(
+        color: AppColors.darkBg,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Text('$count', style: AppTypography.caption),
+    );
+  }
+}
+
+/// Assign-on-create field shown inside the task form — a summary tile (stacked
+/// avatars + count) that opens a searchable multi-select sheet. State (the
+/// selected set + the loaded future) lives on [_TaskFormSheetState]; this widget
+/// renders + returns the new selection through [onChanged].
+class _AssigneeField extends StatelessWidget {
+  const _AssigneeField({
     required this.future,
     required this.selected,
-    required this.onToggle,
-    required this.onToggleAll,
+    required this.onChanged,
   });
 
   final Future<List<UserEntity>>? future;
   final Set<String> selected;
-  final ValueChanged<String> onToggle;
-  final ValueChanged<List<UserEntity>> onToggleAll;
+  final ValueChanged<Set<String>> onChanged;
+
+  static String _name(UserEntity u) =>
+      (u.displayName != null && u.displayName!.isNotEmpty)
+          ? u.displayName!
+          : u.email;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurfaceElevated,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.darkBorder),
-      ),
-      child: future == null
-          ? _withHint('Pick a branch to choose who to assign.')
-          : FutureBuilder<List<UserEntity>>(
-              future: future,
-              builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return _withHint('Loading team…');
-                }
-                final employees = snap.data ?? const <UserEntity>[];
-                if (employees.isEmpty) {
-                  return _withHint('No employees in this branch yet.');
-                }
-                final allSelected =
-                    employees.every((u) => selected.contains(u.uid));
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _headerRow(
-                      trailing: GestureDetector(
-                        onTap: () => onToggleAll(employees),
-                        child: Text(allSelected ? 'Clear all' : 'Whole team',
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.textSecondary)),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        for (final u in employees)
-                          _EmployeeChip(
-                            user: u,
-                            selected: selected.contains(u.uid),
-                            onTap: () => onToggle(u.uid),
-                          ),
-                      ],
-                    ),
-                  ],
-                );
-              },
+    if (future == null) {
+      return const _PickerTile(
+        icon: Icons.group_add_outlined,
+        label: 'Assignees',
+        placeholder: 'Pick a branch first',
+        enabled: false,
+      );
+    }
+    return FutureBuilder<List<UserEntity>>(
+      future: future,
+      builder: (context, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const _PickerTile(
+            icon: Icons.group_add_outlined,
+            label: 'Assignees',
+            placeholder: 'Loading team…',
+            enabled: false,
+          );
+        }
+        final employees = snap.data ?? const <UserEntity>[];
+        if (employees.isEmpty) {
+          return const _PickerTile(
+            icon: Icons.group_add_outlined,
+            label: 'Assignees',
+            placeholder: 'No employees in this branch yet',
+            enabled: false,
+          );
+        }
+        final chosen = [
+          for (final u in employees)
+            if (selected.contains(u.uid)) u,
+        ];
+        final value = chosen.isEmpty
+            ? null
+            : chosen.length == 1
+                ? _name(chosen.first)
+                : '${chosen.length} people';
+        return _PickerTile(
+          icon: Icons.group_add_outlined,
+          label: 'Assignees',
+          value: value,
+          placeholder: 'Unassigned — pick who runs it',
+          leading: chosen.isEmpty ? null : _AvatarStack(users: chosen),
+          onTap: () async {
+            final result = await showModalBottomSheet<Set<String>>(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: AppColors.darkSurface,
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              builder: (_) =>
+                  _AssigneePickerSheet(employees: employees, initial: selected),
+            );
+            if (result != null) onChanged(result);
+          },
+        );
+      },
+    );
+  }
+}
+
+/// Overlapping avatar cluster (up to 3 faces + a `+N` overflow) shown as the
+/// leading glyph of the assignee tile once someone is picked.
+class _AvatarStack extends StatelessWidget {
+  const _AvatarStack({required this.users});
+  final List<UserEntity> users;
+
+  static const double _size = 30;
+  static const double _step = 19;
+
+  @override
+  Widget build(BuildContext context) {
+    const maxFaces = 3;
+    final faces = users.take(maxFaces).toList();
+    final extra = users.length - faces.length;
+    final slots = faces.length + (extra > 0 ? 1 : 0);
+    final width = _size + (slots - 1) * _step;
+    return SizedBox(
+      width: width,
+      height: _size,
+      child: Stack(
+        children: [
+          for (var i = 0; i < faces.length; i++)
+            Positioned(
+              left: i * _step,
+              child: _ringed(child: UserAvatar.fromUser(faces[i], size: 26)),
             ),
+          if (extra > 0)
+            Positioned(
+              left: faces.length * _step,
+              child: _ringed(
+                child: Container(
+                  width: 26,
+                  height: 26,
+                  alignment: Alignment.center,
+                  decoration: const BoxDecoration(
+                    color: AppColors.darkBg,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text('+$extra',
+                      style: AppTypography.caption
+                          .copyWith(color: AppColors.textSecondary)),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
-  Widget _withHint(String hint) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _headerRow(),
-          const SizedBox(height: AppSpacing.sm),
-          Text(hint,
-              style:
-                  AppTypography.caption.copyWith(color: AppColors.textTertiary)),
-        ],
-      );
-
-  Widget _headerRow({Widget? trailing}) => Row(
-        children: [
-          const Icon(Icons.group_add_outlined,
-              size: 16, color: AppColors.textTertiary),
-          const SizedBox(width: AppSpacing.sm),
-          Text('Assign to', style: AppTypography.labelSmall),
-          if (selected.isNotEmpty) ...[
-            const SizedBox(width: AppSpacing.sm),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: AppColors.darkBg,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: AppColors.darkBorder),
-              ),
-              child: Text('${selected.length}', style: AppTypography.caption),
-            ),
-          ],
-          const Spacer(),
-          ?trailing,
-        ],
+  Widget _ringed({required Widget child}) => Container(
+        padding: const EdgeInsets.all(2),
+        decoration: const BoxDecoration(
+          color: AppColors.darkSurface,
+          shape: BoxShape.circle,
+        ),
+        child: child,
       );
 }
 
-/// A selectable employee chip (avatar + name + toggle) used by [_AssigneePicker].
-class _EmployeeChip extends StatelessWidget {
-  const _EmployeeChip({
-    required this.user,
+/// Searchable multi-select employee chooser opened from [_AssigneeField]. Owns a
+/// local working set and returns it on "Done" (or null if dismissed), so the
+/// form only commits a deliberate selection.
+class _AssigneePickerSheet extends StatefulWidget {
+  const _AssigneePickerSheet({required this.employees, required this.initial});
+  final List<UserEntity> employees;
+  final Set<String> initial;
+
+  @override
+  State<_AssigneePickerSheet> createState() => _AssigneePickerSheetState();
+}
+
+class _AssigneePickerSheetState extends State<_AssigneePickerSheet> {
+  late final Set<String> _sel = {...widget.initial};
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  String _name(UserEntity u) =>
+      (u.displayName != null && u.displayName!.isNotEmpty)
+          ? u.displayName!
+          : u.email;
+
+  @override
+  Widget build(BuildContext context) {
+    final q = _query.trim().toLowerCase();
+    final items = q.isEmpty
+        ? widget.employees
+        : [
+            for (final u in widget.employees)
+              if ('${_name(u)} ${u.email}'.toLowerCase().contains(q)) u,
+          ];
+    final allSelected = widget.employees.isNotEmpty &&
+        widget.employees.every((u) => _sel.contains(u.uid));
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding,
+        AppSpacing.md,
+        AppSpacing.pagePadding,
+        MediaQuery.of(context).viewInsets.bottom +
+            MediaQuery.of(context).padding.bottom +
+            AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SheetHandle(),
+          const SizedBox(height: AppSpacing.sm),
+          Text('Assign employees', style: AppTypography.h3),
+          const SizedBox(height: 2),
+          Text('Choose who runs this work', style: AppTypography.caption),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              _QuickAction(
+                icon: Icons.groups_2_outlined,
+                label: allSelected ? 'Team selected' : 'Whole team',
+                active: allSelected,
+                onTap: () => setState(() {
+                  if (allSelected) {
+                    _sel.clear();
+                  } else {
+                    _sel.addAll(widget.employees.map((u) => u.uid));
+                  }
+                }),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              _QuickAction(
+                icon: Icons.person_off_outlined,
+                label: 'Clear',
+                active: false,
+                onTap: _sel.isEmpty ? null : () => setState(_sel.clear),
+              ),
+            ],
+          ),
+          if (widget.employees.length > 6) ...[
+            const SizedBox(height: AppSpacing.md),
+            AppTextField(
+              controller: _search,
+              label: 'Search team',
+              prefixIcon: Icons.search_rounded,
+              textInputAction: TextInputAction.search,
+              onChanged: (s) => setState(() => _query = s),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: items.length,
+              itemBuilder: (context, i) {
+                final u = items[i];
+                final selected = _sel.contains(u.uid);
+                return _AssigneeRow(
+                  name: _name(u),
+                  email: u.email,
+                  avatar: UserAvatar.fromUser(u, size: 38),
+                  selected: selected,
+                  onTap: () => setState(() {
+                    if (selected) {
+                      _sel.remove(u.uid);
+                    } else {
+                      _sel.add(u.uid);
+                    }
+                  }),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          AppButton(
+            label: _sel.isEmpty ? 'Done' : 'Assign ${_sel.length}',
+            onPressed: () => Navigator.of(context).pop(_sel),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One selectable employee row inside [_AssigneePickerSheet].
+class _AssigneeRow extends StatelessWidget {
+  const _AssigneeRow({
+    required this.name,
+    required this.email,
+    required this.avatar,
     required this.selected,
     required this.onTap,
   });
 
-  final UserEntity user;
+  final String name;
+  final String email;
+  final Widget avatar;
   final bool selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final name = (user.displayName != null && user.displayName!.isNotEmpty)
-        ? user.displayName!
-        : user.email;
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
-        decoration: BoxDecoration(
-          color: selected ? AppColors.primary.withAlpha(28) : AppColors.darkBg,
-          borderRadius: BorderRadius.circular(AppRadius.full),
-          border: Border.all(
-              color: selected ? AppColors.primary : AppColors.darkBorder),
-        ),
+      borderRadius: AppRadius.mdAll,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            UserAvatar.fromUser(user, size: 24),
-            const SizedBox(width: AppSpacing.sm),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 140),
-              child: Text(
-                name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.caption.copyWith(
-                  color:
-                      selected ? AppColors.primary : AppColors.textPrimary,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-                ),
+            avatar,
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name,
+                      style: AppTypography.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                  Text(email,
+                      style: AppTypography.caption,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis),
+                ],
               ),
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: AppSpacing.sm),
             Icon(
               selected
                   ? Icons.check_circle_rounded
-                  : Icons.add_circle_outline_rounded,
-              size: 16,
-              color: selected ? AppColors.primary : AppColors.textTertiary,
+                  : Icons.radio_button_unchecked_rounded,
+              size: 22,
+              color: selected ? AppColors.success : AppColors.textTertiary,
             ),
           ],
         ),
@@ -1331,111 +1818,239 @@ class _SubmittedWork extends StatelessWidget {
   }
 }
 
-// ─── Shared dropdown ─────────────────────────────────────────────
-class _Dropdown<T> extends StatelessWidget {
-  const _Dropdown({
-    required this.label,
-    required this.value,
-    required this.items,
-    required this.labelOf,
-    required this.onChanged,
-  });
+// ─── Premium form primitives ─────────────────────────────────────
+// A small, cohesive kit shared across the create sheet so every section reads
+// as one system: a hero header, group dividers, a sliding segmented control,
+// summary picker tiles, the deadline field and an animated validation banner.
 
-  final String label;
-  final T value;
-  final List<T> items;
-  final String Function(T) labelOf;
-  final void Function(T) onChanged;
+/// The sheet's hero header — title + a one-line intent, so the form opens like
+/// a workflow builder rather than a bare "New Task".
+class _SheetHeader extends StatelessWidget {
+  const _SheetHeader({required this.title, required this.subtitle});
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTypography.h2),
+          const SizedBox(height: 2),
+          Text(subtitle, style: AppTypography.caption),
+        ],
+      ),
+    );
+  }
+}
+
+/// A group divider — a small labelled heading with a trailing hairline that
+/// visually partitions the long form into scannable sections.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label, {this.icon});
+  final String label;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xl, bottom: AppSpacing.md),
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 15, color: AppColors.textTertiary),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+          Text(
+            label.toUpperCase(),
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 1.1,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          const Expanded(child: Divider(color: AppColors.darkBorder, height: 1)),
+        ],
+      ),
+    );
+  }
+}
+
+/// A small caption above a control (e.g. above a segmented control).
+class _FieldCaption extends StatelessWidget {
+  const _FieldCaption(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Text(text,
+      style: AppTypography.labelSmall
+          .copyWith(color: AppColors.textSecondary));
+}
+
+/// The soft rounded 36px icon tile that leads a [_PickerTile] / list row.
+class _LeadIcon extends StatelessWidget {
+  const _LeadIcon({required this.icon});
+  final IconData icon;
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+      width: 36,
+      height: 36,
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
-        borderRadius: BorderRadius.circular(16),
+        color: AppColors.darkBg,
+        borderRadius: AppRadius.mdAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
-          value: value,
-          isExpanded: true,
-          dropdownColor: AppColors.darkSurfaceElevated,
-          borderRadius: AppRadius.cardAll,
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: AppColors.textTertiary),
-          style: AppTypography.body.copyWith(color: AppColors.textPrimary),
-          items: [
-            for (final item in items)
-              DropdownMenuItem<T>(
-                value: item,
-                child: Text('$label: ${labelOf(item)}'),
+      child:
+          Icon(icon, size: 18, color: AppColors.textSecondary),
+    );
+  }
+}
+
+/// A tappable summary row — a leading glyph, a label, and the current value (or
+/// a muted placeholder). The house replacement for dropdown-style selectors:
+/// the *value* stays visible in the form; the *choosing* happens in a sheet.
+class _PickerTile extends StatelessWidget {
+  const _PickerTile({
+    required this.icon,
+    required this.label,
+    this.value,
+    this.placeholder,
+    this.leading,
+    this.onTap,
+    this.onClear,
+    this.enabled = true,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? value;
+  final String? placeholder;
+  final Widget? leading;
+  final VoidCallback? onTap;
+  final VoidCallback? onClear;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = value != null;
+    return Opacity(
+      opacity: enabled ? 1 : 0.55,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: AppRadius.xlAll,
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md, vertical: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: AppColors.darkSurface,
+            borderRadius: AppRadius.xlAll,
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: Row(
+            children: [
+              leading ?? _LeadIcon(icon: icon),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style: AppTypography.caption
+                            .copyWith(color: AppColors.textTertiary)),
+                    const SizedBox(height: 2),
+                    Text(
+                      filled ? value! : (placeholder ?? ''),
+                      style: AppTypography.body.copyWith(
+                        color: filled
+                            ? AppColors.textPrimary
+                            : AppColors.textTertiary,
+                        fontWeight: filled ? FontWeight.w500 : FontWeight.w400,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
               ),
-          ],
-          onChanged: (v) {
-            if (v != null) onChanged(v);
-          },
+              const SizedBox(width: AppSpacing.sm),
+              if (onClear != null && filled)
+                GestureDetector(
+                  onTap: onClear,
+                  behavior: HitTestBehavior.opaque,
+                  child: const Icon(Icons.close_rounded,
+                      size: 18, color: AppColors.textTertiary),
+                )
+              else if (enabled)
+                const Icon(Icons.chevron_right_rounded,
+                    size: 20, color: AppColors.textTertiary),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// "Assigned to" mode chip row (Employee / Team / Shift) — new tasks only.
-/// Employee/Team both keep the existing [_AssigneePicker] (Team is a UX-level
-/// alias for multi-select individual, same `assigneeIds` mechanism); Shift
-/// swaps it for [ShiftChipPicker] (Shift Assignment feature).
-class _AssignedToPicker extends StatelessWidget {
-  const _AssignedToPicker({required this.value, required this.onChanged});
-  final TaskAssignmentType value;
-  final void Function(TaskAssignmentType) onChanged;
+/// The optional-deadline control — a summary tile plus quick "Today / Tomorrow /
+/// Next week" chips, so the common cases are one tap and precise dates stay one
+/// tap deeper (progressive disclosure). Empty by default; nothing is imposed.
+class _DeadlineField extends StatelessWidget {
+  const _DeadlineField({
+    required this.value,
+    required this.onPick,
+    required this.onQuick,
+    required this.onClear,
+  });
+
+  final DateTime? value;
+  final VoidCallback onPick;
+  final ValueChanged<DateTime> onQuick;
+  final VoidCallback onClear;
+
+  static String _fmt(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${months[d.month - 1]} ${d.day}, ${d.year}';
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final quicks = <(String, DateTime)>[
+      ('Today', today),
+      ('Tomorrow', today.add(const Duration(days: 1))),
+      ('Next week', today.add(const Duration(days: 7))),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            const Icon(Icons.group_outlined,
-                size: 16, color: AppColors.textTertiary),
-            const SizedBox(width: AppSpacing.sm),
-            Text('Assigned to', style: AppTypography.bodySmall),
-          ],
+        _PickerTile(
+          icon: Icons.event_outlined,
+          label: 'Deadline',
+          value: value == null ? null : _fmt(value!),
+          placeholder: 'No deadline',
+          onTap: onPick,
+          onClear: onClear,
         ),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
           spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            for (final type in TaskAssignmentType.values)
-              GestureDetector(
-                onTap: () => onChanged(type),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: value == type
-                        ? AppColors.primary
-                        : AppColors.darkSurfaceElevated,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: value == type
-                          ? AppColors.primary
-                          : AppColors.darkBorder,
-                    ),
-                  ),
-                  child: Text(
-                    type.label,
-                    style: AppTypography.caption.copyWith(
-                      color: value == type
-                          ? AppColors.onPrimary
-                          : AppColors.textSecondary,
-                      fontWeight:
-                          value == type ? FontWeight.w700 : FontWeight.normal,
-                    ),
-                  ),
-                ),
+            for (final (label, date) in quicks)
+              _MiniChip(
+                label: label,
+                selected: value != null && _sameDay(value!, date),
+                onTap: () => onQuick(date),
               ),
           ],
         ),
@@ -1444,7 +2059,203 @@ class _AssignedToPicker extends StatelessWidget {
   }
 }
 
-/// Morning/Night shift chip picker, shown instead of [_AssigneePicker] when
+/// A compact selectable chip for quick presets (e.g. deadline shortcuts).
+class _MiniChip extends StatelessWidget {
+  const _MiniChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.primary
+              : AppColors.darkSurfaceElevated,
+          borderRadius: AppRadius.fullAll,
+          border: Border.all(
+              color: selected ? AppColors.primary : AppColors.darkBorder),
+        ),
+        child: Text(
+          label,
+          style: AppTypography.caption.copyWith(
+            color: selected ? AppColors.onPrimary : AppColors.textSecondary,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One option in a [_Segmented] control.
+class _Seg<T> {
+  const _Seg(this.value, this.label, {this.icon});
+  final T value;
+  final String label;
+  final IconData? icon;
+}
+
+/// A premium iOS-style segmented control with a sliding thumb — the house
+/// replacement for a short single-choice dropdown (priority, assignment mode,
+/// recurrence). Equal-width segments; the white thumb eases to the selection.
+class _Segmented<T> extends StatelessWidget {
+  const _Segmented({
+    required this.segments,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<_Seg<T>> segments;
+  final T value;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final n = segments.length;
+    final index = segments.indexWhere((s) => s.value == value);
+    // Align.x for equal-width slots: -1 at slot 0 … +1 at slot n-1.
+    final thumbX = n <= 1 ? 0.0 : (2 * (index < 0 ? 0 : index) / (n - 1)) - 1;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Stack(
+        children: [
+          if (index >= 0)
+            Positioned.fill(
+              child: AnimatedAlign(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment(thumbX, 0),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / n,
+                  heightFactor: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          Row(
+            children: [
+              for (final seg in segments)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onChanged(seg.value),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      child: _SegLabel(seg: seg, selected: seg.value == value),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegLabel extends StatelessWidget {
+  const _SegLabel({required this.seg, required this.selected});
+  final _Seg seg;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.onPrimary : AppColors.textSecondary;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (seg.icon != null) ...[
+          Icon(seg.icon, size: 15, color: color),
+          const SizedBox(width: 5),
+        ],
+        Flexible(
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 180),
+            style: AppTypography.caption.copyWith(
+              color: color,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+            ),
+            child: Text(seg.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Animated, monochrome-friendly validation banner shown above the CTA. Slides
+/// open when a message arrives and collapses cleanly when it clears, so an error
+/// reads as a deliberate moment rather than red text jumping in.
+class _FormErrorBanner extends StatelessWidget {
+  const _FormErrorBanner({required this.message});
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: message == null
+          ? const SizedBox(width: double.infinity)
+          : Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.md),
+              child: EntranceFade(
+                offset: 8,
+                duration: const Duration(milliseconds: 220),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorSurface,
+                    borderRadius: AppRadius.lgAll,
+                    border: Border.all(color: AppColors.error.withAlpha(90)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.error_outline_rounded,
+                          size: 18, color: AppColors.error),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(message!,
+                            style: AppTypography.bodySmall
+                                .copyWith(color: AppColors.error)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}
+
+/// Morning/Night shift chip picker, shown instead of [_AssigneeField] when
 /// "Shift" is the assigned-to mode (Shift Assignment feature) — the task
 /// targets whoever is rostered on the picked shift, not named employees.
 class ShiftChipPicker extends StatelessWidget {
@@ -1639,63 +2450,3 @@ class WeekdayChipPicker extends StatelessWidget {
   }
 }
 
-/// Compact recurrence selector: chips for None / Daily / Weekly / Monthly.
-class _RecurrencePicker extends StatelessWidget {
-  const _RecurrencePicker({required this.value, required this.onChanged});
-  final RecurrenceFrequency value;
-  final void Function(RecurrenceFrequency) onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.repeat_rounded,
-                size: 16, color: AppColors.textTertiary),
-            const SizedBox(width: AppSpacing.sm),
-            Text('Repeats', style: AppTypography.bodySmall),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          children: [
-            for (final freq in RecurrenceFrequency.values)
-              GestureDetector(
-                onTap: () => onChanged(freq),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: value == freq
-                        ? AppColors.primary
-                        : AppColors.darkSurfaceElevated,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: value == freq
-                          ? AppColors.primary
-                          : AppColors.darkBorder,
-                    ),
-                  ),
-                  child: Text(
-                    freq.label,
-                    style: AppTypography.caption.copyWith(
-                      color: value == freq
-                          ? AppColors.onPrimary
-                          : AppColors.textSecondary,
-                      fontWeight: value == freq
-                          ? FontWeight.w700
-                          : FontWeight.normal,
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ],
-    );
-  }
-}

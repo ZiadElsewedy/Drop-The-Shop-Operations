@@ -26,12 +26,14 @@ class TaskModel {
   final String title;
   final String? description;
   final TaskType type;
+  final String workType;
   final TaskStatus status;
   final TaskPriority priority;
   final String? branchId;
   final List<String> assigneeIds;
   final List<ChecklistItem> checklist;
   final List<TaskAttachment> referenceAttachments;
+  final Map<String, dynamic> data;
   final String? createdBy;
   final String? assignedShiftId;
   final ScheduleShift? shift;
@@ -62,12 +64,14 @@ class TaskModel {
     required this.title,
     this.description,
     this.type = TaskType.daily,
+    this.workType = 'general',
     this.status = TaskStatus.pending,
     this.priority = TaskPriority.normal,
     this.branchId,
     this.assigneeIds = const [],
     this.checklist = const [],
     this.referenceAttachments = const [],
+    this.data = const {},
     this.createdBy,
     this.assignedShiftId,
     this.shift,
@@ -99,12 +103,14 @@ class TaskModel {
         title: map['title'] as String? ?? '',
         description: map['description'] as String?,
         type: TaskType.fromString(map['type'] as String?),
+        workType: (map['workType'] as String?) ?? 'general',
         status: TaskStatus.fromString(map['status'] as String?),
         priority: TaskPriority.fromString(map['priority'] as String?),
         branchId: map['branchId'] as String?,
         assigneeIds: _assigneesFromMap(map),
         checklist: _checklistFromList(map['checklist']),
         referenceAttachments: _attachmentsFromList(map['referenceAttachments']),
+        data: _dataFromMap(map['data']),
         createdBy: map['createdBy'] as String?,
         assignedShiftId: map['assignedShiftId'] as String?,
         shift: ScheduleShift.fromStringOrNull(map['shift'] as String?),
@@ -136,12 +142,14 @@ class TaskModel {
         title: e.title,
         description: e.description,
         type: e.type,
+        workType: e.workType,
         status: e.status,
         priority: e.priority,
         branchId: e.branchId,
         assigneeIds: e.assigneeIds,
         checklist: e.checklist,
         referenceAttachments: e.referenceAttachments,
+        data: e.data,
         createdBy: e.createdBy,
         assignedShiftId: e.assignedShiftId,
         shift: e.shift,
@@ -177,6 +185,7 @@ class TaskModel {
         'title': title,
         'description': description,
         'type': type.value,
+        'workType': workType,
         'status': status.value,
         'priority': priority.value,
         'branchId': branchId,
@@ -184,6 +193,7 @@ class TaskModel {
         'assignedEmployeeId': assigneeIds.isEmpty ? null : assigneeIds.first,
         'checklist': _checklistToList(checklist),
         'referenceAttachments': _attachmentsToList(referenceAttachments),
+        'data': _dataToMap(data),
         'createdBy': createdBy,
         'assignedShiftId': assignedShiftId,
         'shift': shift?.value,
@@ -219,12 +229,14 @@ class TaskModel {
         title: title,
         description: description,
         type: type,
+        workType: workType,
         status: status,
         priority: priority,
         branchId: branchId,
         assigneeIds: assigneeIds,
         checklist: checklist,
         referenceAttachments: referenceAttachments,
+        data: data,
         createdBy: createdBy,
         assignedShiftId: assignedShiftId,
         shift: shift,
@@ -256,12 +268,14 @@ class TaskModel {
         title: title,
         description: description,
         type: type,
+        workType: workType,
         status: status,
         priority: priority,
         branchId: branchId,
         assigneeIds: assigneeIds,
         checklist: checklist,
         referenceAttachments: referenceAttachments,
+        data: data,
         createdBy: createdBy,
         assignedShiftId: assignedShiftId,
         shift: shift,
@@ -387,6 +401,46 @@ class TaskModel {
             'attachments': _attachmentsToList(e.attachments),
           },
       ];
+
+  /// Reads the dynamic work-type [TaskEntity.data] map, converting persisted
+  /// [Timestamp]s back to [DateTime] so date/time fields stay strongly typed in
+  /// the domain. Non-map input → empty (back-compat for pre-work-type docs).
+  static Map<String, dynamic> _dataFromMap(dynamic raw) {
+    if (raw is! Map) return const {};
+    return {
+      for (final entry in raw.entries)
+        entry.key.toString(): _decodeValue(entry.value),
+    };
+  }
+
+  static dynamic _decodeValue(dynamic v) {
+    if (v is Timestamp) return v.toDate();
+    if (v is Map) {
+      return {
+        for (final e in v.entries) e.key.toString(): _decodeValue(e.value),
+      };
+    }
+    if (v is List) return v.map(_decodeValue).toList();
+    return v;
+  }
+
+  /// Writes the dynamic work-type [TaskEntity.data] map, converting [DateTime]s
+  /// to [Timestamp] (Firestore cannot store a raw `DateTime`). Recurses into
+  /// nested maps/lists (e.g. an inspection's per-point results map).
+  static Map<String, dynamic> _dataToMap(Map<String, dynamic> data) => {
+        for (final entry in data.entries) entry.key: _encodeValue(entry.value),
+      };
+
+  static dynamic _encodeValue(dynamic v) {
+    if (v is DateTime) return Timestamp.fromDate(v);
+    if (v is Map) {
+      return {
+        for (final e in v.entries) e.key.toString(): _encodeValue(e.value),
+      };
+    }
+    if (v is List) return v.map(_encodeValue).toList();
+    return v;
+  }
 
   static List<TaskAttachment> _attachmentsFromList(dynamic raw) {
     if (raw is! List) return const [];

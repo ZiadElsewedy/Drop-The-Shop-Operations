@@ -30,6 +30,7 @@ import 'package:drop/features/task/domain/entities/task_template_entity.dart';
 import 'package:drop/features/task/domain/note_category.dart';
 import 'package:drop/features/task/domain/repositories/task_repository.dart';
 import 'package:drop/features/task/domain/task_ordering.dart';
+import 'package:drop/features/task/domain/work_types/task_work_x.dart';
 import 'package:drop/features/task/domain/usecases/assign_task.dart';
 import 'package:drop/features/task/domain/usecases/create_task.dart';
 import 'package:drop/features/task/domain/usecases/delete_task.dart';
@@ -296,6 +297,12 @@ class TaskCubit extends Cubit<TaskState> {
     required String title,
     String? description,
     required TaskType type,
+    /// The operational work type (Registry id — `general`, `transfer`,
+    /// `inventoryCount`, …). Defaults to `general` so every existing call site
+    /// (recurrence spawn, template materialize) is unaffected.
+    String workType = 'general',
+    /// Schema-driven values for [workType]'s dynamic fields.
+    Map<String, dynamic> data = const {},
     required TaskPriority priority,
     required String branchId,
     DateTime? deadline,
@@ -325,6 +332,8 @@ class TaskCubit extends Cubit<TaskState> {
         title: title,
         description: description,
         type: type,
+        workType: workType,
+        data: data,
         priority: priority,
         branchId: branchId,
         assigneeIds: effectiveAssigneeIds,
@@ -676,6 +685,51 @@ class TaskCubit extends Cubit<TaskState> {
     return _mutate(() => _updateTask(task.copyWith(checklist: updated)));
   }
 
+  /// Merges [patch] into the task's schema-driven work-type [TaskEntity.data] —
+  /// the employee-captured completion fields (a counted quantity, an amount
+  /// spent, inspection results). A single `_updateTask` write; a `null` value in
+  /// [patch] removes the key. Permitted for an assignee by the deployed rules
+  /// (it's an ordinary field like notes/checklist — no frozen field is touched).
+  Future<void> updateWorkData(TaskEntity task, Map<String, dynamic> patch) {
+    if (patch.isEmpty) return Future<void>.value();
+    final next = {...task.data};
+    patch.forEach((k, v) {
+      if (v == null) {
+        next.remove(k);
+      } else {
+        next[k] = v;
+      }
+    });
+    return _mutate(() => _updateTask(task.copyWith(data: next)));
+  }
+
+  /// Records a per-type [WorkEvent] milestone on the timeline (a transfer's
+  /// "dispatched" / "received", a purchase's "purchased", …). The milestone
+  /// rides `ActivityEntry.status` as its [eventId], so it renders on the generic
+  /// activity timeline with no core-status change. Idempotent — a no-op if the
+  /// milestone is already logged.
+  Future<void> logWorkEvent(
+    TaskEntity task, {
+    required String eventId,
+    String? note,
+  }) {
+    if (task.activityLog.any((e) => e.status == eventId)) {
+      return Future<void>.value();
+    }
+    return _mutate(() => _updateTask(task.copyWith(
+          activityLog: [
+            ...task.activityLog,
+            ActivityEntry(
+              status: eventId,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: DateTime.now(),
+              note: note,
+            ),
+          ],
+        )));
+  }
+
   /// Appends a manager/admin operational **note** to the task's timeline WITHOUT
   /// a status change — fast feedback from the feed's triage surface. No-op on
   /// blank text. The [category] (info / warning / issue) sets the note's
@@ -702,6 +756,13 @@ class TaskCubit extends Cubit<TaskState> {
   }
 
   Future<void> submitForReview(TaskEntity task) async {
+    final submission =
+        task.workDefinition.validateSubmission(task.workContext);
+    if (!submission.ok) {
+      _emitTransientError(
+          submission.firstError ?? "This task isn't ready to submit yet.");
+      return;
+    }
     final ok = await _transitionMutate(
       task,
       TaskStatus.waitingReview,
@@ -753,9 +814,15 @@ class TaskCubit extends Cubit<TaskState> {
           "That action isn't allowed for this task's current status.");
       return false;
     }
-    if (!task.requiredChecklistComplete) {
+    // The work type owns its completion gate (a general task = required checklist
+    // items done; an inventory count = a counted quantity; a transfer = a
+    // handover photo). Proof being uploaded *now* counts toward the gate.
+    final submission = task.workDefinition.validateSubmission(
+      task.workContext.withPendingProof(attachments.length),
+    );
+    if (!submission.ok) {
       _emitTransientError(
-          'Complete all required checklist items before submitting.');
+          submission.firstError ?? "This task isn't ready to submit yet.");
       return false;
     }
     if (_user == null || _mutating) return false;
