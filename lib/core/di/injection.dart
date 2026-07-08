@@ -90,6 +90,11 @@ import 'package:drop/features/requests/domain/usecases/create_request.dart';
 import 'package:drop/features/requests/domain/usecases/upload_request_attachment.dart';
 import 'package:drop/features/requests/presentation/cubit/request_detail_cubit.dart';
 import 'package:drop/features/requests/presentation/cubit/requests_list_cubit.dart';
+import 'package:drop/features/community/data/datasources/event_remote_datasource.dart';
+import 'package:drop/features/community/data/repositories/event_repository_impl.dart';
+import 'package:drop/features/community/domain/repositories/event_repository.dart';
+import 'package:drop/features/community/presentation/cubit/community_hub_cubit.dart';
+import 'package:drop/features/community/presentation/cubit/event_workspace_cubit.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart' show UserEntity;
 
 class AppDependencies {
@@ -176,6 +181,25 @@ class AppDependencies {
         uploadAttachment: _uploadRequestAttachment,
         user: user,
         requestId: requestId,
+      );
+
+  /// Community Hub / DROP Events — the hub list cubit (singleton, app-wide).
+  static late final CommunityHubCubit communityHubCubit;
+
+  // The event repository is kept so a fresh per-event [EventWorkspaceCubit] can
+  // be built on demand (one per opened event).
+  static late final EventRepository _eventRepository;
+
+  /// Builds a fresh workspace cubit for [eventId] (owned + disposed by its
+  /// `BlocProvider`; streams the event doc + owns every section edit).
+  static EventWorkspaceCubit createEventWorkspaceCubit(
+    String eventId,
+    UserEntity? user,
+  ) =>
+      EventWorkspaceCubit(
+        repository: _eventRepository,
+        user: user,
+        eventId: eventId,
       );
 
   /// Phase 3 task foundation, activated by the Phase 4 [taskCubit] + use cases.
@@ -309,6 +333,23 @@ class AppDependencies {
       branchRepository: branchRepository,
       createRequest: CreateRequest(requestRepository),
       uploadAttachment: _uploadRequestAttachment,
+    );
+
+    // ─── Community Hub / DROP Events ────────────────────────────────────
+    // Repo-direct (like branch/admin/schedule): the app-wide hub cubit reads a
+    // role-scoped realtime stream + files new events; the per-event workspace
+    // cubit is built on demand via [createEventWorkspaceCubit] and streams the
+    // single embedded event document. Reuses branchRepository for branch names.
+    final EventRepository eventRepository = EventRepositoryImpl(
+      EventRemoteDataSourceImpl(
+        FirebaseFirestore.instance,
+        FirebaseStorage.instance,
+      ),
+    );
+    _eventRepository = eventRepository;
+    communityHubCubit = CommunityHubCubit(
+      repository: eventRepository,
+      branchRepository: branchRepository,
     );
 
     // ─── Admin module (Phase 5) ───────────────────────────────

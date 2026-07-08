@@ -12,6 +12,66 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-07-08 — Community Hub / DROP Events: the flagship event workspace)
+
+A whole new flagship feature: **Community Hub** manages every internal and
+external DROP event (Collection Launch, Pop-up, Brand Collab, Community
+Gathering, Creator Meet, Branch Opening, Warehouse Sale, Internal Training, Team
+Building, Seasonal Campaign, VIP Event). An event is **not a calendar entry** —
+it is its own operational **workspace**, and the whole experience is built around
+that idea. New feature slice `lib/features/community/` (clean architecture,
+feature-first), plus 3 enums, wiring, rules, and tests.
+
+- **Domain (plain-immutable, no codegen — same pattern as `BroadcastScheduleEntity`):**
+  `EventEntity` carries identity (title, type, status, hero image, description,
+  branch, location, date, owner, expected attendance) **and every workspace
+  section embedded inline** — `EventMilestone` (timeline, grouped by
+  `EventPhase`), `EventAssignment` (team), `EventTask` (checklist, reuses
+  `TaskPriority`), `EventInventoryItem`, `EventLogisticsItem`, `EventBudgetLine`,
+  `EventAnnouncement`, and the after-event `EventOutcome`. So one `events/{id}`
+  document is the entire workspace and streams live as one snapshot. Derived
+  getters compute preparation progress and budget rollups.
+- **Intelligence — `event_readiness.dart`** (pure, unit-tested): a 0–100
+  readiness score + ranked insights (blockers / warnings / wins). Detects missing
+  owner, no date, no team, **unowned tasks**, over-budget spend, overdue
+  milestones/tasks, unconfirmed team, thin prep near the date, and celebrates
+  what's locked in — the "think beyond CRUD" layer. Pure hub ordering in
+  `event_ordering.dart` (live → soonest-upcoming → archive).
+- **Enums:** `EventType` (12 kinds), `EventStatus`
+  (`Draft → Planning → Ready → Live → Completed → Archived`, + `Cancelled`; forward
+  `advanceTo`/`advanceLabel`, `isActive`/`isPreparing`), `EventPhase` (5 timeline
+  chapters).
+- **Data:** `EventModel` (deep nested (de)serialization, `Timestamp ⇄ DateTime`
+  at the boundary), `EventRemoteDataSource` (Firestore + Storage; unordered
+  snapshots so a just-created event never hides from its author), repository impl
+  (soft-delete filter + ordering client-side, no composite index).
+- **Presentation:** app-wide `CommunityHubCubit` (role-scoped realtime stream +
+  create — repo-direct, like branch/admin/schedule) and a per-event
+  `EventWorkspaceCubit` (streams the doc, **one write path**: `copyWith` →
+  `updateEvent`, so every section edit is one atomic update; built on demand via
+  `AppDependencies.createEventWorkspaceCubit`).
+- **The flagship screen** — `event_workspace_screen.dart`: a **cinematic
+  collapsing hero** (artwork, status, live countdown, preparation bar, meta),
+  then the operational content revealed as **chapters** (Overview → Readiness →
+  Timeline → Team → Tasks → Inventory → Logistics → Budget → Communication →
+  After). The workspace **evolves with the event**: a live event floats a
+  **command center** to the top; a completed one settles into its archive.
+  Plus `community_hub_screen.dart` (spotlight rail + archive) and a focused
+  `create_event_screen.dart`. Editing is admin + manager (mirrors rules);
+  employees get the live, read-only story.
+- **Design:** strictly monochrome DROP system reused end-to-end (GlassContainer,
+  AdaptiveScaffold, the shared type scale/spacing/radius), a new `PreparationRing`
+  (animated), a `CheckRow`/`EventChapter` kit for rhythm, and premium bottom-sheet
+  editors. New **Community** sidebar destination for every role.
+- **Integration:** `events` collection constant, routes `/community`,
+  `/community/create`, `/event/:eventId`, DI wiring, app-wide provider,
+  `firestore.rules` (admin all · branch member read · admin/own-branch-manager
+  write · soft-delete only) and `storage.rules` (`events/{id}/hero.<ext>`).
+- **Tests:** `event_status_test`, `event_readiness_test`, `event_ordering_test`,
+  `event_model_test` (pure logic + serialization round-trip).
+- **Deliberately client-only** (no Cloud Functions / counters) to keep the slice
+  self-contained; server-side event notifications are a noted follow-up.
+
 ### Fixed (2026-07-08 — Requests close-out: generated state + analyzer clean)
 
 - Regenerated `requests_list_state.freezed.dart` after the Requests list state

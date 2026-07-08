@@ -55,6 +55,18 @@ service firebase.storage {
       allow update, delete: if false;
     }
 
+    // Event media (Community Hub): events/{eventId}/hero.<ext>. Unlike task /
+    // case / request evidence, the hero image is a single, replaceable cover at a
+    // fixed filename, so write (create + overwrite) is allowed — mirroring the
+    // branch-logo pattern. Any signed-in user may read (covers appear on the hub
+    // for every role); the meaningful gate is the Firestore write of the URL onto
+    // events/{id} (firestore.rules) — admin / own-branch manager only — so a
+    // non-editor upload can never be attached to an event.
+    match /events/{eventId}/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null;
+    }
+
     // Branch media (§8): branches/{branchId}/logo.jpg and cover.jpg. Any
     // signed-in user may read (logos appear on schedules / dashboards for every
     // role). Write is left to any signed-in user here because Storage rules

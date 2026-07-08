@@ -11,10 +11,59 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
+**Last updated:** 2026-07-08 (Community Hub / DROP Events — flagship event workspace)
+**Version:** 1.0.0+1 · **Branch:** `claude/community-hub-events-pzjvbp` (DROP — monochrome premium desktop UX)
 **Last updated:** 2026-07-08 (Requests closed out: analyzer clean + tests green)
 **Version:** 1.0.0+1 · **Branch:** `feature/ui-tasks` (DROP — monochrome premium desktop UX)
 **Last updated:** 2026-07-08 (Work Details design system + Create Work sheet UX)
 **Version:** 1.0.0+1 · **Branch:** `feature/work-management-system` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Community Hub / DROP Events — the flagship event workspace (2026-07-08)
+
+A whole new flagship feature (`lib/features/community/`): the **Community Hub**
+manages every internal and external DROP event, and every event is **its own
+operational workspace**, not a calendar row. Built full-stack, clean-architecture,
+strictly monochrome-premium — reusing the existing design system end-to-end.
+
+- **An event = one self-contained document with every section embedded.**
+  `EventEntity` (plain immutable, no codegen — the `BroadcastScheduleEntity`
+  pattern) carries identity **and** the workspace sections inline: timeline
+  milestones (by `EventPhase`), team assignments, tasks (reusing `TaskPriority`),
+  inventory, logistics, budget lines, announcements, and the after-event outcome.
+  So `events/{id}` streams the whole live workspace as one snapshot, and every
+  edit is one atomic `updateEvent` (the cubit's single write path:
+  `copyWith` → save).
+- **Intelligence, not CRUD.** `event_readiness.dart` (pure, unit-tested) computes
+  a 0–100 readiness score + ranked blockers/warnings/wins: missing owner, no date,
+  no team, **unowned tasks**, over-budget, overdue work, unconfirmed team, thin
+  prep near the date. Surfaced in a Readiness chapter.
+- **The flagship screen** (`event_workspace_screen.dart`): a **cinematic
+  collapsing hero** (artwork · status · live countdown · preparation bar) then the
+  content revealed as **chapters** (Overview → Readiness → Timeline → Team → Tasks
+  → Inventory → Logistics → Budget → Communication → After). It **evolves with the
+  event** — a live event floats a command center to the top; a completed one
+  becomes an elegant archive. Hub screen has a spotlight rail + archive; a focused
+  create flow opens the new workspace directly.
+- **Roles:** every role sees the hub (self-scoped: admin all branches · manager +
+  employee own branch); admin + manager create/edit (mirrors `firestore.rules`);
+  employees get the live, read-only story. New **Community** sidebar destination
+  for all roles.
+- **Cubits:** app-wide `CommunityHubCubit` (role-scoped realtime stream + create,
+  repo-direct) + per-event `EventWorkspaceCubit` (built on demand via
+  `AppDependencies.createEventWorkspaceCubit`). Enums `EventType`/`EventStatus`/
+  `EventPhase`. Routes `/community`, `/community/create`, `/event/:eventId`.
+  `firestore.rules` + `storage.rules` (`events/{id}/hero.<ext>`) added.
+- **Tests:** `event_status_test`, `event_readiness_test`, `event_ordering_test`,
+  `event_model_test`.
+- ⚠️ **Not yet run through `flutter analyze`/`flutter test`** — this session had
+  no Dart toolchain available (no `build_runner`/analyzer/test runner), so the
+  slice was written to compile by construction and reviewed by hand. It uses
+  **plain-immutable models + plain cubit states** specifically to avoid needing
+  codegen. Run `flutter analyze` + the four new tests before shipping.
+- **Deliberately client-only** (no Cloud Functions / counters) so the slice is
+  self-contained; server-side event notifications are a noted follow-up.
 
 ---
 

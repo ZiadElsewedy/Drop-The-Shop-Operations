@@ -43,6 +43,9 @@ import 'package:drop/features/cases/presentation/pages/case_conversation_screen.
 import 'package:drop/features/requests/presentation/pages/requests_screen.dart';
 import 'package:drop/features/requests/presentation/pages/create_request_screen.dart';
 import 'package:drop/features/requests/presentation/pages/request_detail_screen.dart';
+import 'package:drop/features/community/presentation/pages/community_hub_screen.dart';
+import 'package:drop/features/community/presentation/pages/create_event_screen.dart';
+import 'package:drop/features/community/presentation/pages/event_workspace_screen.dart';
 import 'route_names.dart';
 
 GoRouter createRouter(
@@ -293,6 +296,30 @@ GoRouter createRouter(
               state,
               RequestDetailScreen(
                 requestId: state.pathParameters['requestId'] ?? '',
+              ),
+            ),
+          ),
+          // ─── Community Hub / DROP Events ─────────────────────────────────────
+          // Shared by every role; the hub self-scopes by role and Firestore rules
+          // enforce access. The static `/community/create` route is declared
+          // before the singular `/event/:eventId` deep-link (a distinct path, so
+          // it never captures `create`).
+          GoRoute(
+            path: RouteNames.community,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const CommunityHubScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.communityCreate,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const CreateEventScreen()),
+          ),
+          GoRoute(
+            path: RouteNames.eventDetailPattern,
+            pageBuilder: (context, state) => _slideTransition(
+              state,
+              EventWorkspaceScreen(
+                eventId: state.pathParameters['eventId'] ?? '',
               ),
             ),
           ),

@@ -23,6 +23,11 @@ class AppConstants {
   static const String requestsCollection = 'requests';
   static const String countersCollection = 'counters';
 
+  /// Community Hub / DROP Events. Each event is a single self-contained document
+  /// (`events/{id}`) with every workspace section embedded inline; the hero image
+  /// lives in Storage at `events/{id}/hero.<ext>`.
+  static const String eventsCollection = 'events';
+
   // ─── Communications Center — Phase 2 ──────────────────────────
   static const String broadcastTemplatesCollection = 'broadcastTemplates';
   static const String broadcastSchedulesCollection = 'broadcastSchedules';

@@ -58,6 +58,21 @@ class RouteNames {
   /// The concrete request-detail path for [requestId].
   static String requestDetail(String requestId) => '/request/$requestId';
 
+  // ─── Community Hub / DROP Events ───────────────────────────────
+  // Shared by every role (like cases/requests) — the hub self-scopes by role
+  // (admin: all branches · manager + employee: own branch) and Firestore rules
+  // enforce access, so these sit outside the role-area guards. The static
+  // `/community/create` route is declared before the singular `/event/:eventId`
+  // deep-link (a distinct path, so it never captures `create`).
+  static const String community = '/community';
+  static const String communityCreate = '/community/create';
+
+  /// The single-event workspace deep-link pattern (`/event/:eventId`).
+  static const String eventDetailPattern = '/event/:eventId';
+
+  /// The concrete event-workspace path for [eventId].
+  static String eventDetail(String eventId) => '/event/$eventId';
+
   // ─── Role shells (Phase 1) ──────────────────────────────────
   // The employee role uses [home] ('/') as its landing.
   static const String adminDashboard = '/admin';

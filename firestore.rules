@@ -607,6 +607,36 @@ service cloud.firestore {
       }
     }
 
+    // ── Community Hub / DROP Events (`events/{eventId}`) ───────────
+    // Each event is a single self-contained document with every workspace
+    // section (timeline / team / tasks / inventory / logistics / budget /
+    // communication / outcome) embedded inline, so a section edit is one
+    // whole-document update — governed by a single update rule.
+    //   read   — admin (all) · a branch member (manager OR employee) whose
+    //            branch matches the event. A null-branch event is admin-only.
+    //   create — admin (any branch) · manager (own branch only), stamping
+    //            themselves as `createdBy`.
+    //   update — admin (anything) · own-branch manager. Covers every section
+    //            edit, status change, and the soft-delete (`deletedAt`) stamp.
+    //   delete — never (events are records; removal is a soft-delete update).
+    match /events/{eventId} {
+      allow read: if isAdmin()
+        || (selfBranch() != ''
+            && resource.data.get('branchId', '') == selfBranch());
+
+      allow create: if isSignedIn()
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && (isAdmin()
+            || (isManager()
+                && request.resource.data.get('branchId', '') == selfBranch()));
+
+      allow update: if isAdmin()
+        || (isManager()
+            && resource.data.get('branchId', '') == selfBranch());
+
+      allow delete: if false;
+    }
+
     // ── Monotonic counters (`counters/{id}`) ──────────────────────
     // e.g. `counters/requests` backs the human-friendly REQ-000123 sequence,
     // written ONLY by the Admin SDK (the `onRequestCreated` transaction), which
