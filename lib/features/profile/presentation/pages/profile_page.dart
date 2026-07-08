@@ -178,12 +178,12 @@ class _Identity extends StatelessWidget {
               else if (incomplete)
                 GestureDetector(
                   onTap: () => context.push(RouteNames.editProfile),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('Complete your profile', style: AppTypography.body),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.chevron_right_rounded,
+                      SizedBox(width: 2),
+                      Icon(Icons.chevron_right_rounded,
                           size: 16, color: AppColors.textTertiary),
                     ],
                   ),
@@ -364,12 +364,12 @@ class _ProfileSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(
           AppSpacing.pagePadding, AppSpacing.sm, AppSpacing.pagePadding, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Row(
             children: [
               Skeleton(width: 64, height: 64, circle: true),

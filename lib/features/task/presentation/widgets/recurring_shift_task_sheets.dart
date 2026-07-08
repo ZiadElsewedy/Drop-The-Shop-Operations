@@ -116,8 +116,8 @@ class _ManageRecurringShiftTasksState
             }
             final templates = snap.data ?? const [];
             if (templates.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
                 child: Text(
                   'No recurring shift tasks yet. Add a daily/weekly routine '
                   'like "Open Store" that\'s assigned to a shift, not a person.',
@@ -324,11 +324,11 @@ class _RecurringShiftTaskFormState extends State<_RecurringShiftTaskForm> {
             onChanged: (v) => setState(() => _priority = v),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.checklist_rounded,
+              Icon(Icons.checklist_rounded,
                   size: 16, color: AppColors.textSecondary),
-              const SizedBox(width: AppSpacing.sm),
+              SizedBox(width: AppSpacing.sm),
               Text('Checklist steps', style: AppTypography.labelSmall),
             ],
           ),

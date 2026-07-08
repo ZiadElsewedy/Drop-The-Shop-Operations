@@ -100,9 +100,9 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 140),
-                  child: const Text(
+                const FadeSlideTransition(
+                  delay: Duration(milliseconds: 140),
+                  child: Text(
                     'Sign in to your DROP account',
                     textAlign: TextAlign.center,
                     style: AppTypography.bodyLarge,
@@ -142,7 +142,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Welcome back', style: AppTypography.h1),
+                    const Text('Welcome back', style: AppTypography.h1),
                     const SizedBox(height: AppSpacing.sm),
                     const Text(
                       'Sign in to your DROP account',
@@ -189,7 +189,7 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: AppSpacing.md),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Text(
+              child: const Text(
                 'Run daily branch operations end to end — tasks, schedules, '
                 'shift swaps and team communications — from one premium control '
                 'surface for DROP THE SHOP.',
@@ -197,11 +197,11 @@ class _LoginPageState extends State<LoginPage> {
               ),
             ),
             const SizedBox(height: AppSpacing.xxxl),
-            Row(
+            const Row(
               children: [
-                const Icon(Icons.shield_outlined,
+                Icon(Icons.shield_outlined,
                     size: 15, color: AppColors.textTertiary),
-                const SizedBox(width: 8),
+                SizedBox(width: 8),
                 Text('Secure, admin-provisioned access',
                     style: AppTypography.caption),
               ],

@@ -180,7 +180,7 @@ class WorkTypePanel extends StatelessWidget {
             ],
             if (reimburse) ...[
               const SizedBox(height: AppSpacing.lg),
-              _NoteRow(
+              const _NoteRow(
                 icon: Icons.account_balance_wallet_outlined,
                 text: 'Employee paid out of pocket — reimbursement requested.',
               ),
@@ -872,7 +872,7 @@ class _LogButton extends StatelessWidget {
       child: Container(
         padding:
             const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8),
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: AppColors.primary,
           borderRadius: AppRadius.smAll,
         ),

@@ -519,7 +519,7 @@ class _StatTile extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Icon(Icons.arrow_outward_rounded,
+                const Icon(Icons.arrow_outward_rounded,
                     size: 16, color: AppColors.textTertiary),
               ],
             ),
@@ -607,7 +607,7 @@ class _SectionLabel extends StatelessWidget {
         Text(text,
             style: AppTypography.caption
                 .copyWith(color: AppColors.textSecondary, letterSpacing: 0.6)),
-        Text('overload first', style: AppTypography.caption),
+        const Text('overload first', style: AppTypography.caption),
       ],
     );
   }

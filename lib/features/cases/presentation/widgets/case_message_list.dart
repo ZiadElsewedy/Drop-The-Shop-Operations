@@ -116,7 +116,7 @@ class _CaseMessageListState extends State<CaseMessageList> {
   Widget build(BuildContext context) {
     final messages = caseThread(widget.messages, widget.caseItem);
     if (messages.isEmpty) {
-      return Center(
+      return const Center(
         child: Text('No messages yet.', style: AppTypography.bodySmall),
       );
     }

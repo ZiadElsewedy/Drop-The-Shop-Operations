@@ -99,9 +99,9 @@ class _ForcePasswordChangePageState extends State<ForcePasswordChangePage> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 130),
-                  child: const Text(
+                const FadeSlideTransition(
+                  delay: Duration(milliseconds: 130),
+                  child: Text(
                     'For security, replace the temporary password you were given '
                     'before continuing.',
                     style: AppTypography.bodyLarge,

@@ -813,7 +813,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                   borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          Text('Schedule broadcast', style: AppTypography.h3),
+          const Text('Schedule broadcast', style: AppTypography.h3),
           const SizedBox(height: AppSpacing.lg),
           _label('First send'),
           _Tappable(
@@ -842,7 +842,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
-                Text('Every', style: AppTypography.body),
+                const Text('Every', style: AppTypography.body),
                 const SizedBox(width: AppSpacing.md),
                 _StepBtn(
                     icon: Icons.remove_rounded,
@@ -859,7 +859,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                     onTap: () => setState(
                         () => _interval = (_interval + 1).clamp(1, 365))),
                 const SizedBox(width: AppSpacing.md),
-                Text('days', style: AppTypography.body),
+                const Text('days', style: AppTypography.body),
               ],
             ),
           ],

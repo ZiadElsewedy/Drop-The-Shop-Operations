@@ -70,7 +70,7 @@ class EmployeeCard extends StatelessWidget {
                             style: AppTypography.caption
                                 .copyWith(color: AppColors.textSecondary),
                           ),
-                          Text('  ·  ', style: AppTypography.caption),
+                          const Text('  ·  ', style: AppTypography.caption),
                           Flexible(
                             child: Text(
                               hasBranch ? branch : 'No branch',

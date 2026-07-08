@@ -150,9 +150,9 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 90),
-                  child: const Text(
+                const FadeSlideTransition(
+                  delay: Duration(milliseconds: 90),
+                  child: Text(
                     'A few details before you get started.',
                     style: AppTypography.bodyLarge,
                   ),

@@ -124,7 +124,7 @@ class _ListPane extends StatelessWidget {
               AppSpacing.md, AppSpacing.sm),
           child: Row(
             children: [
-              Text('Cases', style: AppTypography.h2),
+              const Text('Cases', style: AppTypography.h2),
               const Spacer(),
               if (canFile)
                 IconButton(
@@ -175,14 +175,14 @@ class _EmptyPane extends StatelessWidget {
   const _EmptyPane();
   @override
   Widget build(BuildContext context) {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.forum_outlined, size: 44, color: AppColors.textTertiary),
-          const SizedBox(height: AppSpacing.md),
+          Icon(Icons.forum_outlined, size: 44, color: AppColors.textTertiary),
+          SizedBox(height: AppSpacing.md),
           Text('Select a case', style: AppTypography.h3),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text('Pick a conversation from the list.',
               style: AppTypography.bodySmall),
         ],

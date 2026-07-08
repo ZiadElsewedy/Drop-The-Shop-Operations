@@ -140,10 +140,10 @@ class AppTheme {
         ),
       );
 
-  static final PageTransitionsTheme _pageTransitions = PageTransitionsTheme(
+  static const PageTransitionsTheme _pageTransitions = PageTransitionsTheme(
     builders: {
-      TargetPlatform.android: const ZoomPageTransitionsBuilder(),
-      TargetPlatform.iOS: const ZoomPageTransitionsBuilder(),
+      TargetPlatform.android: ZoomPageTransitionsBuilder(),
+      TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
     },
   );
 }

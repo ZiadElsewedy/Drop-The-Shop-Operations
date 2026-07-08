@@ -162,9 +162,9 @@ class _WorkTypeSheet extends StatelessWidget {
         children: [
           const _SheetGrip(),
           const SizedBox(height: AppSpacing.md),
-          Text('Work type', style: AppTypography.h3),
+          const Text('Work type', style: AppTypography.h3),
           const SizedBox(height: 2),
-          Text('What kind of work is this?', style: AppTypography.caption),
+          const Text('What kind of work is this?', style: AppTypography.caption),
           const SizedBox(height: AppSpacing.lg),
           Flexible(
             child: ListView.separated(

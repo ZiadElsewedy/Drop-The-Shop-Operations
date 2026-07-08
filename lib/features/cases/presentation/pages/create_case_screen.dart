@@ -242,7 +242,7 @@ class _UrgentToggle extends StatelessWidget {
                     Text('Mark as Urgent',
                         style: AppTypography.label
                             .copyWith(fontWeight: FontWeight.w600)),
-                    Text('For incidents that need immediate attention',
+                    const Text('For incidents that need immediate attention',
                         style: AppTypography.caption),
                   ],
                 ),

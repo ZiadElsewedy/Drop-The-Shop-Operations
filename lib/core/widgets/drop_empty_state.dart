@@ -44,7 +44,7 @@ class DropEmptyState extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // The brand mark, quietly faded — present, not loud.
-                  Opacity(
+                  const Opacity(
                     opacity: 0.35,
                     child: DropLogo(height: 34, color: AppColors.textSecondary),
                   ),

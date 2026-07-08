@@ -92,7 +92,7 @@ class PendingActions extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Nothing queued', style: AppTypography.label),
+                  const Text('Nothing queued', style: AppTypography.label),
                   const SizedBox(height: 2),
                   Text(
                     'No swaps, reviews or overdue tasks.',

@@ -195,7 +195,7 @@ class _HeaderBar extends StatelessWidget {
           Container(
             width: 38,
             height: 38,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.primarySurface,
               borderRadius: AppRadius.mdAll,
             ),

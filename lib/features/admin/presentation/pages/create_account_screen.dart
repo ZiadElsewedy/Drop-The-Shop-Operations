@@ -150,13 +150,13 @@ class _CreateAccountScreenState extends State<CreateAccountScreen> {
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.darkSurface,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.cardAll),
-        title: Text('Account created', style: AppTypography.h3),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.cardAll),
+        title: const Text('Account created', style: AppTypography.h3),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Share these temporary credentials with the user. They will be '
               'asked to change the password on first sign-in.',
               style: AppTypography.bodySmall,

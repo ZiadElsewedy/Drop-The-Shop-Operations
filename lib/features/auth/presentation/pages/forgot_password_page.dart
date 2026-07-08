@@ -110,9 +110,9 @@ class _FormView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
-            FadeSlideTransition(
-              delay: const Duration(milliseconds: 120),
-              child: const Text(
+            const FadeSlideTransition(
+              delay: Duration(milliseconds: 120),
+              child: Text(
                 "Enter your email and we'll send you a link to reset your password.",
                 style: AppTypography.bodyLarge,
               ),
@@ -188,7 +188,7 @@ class _SuccessView extends StatelessWidget {
             child: Container(
               width: 64,
               height: 64,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.successSurface,
                 borderRadius: AppRadius.cardAll,
               ),
@@ -204,8 +204,8 @@ class _SuccessView extends StatelessWidget {
 
           const SizedBox(height: AppSpacing.xxl),
 
-          FadeSlideTransition(
-            delay: const Duration(milliseconds: 120),
+          const FadeSlideTransition(
+            delay: Duration(milliseconds: 120),
             child: Text(
               'Check Your\nEmail',
               style: AppTypography.displayMedium,

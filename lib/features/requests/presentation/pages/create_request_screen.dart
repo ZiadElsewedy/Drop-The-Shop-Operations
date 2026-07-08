@@ -131,13 +131,13 @@ class _CreateRequestScreenState extends State<CreateRequestScreen> {
             filled: true,
             fillColor: AppColors.darkSurface,
             contentPadding: const EdgeInsets.all(AppSpacing.md),
-            border: OutlineInputBorder(
+            border: const OutlineInputBorder(
               borderRadius: AppRadius.mdAll,
-              borderSide: const BorderSide(color: AppColors.darkBorder),
+              borderSide: BorderSide(color: AppColors.darkBorder),
             ),
-            enabledBorder: OutlineInputBorder(
+            enabledBorder: const OutlineInputBorder(
               borderRadius: AppRadius.mdAll,
-              borderSide: const BorderSide(color: AppColors.darkBorder),
+              borderSide: BorderSide(color: AppColors.darkBorder),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: AppRadius.mdAll,
@@ -182,7 +182,7 @@ class _TypeSummary extends StatelessWidget {
           Container(
             width: 44,
             height: 44,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.primarySurface,
               borderRadius: AppRadius.mdAll,
             ),
@@ -285,7 +285,7 @@ class _TypeRow extends StatelessWidget {
               Container(
                 width: 42,
                 height: 42,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.primarySurface,
                   borderRadius: AppRadius.mdAll,
                 ),
@@ -344,7 +344,7 @@ class _TypeTileCard extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.primarySurface,
                   borderRadius: AppRadius.mdAll,
                 ),

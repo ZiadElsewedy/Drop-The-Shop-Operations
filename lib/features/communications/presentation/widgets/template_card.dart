@@ -69,11 +69,11 @@ class TemplateCard extends StatelessWidget {
                     style: AppTypography.caption.copyWith(color: catColor)),
                 if (template.isGlobal) ...[
                   _dot(),
-                  Text('Global', style: AppTypography.caption),
+                  const Text('Global', style: AppTypography.caption),
                 ],
                 if (placeholders.isNotEmpty) ...[
                   _dot(),
-                  Icon(Icons.data_object_rounded,
+                  const Icon(Icons.data_object_rounded,
                       size: 12, color: AppColors.textTertiary),
                   const SizedBox(width: 2),
                   Text('${placeholders.length}',

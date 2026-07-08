@@ -120,7 +120,7 @@ class BroadcastCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               Row(
                 children: [
-                  Icon(Icons.person_outline_rounded,
+                  const Icon(Icons.person_outline_rounded,
                       size: 14, color: AppColors.textTertiary),
                   const SizedBox(width: 4),
                   Flexible(
@@ -247,12 +247,12 @@ class _DeliveryChip extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.send_rounded, size: 12, color: AppColors.textTertiary),
+        const Icon(Icons.send_rounded, size: 12, color: AppColors.textTertiary),
         const SizedBox(width: 4),
         Text(text, style: AppTypography.caption),
         if (failed != null && failed > 0) ...[
           const SizedBox(width: 6),
-          Icon(Icons.error_outline_rounded, size: 12, color: AppColors.error),
+          const Icon(Icons.error_outline_rounded, size: 12, color: AppColors.error),
           const SizedBox(width: 2),
           Text('$failed failed',
               style: AppTypography.caption.copyWith(color: AppColors.error)),

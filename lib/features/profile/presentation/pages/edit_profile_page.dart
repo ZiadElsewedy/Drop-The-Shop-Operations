@@ -84,14 +84,14 @@ class _EditProfilePageState extends State<EditProfilePage> {
             ListTile(
               leading: const Icon(Icons.photo_library_outlined,
                   color: AppColors.textPrimary, size: 20),
-              title: Text('Choose from library', style: AppTypography.label),
+              title: const Text('Choose from library', style: AppTypography.label),
               onTap: () => Navigator.pop(context, ImageSource.gallery),
             ),
             if (supportsCameraCapture)
               ListTile(
                 leading: const Icon(Icons.camera_alt_outlined,
                     color: AppColors.textPrimary, size: 20),
-                title: Text('Take a photo', style: AppTypography.label),
+                title: const Text('Take a photo', style: AppTypography.label),
                 onTap: () => Navigator.pop(context, ImageSource.camera),
               ),
             const SizedBox(height: AppSpacing.sm),

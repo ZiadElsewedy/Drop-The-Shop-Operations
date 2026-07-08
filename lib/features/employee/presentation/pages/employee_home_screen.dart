@@ -400,9 +400,9 @@ class _ShiftBlock extends StatelessWidget {
     return BlocBuilder<StatisticsCubit, StatisticsState>(
       builder: (context, state) => state.maybeWhen(
         loaded: (s) => _content(s),
-        orElse: () => Column(
+        orElse: () => const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Skeleton(
               width: 72,
               height: 9,
@@ -878,7 +878,7 @@ class _TaskSection extends StatelessWidget {
           ],
         ],
         const SizedBox(height: AppSpacing.lg),
-        _ViewAllRow(label: 'Open all tasks', emphasized: true),
+        const _ViewAllRow(label: 'Open all tasks', emphasized: true),
       ],
     );
   }
@@ -1502,9 +1502,9 @@ class _EmptyTaskState extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Text('No tasks yet', style: AppTypography.h3),
+          const Text('No tasks yet', style: AppTypography.h3),
           const SizedBox(height: 4),
-          Text(
+          const Text(
             'When your manager assigns work, it shows up right here.',
             style: AppTypography.bodySmall,
             textAlign: TextAlign.center,
@@ -1550,7 +1550,7 @@ class _AllDoneCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
+                    const Text(
                       'Nothing needs your attention right now.',
                       style: AppTypography.bodySmall,
                     ),
@@ -1561,7 +1561,7 @@ class _AllDoneCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        _ViewAllRow(label: 'Open all tasks', emphasized: true),
+        const _ViewAllRow(label: 'Open all tasks', emphasized: true),
       ],
     );
   }
@@ -1750,7 +1750,7 @@ class _OutgoingSwapCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Your swap request', style: AppTypography.label),
+                      const Text('Your swap request', style: AppTypography.label),
                       const SizedBox(height: 2),
                       Text(
                         detail,

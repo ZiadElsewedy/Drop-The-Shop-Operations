@@ -31,6 +31,47 @@ implement any action in this phase.
 
 ---
 
+## ⚡ Sprint 2 — Render/Rebuild audit + const pass (`core/optimization`, 2026-07-08)
+
+**Rendering perf, pixel-perfect, zero behavior change.** Audit
+`docs/performance/SPRINT2_RENDER_AUDIT.md` (Steps 1–8). **Implemented Phase A —
+const pass:** `flutter_lints` doesn't enable `prefer_const_*`; found 174 missing
+consts, applied ~130 via `dart fix` across 56 files (behavior-identical; analyzer
+clean; suite unchanged; lint config reverted; no generated files touched).
+**Recommended/deferred (need live verify — blocked on signing):** `BlocSelector`
+for scalar chrome (notifications/cases/requests/statistics/profile), `child:`
+hoisting, ListView→`.builder` on paginated feeds, image cache. Home/Schedule
+rebuild-scoping = frozen, untouched. `buildWhen` is still 0 / `BlocSelector` only
+in admin_dashboard (the reference) — widening it is staged, not done blind.
+
+---
+
+## 🗂️ Sprint 1 QW#3 — split `task_action_sheets.dart` (`core/optimization`, 2026-07-08)
+
+**Organizational extraction only — no behavior/UI/API change.** The 2,447-line
+`task_action_sheets.dart` (40 classes) is now a `task_action_sheets/` folder of
+**8 `part` files** by responsibility (task_form / branch_picker / checklist /
+assignee_picker / assign / review / shift_pickers / shared·form_primitives);
+main = 136 lines (imports + `part` directives + the 4 public `show*` fns +
+SheetHandle/SheetTitle). Used Dart `part`/`part of` (one library) so the ~33
+interdependent `_`-private widgets stay shared **without going public** — zero
+circular-import risk, external imports unchanged. Analyzer clean, suite unchanged.
+`SheetHandle` also exists in `schedule/sheet_chrome.dart` (cross-feature dup) —
+flagged for a later core/widgets promotion, not touched here.
+
+---
+
+## 🔎 Sprint 1 QW#2 — Firestore Query Audit (`core/optimization`, 2026-07-08)
+
+**Audit only — no code changed.** `docs/performance/FIRESTORE_QUERY_AUDIT.md`
+inventories every client query (14 datasources) at real internal-ops scale.
+Verdict: healthy — point reads + bounded collections dominate; `notifications`
+(limit+index) and stats `count()` are exemplary; **no missing composite index**.
+Deferred work only: pagination on 6 admin/global streams (`watchAllTasks` first)
++ `managerStats`→`count()`. Do not add limits/pagination in this sprint.
+
+---
+
 ## 🧹 Sprint 1 — single `AppDateFormatter` (`core/optimization`, 2026-07-08)
 
 **Code-quality consolidation, zero visual change.** `lib/core/utils/app_date_formatter.dart`

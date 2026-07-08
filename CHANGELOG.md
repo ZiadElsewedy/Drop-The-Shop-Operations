@@ -12,6 +12,68 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Performance (2026-07-08 — Sprint 2: Render/Rebuild audit + const pass, `core/optimization`)
+
+Rendering-performance sprint — **pixel-perfect, zero behavior/UX/feature/backend
+change.** New audit `docs/performance/SPRINT2_RENDER_AUDIT.md` (Steps 1–8:
+Bloc-rebuild, extraction, const, lists, heavy widgets, images, animations,
+render-tree) with per-screen `BlocSelector`/`buildWhen` recommendations + rebuild
+estimates.
+
+- **Phase A implemented — `const` pass:** `flutter_lints` doesn't enable
+  `prefer_const_*`, hiding **174** missing-`const` sites. Applied via `dart fix`
+  (**~130 fixes across 56 files** — `SizedBox`/`Padding`/`Text`/`Icon`/
+  `EdgeInsets`/`Divider`/`BorderRadius`/`Duration`). Behavior-identical by
+  construction (`dart fix` only adds `const` to guaranteed compile-time
+  constants → those widgets are canonicalized once and skip rebuild). Removed 2
+  redundant nested `const`s in `app_theme.dart` that the fixer over-added. Lint
+  config restored to original; analyzer clean; suite unchanged (same 3
+  pre-existing, unrelated failures); no generated files touched.
+- **Phases B–E recommended, deliberately NOT implemented blind:** `BlocSelector`
+  for scalar chrome (Notifications/Cases/Requests/Statistics/Profile), `child:`
+  hoisting on animation builders, plain-`ListView`→`.builder` on paginated feeds,
+  persistent image cache. Each needs live rebuild-count/pixel verification (still
+  blocked on the Phase 0.2 signing/auth issue); implementing them blind would
+  risk the silent stale-UI regressions this sprint forbids. Home/Schedule
+  rebuild-scoping left untouched (owner-frozen premium UI).
+
+### Refactored (2026-07-08 — Sprint 1 Quick Win #3: split `task_action_sheets.dart`, `core/optimization`)
+
+Organizational refactor — **pure extraction, zero behavior/UI/API change** (analyzer
+clean; full suite unchanged — same 3 pre-existing, unrelated failures).
+
+- Split the 2,447-line `task_action_sheets.dart` (40 classes) into a
+  `task_action_sheets/` folder of **8 Dart `part` files** grouped by
+  responsibility: `task_form_sheet`, `branch_picker_sheet`, `checklist_builder`,
+  `assignee_picker_sheet`, `assign_sheet`, `review_sheet`, `shift_pickers`, and
+  `shared/form_primitives`. Main file drops to **136 lines** (imports + `part`
+  directives + the 4 public `show*` entry points + `SheetHandle`/`SheetTitle`).
+- **`part`/`part of` (one library)** was chosen over separate libraries so the
+  ~33 interdependent `_`-private widgets keep sharing scope **without being made
+  public** — no visibility change, no circular-import risk, and every external
+  import of `task_action_sheets.dart` (6 files) stays valid unchanged.
+- Public API identical: `showTaskFormSheet`, `showAssignSheet`, `showReviewSheet`,
+  `showSheet`, `SheetHandle`, `SheetTitle`, `ShiftChipPicker`, `ShiftRepeatPicker`,
+  `WeekdayChipPicker`. No widgets deleted, no abstractions/base classes added.
+- Noted but **not touched** (out of scope): `SheetHandle` is also defined in
+  `schedule/.../sheet_chrome.dart` — a cross-feature duplicate to consolidate in a
+  later `core/widgets` promotion pass, not here.
+
+### Added (2026-07-08 — Sprint 1 Quick Win #2: Firestore Query Audit, `core/optimization`)
+
+Audit only — **no code changed, no limits/pagination/indexes added.** New doc
+`docs/performance/FIRESTORE_QUERY_AUDIT.md` inventories every client Firestore
+query (all 14 `*_remote_datasource.dart`) with collection/where/orderBy/limit/
+cursor/get-vs-stream/purpose/est-docs/behavior/issue/recommendation, grouped by
+feature. Grounded in the **real internal-ops scale** (not theoretical 100k).
+Findings: query layer is healthy — point reads + naturally-bounded collections
+dominate; `notifications` (`where`+`orderBy`+`limit(30)`+composite index) and the
+statistics `count()` aggregation are exemplary; **no composite index is missing**.
+Only structural work = **deferred pagination on 6 admin/global streams**
+(`watchAllTasks` first, then cases/requests/broadcasts/schedules/swaps) + one
+consistency cleanup (`managerStats` → `count()`). Prioritized as Safe Quick Wins /
+Needs investigation / Needs pagination later.
+
 ### Refactored (2026-07-08 — Sprint 1: single `AppDateFormatter`, `core/optimization`)
 
 Code-quality consolidation — **maintainability only, zero visual change** (every

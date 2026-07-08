@@ -138,7 +138,7 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
                     const SizedBox(height: AppSpacing.lg),
                     _sectionLabel('Day notes'),
                     const SizedBox(height: 2),
-                    Text('One instruction per line — each becomes a bullet '
+                    const Text('One instruction per line — each becomes a bullet '
                         'for the team.',
                         style: AppTypography.caption),
                     const SizedBox(height: AppSpacing.sm),
@@ -269,7 +269,7 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primarySurface,
                 borderRadius: AppRadius.fullAll,
               ),
@@ -414,7 +414,7 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
           foregroundColor: AppColors.primary,
           side: const BorderSide(color: AppColors.darkBorder),
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonAll),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.buttonAll),
         ),
         icon: const Icon(Icons.event_busy_outlined, size: 18),
         label: const Text('Add leave'),

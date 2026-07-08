@@ -403,14 +403,14 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
             child: DropdownButton<String>(
               value: branchId.isEmpty ? null : branchId,
               isExpanded: true,
-              hint: Row(
+              hint: const Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.store_mall_directory_outlined,
                     size: 18,
                     color: AppColors.textTertiary,
                   ),
-                  const SizedBox(width: AppSpacing.sm),
+                  SizedBox(width: AppSpacing.sm),
                   Text('Select a branch', style: AppTypography.body),
                 ],
               ),

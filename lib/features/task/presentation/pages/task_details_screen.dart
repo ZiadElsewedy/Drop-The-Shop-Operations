@@ -935,7 +935,7 @@ class _AssigneeBlock extends StatelessWidget {
               const Icon(Icons.person_outlined,
                   size: 14, color: AppColors.textTertiary),
               const SizedBox(width: AppSpacing.sm),
-              Text('Assigned by  ',
+              const Text('Assigned by  ',
                   style: AppTypography.caption),
               Text(
                 _assignedByName(directory, task.createdBy!),
@@ -1335,7 +1335,7 @@ class _ReviewBlockState extends State<_ReviewBlock> {
       children: [
         const Divider(color: AppColors.darkBorder),
         const SizedBox(height: AppSpacing.md),
-        Text('Review submission', style: AppTypography.h3),
+        const Text('Review submission', style: AppTypography.h3),
         const SizedBox(height: AppSpacing.lg),
         AppTextField(
           controller: _notes,

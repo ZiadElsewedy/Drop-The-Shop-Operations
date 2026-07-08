@@ -33,7 +33,7 @@ class SettingsPage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.lg),
 
                 // ── Account ──
-                _SectionHeader(label: 'Account'),
+                const _SectionHeader(label: 'Account'),
                 const SizedBox(height: AppSpacing.md),
                 _SettingsGroup(
                   children: [
@@ -62,7 +62,7 @@ class SettingsPage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxl),
 
                 // ── About ──
-                _SectionHeader(label: 'About'),
+                const _SectionHeader(label: 'About'),
                 const SizedBox(height: AppSpacing.md),
                 _VersionRow(),
 
@@ -130,7 +130,7 @@ class _SettingsRow extends StatelessWidget {
     return Column(
       children: [
         if (!isFirst)
-          Divider(
+          const Divider(
             height: 1,
             thickness: 1,
             color: AppColors.darkBorder,
@@ -172,7 +172,7 @@ class _SettingsRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                Icon(Icons.chevron_right_rounded,
+                const Icon(Icons.chevron_right_rounded,
                     size: 18, color: AppColors.textTertiary),
               ],
             ),

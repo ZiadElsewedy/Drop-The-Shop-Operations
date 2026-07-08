@@ -398,8 +398,8 @@ class _ChipActionSheetState extends State<_ChipActionSheet> {
   Widget _swapPicker() {
     final candidates = _swapCandidates();
     if (candidates.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
         child: Text(
           'No other assigned shifts this week to switch with.',
           style: AppTypography.bodySmall,
@@ -497,7 +497,7 @@ class _ChipActionSheetState extends State<_ChipActionSheet> {
             backgroundColor: AppColors.primary,
             foregroundColor: AppColors.onPrimary,
             padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-            shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonAll),
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.buttonAll),
           ),
           icon: const Icon(Icons.swap_horiz_rounded, size: 18),
           label: Text('Switch $_name ⇄ ${shortName(target)}'),
