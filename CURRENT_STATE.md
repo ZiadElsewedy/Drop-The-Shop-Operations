@@ -11,10 +11,46 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-08 (Requests closed out: analyzer clean + tests green)
-**Version:** 1.0.0+1 · **Branch:** `feature/ui-tasks` (DROP — monochrome premium desktop UX)
-**Last updated:** 2026-07-08 (Work Details design system + Create Work sheet UX)
-**Version:** 1.0.0+1 · **Branch:** `feature/work-management-system` (DROP — monochrome premium desktop UX)
+**Last updated:** 2026-07-08 (DROP Design System V2 — Phase 1: Admin dashboard + reusable primitives)
+**Version:** 1.0.0+1 · **Branch:** `core/optimization` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ DROP Design System V2 — Phase 1: Admin dashboard + reusable primitives (2026-07-08)
+
+**Presentation + design-system foundation. No schema/rules/functions/backend/business-logic
+change; every cubit call, route and save path is unchanged.** The Admin Home was
+re-ranked around **"what needs my attention right now?"** through *calm hierarchy* (not
+reduction) — keeping the premium DROP identity — and the building blocks were extracted as
+**reusable core primitives** every future module inherits. See
+[docs/design/DESIGN_SYSTEM_V2.md](docs/design/DESIGN_SYSTEM_V2.md).
+
+- **4 new core primitives** (`lib/core/widgets/`): `PageHero`, `AttentionTile`, `StatStrip`,
+  `ActivityCard` — each with a Semantics label, ≥44px targets, reduced-motion honouring, and
+  lazy/capped rendering for collections. Pure core (no core→feature coupling): the living
+  border is applied by the feature via `AttentionTile.radius`, not imported by the primitive.
+- **Admin Home re-assembly** (`admin_dashboard_screen.dart`, rewritten): Hero (one *Create
+  Task* CTA) → **Needs attention** dominant (Pending review · Overdue · Unassigned · Sent-back ·
+  Swaps; single most-urgent tile carries the living border) → **Today** strip → **Recent
+  activity** (`RecentActivityFeed`, **no home filters**) → **Operations digest** (requests ·
+  cases · schedule coverage) → Quick actions / Manage / Branch pulse. Preserved the scoped
+  `BlocSelector` rebuild architecture (live, no manual refresh), plus `PageStorageKey` +
+  reduced-motion entrance gating.
+- **Context-preserving navigation:** extracted the feed's preview sheet into shared
+  `showTaskPreviewSheet` / `openTaskDetails` (`task_preview_sheet.dart`); `task_feed_section.dart`
+  now delegates to them (behaviour-identical for admin **and** manager home). Needs-attention
+  drills push a reusable `FilteredTasksScreen` on the caller's navigator — Back returns to the
+  dashboard exactly where it was.
+- **Pure derivations** (`task_metrics.dart`): `overdueCount` / `reviewCount` /
+  `runningNowCount` / `unassignedCount` / `rejectedCount` / `approvalRatePct`, reusing the
+  canonical feed predicates.
+- **Verification:** `flutter analyze` clean (0 new). New tests `task_metrics_test.dart` (8) +
+  `dashboard_primitives_test.dart` (widget: hero CTA, attention count+tap+reduced-motion+a11y,
+  stat strip, activity card). Full suite **609 pass / 3 pre-existing fail** (2 splash-centering
+  + 1 stale `notification_grouping_test` expecting the old category list — all unrelated, in
+  untouched files). Manager Home, `LiveStatusBorder` motion/colours, and all backend untouched.
+- **Deferred (later V2 phases, owner-sequenced):** P2 Branches experience + Branch workspace ·
+  P3 Mobile UX · P4 Image cropper/media · P5 remaining polish. On-device visual QA is owner-side.
 
 ---
 

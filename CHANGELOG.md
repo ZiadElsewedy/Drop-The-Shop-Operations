@@ -12,6 +12,40 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added / Refactored (2026-07-08 — DROP Design System V2, Phase 1: Admin dashboard + reusable primitives, `core/optimization`)
+
+Re-ranked the Admin Home around **"what needs my attention right now?"** through
+*calm hierarchy* (never reduction — kept the premium DROP identity), and extracted
+its building blocks as **reusable core primitives** every future module inherits.
+Presentation + design-system foundation only: **no schema/rules/functions/backend/
+business-logic change** — every cubit call, route and save path is identical. New
+contract doc: `docs/design/DESIGN_SYSTEM_V2.md`.
+
+- **Added — 4 core primitives** (`lib/core/widgets/`): `PageHero` (module-hero
+  lockup with one primary CTA), `AttentionTile` (priority triage cell), `StatStrip`
+  (quiet fact row), `ActivityCard` (clean vertical feed row — replaces the
+  horizontal spreadsheet). Each ships a Semantics label, ≥44px targets,
+  reduced-motion honouring, and lazy/capped collection rendering. Pure core — the
+  living border is applied by the feature via `AttentionTile.radius`, not imported.
+- **Added — task feature widgets:** `RecentActivityFeed` + `TaskActivityCard`
+  (map tasks → `ActivityCard`), the reusable `FilteredTasksScreen`, shared
+  `showTaskPreviewSheet`/`openTaskDetails` (`task_preview_sheet.dart`), and pure
+  `task_metrics.dart` derivations.
+- **Refactored — Admin Home** (`admin_dashboard_screen.dart`): Hero (Create Task
+  CTA) → **Needs attention** dominant (Pending review · Overdue · Unassigned ·
+  Sent-back · Swaps; most-urgent tile carries the living border, each drills to a
+  filtered task view) → **Today** strip → **Recent activity** (no home filters) →
+  **Operations digest** (requests · cases · schedule coverage) → Quick actions /
+  Manage / Branch pulse. Kept the scoped-`BlocSelector` live architecture, added
+  `PageStorageKey` + reduced-motion entrance gating.
+- **Refactored — `task_feed_section.dart`** now delegates to the shared preview
+  sheet (behaviour-identical for admin **and** manager home; one implementation).
+- **Removed from Home:** the horizontal task "spreadsheet" + its filter chips (the
+  full filtered feed still lives on the Tasks page via "See all").
+- **Verification:** `flutter analyze` clean; new `task_metrics_test.dart` (8) +
+  `dashboard_primitives_test.dart`; full suite **609 pass / 3 pre-existing fail**
+  (2 splash-centering + 1 stale notification-category test, all in untouched files).
+
 ### Hardening (2026-07-08 — Production Readiness Audit, `core/optimization`)
 
 Reliability audit — **report first, then only provably-safe fixes.** New
