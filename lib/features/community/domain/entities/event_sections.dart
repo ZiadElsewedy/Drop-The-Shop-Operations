@@ -10,7 +10,6 @@ import 'package:drop/core/enums/task_priority.dart';
 /// value objects with this shape (no generated-file churn), the same choice made
 /// for `BroadcastScheduleEntity`. They honour the domain-layer contract: pure
 /// Dart, no Flutter/Firebase imports. Serialization lives in `EventModel`.
-library;
 
 /// A planning **milestone** on the event timeline, grouped by [phase]. Toggling
 /// it done is what makes the timeline visibly advance.
