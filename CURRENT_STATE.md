@@ -46,8 +46,17 @@ revisit trigger). ~⅓ of the brief already ships (`shift_hours`, `schedule_heal
   same `onMoveChip`→`MoveValidation` seam. Scale-in on placement (keyed by uid,
   reduce-motion aware). Touch unchanged. Tests:
   `assignment_chip_interactions_test.dart` (6); schedule/shell regression 60 pass.
-- **▫︎ Next:** Pillar 3 (clickable health breakdown). Pillar 4 (shift templates)
-  is gated behind its own mini-design + owner GO.
+- **✅ Inspector drawer (shipped):** the right rail became a real drawer —
+  `schedule_inspector_drawer.dart` (extracted, stateless): overview + team roster
+  → tap a person → their week detail (hours from resolved `ShiftHours`,
+  morning/night/weekend split, streak, days off, Sun→Sat glance, wellbeing
+  flags). `domain/employee_week_stats.dart` = pure derivation. Tests:
+  `schedule_inspector_drawer_test.dart` (4) + `employee_week_stats_test.dart` (3).
+- **▫︎ Next:** Pillar 3 — the **health engine** (owner asked for a rule-based
+  analyzer: modular workload/fairness/rest/coverage rules + score aggregation
+  over the existing `schedule_health.dart`, behaviour-preserving; **not started
+  yet** — the inspector drawer was an owner-directed detour). Pillar 4 (shift
+  templates) still gated behind its own mini-design + owner GO.
 
 **Focus Mode persistence** across a cold launch is a deferred TODO (needs
 `shared_preferences`; owner to decide) — in-session persistence works today.

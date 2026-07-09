@@ -12,6 +12,29 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added (2026-07-09 — Schedule V2, inspector drawer, `feature/schedule-optimization`)
+
+The right-hand rail (Pillar 1b) had a big empty area below its stats — turned it
+into a **real inspector drawer**. Presentation only: **no schema/rules/backend
+change**; all facts derived read-only from the loaded roster.
+
+- **Added — `schedule_inspector_drawer.dart`** (extracted, stateless, testable
+  in isolation — selection lifted to the parent): default view is the week
+  overview + Schedule Health + a **tappable team roster**; tap a person and it
+  swaps to their **week detail** — weekly **hours** (from the week's resolved
+  overnight-aware `ShiftHours`), the morning/night/weekend split, days worked,
+  **consecutive-day** streak, days off, a Sun→Sat **at-a-glance** strip, and any
+  wellbeing flags (`health.findings` for that uid). Back returns to overview; a
+  stale selection falls back to overview.
+- **Added — `domain/employee_week_stats.dart`** (`EmployeeWeekStats` +
+  `computeEmployeeWeekStats`): pure one-pass per-person week derivation.
+- `manager_schedule_view.dart` holds only the `_selectedUid` and renders the
+  widget (the ~330 lines of inline inspector were moved into the widget).
+- **Tests:** `test/schedule_inspector_drawer_test.dart` (4) +
+  `test/employee_week_stats_test.dart` (3). Full schedule/shell regression:
+  **67 pass**, analyze clean. (The isolated widget test caught a value-row
+  overflow before it shipped.)
+
 ### Added (2026-07-09 — Schedule V2, Pillar 2: Assignment Craft, `feature/schedule-optimization`)
 
 Second pillar of **Schedule V2** — premium assignment-chip interaction, built by

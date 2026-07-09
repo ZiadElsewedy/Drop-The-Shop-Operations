@@ -39,6 +39,7 @@ import 'package:drop/features/schedule/presentation/widgets/day_details_sheet.da
 import 'package:drop/features/schedule/presentation/widgets/schedule_grid.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_health_card.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
+import 'package:drop/features/schedule/presentation/widgets/schedule_inspector_drawer.dart';
 import 'package:drop/features/schedule/presentation/widgets/shift_details_sheet.dart';
 import 'package:drop/features/schedule/presentation/widgets/swap_alert_card.dart'
     show showSwapQueueSheet;
@@ -69,6 +70,10 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
   /// The insight chip the user toggled on — its slots stay lit, the rest of
   /// the grid dims. Cleared when the shift filter changes.
   ScheduleInsightKind? _activeInsight;
+
+  /// The employee selected in the desktop inspector drawer (null = overview).
+  /// Falls back to overview automatically if the roster no longer contains them.
+  String? _selectedUid;
 
   /// Drives the undo bar's auto-dismiss explicitly instead of relying on
   /// [SnackBar]'s built-in `duration` — that timer pauses while the bar is
@@ -626,76 +631,15 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
             ],
           ),
         ),
-        _inspectorRail(health, insights),
-      ],
-    );
-  }
-
-  // ── Inspector rail (Schedule V2 · Pillar 1b) ───────────────────
-  /// The Mac inspector — at-a-glance week analytics docked beside the grid.
-  /// Presentation-only: it renders the SAME health + totals the stacked layout
-  /// shows, just kept in view alongside the roster.
-  Widget _inspectorRail(ScheduleHealth health, ScheduleInsights insights) {
-    return Container(
-      width: 340,
-      decoration: const BoxDecoration(
-        border: Border(left: BorderSide(color: AppColors.darkBorder)),
-      ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          20,
-          AppSpacing.md,
-          20,
-          AppSpacing.xl,
+        ScheduleInspectorDrawer(
+          schedule: schedule,
+          members: members,
+          health: health,
+          insights: insights,
+          selectedUid: _selectedUid,
+          onSelect: (uid) => setState(() => _selectedUid = uid),
         ),
-        children: [
-          _railSectionLabel('This week'),
-          const SizedBox(height: AppSpacing.sm),
-          _railStatRow('Morning', insights.morningAssignments),
-          _railStatRow('Night', insights.nightAssignments),
-          if (insights.leaveEntries > 0)
-            _railStatRow('On leave', insights.leaveEntries),
-          _railStatRow('Open shifts', insights.openCount),
-          _railStatRow('People scheduled', insights.scheduledPeople),
-          const SizedBox(height: AppSpacing.lg),
-          _railSectionLabel('Schedule health'),
-          const SizedBox(height: AppSpacing.sm),
-          ScheduleHealthCard(health: health),
-        ],
-      ),
-    );
-  }
-
-  Widget _railSectionLabel(String text) {
-    return Text(
-      text.toUpperCase(),
-      style: AppTypography.caption.copyWith(
-        color: AppColors.textTertiary,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 1.2,
-      ),
-    );
-  }
-
-  Widget _railStatRow(String label, int value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              label,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ),
-          Text(
-            '$value',
-            style: AppTypography.label.copyWith(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
