@@ -215,7 +215,7 @@ class StatisticsRemoteDataSourceImpl implements StatisticsRemoteDataSource {
             (await _schedules.doc(ScheduleWeek.docId(branchId, now)).get())
                 .data();
         if (schedule != null) {
-          final days = ScheduleDay.values;
+          const days = ScheduleDay.values;
           final todayIdx = ScheduleDay.today().index;
 
           // Current: today's shift that includes this employee.

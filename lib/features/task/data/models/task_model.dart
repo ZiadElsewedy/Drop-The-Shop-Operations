@@ -40,6 +40,7 @@ class TaskModel {
   final TaskAssignmentType assignmentType;
   final DateTime? instanceDate;
   final String? sourceTemplateId;
+  final DateTime? startsAt;
   final DateTime? deadline;
   final String? notes;
   final String? proofImageUrl;
@@ -78,6 +79,7 @@ class TaskModel {
     this.assignmentType = TaskAssignmentType.individual,
     this.instanceDate,
     this.sourceTemplateId,
+    this.startsAt,
     this.deadline,
     this.notes,
     this.proofImageUrl,
@@ -117,6 +119,7 @@ class TaskModel {
         assignmentType: TaskAssignmentType.fromString(map['assignmentType'] as String?),
         instanceDate: map.date('instanceDate'),
         sourceTemplateId: map['sourceTemplateId'] as String?,
+        startsAt: map.date('startsAt'),
         deadline: map.date('deadline'),
         notes: map['notes'] as String?,
         proofImageUrl: map['proofImageUrl'] as String?,
@@ -156,6 +159,7 @@ class TaskModel {
         assignmentType: e.assignmentType,
         instanceDate: e.instanceDate,
         sourceTemplateId: e.sourceTemplateId,
+        startsAt: e.startsAt,
         deadline: e.deadline,
         notes: e.notes,
         proofImageUrl: e.proofImageUrl,
@@ -200,6 +204,7 @@ class TaskModel {
         'assignmentType': assignmentType.value,
         'instanceDate': instanceDate == null ? null : Timestamp.fromDate(instanceDate!),
         'sourceTemplateId': sourceTemplateId,
+        'startsAt': startsAt == null ? null : Timestamp.fromDate(startsAt!),
         'deadline': deadline == null ? null : Timestamp.fromDate(deadline!),
         'notes': notes,
         'proofImageUrl': proofImageUrl,
@@ -243,6 +248,7 @@ class TaskModel {
         assignmentType: assignmentType,
         instanceDate: instanceDate,
         sourceTemplateId: sourceTemplateId,
+        startsAt: startsAt,
         deadline: deadline,
         notes: notes,
         proofImageUrl: proofImageUrl,
@@ -282,6 +288,7 @@ class TaskModel {
         assignmentType: assignmentType,
         instanceDate: instanceDate,
         sourceTemplateId: sourceTemplateId,
+        startsAt: startsAt,
         deadline: deadline,
         notes: notes,
         proofImageUrl: proofImageUrl,

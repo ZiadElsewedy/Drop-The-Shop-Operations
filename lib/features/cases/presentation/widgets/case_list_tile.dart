@@ -186,7 +186,7 @@ class _CategoryAvatar extends StatelessWidget {
     return Container(
       width: 38,
       height: 38,
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.primarySurface,
         borderRadius: AppRadius.mdAll,
       ),

@@ -7,6 +7,7 @@ import 'package:drop/core/enums/user_role.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/responsive/breakpoints.dart';
 import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
@@ -22,6 +23,7 @@ import 'package:drop/features/auth/presentation/widgets/app_button.dart';
 import 'package:drop/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:drop/features/task/domain/entities/checklist_item.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/domain/task_schedule.dart';
 import 'package:drop/features/task/domain/work_types/task_work_x.dart';
 import 'package:drop/features/task/presentation/attachment_format.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
@@ -695,13 +697,40 @@ class _StatusHeader extends StatelessWidget {
                 icon: Icons.label_outline_rounded,
                 label: task.type.value,
               ),
+              // Scheduling V2 — the start of the task's schedule window.
+              if (task.startsAt != null)
+                _MetaPill(
+                  icon: Icons.play_circle_outline_rounded,
+                  label: 'Starts ${_dateLabel(task.startsAt!)}',
+                ),
               if (task.deadline != null) ...[
                 _MetaPill(
                   icon: Icons.schedule_outlined,
-                  label: _dateLabel(task.deadline!),
+                  label: 'Due ${_dateLabel(task.deadline!)}',
                   highlight: _isOverdue(task),
                 ),
               ],
+              // Current time-aware phase (Scheduled/Active/Due-soon/Overdue) for
+              // in-flight work; a finished task's story is the status pill.
+              if (schedulePhase(task, DateTime.now()).isActionable)
+                _MetaPill(
+                  icon: Icons.timelapse_outlined,
+                  label: schedulePhase(task, DateTime.now()).label,
+                  highlight: schedulePhase(task, DateTime.now()) ==
+                      TaskSchedulePhase.overdue,
+                ),
+              if (scheduledDuration(task) != null &&
+                  formatScheduleDuration(scheduledDuration(task)!).isNotEmpty)
+                _MetaPill(
+                  icon: Icons.hourglass_empty_rounded,
+                  label:
+                      'Est. ${formatScheduleDuration(scheduledDuration(task)!)}',
+                ),
+              if (task.approvedAt != null)
+                _MetaPill(
+                  icon: Icons.check_circle_outline_rounded,
+                  label: 'Completed ${_dateLabel(task.approvedAt!)}',
+                ),
               if (task.recurrence != null &&
                   task.recurrence!.frequency.value != 'none')
                 _MetaPill(
@@ -934,7 +963,7 @@ class _AssigneeBlock extends StatelessWidget {
               const Icon(Icons.person_outlined,
                   size: 14, color: AppColors.textTertiary),
               const SizedBox(width: AppSpacing.sm),
-              Text('Assigned by  ',
+              const Text('Assigned by  ',
                   style: AppTypography.caption),
               Text(
                 _assignedByName(directory, task.createdBy!),
@@ -1334,7 +1363,7 @@ class _ReviewBlockState extends State<_ReviewBlock> {
       children: [
         const Divider(color: AppColors.darkBorder),
         const SizedBox(height: AppSpacing.md),
-        Text('Review submission', style: AppTypography.h3),
+        const Text('Review submission', style: AppTypography.h3),
         const SizedBox(height: AppSpacing.lg),
         AppTextField(
           controller: _notes,
@@ -1407,13 +1436,7 @@ bool _isOverdue(TaskEntity task) {
   return !done && d.isBefore(DateTime.now());
 }
 
-String _dateLabel(DateTime d) {
-  const m = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  return '${d.day} ${m[d.month - 1]} ${d.year}';
-}
+String _dateLabel(DateTime d) => AppDateFormatter.dayMonthYear(d);
 
 String _priorityLabel(TaskPriority p) => switch (p) {
       TaskPriority.high => 'High priority',

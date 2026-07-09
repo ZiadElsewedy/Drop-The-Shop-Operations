@@ -569,7 +569,7 @@ class _CommunicationsScreenState extends State<CommunicationsScreen> {
                             ? AppColors.accent
                             : AppColors.textPrimary)),
                 const Spacer(),
-                Icon(Icons.chevron_right_rounded,
+                const Icon(Icons.chevron_right_rounded,
                     size: 16, color: AppColors.textTertiary),
               ],
             ),

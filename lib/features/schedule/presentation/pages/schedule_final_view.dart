@@ -242,7 +242,7 @@ class _PreviewToolbar extends StatelessWidget {
               ),
               if (constraints.maxWidth >= 980) ...[
                 const SizedBox(width: AppSpacing.md),
-                Text(
+                const Text(
                   'Export preview · controls are not included in the PNG',
                   style: AppTypography.caption,
                 ),
@@ -420,7 +420,7 @@ class _ExportCanvas extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Text('Read-only roster snapshot', style: AppTypography.caption),
+                const Text('Read-only roster snapshot', style: AppTypography.caption),
               ],
             ),
           ],

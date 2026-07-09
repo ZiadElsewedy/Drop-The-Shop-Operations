@@ -38,6 +38,8 @@ class AppTheme {
           color: AppColors.darkBorder,
           thickness: 1,
         ),
+        datePickerTheme: _datePickerTheme,
+        timePickerTheme: _timePickerTheme,
         pageTransitionsTheme: _pageTransitions,
       );
 
@@ -140,10 +142,117 @@ class AppTheme {
         ),
       );
 
-  static final PageTransitionsTheme _pageTransitions = PageTransitionsTheme(
+  // ── Date / time pickers — bespoke monochrome instead of generic Material ──
+  // The stock pickers are the most "default Flutter" surface in the create-task
+  // flow. These themes dress them in the DROP language: a near-black elevated
+  // sheet, a large radius, the white accent for the selected day/time, and the
+  // neutral text ramp — so choosing a start/due time feels part of the product.
+  static final DatePickerThemeData _datePickerTheme = DatePickerThemeData(
+    backgroundColor: AppColors.darkSurfaceElevated,
+    surfaceTintColor: AppColors.transparent,
+    elevation: 24,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.xxl),
+      side: const BorderSide(color: AppColors.darkBorder),
+    ),
+    headerBackgroundColor: AppColors.transparent,
+    headerForegroundColor: AppColors.textSecondary,
+    headerHeadlineStyle: AppTypography.h2,
+    weekdayStyle: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+    dayStyle: AppTypography.label,
+    yearStyle: AppTypography.label,
+    dividerColor: AppColors.darkBorder,
+    todayBorder: const BorderSide(color: AppColors.textTertiary),
+    dayForegroundColor: _pickerSelectable(AppColors.textPrimary),
+    dayBackgroundColor: _pickerSelected(),
+    todayForegroundColor: _pickerSelectable(AppColors.textPrimary),
+    yearForegroundColor: _pickerSelectable(AppColors.textSecondary),
+    yearBackgroundColor: _pickerSelected(),
+    cancelButtonStyle: TextButton.styleFrom(
+      foregroundColor: AppColors.textSecondary,
+    ),
+    confirmButtonStyle: TextButton.styleFrom(
+      foregroundColor: AppColors.textPrimary,
+      textStyle: AppTypography.label,
+    ),
+  );
+
+  static final TimePickerThemeData _timePickerTheme = TimePickerThemeData(
+    backgroundColor: AppColors.darkSurfaceElevated,
+    elevation: 24,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.xxl),
+      side: const BorderSide(color: AppColors.darkBorder),
+    ),
+    hourMinuteColor: _timeFill(unselected: AppColors.darkSurface),
+    hourMinuteTextColor: _timeFg(AppColors.textPrimary),
+    hourMinuteTextStyle: AppTypography.display.copyWith(fontSize: 44),
+    dayPeriodColor: _timeFill(unselected: AppColors.transparent),
+    dayPeriodTextColor: _timeFg(AppColors.textSecondary),
+    dayPeriodBorderSide: const BorderSide(color: AppColors.darkBorder),
+    dialBackgroundColor: AppColors.darkSurface,
+    dialHandColor: AppColors.primary,
+    dialTextColor: _timeFg(AppColors.textPrimary),
+    dialTextStyle: AppTypography.label,
+    entryModeIconColor: AppColors.textSecondary,
+    helpTextStyle: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+    cancelButtonStyle: TextButton.styleFrom(
+      foregroundColor: AppColors.textSecondary,
+    ),
+    confirmButtonStyle: TextButton.styleFrom(
+      foregroundColor: AppColors.textPrimary,
+      textStyle: AppTypography.label,
+    ),
+  );
+
+  /// White accent fill when a day/time is selected, transparent (or [unselected])
+  /// otherwise — the single "selected pill" treatment across both pickers.
+  static WidgetStateProperty<Color?> _pickerSelected({Color? unselected}) =>
+      WidgetStateProperty.resolveWith((states) =>
+          states.contains(WidgetState.selected)
+              ? AppColors.primary
+              : (unselected ?? AppColors.transparent));
+
+  /// Foreground colour that flips to the dark [onFill] on a selected (white)
+  /// pill and dims when disabled — keeps contrast correct in every state.
+  static WidgetStateProperty<Color?> _pickerSelectable(
+    Color base, {
+    Color onFill = AppColors.onPrimary,
+  }) =>
+      WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.disabled)) {
+          return AppColors.textQuaternary;
+        }
+        if (states.contains(WidgetState.selected)) return onFill;
+        return base;
+      });
+
+  // The time-picker colour slots are plain `Color?` fields that accept a
+  // `WidgetStateColor`, so they need a resolver that returns a non-null Color
+  // (the date-picker uses `WidgetStateProperty<Color?>` instead).
+
+  /// White accent fill when the hour/minute/period is selected, [unselected]
+  /// otherwise.
+  static WidgetStateColor _timeFill({required Color unselected}) =>
+      WidgetStateColor.resolveWith((states) =>
+          states.contains(WidgetState.selected)
+              ? AppColors.primary
+              : unselected);
+
+  /// Foreground that flips to dark on the selected white fill, dims when disabled.
+  static WidgetStateColor _timeFg(Color base) =>
+      WidgetStateColor.resolveWith((states) {
+        if (states.contains(WidgetState.disabled)) {
+          return AppColors.textQuaternary;
+        }
+        if (states.contains(WidgetState.selected)) return AppColors.onPrimary;
+        return base;
+      });
+
+  static const PageTransitionsTheme _pageTransitions = PageTransitionsTheme(
     builders: {
-      TargetPlatform.android: const ZoomPageTransitionsBuilder(),
-      TargetPlatform.iOS: const ZoomPageTransitionsBuilder(),
+      TargetPlatform.android: ZoomPageTransitionsBuilder(),
+      TargetPlatform.iOS: ZoomPageTransitionsBuilder(),
     },
   );
 }

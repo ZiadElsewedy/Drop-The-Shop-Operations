@@ -7,6 +7,7 @@ import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/utils/validators.dart';
 import 'package:drop/core/widgets/app_snackbar.dart';
 import 'package:drop/features/auth/presentation/widgets/auth_scaffold.dart';
@@ -104,7 +105,7 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final dateLabel = _birthDate == null
         ? 'Select your birth date'
-        : '${_birthDate!.day}/${_birthDate!.month}/${_birthDate!.year}';
+        : AppDateFormatter.numeric(_birthDate!);
 
     return AuthScaffold(
       actions: [
@@ -149,9 +150,9 @@ class _ProfileCompletionPageState extends State<ProfileCompletionPage> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 90),
-                  child: const Text(
+                const FadeSlideTransition(
+                  delay: Duration(milliseconds: 90),
+                  child: Text(
                     'A few details before you get started.',
                     style: AppTypography.bodyLarge,
                   ),

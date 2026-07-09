@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:drop/core/enums/broadcast_audience.dart';
 import 'package:drop/core/enums/broadcast_category.dart';
 import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/features/communications/domain/entities/broadcast_entity.dart';
 
 /// Shared presentation formatting for the Communications Center — keeps the
@@ -16,17 +17,12 @@ String broadcastTimeAgo(DateTime? dt) {
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
   if (diff.inHours < 24) return '${diff.inHours}h ago';
   if (diff.inDays < 7) return '${diff.inDays}d ago';
-  return '${dt.day} ${_month(dt.month)} ${dt.year}';
+  return AppDateFormatter.dayMonthYear(dt);
 }
 
 /// Longer, human date for the detail screen ("21 Jun 2026 • 4:59 PM").
-String broadcastFullDate(DateTime? dt) {
-  if (dt == null) return '—';
-  final h = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-  final m = dt.minute.toString().padLeft(2, '0');
-  final ampm = dt.hour < 12 ? 'AM' : 'PM';
-  return '${dt.day} ${_month(dt.month)} ${dt.year} • $h:$m $ampm';
-}
+String broadcastFullDate(DateTime? dt) =>
+    dt == null ? '—' : AppDateFormatter.dayMonthYearTime(dt);
 
 /// The audience label for a feed/detail chip ("Everyone" / "Branch" / "Direct").
 String audienceLabel(BroadcastEntity b) => switch (b.audience) {
@@ -61,8 +57,3 @@ String broadcastStatusLabel(BroadcastEntity b) {
   if (b.isArchived) return 'Archived';
   return 'Sent';
 }
-
-String _month(int m) => const [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ][(m - 1).clamp(0, 11)];

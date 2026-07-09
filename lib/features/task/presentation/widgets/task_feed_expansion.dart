@@ -7,6 +7,7 @@ import 'package:drop/core/services/usage_tracker.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/user_avatar.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/task/domain/entities/activity_entry.dart';
@@ -86,7 +87,9 @@ class TaskFeedExpansion extends StatelessWidget {
           _info(
             'Due',
             Text(
-              task.deadline == null ? 'No due date' : _date(task.deadline!),
+              task.deadline == null
+                  ? 'No due date'
+                  : AppDateFormatter.dayMonth(task.deadline!),
               style: _valueStyle.copyWith(
                   color: overdue ? AppColors.error : AppColors.textPrimary),
             ),
@@ -187,11 +190,6 @@ class TaskFeedExpansion extends StatelessWidget {
         ),
       );
 
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  static String _date(DateTime d) => '${d.day} ${_months[d.month - 1]}';
   static String _name(UserEntity u) =>
       (u.displayName?.isNotEmpty ?? false) ? u.displayName! : u.email;
 

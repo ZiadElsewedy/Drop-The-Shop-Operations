@@ -5,6 +5,7 @@ import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/adaptive_scaffold.dart';
 import 'package:drop/core/widgets/app_snackbar.dart';
 import 'package:drop/core/widgets/list_skeleton.dart';
@@ -630,20 +631,4 @@ bool _isOverdue(TaskEntity task) {
   return !done && d.isBefore(DateTime.now());
 }
 
-String _dateLabel(DateTime d) {
-  const m = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return '${d.day} ${m[d.month - 1]}';
-}
+String _dateLabel(DateTime d) => AppDateFormatter.dayMonth(d);

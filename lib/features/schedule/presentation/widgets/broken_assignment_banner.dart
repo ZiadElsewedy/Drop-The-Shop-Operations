@@ -78,7 +78,7 @@ class BrokenAssignmentBanner extends StatelessWidget {
                           .copyWith(color: AppColors.warning),
                     ),
                     const SizedBox(height: 1),
-                    Text('A scheduled employee is no longer in this branch.',
+                    const Text('A scheduled employee is no longer in this branch.',
                         style: AppTypography.caption),
                   ],
                 ),
@@ -152,7 +152,7 @@ class _ResolveBrokenSheet extends StatelessWidget {
             const LinearProgressIndicator(minHeight: 2),
           ],
           const SizedBox(height: AppSpacing.md),
-          Text('Resolve assignments', style: AppTypography.h3),
+          const Text('Resolve assignments', style: AppTypography.h3),
           const SizedBox(height: 2),
           Text(
             slots.isEmpty
@@ -226,7 +226,7 @@ class _ResolveBrokenSheet extends StatelessWidget {
                 Text('${slot.day.label} · ${slot.shift.label}',
                     style: AppTypography.label),
                 const SizedBox(height: 1),
-                Text('Former employee — no longer here',
+                const Text('Former employee — no longer here',
                     style: AppTypography.caption),
               ],
             ),

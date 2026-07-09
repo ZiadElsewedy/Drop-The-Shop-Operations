@@ -38,7 +38,7 @@ class SubmissionLoadingOverlay extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Submitting task', style: AppTypography.h3),
+                const Text('Submitting task', style: AppTypography.h3),
                 const SizedBox(height: AppSpacing.lg),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(99),

@@ -76,8 +76,8 @@ class _EmployeePickerSheet extends StatelessWidget {
           Text(subtitle, style: AppTypography.caption),
           const SizedBox(height: AppSpacing.md),
           if (employees.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
               child: Text('No employees in this branch yet.',
                   style: AppTypography.bodySmall),
             )

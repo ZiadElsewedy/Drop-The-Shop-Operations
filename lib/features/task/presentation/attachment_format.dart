@@ -1,5 +1,6 @@
 import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/features/task/domain/entities/activity_entry.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
@@ -51,18 +52,8 @@ TaskAttachment _legacy(String url, DateTime at, String by, String? byName) =>
       uploadedByName: byName,
     );
 
-const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
 /// Full upload timestamp, e.g. `20 Jun 2026 • 4:32 PM`.
-String attachmentTimestamp(DateTime d) {
-  final h12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
-  final ampm = d.hour < 12 ? 'AM' : 'PM';
-  final min = d.minute.toString().padLeft(2, '0');
-  return '${d.day} ${_months[d.month - 1]} ${d.year} • $h12:$min $ampm';
-}
+String attachmentTimestamp(DateTime d) => AppDateFormatter.dayMonthYearTime(d);
 
 /// Video length as `mm:ss` (e.g. `00:28`, `01:05`), or null when unknown.
 String? formatVideoDuration(Duration? d) {

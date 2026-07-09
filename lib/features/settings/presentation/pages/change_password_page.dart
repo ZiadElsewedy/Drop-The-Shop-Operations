@@ -56,9 +56,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               children: [
                 const SizedBox(height: AppSpacing.xl),
 
-                FadeSlideTransition(
-                  delay: const Duration(milliseconds: 50),
-                  child: const Text(
+                const FadeSlideTransition(
+                  delay: Duration(milliseconds: 50),
+                  child: Text(
                     'Enter your current password and choose a new one.',
                     style: AppTypography.bodyLarge,
                   ),

@@ -87,6 +87,15 @@ class TaskEntity with _$TaskEntity {
     /// generated it (`generateShiftTaskInstances` Cloud Function). Null for
     /// one-off tasks and for every task predating recurring shift templates.
     String? sourceTemplateId,
+    /// When the task is scheduled to **start** (Task Scheduling V2). Pre-filled
+    /// from the assigned shift's hours as a *smart default* the manager can
+    /// override; null on tasks predating scheduling (unknown start). Additive —
+    /// no migration. See [dueAt] for the due side and `task_schedule.dart` for
+    /// the derived [TaskSchedulePhase] (Scheduled → Active → Due-soon → Overdue).
+    DateTime? startsAt,
+    /// When the task becomes **due / overdue** — the canonical due timestamp,
+    /// exposed as [dueAt]. Kept named `deadline` for backward compatibility (all
+    /// existing reads + old Firestore docs are unchanged).
     DateTime? deadline,
     /// Free-text notes added by the executing employee.
     String? notes,
@@ -149,6 +158,14 @@ class TaskEntity with _$TaskEntity {
 
   /// Whether the manager attached any reference images.
   bool get hasReferences => referenceAttachments.isNotEmpty;
+
+  /// The canonical **due** timestamp (Task Scheduling V2). Aliases the physical
+  /// [deadline] field so new code reads `dueAt` while old docs/readers keep
+  /// working. Pairs with [startsAt].
+  DateTime? get dueAt => deadline;
+
+  /// True once the task carries an explicit schedule window (both ends set).
+  bool get hasSchedule => startsAt != null && deadline != null;
 
   /// True once the retention pass has archived this (approved) task — it drops
   /// out of every active list/stream (filtered in `TaskRepositoryImpl`) but

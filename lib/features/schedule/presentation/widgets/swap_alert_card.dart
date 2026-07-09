@@ -54,7 +54,7 @@ class SwapAlertCard extends StatelessWidget {
                         style: AppTypography.label,
                       ),
                       const SizedBox(height: 1),
-                      Text('Tap to review and approve',
+                      const Text('Tap to review and approve',
                           style: AppTypography.caption),
                     ],
                   ),
@@ -62,7 +62,7 @@ class SwapAlertCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.md, vertical: 6),
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: AppRadius.fullAll,
                   ),
@@ -132,7 +132,7 @@ Future<void> showSwapQueueSheet({
                 AppSpacing.md, AppSpacing.pagePadding, AppSpacing.sm),
             child: Row(
               children: [
-                Text('Swap Requests', style: AppTypography.h3),
+                const Text('Swap Requests', style: AppTypography.h3),
                 const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.close_rounded,

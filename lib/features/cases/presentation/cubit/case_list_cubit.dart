@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/enums/case_category.dart';
+import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/core/enums/case_privacy.dart';
 import 'package:drop/core/enums/case_recipient.dart';
 import 'package:drop/core/enums/case_status.dart';
@@ -221,7 +222,9 @@ class CaseListCubit extends Cubit<CaseListState> {
       for (final b in list) {
         _branchNames[b.id] = b.name;
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLog.warning('cases', 'branch-name enrichment failed: $e');
+    }
   }
 
   Future<void> _ensureDirectory(List<CaseEntity> cases) async {
@@ -240,7 +243,9 @@ class CaseListCubit extends Cubit<CaseListState> {
           _directory[u.uid] = u;
           changed = true;
         }
-      } catch (_) {}
+      } catch (e) {
+        AppLog.warning('cases', 'member-directory enrichment failed: $e');
+      }
     }
     if (changed && !isClosed) {
       state.mapOrNull(

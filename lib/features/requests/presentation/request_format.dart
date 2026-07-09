@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:drop/core/enums/request_status.dart';
 import 'package:drop/core/enums/request_type.dart';
 import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 
 /// Presentation-only formatting for Operations Requests — icons, the single
 /// status→colour source, and relative time. Kept out of the domain so the enums
@@ -37,11 +38,8 @@ class RequestFormat {
       };
 
   // ─── Relative time ("2m", "3h", "Yesterday", "6 Jul") ──────────
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
+  // (Its own wording — "now"/"Yesterday", no "ago" — differs from the shared
+  // [AppDateFormatter.relative]; only the absolute-date fallback is shared.)
   static String relativeTime(DateTime? time, {DateTime? now}) {
     if (time == null) return '';
     final clock = now ?? DateTime.now();
@@ -51,7 +49,7 @@ class RequestFormat {
     if (diff.inHours < 24) return '${diff.inHours}h';
     if (diff.inDays == 1) return 'Yesterday';
     if (diff.inDays < 7) return '${diff.inDays}d';
-    return '${time.day} ${_months[time.month - 1]}';
+    return AppDateFormatter.dayMonth(time);
   }
 
   /// A longer age label for a pending request's "waiting" hint.
@@ -61,16 +59,8 @@ class RequestFormat {
     return 'Waiting ${d.inDays}d';
   }
 
-  static String timeOfDay(DateTime d) {
-    final hour12 = d.hour % 12 == 0 ? 12 : d.hour % 12;
-    final minute = d.minute.toString().padLeft(2, '0');
-    final period = d.hour < 12 ? 'AM' : 'PM';
-    return '$hour12:$minute $period';
-  }
-
-  static String dateLabel(DateTime d) => '${d.day} ${_months[d.month - 1]}';
-
   /// A precise "6 Jul · 4:30 PM" stamp for the detail header.
-  static String fullStamp(DateTime? d) =>
-      d == null ? '' : '${dateLabel(d)} · ${timeOfDay(d)}';
+  static String fullStamp(DateTime? d) => d == null
+      ? ''
+      : '${AppDateFormatter.dayMonth(d)} · ${AppDateFormatter.time(d)}';
 }

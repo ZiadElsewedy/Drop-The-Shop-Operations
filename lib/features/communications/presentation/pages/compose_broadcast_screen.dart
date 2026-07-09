@@ -7,6 +7,7 @@ import 'package:drop/core/enums/broadcast_recurrence.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/routes/route_names.dart';
 import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/core/widgets/adaptive_scaffold.dart';
@@ -386,7 +387,7 @@ class _ComposeBroadcastScreenState extends State<ComposeBroadcastScreen> {
   /// The placeholder values available in the composer (recipient/branch/date).
   Map<String, String> _placeholderContext() {
     final now = DateTime.now();
-    final date = '${now.day}/${now.month}/${now.year}';
+    final date = AppDateFormatter.numeric(now);
     final branchName = _selectedBranch?.name ?? _ownBranchName ?? '';
     final employeeName = _singleSelectedUser?.displayName ?? '';
     return {
@@ -812,7 +813,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                   borderRadius: BorderRadius.circular(2)),
             ),
           ),
-          Text('Schedule broadcast', style: AppTypography.h3),
+          const Text('Schedule broadcast', style: AppTypography.h3),
           const SizedBox(height: AppSpacing.lg),
           _label('First send'),
           _Tappable(
@@ -841,7 +842,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
             const SizedBox(height: AppSpacing.md),
             Row(
               children: [
-                Text('Every', style: AppTypography.body),
+                const Text('Every', style: AppTypography.body),
                 const SizedBox(width: AppSpacing.md),
                 _StepBtn(
                     icon: Icons.remove_rounded,
@@ -858,7 +859,7 @@ class _ScheduleSheetState extends State<_ScheduleSheet> {
                     onTap: () => setState(
                         () => _interval = (_interval + 1).clamp(1, 365))),
                 const SizedBox(width: AppSpacing.md),
-                Text('days', style: AppTypography.body),
+                const Text('days', style: AppTypography.body),
               ],
             ),
           ],

@@ -1,0 +1,141 @@
+/// Task Scheduling V2 — the **derived, time-aware phase** of a task. Pure Dart
+/// (no Flutter/Firestore): computed from `startsAt` / `dueAt` + the lifecycle
+/// status, so it's unit-testable and can't drift from the data.
+///
+/// It is **not** a persisted status and **not** a new `TaskStatus` — the
+/// pending→started→review workflow, the enum, and `firestore.rules` are
+/// untouched. The phase is orthogonal to the lifecycle: a `pending` task whose
+/// window is *now* reads [TaskSchedulePhase.active] (it should be running but
+/// nobody started it), which is exactly the operational signal a manager wants.
+library;
+
+import 'package:drop/core/enums/schedule_day.dart';
+import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/domain/task_feed.dart' show isTaskOverdue;
+
+/// The time-aware operational phase, derived per [schedulePhase].
+enum TaskSchedulePhase { scheduled, active, dueSoon, overdue, done }
+
+extension TaskSchedulePhaseX on TaskSchedulePhase {
+  String get label => switch (this) {
+        TaskSchedulePhase.scheduled => 'Scheduled',
+        TaskSchedulePhase.active => 'Active',
+        TaskSchedulePhase.dueSoon => 'Due soon',
+        TaskSchedulePhase.overdue => 'Overdue',
+        TaskSchedulePhase.done => 'Done',
+      };
+
+  /// A time-phase chip only makes sense for **in-flight** work; a finished task
+  /// tells its story through the lifecycle status pill instead.
+  bool get isActionable => this != TaskSchedulePhase.done;
+}
+
+/// The window (before [TaskEntity.dueAt]) within which a task reads "due soon".
+const Duration kDueSoonWindow = Duration(minutes: 30);
+
+/// The derived phase of [t] at [now]. Ordering:
+/// terminal (approved/completed/submitted) → [done]; else overdue
+/// ([isTaskOverdue]) → [overdue]; else due within [dueSoonWindow] → [dueSoon];
+/// else `now < startsAt` → [scheduled]; else [active]. Missing timestamps degrade
+/// gracefully (no due → never overdue/due-soon; no start → never scheduled).
+TaskSchedulePhase schedulePhase(
+  TaskEntity t,
+  DateTime now, {
+  Duration dueSoonWindow = kDueSoonWindow,
+}) {
+  // The doer is finished — the lifecycle badge carries it from here.
+  final s = t.status;
+  if (s == TaskStatus.approved ||
+      s == TaskStatus.completed ||
+      s == TaskStatus.waitingReview) {
+    return TaskSchedulePhase.done;
+  }
+  if (isTaskOverdue(t, now)) return TaskSchedulePhase.overdue;
+  final due = t.dueAt;
+  if (due != null &&
+      !now.isAfter(due) &&
+      due.difference(now) <= dueSoonWindow) {
+    return TaskSchedulePhase.dueSoon;
+  }
+  final start = t.startsAt;
+  if (start != null && now.isBefore(start)) return TaskSchedulePhase.scheduled;
+  return TaskSchedulePhase.active;
+}
+
+/// The **smart-default** schedule window for a task on [date] in [shift] — the
+/// suggestion the create form pre-fills (and the manager can override). Uses the
+/// standing [ShiftHours.standard] baseline unless a resolved [hours] is passed;
+/// overnight ends (endMinutes > 1440) roll into the next day automatically.
+({DateTime start, DateTime due}) shiftDefaultSchedule(
+  DateTime date,
+  ScheduleShift shift, {
+  ShiftHours? hours,
+}) {
+  final h = hours ?? ShiftHours.standard(ScheduleDay.fromDate(date), shift);
+  final base = DateTime(date.year, date.month, date.day);
+  return (
+    start: base.add(Duration(minutes: h.startMinutes)),
+    due: base.add(Duration(minutes: h.endMinutes)),
+  );
+}
+
+/// Count of in-flight tasks whose due time is within [window] (the dashboard's
+/// "Due soon" figure).
+int dueSoonCount(
+  List<TaskEntity> tasks,
+  DateTime now, {
+  Duration window = kDueSoonWindow,
+}) =>
+    tasks
+        .where((t) =>
+            schedulePhase(t, now, dueSoonWindow: window) ==
+            TaskSchedulePhase.dueSoon)
+        .length;
+
+/// How well a set of assignees' rostered shifts agree — drives the create form's
+/// smart default beyond explicit shift assignment (Scheduling V2 refinement).
+enum AssigneeShiftFit { none, unanimous, mixed }
+
+/// Given each assignee's rostered shift(s) for the target day, decide the smart
+/// default: [unanimous] (everyone shares one shift → suggest it), [mixed]
+/// (people on different shifts → ask the user to choose), or [none] (nobody
+/// rostered → manual). Pure so it's testable without the schedule repository.
+({AssigneeShiftFit fit, ScheduleShift? shift}) assigneeShiftFit(
+  Iterable<List<ScheduleShift>> perAssigneeShifts,
+) {
+  final all = <ScheduleShift>{};
+  var anyRostered = false;
+  for (final shifts in perAssigneeShifts) {
+    if (shifts.isNotEmpty) anyRostered = true;
+    all.addAll(shifts);
+  }
+  if (!anyRostered) return (fit: AssigneeShiftFit.none, shift: null);
+  if (all.length == 1) {
+    return (fit: AssigneeShiftFit.unanimous, shift: all.first);
+  }
+  return (fit: AssigneeShiftFit.mixed, shift: null);
+}
+
+/// The scheduled window length (`dueAt − startsAt`), or null when either end is
+/// unset. Naturally spans midnight (instant subtraction), so an overnight task
+/// yields a correct positive duration.
+Duration? scheduledDuration(TaskEntity t) {
+  final s = t.startsAt, d = t.dueAt;
+  if (s == null || d == null) return null;
+  return d.difference(s);
+}
+
+/// A compact human duration — "8h 30m" / "8h" / "45m"; empty for a non-positive
+/// span. Informational (the schedule section + Task Details) and the basis of
+/// future duration analytics (expected `dueAt−startsAt` vs actual).
+String formatScheduleDuration(Duration d) {
+  if (d.inMinutes <= 0) return '';
+  final h = d.inHours;
+  final m = d.inMinutes % 60;
+  if (h > 0 && m > 0) return '${h}h ${m}m';
+  if (h > 0) return '${h}h';
+  return '${m}m';
+}

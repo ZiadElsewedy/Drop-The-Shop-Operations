@@ -6,6 +6,7 @@ import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
@@ -137,7 +138,7 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
                     const SizedBox(height: AppSpacing.lg),
                     _sectionLabel('Day notes'),
                     const SizedBox(height: 2),
-                    Text('One instruction per line — each becomes a bullet '
+                    const Text('One instruction per line — each becomes a bullet '
                         'for the team.',
                         style: AppTypography.caption),
                     const SizedBox(height: AppSpacing.sm),
@@ -268,7 +269,7 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
             Container(
               padding:
                   const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.primarySurface,
                 borderRadius: AppRadius.fullAll,
               ),
@@ -413,7 +414,7 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
           foregroundColor: AppColors.primary,
           side: const BorderSide(color: AppColors.darkBorder),
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-          shape: RoundedRectangleBorder(borderRadius: AppRadius.buttonAll),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.buttonAll),
         ),
         icon: const Icon(Icons.event_busy_outlined, size: 18),
         label: const Text('Add leave'),
@@ -515,13 +516,7 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
         ),
       );
 
-  String _dateLabel(DateTime d) {
-    const m = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${d.day} ${m[d.month - 1]}';
-  }
+  String _dateLabel(DateTime d) => AppDateFormatter.dayMonth(d);
 }
 
 /// Small circular icon action used inline in leave rows.

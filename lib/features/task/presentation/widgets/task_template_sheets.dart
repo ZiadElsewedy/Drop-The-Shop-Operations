@@ -473,11 +473,11 @@ class _TemplateFormState extends State<_TemplateForm> {
             onChanged: (v) => setState(() => _priority = v),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Row(
+          const Row(
             children: [
-              const Icon(Icons.checklist_rounded,
+              Icon(Icons.checklist_rounded,
                   size: 16, color: AppColors.textSecondary),
-              const SizedBox(width: AppSpacing.sm),
+              SizedBox(width: AppSpacing.sm),
               Text('Checklist steps', style: AppTypography.labelSmall),
             ],
           ),

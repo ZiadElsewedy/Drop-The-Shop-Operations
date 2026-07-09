@@ -1,0 +1,97 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:drop/core/enums/task_assignment_type.dart';
+import 'package:drop/core/enums/task_status.dart';
+import 'package:drop/features/task/domain/entities/task_entity.dart';
+import 'package:drop/features/task/domain/task_metrics.dart';
+
+/// Pure dashboard metric derivations (DROP Design System V2). Each figure that
+/// feeds a Needs-Attention tile / the Today strip is unit-verified so it can't
+/// drift from the live task list.
+void main() {
+  final now = DateTime(2026, 7, 8, 10); // Wed 8 Jul, 10:00
+  final past = DateTime(2026, 7, 7, 9); // yesterday
+  final future = DateTime(2026, 7, 9, 9); // tomorrow
+
+  TaskEntity task(
+    String id, {
+    TaskStatus status = TaskStatus.pending,
+    List<String> assignees = const [],
+    TaskAssignmentType type = TaskAssignmentType.individual,
+    DateTime? deadline,
+    DateTime? approvedAt,
+  }) =>
+      TaskEntity(
+        id: id,
+        title: id,
+        status: status,
+        assigneeIds: assignees,
+        assignmentType: type,
+        deadline: deadline,
+        approvedAt: approvedAt,
+      );
+
+  group('overdueCount', () {
+    test('counts open tasks past their deadline, ignores terminal states', () {
+      final tasks = [
+        task('a', status: TaskStatus.pending, deadline: past), // overdue
+        task('b', status: TaskStatus.started, deadline: past), // overdue
+        task('c', status: TaskStatus.pending, deadline: future), // not yet
+        task('d', status: TaskStatus.waitingReview, deadline: past), // terminal
+        task('e', status: TaskStatus.approved, deadline: past, approvedAt: now),
+        task('f', status: TaskStatus.pending), // no deadline
+      ];
+      expect(overdueCount(tasks, now), 2);
+    });
+  });
+
+  test('reviewCount counts only waitingReview', () {
+    final tasks = [
+      task('a', status: TaskStatus.waitingReview),
+      task('b', status: TaskStatus.waitingReview),
+      task('c', status: TaskStatus.started),
+    ];
+    expect(reviewCount(tasks), 2);
+  });
+
+  test('runningNowCount counts only started', () {
+    final tasks = [
+      task('a', status: TaskStatus.started),
+      task('b', status: TaskStatus.pending),
+      task('c', status: TaskStatus.started),
+    ];
+    expect(runningNowCount(tasks), 2);
+  });
+
+  group('unassignedCount', () {
+    test('counts active individual/team tasks with no owner', () {
+      final tasks = [
+        task('a', status: TaskStatus.pending), // unassigned → count
+        task('b', status: TaskStatus.started), // unassigned → count
+        task('c', status: TaskStatus.pending, assignees: ['u1']), // owned
+        // shift tasks target a shift, never "unassigned"
+        task('d', status: TaskStatus.pending, type: TaskAssignmentType.shift),
+        // finished work is out of the active window
+        task('e', status: TaskStatus.approved, approvedAt: DateTime(2026, 6, 1)),
+      ];
+      expect(unassignedCount(tasks, now), 2);
+    });
+  });
+
+  test('rejectedCount counts only rejected', () {
+    final tasks = [
+      task('a', status: TaskStatus.rejected),
+      task('b', status: TaskStatus.pending),
+    ];
+    expect(rejectedCount(tasks), 1);
+  });
+
+  group('approvalRatePct', () {
+    test('rounds approved / decided to a whole percent', () {
+      expect(approvalRatePct(approved: 3, rejected: 1), 75);
+      expect(approvalRatePct(approved: 1, rejected: 0), 100);
+    });
+    test('returns null when nothing has been decided', () {
+      expect(approvalRatePct(approved: 0, rejected: 0), isNull);
+    });
+  });
+}

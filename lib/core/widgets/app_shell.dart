@@ -139,20 +139,20 @@ class AppShell extends StatelessWidget {
     switch (role) {
       case UserRole.admin:
         return [
-          SidebarSection(items: [
-            const SidebarItem(
+          const SidebarSection(items: [
+            SidebarItem(
               icon: Icons.dashboard_outlined,
               activeIcon: Icons.dashboard_rounded,
               label: 'Dashboard',
               route: RouteNames.adminDashboard,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.fact_check_outlined,
               activeIcon: Icons.fact_check_rounded,
               label: 'Tasks',
               route: RouteNames.adminTasks,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.calendar_view_week_outlined,
               activeIcon: Icons.calendar_view_week_rounded,
               label: 'Schedule',
@@ -164,26 +164,26 @@ class AppShell extends StatelessWidget {
             community,
             notifications,
           ]),
-          SidebarSection(title: 'Administration', items: [
-            const SidebarItem(
+          const SidebarSection(title: 'Administration', items: [
+            SidebarItem(
               icon: Icons.analytics_outlined,
               activeIcon: Icons.analytics_rounded,
               label: 'Analytics',
               route: RouteNames.adminAnalytics,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.store_outlined,
               activeIcon: Icons.store_rounded,
               label: 'Branches',
               route: RouteNames.adminBranches,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.badge_outlined,
               activeIcon: Icons.badge_rounded,
               label: 'Managers',
               route: RouteNames.adminManagers,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.people_outline_rounded,
               activeIcon: Icons.people_rounded,
               label: 'Employees',
@@ -193,20 +193,20 @@ class AppShell extends StatelessWidget {
         ];
       case UserRole.manager:
         return [
-          SidebarSection(items: [
-            const SidebarItem(
+          const SidebarSection(items: [
+            SidebarItem(
               icon: Icons.dashboard_outlined,
               activeIcon: Icons.dashboard_rounded,
               label: 'Dashboard',
               route: RouteNames.managerHome,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.fact_check_outlined,
               activeIcon: Icons.fact_check_rounded,
               label: 'Operations',
               route: RouteNames.managerTasks,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.calendar_view_week_outlined,
               activeIcon: Icons.calendar_view_week_rounded,
               label: 'Schedule',
@@ -221,20 +221,20 @@ class AppShell extends StatelessWidget {
         ];
       case UserRole.employee:
         return [
-          SidebarSection(items: [
-            const SidebarItem(
+          const SidebarSection(items: [
+            SidebarItem(
               icon: Icons.home_outlined,
               activeIcon: Icons.home_rounded,
               label: 'Home',
               route: RouteNames.home,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.fact_check_outlined,
               activeIcon: Icons.fact_check_rounded,
               label: 'My Tasks',
               route: RouteNames.myTasks,
             ),
-            const SidebarItem(
+            SidebarItem(
               icon: Icons.calendar_view_week_outlined,
               activeIcon: Icons.calendar_view_week_rounded,
               label: 'My Schedule',

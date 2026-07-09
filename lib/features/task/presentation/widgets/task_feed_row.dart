@@ -4,6 +4,7 @@ import 'package:drop/core/enums/task_priority.dart';
 import 'package:drop/core/enums/task_status.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/status_badge.dart';
 import 'package:drop/core/widgets/user_avatar.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
@@ -240,11 +241,6 @@ class _DueLabel extends StatelessWidget {
   final TaskEntity task;
   final bool overdue;
 
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
   @override
   Widget build(BuildContext context) {
     final d = task.deadline;
@@ -252,7 +248,7 @@ class _DueLabel extends StatelessWidget {
       return Text('—',
           style: AppTypography.caption.copyWith(color: AppColors.textTertiary));
     }
-    final label = '${d.day} ${_months[d.month - 1]}';
+    final label = AppDateFormatter.dayMonth(d);
     return Text(
       overdue ? '$label · late' : label,
       textAlign: TextAlign.right,

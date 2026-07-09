@@ -134,8 +134,8 @@ class _BranchSelectorState extends State<_BranchSelector> {
                   value: b.id,
                 ),
               if (branches.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
                   child: Text('No active branches yet — create one first.',
                       style: AppTypography.caption),
                 ),
@@ -231,7 +231,7 @@ class _EmploymentStatusSheet extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Title('Employment status'),
-        Text(
+        const Text(
           'An HR record label. It does not block access on its own — use '
           'Deactivate to revoke sign-in.',
           style: AppTypography.caption,
@@ -336,7 +336,7 @@ class _SetPositionSheetState extends State<_SetPositionSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const _Title('Job position'),
-          Text(
+          const Text(
               'Drives shift-swap role compatibility when a branch requires '
               'same-role swaps. Leave empty for none.',
               style: AppTypography.caption),
@@ -544,7 +544,7 @@ class _PromoteManagerSheetState extends State<_PromoteManagerSheet> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _Title('Promote to manager'),
-        Text('Promote an existing employee to manager. Their current branch is '
+        const Text('Promote an existing employee to manager. Their current branch is '
             'kept — reassign it from the manager list if needed.',
             style: AppTypography.caption),
         const SizedBox(height: AppSpacing.md),
@@ -559,8 +559,8 @@ class _PromoteManagerSheetState extends State<_PromoteManagerSheet> {
             }
             final employees = snap.data ?? const [];
             if (employees.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: AppSpacing.lg),
                 child: Text('No employees to promote.',
                     style: AppTypography.bodySmall),
               );

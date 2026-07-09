@@ -91,7 +91,7 @@ class AdminUserCard extends StatelessWidget {
                 color: statusColor,
               ),
               if (user.mustChangePassword)
-                _Chip(
+                const _Chip(
                   icon: Icons.lock_clock_rounded,
                   label: 'pending first login',
                   color: AppColors.warning,

@@ -133,7 +133,7 @@ class _SubmissionDetailsSheetState extends State<SubmissionDetailsSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Submission Details', style: AppTypography.h3),
+                const Text('Submission Details', style: AppTypography.h3),
                 const SizedBox(height: 2),
                 Text(
                   '${activityTitle(s.content.status)} by $name · '

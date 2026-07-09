@@ -6,6 +6,7 @@ import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/adaptive_scaffold.dart';
 import 'package:drop/core/widgets/app_glass_card.dart';
 import 'package:drop/core/widgets/branch_avatar.dart';
@@ -142,13 +143,7 @@ class _ProfileContent extends StatelessWidget {
     }
   }
 
-  String _date(DateTime d) {
-    const m = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${m[d.month - 1]} ${d.day}, ${d.year}';
-  }
+  String _date(DateTime d) => AppDateFormatter.monthDayYear(d);
 }
 
 class _Identity extends StatelessWidget {
@@ -183,12 +178,12 @@ class _Identity extends StatelessWidget {
               else if (incomplete)
                 GestureDetector(
                   onTap: () => context.push(RouteNames.editProfile),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('Complete your profile', style: AppTypography.body),
-                      const SizedBox(width: 2),
-                      const Icon(Icons.chevron_right_rounded,
+                      SizedBox(width: 2),
+                      Icon(Icons.chevron_right_rounded,
                           size: 16, color: AppColors.textTertiary),
                     ],
                   ),
@@ -369,12 +364,12 @@ class _ProfileSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
+    return const Padding(
+      padding: EdgeInsets.fromLTRB(
           AppSpacing.pagePadding, AppSpacing.sm, AppSpacing.pagePadding, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Row(
             children: [
               Skeleton(width: 64, height: 64, circle: true),

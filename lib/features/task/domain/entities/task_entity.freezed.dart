@@ -90,6 +90,17 @@ mixin _$TaskEntity {
   /// generated it (`generateShiftTaskInstances` Cloud Function). Null for
   /// one-off tasks and for every task predating recurring shift templates.
   String? get sourceTemplateId => throw _privateConstructorUsedError;
+
+  /// When the task is scheduled to **start** (Task Scheduling V2). Pre-filled
+  /// from the assigned shift's hours as a *smart default* the manager can
+  /// override; null on tasks predating scheduling (unknown start). Additive —
+  /// no migration. See [dueAt] for the due side and `task_schedule.dart` for
+  /// the derived [TaskSchedulePhase] (Scheduled → Active → Due-soon → Overdue).
+  DateTime? get startsAt => throw _privateConstructorUsedError;
+
+  /// When the task becomes **due / overdue** — the canonical due timestamp,
+  /// exposed as [dueAt]. Kept named `deadline` for backward compatibility (all
+  /// existing reads + old Firestore docs are unchanged).
   DateTime? get deadline => throw _privateConstructorUsedError;
 
   /// Free-text notes added by the executing employee.
@@ -181,6 +192,7 @@ abstract class $TaskEntityCopyWith<$Res> {
     TaskAssignmentType assignmentType,
     DateTime? instanceDate,
     String? sourceTemplateId,
+    DateTime? startsAt,
     DateTime? deadline,
     String? notes,
     String? proofImageUrl,
@@ -237,6 +249,7 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? assignmentType = null,
     Object? instanceDate = freezed,
     Object? sourceTemplateId = freezed,
+    Object? startsAt = freezed,
     Object? deadline = freezed,
     Object? notes = freezed,
     Object? proofImageUrl = freezed,
@@ -330,6 +343,10 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.sourceTemplateId
                 : sourceTemplateId // ignore: cast_nullable_to_non_nullable
                       as String?,
+            startsAt: freezed == startsAt
+                ? _value.startsAt
+                : startsAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
             deadline: freezed == deadline
                 ? _value.deadline
                 : deadline // ignore: cast_nullable_to_non_nullable
@@ -450,6 +467,7 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     TaskAssignmentType assignmentType,
     DateTime? instanceDate,
     String? sourceTemplateId,
+    DateTime? startsAt,
     DateTime? deadline,
     String? notes,
     String? proofImageUrl,
@@ -506,6 +524,7 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? assignmentType = null,
     Object? instanceDate = freezed,
     Object? sourceTemplateId = freezed,
+    Object? startsAt = freezed,
     Object? deadline = freezed,
     Object? notes = freezed,
     Object? proofImageUrl = freezed,
@@ -599,6 +618,10 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.sourceTemplateId
             : sourceTemplateId // ignore: cast_nullable_to_non_nullable
                   as String?,
+        startsAt: freezed == startsAt
+            ? _value.startsAt
+            : startsAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
         deadline: freezed == deadline
             ? _value.deadline
             : deadline // ignore: cast_nullable_to_non_nullable
@@ -698,6 +721,7 @@ class _$TaskEntityImpl extends _TaskEntity {
     this.assignmentType = TaskAssignmentType.individual,
     this.instanceDate,
     this.sourceTemplateId,
+    this.startsAt,
     this.deadline,
     this.notes,
     this.proofImageUrl,
@@ -860,6 +884,18 @@ class _$TaskEntityImpl extends _TaskEntity {
   /// one-off tasks and for every task predating recurring shift templates.
   @override
   final String? sourceTemplateId;
+
+  /// When the task is scheduled to **start** (Task Scheduling V2). Pre-filled
+  /// from the assigned shift's hours as a *smart default* the manager can
+  /// override; null on tasks predating scheduling (unknown start). Additive —
+  /// no migration. See [dueAt] for the due side and `task_schedule.dart` for
+  /// the derived [TaskSchedulePhase] (Scheduled → Active → Due-soon → Overdue).
+  @override
+  final DateTime? startsAt;
+
+  /// When the task becomes **due / overdue** — the canonical due timestamp,
+  /// exposed as [dueAt]. Kept named `deadline` for backward compatibility (all
+  /// existing reads + old Firestore docs are unchanged).
   @override
   final DateTime? deadline;
 
@@ -949,7 +985,7 @@ class _$TaskEntityImpl extends _TaskEntity {
 
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, workType: $workType, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, data: $data, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, workType: $workType, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, data: $data, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, startsAt: $startsAt, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt)';
   }
 
   @override
@@ -993,6 +1029,8 @@ class _$TaskEntityImpl extends _TaskEntity {
                 other.instanceDate == instanceDate) &&
             (identical(other.sourceTemplateId, sourceTemplateId) ||
                 other.sourceTemplateId == sourceTemplateId) &&
+            (identical(other.startsAt, startsAt) ||
+                other.startsAt == startsAt) &&
             (identical(other.deadline, deadline) ||
                 other.deadline == deadline) &&
             (identical(other.notes, notes) || other.notes == notes) &&
@@ -1053,6 +1091,7 @@ class _$TaskEntityImpl extends _TaskEntity {
     assignmentType,
     instanceDate,
     sourceTemplateId,
+    startsAt,
     deadline,
     notes,
     proofImageUrl,
@@ -1102,6 +1141,7 @@ abstract class _TaskEntity extends TaskEntity {
     final TaskAssignmentType assignmentType,
     final DateTime? instanceDate,
     final String? sourceTemplateId,
+    final DateTime? startsAt,
     final DateTime? deadline,
     final String? notes,
     final String? proofImageUrl,
@@ -1213,6 +1253,18 @@ abstract class _TaskEntity extends TaskEntity {
   /// one-off tasks and for every task predating recurring shift templates.
   @override
   String? get sourceTemplateId;
+
+  /// When the task is scheduled to **start** (Task Scheduling V2). Pre-filled
+  /// from the assigned shift's hours as a *smart default* the manager can
+  /// override; null on tasks predating scheduling (unknown start). Additive —
+  /// no migration. See [dueAt] for the due side and `task_schedule.dart` for
+  /// the derived [TaskSchedulePhase] (Scheduled → Active → Due-soon → Overdue).
+  @override
+  DateTime? get startsAt;
+
+  /// When the task becomes **due / overdue** — the canonical due timestamp,
+  /// exposed as [dueAt]. Kept named `deadline` for backward compatibility (all
+  /// existing reads + old Firestore docs are unchanged).
   @override
   DateTime? get deadline;
 

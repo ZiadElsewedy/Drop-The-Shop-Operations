@@ -3,6 +3,7 @@ import 'package:drop/core/enums/notification_type.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/app_glass_card.dart';
 import 'package:drop/core/widgets/status_badge.dart';
 import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
@@ -107,7 +108,7 @@ class NotificationTile extends StatelessWidget {
                     children: [
                       StatusBadge(label: catLabel, color: catColor),
                       const SizedBox(width: AppSpacing.sm),
-                      Text(_timeAgo(notification.createdAt),
+                      Text(AppDateFormatter.relative(notification.createdAt),
                           style: AppTypography.caption),
                     ],
                   ),
@@ -234,16 +235,4 @@ class NotificationTile extends StatelessWidget {
     }
   }
 
-  static String _timeAgo(DateTime time) {
-    final diff = DateTime.now().difference(time);
-    if (diff.inSeconds < 60) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${time.day} ${months[time.month - 1]}';
-  }
 }

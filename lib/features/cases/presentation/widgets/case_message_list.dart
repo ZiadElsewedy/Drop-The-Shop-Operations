@@ -3,6 +3,7 @@ import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/features/cases/domain/case_thread.dart';
 import 'package:drop/features/cases/domain/entities/case_entity.dart';
 import 'package:drop/features/cases/domain/entities/case_message.dart';
@@ -115,7 +116,7 @@ class _CaseMessageListState extends State<CaseMessageList> {
   Widget build(BuildContext context) {
     final messages = caseThread(widget.messages, widget.caseItem);
     if (messages.isEmpty) {
-      return Center(
+      return const Center(
         child: Text('No messages yet.', style: AppTypography.bodySmall),
       );
     }
@@ -319,11 +320,7 @@ class _DateSeparator extends StatelessWidget {
     final diff = today.difference(day).inDays;
     if (diff == 0) return 'Today';
     if (diff == 1) return 'Yesterday';
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${months[day.month - 1]} ${day.day}, ${day.year}';
+    return AppDateFormatter.monthDayYear(day);
   }
 
   @override

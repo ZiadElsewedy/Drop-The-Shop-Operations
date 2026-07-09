@@ -9,6 +9,7 @@ import 'package:drop/core/routes/route_names.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/core/widgets/app_glass_card.dart';
 import 'package:drop/core/widgets/app_motion.dart';
@@ -274,21 +275,7 @@ class _GreetingSection extends StatelessWidget {
 
   String get _dateLabel {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${days[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
+    return '${days[now.weekday - 1]}, ${AppDateFormatter.dayMonth(now)}';
   }
 
   @override
@@ -413,9 +400,9 @@ class _ShiftBlock extends StatelessWidget {
     return BlocBuilder<StatisticsCubit, StatisticsState>(
       builder: (context, state) => state.maybeWhen(
         loaded: (s) => _content(s),
-        orElse: () => Column(
+        orElse: () => const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
+          children: [
             Skeleton(
               width: 72,
               height: 9,
@@ -891,7 +878,7 @@ class _TaskSection extends StatelessWidget {
           ],
         ],
         const SizedBox(height: AppSpacing.lg),
-        _ViewAllRow(label: 'Open all tasks', emphasized: true),
+        const _ViewAllRow(label: 'Open all tasks', emphasized: true),
       ],
     );
   }
@@ -1315,21 +1302,6 @@ class _MetaRow extends StatelessWidget {
         d.isBefore(DateTime.now());
   }
 
-  static const _months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
   String _relativeDue(DateTime d) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -1339,7 +1311,7 @@ class _MetaRow extends StatelessWidget {
     if (diff == 0) return 'Due today';
     if (diff == 1) return 'Due tomorrow';
     if (diff < 7) return 'Due in ${diff}d';
-    return 'Due ${d.day} ${_months[d.month - 1]}';
+    return 'Due ${AppDateFormatter.dayMonth(d)}';
   }
 
   @override
@@ -1530,9 +1502,9 @@ class _EmptyTaskState extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.md),
-          Text('No tasks yet', style: AppTypography.h3),
+          const Text('No tasks yet', style: AppTypography.h3),
           const SizedBox(height: 4),
-          Text(
+          const Text(
             'When your manager assigns work, it shows up right here.',
             style: AppTypography.bodySmall,
             textAlign: TextAlign.center,
@@ -1578,7 +1550,7 @@ class _AllDoneCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    Text(
+                    const Text(
                       'Nothing needs your attention right now.',
                       style: AppTypography.bodySmall,
                     ),
@@ -1589,7 +1561,7 @@ class _AllDoneCard extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        _ViewAllRow(label: 'Open all tasks', emphasized: true),
+        const _ViewAllRow(label: 'Open all tasks', emphasized: true),
       ],
     );
   }
@@ -1778,7 +1750,7 @@ class _OutgoingSwapCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Your swap request', style: AppTypography.label),
+                      const Text('Your swap request', style: AppTypography.label),
                       const SizedBox(height: 2),
                       Text(
                         detail,

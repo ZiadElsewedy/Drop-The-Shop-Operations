@@ -16,9 +16,9 @@ import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/domain/task_feed.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/cubit/task_state.dart';
-import 'package:drop/features/task/presentation/pages/task_details_screen.dart';
 import 'package:drop/features/task/presentation/widgets/task_feed_expansion.dart';
 import 'package:drop/features/task/presentation/widgets/task_feed_row.dart';
+import 'package:drop/features/task/presentation/widgets/task_preview_sheet.dart';
 
 /// The **global active-task feed** on the homepage (Home Dashboard redesign,
 /// P2). A self-contained widget over the app-wide [TaskCubit] stream — no new
@@ -69,104 +69,12 @@ class TaskFeedSectionState extends State<TaskFeedSection> {
       if (opening) UsageTracker.track('expansion_open');
     } else {
       UsageTracker.track('expansion_open');
-      _openSheet(task, directory);
+      showTaskPreviewSheet(context, task: task, directory: directory);
     }
-  }
-
-  void _openSheet(TaskEntity task, Map<String, UserEntity> directory) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.darkSurface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.7,
-        minChildSize: 0.4,
-        maxChildSize: 0.94,
-        // Scrollable body + a PINNED action footer (stays visible as content
-        // grows) — the sticky-footer requirement for the triage surface.
-        builder: (ctx, scroll) => Column(
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              decoration: BoxDecoration(
-                color: AppColors.darkBorder,
-                borderRadius: BorderRadius.circular(99),
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                controller: scroll,
-                padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, 0,
-                    AppSpacing.pagePadding, AppSpacing.md),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TaskFeedRow(
-                        task: task,
-                        directory: directory,
-                        branchName: branchNameFor(task)),
-                    const SizedBox(height: AppSpacing.sm),
-                    TaskFeedExpansion(
-                      task: task,
-                      directory: directory,
-                      branchName: branchNameFor(task),
-                      onOpenDetails: () {},
-                      showActions: false,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.fromLTRB(
-                  AppSpacing.pagePadding,
-                  AppSpacing.md,
-                  AppSpacing.pagePadding,
-                  MediaQuery.of(ctx).padding.bottom + AppSpacing.md),
-              decoration: const BoxDecoration(
-                color: AppColors.darkSurface,
-                border: Border(top: BorderSide(color: AppColors.darkBorder)),
-              ),
-              child: TaskFeedActions(
-                task: task,
-                onOpenDetails: () {
-                  Navigator.of(ctx).pop();
-                  _openTask(task, directory);
-                },
-                onClose: () => Navigator.of(ctx).maybePop(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   String? branchNameFor(TaskEntity task) =>
       context.read<TaskCubit>().branchNames[task.branchId];
-
-  void _openTask(TaskEntity task, Map<String, UserEntity> directory) {
-    Navigator.of(context).push(PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 260),
-      pageBuilder: (ctx, anim, sec) =>
-          TaskDetailsScreen(task: task, directory: directory),
-      transitionsBuilder: (ctx, anim, sec, child) => SlideTransition(
-        position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
-            .animate(CurvedAnimation(parent: anim, curve: Curves.easeOutCubic)),
-        child: FadeTransition(
-          opacity: CurvedAnimation(parent: anim, curve: const Interval(0, 0.6)),
-          child: child,
-        ),
-      ),
-    ));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +202,7 @@ class TaskFeedSectionState extends State<TaskFeedSection> {
                   task: t,
                   directory: directory,
                   branchName: branchNameFor(t),
-                  onOpenDetails: () => _openTask(t, directory),
+                  onOpenDetails: () => openTaskDetails(context, t, directory),
                   onClose: () => setState(() => _expandedId = null),
                 ),
               ),

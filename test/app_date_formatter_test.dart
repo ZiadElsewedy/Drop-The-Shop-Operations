@@ -1,0 +1,61 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
+
+/// Locks the exact user-visible output of the single app date formatter. The
+/// expected strings mirror the formats that used to be re-implemented across
+/// ~20 feature files (and are asserted by the older activity/attachment tests),
+/// so this doubles as the regression guard for the Sprint 1 consolidation.
+void main() {
+  group('AppDateFormatter.time (12h AM/PM)', () {
+    test('afternoon, midnight, noon, late', () {
+      expect(AppDateFormatter.time(DateTime(2026, 7, 6, 1, 43)), '1:43 AM');
+      expect(AppDateFormatter.time(DateTime(2026, 7, 6, 0, 5)), '12:05 AM');
+      expect(AppDateFormatter.time(DateTime(2026, 7, 6, 12, 0)), '12:00 PM');
+      expect(AppDateFormatter.time(DateTime(2026, 7, 6, 16, 32)), '4:32 PM');
+      expect(AppDateFormatter.time(DateTime(2026, 7, 6, 23, 30)), '11:30 PM');
+    });
+  });
+
+  group('absolute date styles', () {
+    final d = DateTime(2026, 7, 6, 16, 32);
+    test('dayMonth', () => expect(AppDateFormatter.dayMonth(d), '6 Jul'));
+    test('dayMonthYear',
+        () => expect(AppDateFormatter.dayMonthYear(d), '6 Jul 2026'));
+    test('monthDayYear',
+        () => expect(AppDateFormatter.monthDayYear(d), 'Jul 6, 2026'));
+    test('dayMonthYearTime', () {
+      expect(AppDateFormatter.dayMonthYearTime(d), '6 Jul 2026 • 4:32 PM');
+      expect(AppDateFormatter.dayMonthYearTime(DateTime(2026, 1, 5, 0, 5)),
+          '5 Jan 2026 • 12:05 AM');
+    });
+    test('weekdayDayMonth (long weekday)',
+        () => expect(AppDateFormatter.weekdayDayMonth(d), 'Monday, 6 Jul'));
+    test('numeric', () => expect(AppDateFormatter.numeric(d), '6/7/2026'));
+  });
+
+  group('AppDateFormatter.relative', () {
+    final now = DateTime(2026, 7, 6, 12, 0);
+    test('just now / minutes / hours / days / absolute fallback', () {
+      expect(AppDateFormatter.relative(now, now: now), 'Just now');
+      expect(
+          AppDateFormatter.relative(
+              now.subtract(const Duration(seconds: 30)), now: now),
+          'Just now');
+      expect(
+          AppDateFormatter.relative(
+              now.subtract(const Duration(minutes: 5)), now: now),
+          '5m ago');
+      expect(
+          AppDateFormatter.relative(
+              now.subtract(const Duration(hours: 3)), now: now),
+          '3h ago');
+      expect(
+          AppDateFormatter.relative(
+              now.subtract(const Duration(days: 2)), now: now),
+          '2d ago');
+      // A week+ old falls back to the absolute day+month label.
+      expect(
+          AppDateFormatter.relative(DateTime(2026, 6, 19), now: now), '19 Jun');
+    });
+  });
+}

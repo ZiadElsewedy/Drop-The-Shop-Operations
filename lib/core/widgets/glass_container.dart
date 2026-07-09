@@ -60,24 +60,50 @@ class _GlassContainerState extends State<GlassContainer> {
   Widget build(BuildContext context) {
     final accent = widget.accent ?? AppColors.warning;
     final glow = widget.glow;
+    // A tappable card lifts on hover: the border warms, the surface rises a
+    // couple of pixels and its depth shadow deepens — the pointer feedback that
+    // separates a native desktop app from a projected phone screen. Honoured
+    // only when motion is allowed.
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final lifted = _hovered && !reduceMotion && widget.onTap != null;
     final borderColor = widget.highlight
-        ? accent.withAlpha(140)
+        ? accent.withAlpha(lifted ? 180 : 140)
         : glow != null
-            ? glow.withAlpha(90) // faint semantic border tint
+            ? glow.withAlpha(lifted ? 130 : 90) // faint semantic border tint
             : (_hovered ? AppColors.textTertiary : AppColors.darkBorder);
 
+    // Depth is built from a **two-layer** shadow instead of one flat blur: a
+    // tight contact shadow anchors the card to its surface, and a soft, wide
+    // ambient shadow lets it float above the near-black ground. Together the eye
+    // reads a clear near/far layering — depth without any added colour. Both
+    // deepen and drop further as the card lifts on hover.
     final shadows = <BoxShadow>[
-      if (widget.elevated)
+      if (widget.elevated) ...[
         BoxShadow(
-          color: AppColors.black.withAlpha(40),
-          blurRadius: 16,
-          offset: const Offset(0, 6),
+          color: AppColors.black.withAlpha(lifted ? 48 : 30),
+          blurRadius: lifted ? 8 : 4,
+          offset: Offset(0, lifted ? 4 : 1.5),
+        ),
+        BoxShadow(
+          color: AppColors.black.withAlpha(lifted ? 82 : 46),
+          blurRadius: lifted ? 34 : 20,
+          spreadRadius: -2,
+          offset: Offset(0, lifted ? 16 : 9),
+        ),
+      ]
+      // A flat tile stays shadowless at rest but gains soft depth on hover, so
+      // its lift reads as "picked up" rather than floating.
+      else if (lifted)
+        BoxShadow(
+          color: AppColors.black.withAlpha(55),
+          blurRadius: 18,
+          offset: const Offset(0, 8),
         ),
       // Subtle coloured halo for a status card — soft, never neon.
       if (glow != null)
         BoxShadow(
-          color: glow.withAlpha(48),
-          blurRadius: 24,
+          color: glow.withAlpha(lifted ? 64 : 48),
+          blurRadius: lifted ? 30 : 24,
           spreadRadius: -4,
           offset: const Offset(0, 4),
         ),
@@ -88,7 +114,10 @@ class _GlassContainerState extends State<GlassContainer> {
       duration: const Duration(milliseconds: 100),
       curve: Curves.easeOut,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        transform: Matrix4.translationValues(0, lifted ? -2 : 0, 0),
+        transformAlignment: Alignment.center,
         padding: widget.padding,
         decoration: BoxDecoration(
           gradient: const LinearGradient(

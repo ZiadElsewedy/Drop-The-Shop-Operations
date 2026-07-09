@@ -61,10 +61,19 @@ class AppColors {
   static const Color lightSurfaceElevated = Color(0xFFF4F4F5);
   static const Color lightBorder = Color(0xFFEAEAEC);
 
-  // ─── Text — neutral greys ────────────────────────────────────────────────
+  // ─── Text — a four-step neutral ramp ─────────────────────────────────────
+  // A deliberate brightness ladder so the eye instantly ranks importance
+  // (Design System V2 hierarchy). Each step is clearly darker than the last —
+  // no two levels share a brightness, so a title never competes with its
+  // supporting text:
+  //   textPrimary    — pure white       · titles, the "what"
+  //   textSecondary  — light grey        · secondary information
+  //   textTertiary   — medium grey       · supporting text, captions
+  //   textQuaternary — dark grey         · disabled / least-important meta
   static const Color textPrimary = Color(0xFFFFFFFF); // dark-mode heading
-  static const Color textSecondary = Color(0xFF9A9AA2); // neutral grey
-  static const Color textTertiary = Color(0xFF5C5C63);
+  static const Color textSecondary = Color(0xFFA7A7AF); // light grey
+  static const Color textTertiary = Color(0xFF6E6E77); // medium grey
+  static const Color textQuaternary = Color(0xFF48484E); // disabled / faint meta
   static const Color textDark = Color(0xFF0A0A0B); // light-mode heading
   static const Color textDarkSecondary = Color(0xFF5C5C63);
 

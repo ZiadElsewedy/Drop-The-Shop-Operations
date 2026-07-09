@@ -130,7 +130,7 @@ class _Loaded extends StatelessWidget {
                   _AttachmentsCard(request: request),
                 ],
                 const SizedBox(height: AppSpacing.xl),
-                _SectionLabel('Activity'),
+                const _SectionLabel('Activity'),
                 const SizedBox(height: AppSpacing.md),
                 RequestTimeline(
                   events: thread,
@@ -367,7 +367,7 @@ class _DetailsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardTitle(icon: Icons.notes_rounded, label: 'Message'),
+          const _CardTitle(icon: Icons.notes_rounded, label: 'Message'),
           const SizedBox(height: AppSpacing.md),
           Text(message,
               style: AppTypography.body.copyWith(color: AppColors.textPrimary)),
@@ -387,7 +387,7 @@ class _AttachmentsCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _CardTitle(
+          const _CardTitle(
               icon: Icons.attach_file_rounded, label: 'Attachments'),
           const SizedBox(height: AppSpacing.md),
           AttachmentGallery(attachments: request.attachments),

@@ -431,7 +431,7 @@ class _TimelineNode extends StatelessWidget {
           width: 16,
           height: 16,
           decoration: BoxDecoration(color: doneColor, shape: BoxShape.circle),
-          child: Icon(Icons.check_rounded,
+          child: const Icon(Icons.check_rounded,
               size: 11, color: AppColors.onPrimary),
         );
         labelColor = AppColors.textSecondary;
@@ -722,7 +722,7 @@ class _SwapRequestSheetState extends State<_SwapRequestSheet> {
                 ),
               ),
             ),
-            Text('Request a shift swap', style: AppTypography.h3),
+            const Text('Request a shift swap', style: AppTypography.h3),
             const SizedBox(height: AppSpacing.xs),
             Text('${widget.day.label} · trade your shift with a coworker',
                 style: AppTypography.bodySmall),
@@ -732,7 +732,7 @@ class _SwapRequestSheetState extends State<_SwapRequestSheet> {
             _ExchangePreview(day: widget.day, yourShift: widget.shift),
             const SizedBox(height: AppSpacing.lg),
 
-            Text('Swap with', style: AppTypography.labelSmall),
+            const Text('Swap with', style: AppTypography.labelSmall),
             const SizedBox(height: AppSpacing.sm),
             if (others.isEmpty)
               Padding(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 
 /// Presentation helpers that map a task [ActivityEntry.status] string onto a
 /// human label + dot colour, and format an event time. Shared by the Task
@@ -59,25 +60,11 @@ IconData activityIcon(String status) => switch (status) {
       _ => Icons.circle_outlined,
     };
 
-const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
 /// Compact relative time ("Just now", "5m ago", "3h ago", "2d ago", "19 Jun").
-String relativeTime(DateTime dt) {
-  final diff = DateTime.now().difference(dt);
-  if (diff.inMinutes < 1) return 'Just now';
-  if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-  if (diff.inDays < 1) return '${diff.inHours}h ago';
-  if (diff.inDays < 7) return '${diff.inDays}d ago';
-  return '${dt.day} ${_months[dt.month - 1]}';
-}
+/// Delegates to the single [AppDateFormatter]; kept as a task-timeline alias so
+/// existing call sites (and the cases inbox that reuses it) stay unchanged.
+String relativeTime(DateTime dt) => AppDateFormatter.relative(dt);
 
 /// Wall-clock time ("1:43 AM") — pairs with [relativeTime] on timeline rows so
 /// ops can see the exact moment, not just "2m ago".
-String clockTime(DateTime dt) {
-  final h12 = dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-  final ampm = dt.hour < 12 ? 'AM' : 'PM';
-  return '$h12:${dt.minute.toString().padLeft(2, '0')} $ampm';
-}
+String clockTime(DateTime dt) => AppDateFormatter.time(dt);

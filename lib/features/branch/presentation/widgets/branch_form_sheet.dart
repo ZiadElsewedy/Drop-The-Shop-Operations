@@ -154,7 +154,7 @@ class _BranchFormSheetState extends State<_BranchFormSheet> {
                 )),
             const SizedBox(height: AppSpacing.md),
             if (existing == null)
-              Text('Save the branch first, then reopen it to add a logo & cover.',
+              const Text('Save the branch first, then reopen it to add a logo & cover.',
                   style: AppTypography.caption)
             else ...[
               _LogoRow(
@@ -179,7 +179,7 @@ class _BranchFormSheetState extends State<_BranchFormSheet> {
                     color: AppColors.textTertiary,
                   )),
               const SizedBox(height: AppSpacing.sm),
-              Text(
+              const Text(
                   'Optional limits applied when employees swap shifts. Off by '
                   'default — any coworker on the opposite shift can swap.',
                   style: AppTypography.caption),
@@ -379,12 +379,12 @@ class _LogoRow extends StatelessWidget {
       children: [
         BranchAvatar(logoUrl: logoUrl, name: name, size: 56),
         const SizedBox(width: AppSpacing.md),
-        Expanded(
+        const Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Logo', style: AppTypography.label),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text('Square mark shown across the app',
                   style: AppTypography.caption),
             ],
@@ -452,13 +452,13 @@ class _CoverField extends StatelessWidget {
     );
   }
 
-  Widget _placeholder() => Center(
+  Widget _placeholder() => const Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.add_photo_alternate_outlined,
+            Icon(Icons.add_photo_alternate_outlined,
                 color: AppColors.textTertiary, size: 24),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Text('No cover yet', style: AppTypography.caption),
           ],
         ),

@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/core/enums/notification_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
@@ -30,6 +31,7 @@ import 'package:drop/features/task/domain/entities/task_template_entity.dart';
 import 'package:drop/features/task/domain/note_category.dart';
 import 'package:drop/features/task/domain/repositories/task_repository.dart';
 import 'package:drop/features/task/domain/task_ordering.dart';
+import 'package:drop/features/task/domain/task_schedule.dart';
 import 'package:drop/features/task/domain/work_types/task_work_x.dart';
 import 'package:drop/features/task/domain/usecases/assign_task.dart';
 import 'package:drop/features/task/domain/usecases/create_task.dart';
@@ -226,6 +228,33 @@ class TaskCubit extends Cubit<TaskState> {
     }
   }
 
+  /// Scheduling V2 smart default — resolve the rostered shift of the given
+  /// [uids] on [date] in [branchId], to pre-fill a non-shift task's schedule.
+  /// Returns [AssigneeShiftFit.unanimous] with the shift when everyone shares one,
+  /// [AssigneeShiftFit.mixed] when they differ (the form asks the user to choose),
+  /// or [AssigneeShiftFit.none] when nobody's rostered / no schedule. Best-effort
+  /// (a read error degrades to `none` — the manager just schedules manually).
+  Future<({AssigneeShiftFit fit, ScheduleShift? shift})> resolveAssigneeShift({
+    required String branchId,
+    required List<String> uids,
+    required DateTime date,
+  }) async {
+    if (branchId.isEmpty || uids.isEmpty) {
+      return (fit: AssigneeShiftFit.none, shift: null);
+    }
+    try {
+      final schedule =
+          await _scheduleRepository.getSchedule(branchId, ScheduleWeek.startOf(date));
+      if (schedule == null) return (fit: AssigneeShiftFit.none, shift: null);
+      final day = ScheduleDay.fromDate(date);
+      return assigneeShiftFit([
+        for (final uid in uids) schedule.shiftsFor(uid, day),
+      ]);
+    } catch (_) {
+      return (fit: AssigneeShiftFit.none, shift: null);
+    }
+  }
+
   /// Merges every task source's latest snapshot (keyed by source, each holding
   /// that source's *full* current result set) into one deduped-by-id list and
   /// emits it. A task disappearing from its source's next snapshot (reassigned,
@@ -264,7 +293,9 @@ class TaskCubit extends Cubit<TaskState> {
           loaded: (s) => emit(s.copyWith(directory: Map.of(_directory))),
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      AppLog.warning('task', 'branch-name enrichment failed: $e');
+    }
   }
 
   Future<void> _ensureDirectory(List<TaskEntity> tasks) async {
@@ -283,7 +314,9 @@ class TaskCubit extends Cubit<TaskState> {
           _directory[u.uid] = u;
           changed = true;
         }
-      } catch (_) {}
+      } catch (e) {
+        AppLog.warning('task', 'member-directory enrichment failed: $e');
+      }
     }
     if (changed && !isClosed) {
       state.mapOrNull(
@@ -305,6 +338,10 @@ class TaskCubit extends Cubit<TaskState> {
     Map<String, dynamic> data = const {},
     required TaskPriority priority,
     required String branchId,
+    /// Task Scheduling V2 — when the task is scheduled to start (smart-defaulted
+    /// from the shift in the form, fully overridable). Additive/optional; every
+    /// existing call site omits it (→ null).
+    DateTime? startsAt,
     DateTime? deadline,
     List<String> assigneeIds = const [],
     List<ChecklistItem> checklist = const [],
@@ -343,6 +380,7 @@ class TaskCubit extends Cubit<TaskState> {
         shift: shift,
         instanceDate: effectiveInstanceDate,
         createdBy: _user?.uid,
+        startsAt: startsAt,
         deadline: deadline,
         activityLog: [
           ActivityEntry(

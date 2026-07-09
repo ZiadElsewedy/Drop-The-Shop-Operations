@@ -157,7 +157,7 @@ class _ScheduleCard extends StatelessWidget {
                     activeThumbColor: AppColors.primary,
                   )
                 else
-                  Text('Completed', style: AppTypography.caption),
+                  const Text('Completed', style: AppTypography.caption),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),

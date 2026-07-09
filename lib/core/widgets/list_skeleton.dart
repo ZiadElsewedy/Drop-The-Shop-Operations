@@ -29,9 +29,9 @@ class ListSkeleton extends StatelessWidget {
             borderRadius: AppRadius.cardAll,
             border: Border.all(color: AppColors.darkBorder),
           ),
-          child: Column(
+          child: const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
+            children: [
               Row(
                 children: [
                   Skeleton(

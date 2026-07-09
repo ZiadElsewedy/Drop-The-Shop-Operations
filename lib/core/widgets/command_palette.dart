@@ -248,8 +248,8 @@ class _CommandPaletteState extends State<_CommandPalette> {
               const Divider(height: 1, color: AppColors.darkBorder),
               Flexible(
                 child: entries.isEmpty
-                    ? Padding(
-                        padding: const EdgeInsets.all(28),
+                    ? const Padding(
+                        padding: EdgeInsets.all(28),
                         child: Text('No matches',
                             textAlign: TextAlign.center,
                             style: AppTypography.bodySmall),

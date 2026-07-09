@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/premium_button.dart';
 import 'package:drop/core/widgets/user_avatar.dart';
 import 'package:drop/features/admin/domain/entities/user_compensation.dart';
@@ -261,11 +262,5 @@ class _InspectorPanel extends StatelessWidget {
                 .copyWith(color: AppColors.textPrimary)),
       );
 
-  static String _date(DateTime d) {
-    const m = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${m[d.month - 1]} ${d.day}, ${d.year}';
-  }
+  static String _date(DateTime d) => AppDateFormatter.monthDayYear(d);
 }

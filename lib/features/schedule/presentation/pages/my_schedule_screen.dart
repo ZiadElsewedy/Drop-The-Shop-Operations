@@ -6,6 +6,7 @@ import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/adaptive_scaffold.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
@@ -411,32 +412,7 @@ class _GreetingHeader extends StatelessWidget {
     return n.split(RegExp(r'\s+')).first;
   }
 
-  String _dateLabel(DateTime d) {
-    const days = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${days[d.weekday - 1]}, ${d.day} ${months[d.month - 1]}';
-  }
+  String _dateLabel(DateTime d) => AppDateFormatter.weekdayDayMonth(d);
 }
 
 // ─── No Schedule Card ────────────────────────────────────────────────────────
@@ -451,14 +427,14 @@ class _NoScheduleCard extends StatelessWidget {
         borderRadius: AppRadius.cardAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
-      child: Column(
+      child: const Column(
         children: [
-          const Icon(
+          Icon(
             Icons.event_busy_outlined,
             size: 48,
             color: AppColors.textTertiary,
           ),
-          const SizedBox(height: AppSpacing.md),
+          SizedBox(height: AppSpacing.md),
           Text(
             'No schedule published for this week yet.',
             textAlign: TextAlign.center,
@@ -811,10 +787,10 @@ class _TodayHeroCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Manager', style: AppTypography.caption),
+                const Text('Manager', style: AppTypography.caption),
                 const SizedBox(height: AppSpacing.sm),
                 if (managers.isEmpty)
-                  Text('—', style: AppTypography.body)
+                  const Text('—', style: AppTypography.body)
                 else
                   Row(
                     children: [
@@ -850,7 +826,7 @@ class _TodayHeroCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Working with', style: AppTypography.caption),
+                const Text('Working with', style: AppTypography.caption),
                 const SizedBox(height: AppSpacing.sm),
                 if (team.isEmpty || isOff)
                   Text(isOff ? '—' : 'Just you', style: AppTypography.body)
@@ -1301,14 +1277,14 @@ class _ShiftDetailsSheet extends StatelessWidget {
             // Notes as bullets — the full note, never hidden or truncated.
             if (noteLines.isNotEmpty) ...[
               const SizedBox(height: AppSpacing.xl),
-              Row(
+              const Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.sticky_note_2_outlined,
                     size: 15,
                     color: AppColors.textSecondary,
                   ),
-                  const SizedBox(width: 6),
+                  SizedBox(width: 6),
                   Text('Notes', style: AppTypography.caption),
                 ],
               ),
@@ -1317,18 +1293,18 @@ class _ShiftDetailsSheet extends StatelessWidget {
             ],
             const SizedBox(height: AppSpacing.xl),
             if (managers.isNotEmpty) ...[
-              Text('Manager', style: AppTypography.caption),
+              const Text('Manager', style: AppTypography.caption),
               const SizedBox(height: AppSpacing.sm),
               _MemberTile(user: managers.first),
               const SizedBox(height: AppSpacing.lg),
             ],
             if (s != null)
               if (team.isNotEmpty) ...[
-                Text('Team on this shift', style: AppTypography.caption),
+                const Text('Team on this shift', style: AppTypography.caption),
                 const SizedBox(height: AppSpacing.sm),
                 ...team.map((u) => _MemberTile(user: u)),
               ] else
-                Text(
+                const Text(
                   'You are the only one on this shift.',
                   style: AppTypography.body,
                 ),
@@ -1347,7 +1323,7 @@ class _ShiftDetailsSheet extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(
                       vertical: AppSpacing.md,
                     ),
-                    shape: RoundedRectangleBorder(
+                    shape: const RoundedRectangleBorder(
                       borderRadius: AppRadius.buttonAll,
                     ),
                   ),
@@ -1429,7 +1405,7 @@ class _WeekSectionHeader extends StatelessWidget {
     final range = _range(weekStart, weekEnd);
     return Row(
       children: [
-        Text('This Week', style: AppTypography.h3),
+        const Text('This Week', style: AppTypography.h3),
         const Spacer(),
         Text(
           range,
@@ -1440,23 +1416,9 @@ class _WeekSectionHeader extends StatelessWidget {
   }
 
   String _range(DateTime s, DateTime e) {
-    const m = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
     return s.month == e.month
-        ? '${s.day} – ${e.day} ${m[e.month - 1]}'
-        : '${s.day} ${m[s.month - 1]} – ${e.day} ${m[e.month - 1]}';
+        ? '${s.day} – ${AppDateFormatter.dayMonth(e)}'
+        : '${AppDateFormatter.dayMonth(s)} – ${AppDateFormatter.dayMonth(e)}';
   }
 }
 
@@ -1700,7 +1662,7 @@ class _DayChip extends StatelessWidget {
             height: 28,
             alignment: Alignment.center,
             decoration: isToday
-                ? BoxDecoration(
+                ? const BoxDecoration(
                     color: AppColors.primary,
                     borderRadius: AppRadius.smAll,
                   )
