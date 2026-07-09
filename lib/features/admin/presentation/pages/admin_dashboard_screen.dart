@@ -813,7 +813,16 @@ class _DigestRow extends StatelessWidget {
                 child: Icon(icon, size: 18, color: accent),
               ),
               const SizedBox(width: AppSpacing.md),
-              Expanded(child: Text(label, style: AppTypography.label)),
+              // Row label is a supporting label (light grey); the count is the
+              // metric and reads white when there's work to do.
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTypography.label.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
               Text(
                 value,
                 style: AppTypography.label.copyWith(
@@ -824,10 +833,11 @@ class _DigestRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
+              // Decorative affordance → medium grey (a step below the label).
               const Icon(
                 Icons.chevron_right_rounded,
                 size: 20,
-                color: AppColors.textSecondary,
+                color: AppColors.textTertiary,
               ),
             ],
           ),
@@ -1112,8 +1122,10 @@ class _BranchPulse extends StatelessWidget {
                               names[row.key] ?? 'Branch',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
+                              // Branch name → light grey (secondary info); the
+                              // load counts sit a step below at medium grey.
                               style: AppTypography.labelSmall.copyWith(
-                                color: AppColors.textPrimary,
+                                color: AppColors.textSecondary,
                               ),
                             ),
                           ),
@@ -1121,7 +1133,7 @@ class _BranchPulse extends StatelessWidget {
                             '${row.value.open} open'
                             '${row.value.review > 0 ? ' · ${row.value.review} review' : ''}',
                             style: AppTypography.caption.copyWith(
-                              color: AppColors.textSecondary,
+                              color: AppColors.textTertiary,
                             ),
                           ),
                         ],
@@ -1191,10 +1203,11 @@ class _StaffingAlert extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(title, style: AppTypography.h3),
               const SizedBox(height: 2),
+              // Explanatory helper under the white title → medium grey.
               Text(
                 'Assign branch ownership so schedules, reviews, and cases have a clear owner.',
                 style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textSecondary,
+                  color: AppColors.textTertiary,
                 ),
               ),
             ],

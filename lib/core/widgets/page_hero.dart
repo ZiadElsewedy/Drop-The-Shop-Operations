@@ -64,10 +64,13 @@ class PageHero extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (eyebrow != null && eyebrow!.trim().isNotEmpty) ...[
+          // The eyebrow is a date/context kicker (metadata) → medium grey, so it
+          // reads a clear step below the white title and differs from the
+          // light-grey subtitle beneath it.
           Text(
             eyebrow!.toUpperCase(),
             style: AppTypography.labelSmall.copyWith(
-              color: AppColors.textSecondary,
+              color: AppColors.textTertiary,
               letterSpacing: 1.0,
             ),
           ),

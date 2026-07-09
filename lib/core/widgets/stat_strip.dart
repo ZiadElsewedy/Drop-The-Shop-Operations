@@ -91,12 +91,13 @@ class StatStrip extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 3),
+        // Supporting label under the white metric → light grey.
         Text(
           s.label,
           textAlign: align,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+          style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
         ),
       ],
     );

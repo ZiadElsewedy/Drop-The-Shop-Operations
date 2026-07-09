@@ -119,10 +119,11 @@ class ActivityCard extends StatelessWidget {
                 ?trailing,
                 if (meta != null) ...[
                   if (trailing != null) const SizedBox(height: 6),
+                  // Relative timestamp = metadata → medium grey.
                   Text(
                     meta!,
                     style: AppTypography.caption.copyWith(
-                      color: AppColors.textQuaternary,
+                      color: AppColors.textTertiary,
                     ),
                   ),
                 ],

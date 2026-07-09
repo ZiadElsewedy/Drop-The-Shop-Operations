@@ -139,16 +139,20 @@ class _PickerTile extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Field label = supporting label (light grey); the chosen
+                    // value is the content (white); an unset placeholder is the
+                    // faintest step (dark grey), so an empty field reads clearly
+                    // "not filled yet" without competing with its label.
                     Text(label,
                         style: AppTypography.caption
-                            .copyWith(color: AppColors.textTertiary)),
+                            .copyWith(color: AppColors.textSecondary)),
                     const SizedBox(height: 2),
                     Text(
                       filled ? value! : (placeholder ?? ''),
                       style: AppTypography.body.copyWith(
                         color: filled
                             ? AppColors.textPrimary
-                            : AppColors.textTertiary,
+                            : AppColors.textQuaternary,
                         fontWeight: filled ? FontWeight.w500 : FontWeight.w400,
                       ),
                       maxLines: 1,
@@ -260,10 +264,11 @@ class _ScheduleField extends StatelessWidget {
           onClear: onClearDue,
         ),
         if (resolving)
+          // Contextual helper / metadata under the fields → medium grey.
           _scheduleNote(
             Icons.sync_rounded,
             'Checking roster…',
-            AppColors.textSecondary,
+            AppColors.textTertiary,
           ),
         if (error != null)
           _scheduleNote(Icons.error_outline_rounded, error!, AppColors.error)
@@ -272,7 +277,7 @@ class _ScheduleField extends StatelessWidget {
             Icons.timelapse_rounded,
             'Estimated duration · ${formatScheduleDuration(span)}'
             '${overnight ? ' · overnight' : ''}',
-            AppColors.textSecondary,
+            AppColors.textTertiary,
           ),
         if (warning != null)
           _scheduleNote(

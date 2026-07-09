@@ -12,6 +12,54 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed (2026-07-09 — Admin Dashboard premium pass, `core/optimization`)
+
+A **presentation-only** craft pass to make the Admin Dashboard + Create Task flow
+read like premium enterprise software — calm hierarchy, tactile motion, no
+flattening. **No schema / rules / functions / cubit / route change**; every save
+path and business rule is identical. Full suite **625 pass / 3 pre-existing fail**
+(2 splash-centering + 1 stale notification-category), analyzer clean.
+
+- **Added — 4-step text ramp:** `AppColors.textQuaternary` (disabled/faint meta)
+  completes a deliberate brightness ladder `FFFFFF → A7A7AF → 6E6E77 → 48484E`
+  (titles → secondary → supporting → disabled). Nudged `textSecondary`/
+  `textTertiary` to well-separated values so no two levels share a brightness —
+  directly answering "too many texts share similar brightness / avoid low-contrast
+  gray-on-gray". Global (a contrast improvement everywhere), value-only.
+- **Added — bespoke pickers:** premium monochrome `DatePickerTheme` +
+  `TimePickerTheme` on the dark theme (near-black elevated sheet, large radius,
+  white-accent selection, neutral ramp) — the create-task start/due pickers no
+  longer look like stock Material.
+- **Changed — hover elevation:** `GlassContainer` now gently lifts (−2px + deeper
+  shadow, border warms) on desktop hover for any tappable card; flat tiles gain a
+  soft shadow on hover so the lift reads as "picked up". Reduced-motion honoured.
+- **Changed — Needs Attention tiles:** `AttentionTile` is more dominant/actionable
+  — larger display-weight count, a quiet "arrow-outward" affordance when there's
+  work, taller min-height, and the 4-level hierarchy (calm/faint at zero). a11y
+  contract (`N label` semantics, ≥44px, reduced-motion) unchanged.
+- **Changed — Recent activity:** feed rows enter with a staggered fade+rise via
+  `LiveListItem` (keyed reuse ⇒ only genuinely new tasks animate in — natural live
+  inserts; settled rows stay put), reduced-motion falls back to static.
+  `ActivityCard` time/meta demoted to the faint level for a cleaner premium timeline.
+- **Changed — Today strip:** `StatStrip` values are larger/bolder and cross-fade to
+  a new figure on change (no distracting count-up); labels demoted to supporting.
+- **Changed — hero CTA:** the single primary "Create Task" action responds to hover
+  (whisper of lift + brighten) and press (subtle scale) and carries a soft key-light
+  shadow so it reads as *the* action.
+- **Changed — Create Task grouping:** the sheet is re-sequenced into a progressive
+  workflow — **General → Steps → Assignment → Schedule → Review → Attachments** —
+  moving priority + repeats into their own **Review** group, the start/due window
+  into its own **Schedule** group, and reference images to the end. Same fields,
+  same save paths, clearer disclosure; staggered section entrance preserved.
+- **Changed — final hierarchy audit (close-out):** every text element on the
+  dashboard + Create Task was mapped to one ladder rung so no two adjacent texts
+  share a grey. Metric cells now read **white value → light-grey label →
+  medium-grey sublabel** (`AttentionTile`, `StatStrip`, operations digest); relative
+  timestamps + eyebrows + helper/schedule notes moved to **medium grey**; branch
+  names to **light grey**; field placeholders + zero-state numbers + decorative meta
+  to **dark grey**. Doc: the `DESIGN_SYSTEM_V2` ramp table now records the role→rung
+  mapping. **This closes Admin Dashboard V2.**
+
 ### Added (2026-07-08 — Task Scheduling V2: smart scheduling, `core/optimization`)
 
 Tasks gained a real **start + due time**, pre-filled from the assigned shift as a

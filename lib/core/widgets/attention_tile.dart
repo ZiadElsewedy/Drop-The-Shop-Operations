@@ -116,14 +116,18 @@ class AttentionTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
+              // Hierarchy inside the tile is a clean 3-step ramp: the count is
+              // the metric (white), its label is a supporting label (light grey,
+              // dimmer when there's nothing to do), and the sublabel is helper
+              // text (medium grey) — so the eye lands on the number first.
               Text(
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.label.copyWith(
                   color: active
-                      ? AppColors.textPrimary
-                      : AppColors.textSecondary,
+                      ? AppColors.textSecondary
+                      : AppColors.textTertiary,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -134,7 +138,9 @@ class AttentionTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.caption.copyWith(
-                    color: AppColors.textTertiary,
+                    color: active
+                        ? AppColors.textTertiary
+                        : AppColors.textQuaternary,
                   ),
                 ),
               ],

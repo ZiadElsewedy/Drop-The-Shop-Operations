@@ -11,8 +11,63 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-08 (Task Scheduling V2 — smart shift-defaulted start/due + derived phase)
+**Last updated:** 2026-07-09 (Admin Dashboard premium pass — hierarchy, motion, Create Task regroup)
 **Version:** 1.0.0+1 · **Branch:** `core/optimization` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Admin Dashboard V2 — COMPLETE (premium pass + hierarchy audit, 2026-07-09)
+
+**Presentation-only craft pass. No schema/rules/functions/cubit/route/save-path
+change.** Goal: make the Admin Dashboard + Create Task feel like expensive
+enterprise software (Apple-grade calm hierarchy + tactile micro-interactions)
+**without flattening** the DROP identity — glass surfaces, living border and rich
+metrics all preserved. **Owner has signed this off as the close of Admin Dashboard
+V2 — no further features / no scope expansion on this branch.**
+
+- **Close-out hierarchy audit.** Every text element on the dashboard + Create Task
+  was mapped to exactly one ladder rung so **no two adjacent texts share a grey**:
+  metric cells read **white value → light-grey label → medium-grey sublabel**
+  (`AttentionTile`, `StatStrip`, operations digest); relative timestamps, eyebrows
+  and helper/schedule notes → **medium grey**; branch names → **light grey**; field
+  placeholders, zero-state numbers and decorative meta → **dark grey**. The
+  role→rung mapping is recorded in the `DESIGN_SYSTEM_V2` ramp table (the canonical
+  reference for future modules).
+
+- **Visual language — 4-step text ramp.** Added `AppColors.textQuaternary`
+  (disabled/faint meta) so the neutral ladder is now four clearly-separated steps:
+  `textPrimary #FFFFFF` (titles) → `textSecondary #A7A7AF` (secondary) →
+  `textTertiary #6E6E77` (supporting) → `textQuaternary #48484E` (disabled). The
+  two mid-greys were nudged so **no two levels share a brightness** — the fix for
+  "too many texts share similar brightness / low-contrast gray-on-gray". Global
+  and value-only (a contrast improvement on every screen; no layout change).
+- **Motion.** `GlassContainer` gains a **desktop hover elevation** (−2px lift +
+  deeper shadow + warmed border; flat tiles get a soft hover shadow) — every
+  tappable card now "gently elevates on hover", reduced-motion honoured. Numbers
+  animate (`AttentionTile` count-up, `StatStrip` value cross-fade); the hero CTA
+  scales on press + lifts on hover; sections + activity rows stagger-fade in.
+- **Needs Attention (the heart).** `AttentionTile` is more dominant + actionable:
+  larger **display-weight** count, a quiet arrow-outward "go triage" affordance
+  when there's work, a taller min-height, and the full 4-level hierarchy (stays
+  calm/faint at zero). The single most-urgent tile still carries the living border;
+  everything else stays calm. a11y contract unchanged (`N label` semantics, ≥44px).
+- **Recent activity.** Rows enter with a staggered fade+rise via `LiveListItem`
+  (keyed reuse ⇒ only a genuinely new task animates in — natural live inserts, the
+  settled rows stay put); reduced-motion falls back to static. Time/meta demoted to
+  the faint level → a cleaner premium timeline, not a spreadsheet.
+- **Create Task — progressive workflow.** The sheet is re-sequenced into
+  **General → Steps → Assignment → Schedule → Review → Attachments**: priority +
+  repeats moved into their own **Review** group, the start/due window isolated in a
+  **Schedule** group, reference images moved to the end. Same fields + save paths;
+  clearer disclosure. Plus **bespoke monochrome date/time pickers**
+  (`DatePickerTheme`/`TimePickerTheme`) so start/due no longer look like stock
+  Material.
+- **Verification:** `flutter analyze` clean (0 new; 1 pre-existing info in an
+  untouched test). Full suite **625 pass / 3 pre-existing fail** (2 splash-centering
+  geometry + 1 stale `notification_grouping` category list — all unrelated, in
+  untouched files). Existing widget tests (`dashboard_primitives_test`,
+  `dynamic_work_form_test`) green against the enhanced primitives. On-device visual
+  QA (macOS/mobile) is owner-side — the app can't be signed/run in this environment.
 
 ---
 
