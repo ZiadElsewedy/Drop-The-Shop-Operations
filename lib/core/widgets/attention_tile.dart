@@ -34,6 +34,7 @@ class AttentionTile extends StatelessWidget {
     required this.onTap,
     this.sublabel,
     this.accent,
+    this.clearedMessage,
   });
 
   /// The tile's corner radius — exposed so a caller can match a wrapping
@@ -52,6 +53,12 @@ class AttentionTile extends StatelessWidget {
   /// (default [AppColors.warning]). Null falls back to warning.
   final Color? accent;
 
+  /// The positive line shown **when [count] is zero** (e.g. "No overdue tasks",
+  /// "Everything reviewed"). A cleared tile should reward the healthy state, not
+  /// print a switched-off "0" — so instead of the big number it shows a check +
+  /// this reassurance. Falls back to "All clear".
+  final String? clearedMessage;
+
   @override
   Widget build(BuildContext context) {
     final reduceMotion = MediaQuery.of(context).disableAnimations;
@@ -61,7 +68,7 @@ class AttentionTile extends StatelessWidget {
 
     return Semantics(
       button: true,
-      label: '$count $label',
+      label: active ? '$count $label' : '$label, all clear',
       child: GlassContainer(
         onTap: onTap,
         highlight: active,
@@ -90,64 +97,105 @@ class AttentionTile extends StatelessWidget {
                     child: Icon(icon, size: 21, color: glyphTint),
                   ),
                   const Spacer(),
-                  // A quiet "go triage" affordance — present only when there's
-                  // work, so a clear tile reads calm and an actionable one
-                  // signals it can be opened.
-                  if (active)
-                    Icon(
-                      Icons.arrow_outward_rounded,
-                      size: 18,
-                      color: AppColors.textTertiary,
-                    ),
+                  // The top-right affordance: an "open me" arrow when there's
+                  // work, a quiet check when the category is clear.
+                  Icon(
+                    active
+                        ? Icons.arrow_outward_rounded
+                        : Icons.check_rounded,
+                    size: 18,
+                    color: AppColors.textTertiary,
+                  ),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
-              AnimatedCount(
-                value: count,
-                duration: reduceMotion
-                    ? Duration.zero
-                    : const Duration(milliseconds: 650),
-                style: AppTypography.display.copyWith(
-                  fontSize: 38,
-                  height: 1.0,
-                  letterSpacing: -1.2,
-                  color:
-                      active ? AppColors.textPrimary : AppColors.textQuaternary,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              // Hierarchy inside the tile is a clean 3-step ramp: the count is
-              // the metric (white), its label is a supporting label (light grey,
-              // dimmer when there's nothing to do), and the sublabel is helper
-              // text (medium grey) — so the eye lands on the number first.
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.label.copyWith(
-                  color: active
-                      ? AppColors.textSecondary
-                      : AppColors.textTertiary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (sublabel != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  sublabel!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.caption.copyWith(
-                    color: active
-                        ? AppColors.textTertiary
-                        : AppColors.textQuaternary,
-                  ),
-                ),
-              ],
+              if (active)
+                ..._active(reduceMotion)
+              else
+                ..._cleared(),
             ],
           ),
         ),
       ),
     );
   }
+
+  /// The working state — the count is the metric (white), its label a supporting
+  /// label (light grey), the sublabel helper text (medium grey): a clean 3-step
+  /// ramp so the eye lands on the number first.
+  List<Widget> _active(bool reduceMotion) => [
+        AnimatedCount(
+          value: count,
+          duration: reduceMotion
+              ? Duration.zero
+              : const Duration(milliseconds: 650),
+          style: AppTypography.display.copyWith(
+            fontSize: 38,
+            height: 1.0,
+            letterSpacing: -1.2,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.label.copyWith(
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        if (sublabel != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            sublabel!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+            ),
+          ),
+        ],
+      ];
+
+  /// The cleared state — a positive, reassuring line in place of a bare "0", so
+  /// a healthy board feels under control rather than switched off.
+  List<Widget> _cleared() => [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.only(top: 1),
+              child: Icon(
+                Icons.check_circle_rounded,
+                size: 22,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                clearedMessage ?? 'All clear',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  height: 1.25,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.caption.copyWith(
+            color: AppColors.textQuaternary,
+          ),
+        ),
+      ];
 }

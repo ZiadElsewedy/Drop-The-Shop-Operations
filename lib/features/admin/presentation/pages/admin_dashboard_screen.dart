@@ -22,6 +22,7 @@ import 'package:drop/core/widgets/app_motion.dart';
 import 'package:drop/core/widgets/glass_container.dart';
 import 'package:drop/core/widgets/page_hero.dart';
 import 'package:drop/core/widgets/stat_strip.dart';
+import 'package:drop/features/admin/presentation/dashboard_mood.dart';
 import 'package:drop/features/cases/presentation/cubit/case_list_cubit.dart';
 import 'package:drop/features/cases/presentation/cubit/case_list_state.dart';
 import 'package:drop/features/requests/presentation/cubit/requests_list_cubit.dart';
@@ -185,24 +186,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return BlocBuilder<StatisticsCubit, StatisticsState>(
       builder: (context, statsState) {
         final s = statsState.maybeWhen(loaded: (s) => s, orElse: () => null);
-        return BlocSelector<TaskCubit, TaskState, int>(
-          selector: (state) => runningNowCount(
-            state.maybeWhen(loaded: (t, _, _, _, _) => t, orElse: () => const []),
-          ),
-          builder: (context, running) => PageHero(
-            eyebrow: date,
-            title: '$_salutation, $first',
-            subtitle: _scopeLine(s, running),
-            subtitleIcon: Icons.public_rounded,
-            primaryAction: _PrimaryCta(
-              icon: Icons.add_rounded,
-              label: 'Create Task',
-              onTap: _createTask,
-            ),
-            trailing: context.isDesktop
-                ? [_syncButton(), _CommandHint()]
-                : [_syncButton(compact: true)],
-          ),
+        // The subtitle is a live, contextual "mood" line — the dashboard reads
+        // its own operational state instead of printing a static scope every
+        // load ("2 tasks need your attention" / "Everything's running smoothly"
+        // / "Quiet morning"), with a breathing pulse dot so it feels alive.
+        return BlocSelector<TaskCubit, TaskState, (int, int, int, int, int)>(
+          selector: (state) {
+            final tasks = state.maybeWhen(
+              loaded: (t, _, _, _, _) => t,
+              orElse: () => const <TaskEntity>[],
+            );
+            final now = DateTime.now();
+            return (
+              runningNowCount(tasks),
+              reviewCount(tasks),
+              overdueCount(tasks, now),
+              unassignedCount(tasks, now),
+              rejectedCount(tasks),
+            );
+          },
+          builder: (context, c) {
+            final (running, reviews, overdue, unassigned, rejected) = c;
+            final mood = dashboardMood(
+              reviews: reviews,
+              overdue: overdue,
+              unassigned: unassigned,
+              rejected: rejected,
+              running: running,
+              completedToday: s?.completedTasksToday ?? 0,
+            );
+            return PageHero(
+              eyebrow: date,
+              title: '$_salutation, $first',
+              subtitleWidget: _HeroMood(
+                mood: mood,
+                scope: _scopeLine(s, running),
+              ),
+              primaryAction: _PrimaryCta(
+                icon: Icons.add_rounded,
+                label: 'Create Task',
+                onTap: _createTask,
+              ),
+              trailing: context.isDesktop
+                  ? [_syncButton(), _CommandHint()]
+                  : [_syncButton(compact: true)],
+            );
+          },
         );
       },
     );
@@ -330,6 +359,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             icon: Icons.rate_review_outlined,
             label: 'Pending review',
             sublabel: 'Approve or send back',
+            clearedMessage: 'Everything reviewed',
             count: reviews,
             accent: AppColors.warning,
             onTap: () => context.push(RouteNames.adminReview),
@@ -342,6 +372,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             icon: Icons.event_busy_outlined,
             label: 'Overdue',
             sublabel: 'Past the deadline',
+            clearedMessage: 'No overdue tasks',
             count: overdue,
             accent: AppColors.error,
             onTap: () => _openFiltered(
@@ -358,6 +389,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             icon: Icons.person_off_outlined,
             label: 'Unassigned',
             sublabel: 'Needs an owner',
+            clearedMessage: 'Every task has an owner',
             count: unassigned,
             accent: AppColors.warning,
             onTap: () => _openFiltered(
@@ -374,6 +406,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             icon: Icons.replay_rounded,
             label: 'Sent back',
             sublabel: 'Rejected / rework',
+            clearedMessage: 'Nothing sent back',
             count: rejected,
             accent: AppColors.error,
             onTap: () => _openFiltered(
@@ -390,6 +423,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             icon: Icons.swap_horiz_rounded,
             label: 'Swap requests',
             sublabel: 'Review shift swaps',
+            clearedMessage: 'No pending swaps',
             count: swaps,
             accent: AppColors.warning,
             onTap: _openSwaps,
@@ -769,6 +803,142 @@ class _PrimaryCtaState extends State<_PrimaryCta> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ─── Hero mood ──────────────────────────────────────────────────────
+
+/// The hero's contextual subtitle: a breathing "system live" pulse dot, the
+/// [DashboardMood] sentence (white + bold when it wants the eye, a relaxed light
+/// grey when the board is calm), and the quiet operational scope beneath it.
+class _HeroMood extends StatelessWidget {
+  const _HeroMood({required this.mood, required this.scope});
+
+  final DashboardMood mood;
+  final String scope;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          children: [
+            _LivePulseDot(color: mood.pulseColor),
+            const SizedBox(width: AppSpacing.sm),
+            Flexible(
+              child: Text(
+                mood.headline,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.body.copyWith(
+                  color: mood.emphasised
+                      ? AppColors.textPrimary
+                      : AppColors.textSecondary,
+                  fontWeight:
+                      mood.emphasised ? FontWeight.w600 : FontWeight.w500,
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          scope,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+        ),
+      ],
+    );
+  }
+}
+
+/// A small "the system is alive" indicator — a solid dot with a soft halo and a
+/// slow expanding ring that fades outward (like a live/heartbeat pin). The ring
+/// is purely reassuring motion; under reduced motion it collapses to a static
+/// glowing dot so it never distracts or spins forever for no reason.
+class _LivePulseDot extends StatefulWidget {
+  const _LivePulseDot({required this.color});
+
+  final Color color;
+
+  @override
+  State<_LivePulseDot> createState() => _LivePulseDotState();
+}
+
+class _LivePulseDotState extends State<_LivePulseDot>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 2400),
+  );
+  bool _animating = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final reduce = MediaQuery.of(context).disableAnimations;
+    if (!reduce && !_animating) {
+      _animating = true;
+      _c.repeat();
+    } else if (reduce && _animating) {
+      _animating = false;
+      _c.stop();
+    }
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  static const double _core = 8;
+
+  Widget _dot() => Container(
+        width: _core,
+        height: _core,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: widget.color,
+          boxShadow: [
+            BoxShadow(color: widget.color.withAlpha(120), blurRadius: 6),
+          ],
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_animating) return _dot();
+    return SizedBox(
+      width: 18,
+      height: 18,
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final t = Curves.easeOut.transform(_c.value);
+          final ringSize = _core * (1 + t * 1.1);
+          final ringAlpha = ((1 - t) * 80).round();
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(
+                width: ringSize,
+                height: ringSize,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.color.withAlpha(ringAlpha),
+                ),
+              ),
+              _dot(),
+            ],
+          );
+        },
       ),
     );
   }

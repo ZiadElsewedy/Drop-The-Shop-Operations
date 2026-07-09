@@ -124,7 +124,27 @@ control) is a quiet escape hatch — **never** the update mechanism.
   **direct `RefreshIndicator`/body child** (bounded height). Inside an unbounded
   `ListView`, use a compact inline empty (see `RecentActivityFeed._AllClear`) — a
   full-bleed empty forces an infinite-height layout.
-- **Loading:** `DropLoadingState` (full page) / a compact centred spinner (inline).
+- **Zero ≠ empty.** A zero value is a *healthy* state, not a switched-off one —
+  reward it. An `AttentionTile` at zero shows a check + a reassuring line
+  (`clearedMessage`: "No overdue tasks") instead of a bare "0"; an empty feed reads
+  "All clear / everything is handled", not "no data". Never leave a lone grey "0".
+- **Loading:** `DropLoadingState` (full page) / structure-suggesting **skeleton
+  rows** shaped like the real content (`Skeleton`), not a bare spinner, for an
+  inline list.
+
+## Living system (the dashboard is never static)
+
+Even at zero work the surface should feel alive and under control. Two devices:
+
+- **Contextual mood** (`dashboard_mood.dart`): the hero subtitle reads the live
+  operational state ("2 tasks need your attention" / "Everything's running
+  smoothly" / "Quiet morning"), escalating calm → attention → busy, rather than a
+  static greeting. Derive it from counts you already have; keep it a pure function.
+- **A "live" pulse:** a small breathing dot (a slow expanding ring) says the system
+  is awake. Its colour is *meaningful* (calm vs attention), never decoration.
+- **Depth over colour:** build layering with a **two-layer shadow** (tight contact +
+  soft ambient) on `GlassContainer`, not with tint. The eye should know what's near
+  and what's background without any new hue.
 
 ## Motion
 

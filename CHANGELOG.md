@@ -12,6 +12,40 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added / Changed (2026-07-09 — Admin Dashboard premium polish pass, `core/optimization`)
+
+A dedicated craft pass to make the Admin Dashboard feel **alive, expensive and
+under control** — motion, contextual intelligence, positive zero-states and
+depth — with **no architecture, information-architecture or business-logic
+change**. Full suite **634 pass / 3 pre-existing fail**, analyzer clean.
+
+- **Added — contextual system mood** (`dashboard_mood.dart`, pure + tested): the
+  hero subtitle is now a live sentence that reads the operational state instead
+  of a static line — "2 tasks need your attention" · "5 reviews waiting" ·
+  "Everything's running smoothly" · "Busy afternoon" · "Quiet morning". Derives
+  from counts the dashboard already computes; escalates calm → attention → busy.
+- **Added — "system is alive" pulse:** a small breathing pulse dot beside the
+  mood (a slow expanding ring), so the dashboard never feels switched off. Its
+  colour is meaningful (calm = light grey · attention = warning). Reduced-motion
+  collapses it to a static glowing dot.
+- **Changed — positive zero-states:** an `AttentionTile` at zero no longer shows a
+  bare, switched-off "0". It rewards the healthy state with a check + a reassuring
+  line ("No overdue tasks" · "Everything reviewed" · "Every task has an owner" ·
+  "Nothing sent back" · "No pending swaps") via a new `clearedMessage`.
+- **Changed — animated empty state:** the activity feed's "all clear" is now a
+  softly breathing check badge (a calm heartbeat) with warmer copy — reduced-motion
+  static.
+- **Changed — visual depth:** `GlassContainer` rest shadow is now a **two-layer**
+  shadow (a tight contact shadow that anchors the card + a soft ambient shadow that
+  floats it), so the eye reads near/far layering — depth with no new colour.
+- **Added — schedule visualization:** the Create Task Schedule section renders a
+  tangible **start → due timeline** (endpoints as tabular times, a track with end
+  nodes, the duration riding the middle, a moon for overnight) in place of a plain
+  "estimated duration" line.
+- **Changed — Create Task interactions:** the schedule/branch **picker tiles** warm
+  their border + surface on desktop hover; the activity feed's loading state is now
+  premium **skeleton rows** instead of a bare spinner.
+
 ### Changed (2026-07-09 — Admin Dashboard premium pass, `core/optimization`)
 
 A **presentation-only** craft pass to make the Admin Dashboard + Create Task flow

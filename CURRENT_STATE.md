@@ -11,8 +11,44 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
-**Last updated:** 2026-07-09 (Admin Dashboard premium pass — hierarchy, motion, Create Task regroup)
+**Last updated:** 2026-07-09 (Admin Dashboard premium polish pass — mood, zero-states, depth, schedule viz)
 **Version:** 1.0.0+1 · **Branch:** `core/optimization` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Admin Dashboard premium polish pass — alive & under control (2026-07-09)
+
+**Presentation-only craft pass. No architecture / information-architecture /
+business-logic / schema / rules change.** Owner brief: make the dashboard feel
+*alive, expensive and under control* even at zero tasks/requests/notifications —
+tasteful motion encouraged, but keep DROP's identity (no flatten).
+
+- **Contextual system mood** (`lib/features/admin/presentation/dashboard_mood.dart`,
+  pure + `dashboard_mood_test.dart`): the hero subtitle now reads the live
+  operational state — "2 tasks need your attention" / "5 reviews waiting" /
+  "Everything's running smoothly" / "Busy afternoon" / "Quiet morning" — escalating
+  calm → attention → busy. Beside it a **breathing pulse dot** signals "the system is
+  alive" (meaningful colour: light grey calm, warning when attention); reduced-motion
+  → static dot. The operational scope (`N branches · N employees · N running`) stays
+  as the quiet line beneath.
+- **Positive zero-states:** `AttentionTile` gained `clearedMessage` — at zero it shows
+  a check + a reassuring line ("No overdue tasks", "Everything reviewed", "Every task
+  has an owner", "Nothing sent back", "No pending swaps") instead of a switched-off
+  "0". Semantics announce "…, all clear".
+- **Animated empty state:** the activity feed's "All clear" is a softly breathing
+  check badge (calm heartbeat) with warmer copy; reduced-motion static.
+- **Visual depth:** `GlassContainer` rest shadow is now a **two-layer** shadow
+  (tight contact + soft ambient) so cards read a clear near/far layering — depth with
+  no added colour. Hover deepens both.
+- **Create Task:** a tangible **start → due timeline** visualises the scheduled window
+  (tabular endpoint times, a track with end nodes, the duration riding the middle, a
+  moon for overnight); the **picker tiles** warm on desktop hover; the feed's loading
+  state is premium **skeleton rows**, not a bare spinner.
+- **Verification:** `flutter analyze` clean (0 new); full suite **634 pass / 3
+  pre-existing fail** (2 splash-centering + 1 stale notification-category, untouched
+  files). New/updated tests: `dashboard_mood_test.dart` (8) + an `AttentionTile`
+  cleared-state test. On-device visual QA (macOS/mobile) is owner-side — the app
+  can't be signed/run in this environment.
 
 ---
 

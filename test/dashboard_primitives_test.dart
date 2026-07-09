@@ -92,6 +92,33 @@ void main() {
       await tester.pump();
       expect(find.text('7'), findsOneWidget);
     });
+
+    testWidgets('a cleared tile rewards the healthy state (no bare "0")',
+        (tester) async {
+      await tester.pumpWidget(host(
+        AttentionTile(
+          icon: Icons.event_busy_outlined,
+          label: 'Overdue',
+          sublabel: 'Past the deadline',
+          clearedMessage: 'No overdue tasks',
+          count: 0,
+          onTap: () {},
+        ),
+      ));
+      await tester.pumpAndSettle();
+
+      // The positive message shows instead of a switched-off "0".
+      expect(find.text('No overdue tasks'), findsOneWidget);
+      expect(find.text('0'), findsNothing);
+      // Still an accessible button that announces the cleared state.
+      expect(
+        find.byWidgetPredicate((w) =>
+            w is Semantics &&
+            w.properties.button == true &&
+            (w.properties.label?.contains('all clear') ?? false)),
+        findsOneWidget,
+      );
+    });
   });
 
   group('StatStrip', () {

@@ -94,7 +94,9 @@ class _LeadIcon extends StatelessWidget {
 /// A tappable summary row — a leading glyph, a label, and the current value (or
 /// a muted placeholder). The house replacement for dropdown-style selectors:
 /// the *value* stays visible in the form; the *choosing* happens in a sheet.
-class _PickerTile extends StatelessWidget {
+/// On desktop the tile warms its border and surface on hover so a selectable row
+/// feels alive under the pointer.
+class _PickerTile extends StatefulWidget {
   const _PickerTile({
     required this.icon,
     required this.label,
@@ -116,63 +118,93 @@ class _PickerTile extends StatelessWidget {
   final bool enabled;
 
   @override
+  State<_PickerTile> createState() => _PickerTileState();
+}
+
+class _PickerTileState extends State<_PickerTile> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final filled = value != null;
+    final w = widget;
+    final filled = w.value != null;
+    final interactive = w.enabled && w.onTap != null;
+    final hovered = _hovered && interactive;
     return Opacity(
-      opacity: enabled ? 1 : 0.55,
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: AppRadius.xlAll,
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md, vertical: AppSpacing.md),
-          decoration: BoxDecoration(
-            color: AppColors.darkSurface,
-            borderRadius: AppRadius.xlAll,
-            border: Border.all(color: AppColors.darkBorder),
-          ),
-          child: Row(
-            children: [
-              leading ?? _LeadIcon(icon: icon),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Field label = supporting label (light grey); the chosen
-                    // value is the content (white); an unset placeholder is the
-                    // faintest step (dark grey), so an empty field reads clearly
-                    // "not filled yet" without competing with its label.
-                    Text(label,
-                        style: AppTypography.caption
-                            .copyWith(color: AppColors.textSecondary)),
-                    const SizedBox(height: 2),
-                    Text(
-                      filled ? value! : (placeholder ?? ''),
-                      style: AppTypography.body.copyWith(
-                        color: filled
-                            ? AppColors.textPrimary
-                            : AppColors.textQuaternary,
-                        fontWeight: filled ? FontWeight.w500 : FontWeight.w400,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
+      opacity: w.enabled ? 1 : 0.55,
+      child: MouseRegion(
+        cursor:
+            interactive ? SystemMouseCursors.click : MouseCursor.defer,
+        onEnter: (_) {
+          if (interactive) setState(() => _hovered = true);
+        },
+        onExit: (_) {
+          if (_hovered) setState(() => _hovered = false);
+        },
+        child: InkWell(
+          onTap: w.enabled ? w.onTap : null,
+          borderRadius: AppRadius.xlAll,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md, vertical: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: hovered
+                  ? AppColors.darkSurfaceElevated
+                  : AppColors.darkSurface,
+              borderRadius: AppRadius.xlAll,
+              border: Border.all(
+                color: hovered ? AppColors.textTertiary : AppColors.darkBorder,
               ),
-              const SizedBox(width: AppSpacing.sm),
-              if (onClear != null && filled)
-                GestureDetector(
-                  onTap: onClear,
-                  behavior: HitTestBehavior.opaque,
-                  child: const Icon(Icons.close_rounded,
-                      size: 18, color: AppColors.textTertiary),
-                )
-              else if (enabled)
-                const Icon(Icons.chevron_right_rounded,
-                    size: 20, color: AppColors.textTertiary),
-            ],
+            ),
+            child: Row(
+              children: [
+                w.leading ?? _LeadIcon(icon: w.icon),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Field label = supporting label (light grey); the chosen
+                      // value is the content (white); an unset placeholder is the
+                      // faintest step (dark grey), so an empty field reads clearly
+                      // "not filled yet" without competing with its label.
+                      Text(w.label,
+                          style: AppTypography.caption
+                              .copyWith(color: AppColors.textSecondary)),
+                      const SizedBox(height: 2),
+                      Text(
+                        filled ? w.value! : (w.placeholder ?? ''),
+                        style: AppTypography.body.copyWith(
+                          color: filled
+                              ? AppColors.textPrimary
+                              : AppColors.textQuaternary,
+                          fontWeight:
+                              filled ? FontWeight.w500 : FontWeight.w400,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                if (w.onClear != null && filled)
+                  GestureDetector(
+                    onTap: w.onClear,
+                    behavior: HitTestBehavior.opaque,
+                    child: const Icon(Icons.close_rounded,
+                        size: 18, color: AppColors.textTertiary),
+                  )
+                else if (w.enabled)
+                  Icon(Icons.chevron_right_rounded,
+                      size: 20,
+                      color: hovered
+                          ? AppColors.textSecondary
+                          : AppColors.textTertiary),
+              ],
+            ),
           ),
         ),
       ),
@@ -272,13 +304,18 @@ class _ScheduleField extends StatelessWidget {
           ),
         if (error != null)
           _scheduleNote(Icons.error_outline_rounded, error!, AppColors.error)
-        else if (span != null)
-          _scheduleNote(
-            Icons.timelapse_rounded,
-            'Estimated duration · ${formatScheduleDuration(span)}'
-            '${overnight ? ' · overnight' : ''}',
-            AppColors.textTertiary,
+        // A tangible start → due timeline instead of a plain "8h" line — the
+        // window becomes something you can see, with the duration riding the
+        // track and an overnight window reading its moon.
+        else if (span != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          _ScheduleTimeline(
+            start: start!,
+            due: due!,
+            span: span,
+            overnight: overnight,
           ),
+        ],
         if (warning != null)
           _scheduleNote(
             Icons.warning_amber_rounded,
@@ -309,6 +346,128 @@ class _ScheduleField extends StatelessWidget {
               child: Text(
                 text,
                 style: AppTypography.caption.copyWith(color: color),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+/// A compact **start → due** timeline that visualises the scheduled window: the
+/// two times as endpoints (white, tabular so they align), a connecting track
+/// with a node at each end, and the duration riding the middle of the track (a
+/// moon when the window runs overnight). Makes the schedule tangible instead of
+/// reading it off two separate fields.
+class _ScheduleTimeline extends StatelessWidget {
+  const _ScheduleTimeline({
+    required this.start,
+    required this.due,
+    required this.span,
+    required this.overnight,
+  });
+
+  final DateTime start;
+  final DateTime due;
+  final Duration span;
+  final bool overnight;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md, vertical: AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurfaceElevated,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Row(
+        children: [
+          _endpoint(AppDateFormatter.time(start), 'Start'),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: _track()),
+          const SizedBox(width: AppSpacing.sm),
+          _endpoint(
+            AppDateFormatter.time(due),
+            overnight ? 'Due · next day' : 'Due',
+            end: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _endpoint(String time, String label, {bool end = false}) => Column(
+        crossAxisAlignment:
+            end ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            time,
+            style: AppTypography.labelLarge.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w700,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 1),
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+          ),
+        ],
+      );
+
+  Widget _node({required bool filled}) => Container(
+        width: 9,
+        height: 9,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: filled ? AppColors.textSecondary : AppColors.darkSurface,
+          border: Border.all(color: AppColors.textTertiary, width: 1.5),
+        ),
+      );
+
+  Widget _track() => SizedBox(
+        height: 30,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Row(
+              children: [
+                _node(filled: true),
+                const Expanded(
+                  child: Divider(color: AppColors.darkBorder, thickness: 2),
+                ),
+                _node(filled: false),
+              ],
+            ),
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.darkSurface,
+                borderRadius: AppRadius.fullAll,
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    overnight
+                        ? Icons.nightlight_round
+                        : Icons.timelapse_rounded,
+                    size: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    formatScheduleDuration(span),
+                    style: AppTypography.labelSmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],

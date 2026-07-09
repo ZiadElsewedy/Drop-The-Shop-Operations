@@ -72,13 +72,25 @@ class _GlassContainerState extends State<GlassContainer> {
             ? glow.withAlpha(lifted ? 130 : 90) // faint semantic border tint
             : (_hovered ? AppColors.textTertiary : AppColors.darkBorder);
 
+    // Depth is built from a **two-layer** shadow instead of one flat blur: a
+    // tight contact shadow anchors the card to its surface, and a soft, wide
+    // ambient shadow lets it float above the near-black ground. Together the eye
+    // reads a clear near/far layering — depth without any added colour. Both
+    // deepen and drop further as the card lifts on hover.
     final shadows = <BoxShadow>[
-      if (widget.elevated)
+      if (widget.elevated) ...[
         BoxShadow(
-          color: AppColors.black.withAlpha(lifted ? 70 : 40),
-          blurRadius: lifted ? 26 : 16,
-          offset: Offset(0, lifted ? 12 : 6),
-        )
+          color: AppColors.black.withAlpha(lifted ? 48 : 30),
+          blurRadius: lifted ? 8 : 4,
+          offset: Offset(0, lifted ? 4 : 1.5),
+        ),
+        BoxShadow(
+          color: AppColors.black.withAlpha(lifted ? 82 : 46),
+          blurRadius: lifted ? 34 : 20,
+          spreadRadius: -2,
+          offset: Offset(0, lifted ? 16 : 9),
+        ),
+      ]
       // A flat tile stays shadowless at rest but gains soft depth on hover, so
       // its lift reads as "picked up" rather than floating.
       else if (lifted)
