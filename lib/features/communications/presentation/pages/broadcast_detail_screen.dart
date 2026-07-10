@@ -35,23 +35,54 @@ class BroadcastDetailScreen extends StatefulWidget {
 }
 
 class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
+  /// The broadcast fetched by id on a deep-link (feed not loaded, no `extra`).
+  BroadcastEntity? _fetched;
+  bool _fetching = false;
+  bool _fetchAttempted = false;
+
+  /// One-shot fetch when the broadcast is reachable neither from the live feed
+  /// nor via `extra` — i.e. a notification tap opened this screen cold. Without
+  /// it the deep link would dead-end on "Broadcast unavailable".
+  Future<void> _fetchById() async {
+    if (_fetchAttempted) return;
+    _fetchAttempted = true;
+    setState(() => _fetching = true);
+    final entity =
+        await context.read<BroadcastCubit>().fetchById(widget.broadcastId);
+    if (!mounted) return;
+    setState(() {
+      _fetched = entity;
+      _fetching = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<BroadcastCubit, BroadcastState>(
       builder: (context, state) {
         // Prefer the live feed copy (freshest delivery counts); fall back to
-        // the entity passed in via `extra`.
+        // the entity passed in via `extra`, then to a one-shot deep-link fetch.
         final fromFeed = state.maybeWhen(
           loaded: (list, _) => _byId(list, widget.broadcastId),
           orElse: () => null,
         );
-        final b = fromFeed ?? widget.broadcast;
+        final b = fromFeed ?? widget.broadcast ?? _fetched;
+
+        // Deep-link fallback: not in the feed, none passed in — fetch it once.
+        if (b == null && !_fetchAttempted && !_fetching) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => _fetchById());
+        }
+
         return AdaptiveScaffold(
           title: 'Broadcast',
           actions: [
             if (b != null) _ActionsMenu(broadcast: b),
           ],
-          body: b == null ? _missing() : _detail(context, b),
+          body: b != null
+              ? _detail(context, b)
+              : _fetching
+                  ? const Center(child: CircularProgressIndicator())
+                  : _missing(),
         );
       },
     );
@@ -67,7 +98,8 @@ class _BroadcastDetailScreenState extends State<BroadcastDetailScreen> {
   Widget _missing() => const AppEmptyState(
         icon: Icons.campaign_outlined,
         title: 'Broadcast unavailable',
-        message: 'Open this broadcast from the Communications feed.',
+        message: 'This broadcast may have been deleted, or you no longer have '
+            'access to it.',
       );
 
   Widget _detail(BuildContext context, BroadcastEntity b) {

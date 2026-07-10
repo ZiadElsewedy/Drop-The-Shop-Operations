@@ -20,6 +20,7 @@ import 'package:drop/core/theme/app_theme.dart';
 import 'package:drop/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:drop/features/auth/presentation/cubit/auth_state.dart';
 import 'package:drop/features/auth/presentation/pages/splash_page.dart';
+import 'package:drop/features/notifications/domain/notification_deep_link.dart';
 import 'package:drop/firebase_options.dart';
 
 /// Background FCM handler. The push carries a `notification` block, so the OS
@@ -201,33 +202,63 @@ String _initialLocationFor(AuthState state) => state.maybeWhen(
 
 void _configureNotificationService() {
   AppDependencies.notificationService
-    ..onForeground = (title, body) {
+    ..onForeground = (title, body, data) {
       final text = [
         title,
         body,
       ].where((s) => s != null && s.isNotEmpty).join(' — ');
-      if (text.isNotEmpty) {
-        _messengerKey.currentState?.showSnackBar(SnackBar(content: Text(text)));
-      }
+      if (text.isEmpty) return;
+      // The foreground push is actionable: "View" deep-links to the same
+      // destination a background tap would, so a foreground notification is
+      // never a dead end.
+      final destination = _resolveTapLocation(data);
+      _messengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Text(text),
+          action: destination == null
+              ? null
+              : SnackBarAction(
+                  label: 'View',
+                  onPressed: () => _router?.push(destination),
+                ),
+        ),
+      );
     }
     ..onMessageTap = (data) {
       developer.log(
         'Notification tapped — type=${data['type']} task=${data['taskId']} '
-        'broadcast=${data['broadcastId']} route=${data['route']}',
+        'route=${data['route']}',
         name: 'fcm',
       );
       final router = _router;
       if (router == null) return;
-      final taskId = data['taskId'];
-      if (data['route'] == 'task_details' &&
-          taskId != null &&
-          taskId.isNotEmpty) {
-        router.push(RouteNames.taskDetail(taskId));
+      // One shared resolver for every tap surface (foreground / background /
+      // cold-start / in-app). A resolvable target is pushed onto the current
+      // stack; anything unresolved falls back to the inbox — navigation never
+      // crashes on a stale or unknown notification.
+      final destination = _resolveTapLocation(data);
+      if (destination != null) {
+        router.push(destination);
       } else {
         router.go(RouteNames.notifications);
       }
     };
   unawaited(AppDependencies.notificationService.init());
+}
+
+/// Resolves an FCM push `data` map to a deep-link location for the signed-in
+/// user's role, via the shared [resolveNotificationRoute] resolver. Returns
+/// `null` when there is no safe destination.
+String? _resolveTapLocation(Map<String, dynamic> data) {
+  final role = AppDependencies.authCubit.state.maybeWhen(
+    authenticated: (user) => user.role,
+    orElse: () => null,
+  );
+  return resolveNotificationRoute(
+    route: data['route']?.toString(),
+    payload: data,
+    role: role,
+  );
 }
 
 void _handleAuthState(AuthState state) {

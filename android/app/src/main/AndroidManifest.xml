@@ -1,4 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- FCM push delivery. INTERNET is required to reach FCM; POST_NOTIFICATIONS
+         is the Android 13+ (API 33) runtime permission WITHOUT WHICH no push is
+         ever shown — `FirebaseMessaging.requestPermission()` surfaces the OS
+         prompt, but the permission must be declared here or the grant is a
+         no-op and every notification is silently dropped. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="DROP"
         android:name="${applicationName}"

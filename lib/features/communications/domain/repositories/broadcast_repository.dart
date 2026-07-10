@@ -22,6 +22,12 @@ abstract class BroadcastRepository {
   ///   all-branches broadcasts.
   Stream<List<BroadcastEntity>> watchBroadcasts({String? branchId});
 
+  /// One-shot fetch of a single broadcast by id — the deep-link path when the
+  /// feed isn't loaded (a notification tap opening `/communications/:id` cold).
+  /// Returns `null` if it doesn't exist or the caller can't read it (the
+  /// `broadcasts` rule enforces recipient access).
+  Future<BroadcastEntity?> getBroadcast(String id);
+
   /// Archives ([archived] true) / unarchives a broadcast.
   Future<void> setArchived(String id, bool archived);
 

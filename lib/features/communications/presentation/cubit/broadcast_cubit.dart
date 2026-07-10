@@ -50,6 +50,24 @@ class BroadcastCubit extends Cubit<BroadcastState> {
   bool get _sending =>
       state.maybeWhen(loaded: (_, sending) => sending, orElse: () => false);
 
+  /// One-shot fetch of a single broadcast by id — the deep-link fallback for
+  /// [BroadcastDetailScreen] when the feed hasn't been loaded (a notification tap
+  /// opening `/communications/:id` cold). Returns `null` if it's gone or
+  /// unreadable; never throws (the caller shows a safe "unavailable" state).
+  Future<BroadcastEntity?> fetchById(String id) async {
+    // Prefer the already-loaded feed copy (freshest, zero reads).
+    for (final b in _broadcasts) {
+      if (b.id == id) return b;
+    }
+    try {
+      return await _repository.getBroadcast(id);
+    } catch (e, st) {
+      developer.log('Broadcast: fetchById failed',
+          name: 'communications', error: e, stackTrace: st);
+      return null;
+    }
+  }
+
   /// Subscribes to the live broadcast feed.
   ///
   /// - [branchId] `null` → admin feed (all branches).

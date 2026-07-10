@@ -1095,7 +1095,11 @@ exports.onNotificationCreated = onDocumentCreated(
     if (tokens.length === 0) return;
 
     const payload = n.payload || {};
-    // Data values must be strings — they ride along to the tap handler.
+    // Data values must be strings — they ride along to the tap handler, which
+    // feeds them to the shared deep-link resolver. EVERY target id the resolver
+    // reads must be forwarded here or the deep link is lost on a background /
+    // cold-start tap: taskId · caseId · requestId · broadcastId · swapId
+    // (schedule route). `route` selects which id the resolver uses.
     const message = {
       notification: { title, body },
       data: {
@@ -1105,7 +1109,9 @@ exports.onNotificationCreated = onDocumentCreated(
         recipientUid: String(recipientUid),
         taskId: String(payload.taskId || ""),
         caseId: String(payload.caseId || ""),
+        requestId: String(payload.requestId || ""),
         broadcastId: String(payload.broadcastId || ""),
+        swapId: String(payload.swapId || ""),
         category: String(payload.category || ""),
         revisionNumber:
           payload.revisionNumber == null ? "" : String(payload.revisionNumber),

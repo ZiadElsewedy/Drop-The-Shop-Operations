@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
-import 'package:drop/core/routes/route_names.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
@@ -14,6 +13,7 @@ import 'package:drop/core/widgets/drop_empty_state.dart';
 import 'package:drop/core/widgets/app_motion.dart';
 import 'package:drop/core/widgets/list_skeleton.dart';
 import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
+import 'package:drop/features/notifications/domain/notification_deep_link.dart';
 import 'package:drop/features/notifications/presentation/cubit/notification_cubit.dart';
 import 'package:drop/features/notifications/presentation/cubit/notification_state.dart';
 import 'package:drop/features/notifications/presentation/notification_format.dart';
@@ -76,43 +76,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   /// A task / review notification opens the **exact task** (its details screen
-  /// carries the review surface); a broadcast opens its detail for admin/manager.
-  /// Every type routes somewhere — no dead notifications.
+  /// carries the review surface); a broadcast opens its detail for admin/manager;
+  /// a case/request opens its thread (or the list if the id is gone). Routing is
+  /// delegated to the shared [resolveNotificationRoute] resolver so an in-app tap
+  /// lands on exactly the same destination as an FCM push tap. A `null` result is
+  /// a guarded no-op (no safe target) — the inbox simply stays put.
   void _deepLink(NotificationEntity n) {
-    final role = context.currentRole;
-    switch (n.route) {
-      case 'task_details':
-        final taskId = n.taskId;
-        if (taskId != null && taskId.isNotEmpty) {
-          context.push(RouteNames.taskDetail(taskId));
-        } else if (role != null) {
-          context.push(RouteNames.tasksForRole(role));
-        }
-      case 'broadcast_detail':
-        final id = n.broadcastId;
-        if (id != null &&
-            id.isNotEmpty &&
-            (role?.isAdmin == true || role?.isManager == true)) {
-          context.push(RouteNames.communicationsDetail(id));
-        }
-      case 'schedule':
-        // Shift-swap notification → the role's schedule (where the swap queue is).
-        if (role != null) context.push(RouteNames.scheduleForRole(role));
-      case 'case_details':
-        final id = n.caseId;
-        if (id != null && id.isNotEmpty) {
-          context.push(RouteNames.caseDetail(id));
-        } else {
-          context.push(RouteNames.cases);
-        }
-      case 'request_details':
-        final id = n.requestId;
-        if (id != null && id.isNotEmpty) {
-          context.push(RouteNames.requestDetail(id));
-        } else {
-          context.push(RouteNames.requests);
-        }
-    }
+    final location = resolveNotificationRoute(
+      route: n.route,
+      payload: n.payload,
+      role: context.currentRole,
+    );
+    if (location != null) context.push(location);
   }
 
   /// The notifications in view: the archived set (Archived view) or the live

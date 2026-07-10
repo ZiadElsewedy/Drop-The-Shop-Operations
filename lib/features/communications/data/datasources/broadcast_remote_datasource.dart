@@ -24,6 +24,10 @@ abstract class BroadcastRemoteDataSource {
   /// here (they use the [BroadcastModel.directBranchMarker]).
   Stream<List<BroadcastModel>> watchBroadcasts({String? branchId});
 
+  /// One-shot read of a single `broadcasts/{id}` doc (the deep-link path).
+  /// Returns `null` when the doc is missing or unreadable to the caller.
+  Future<BroadcastModel?> getBroadcast(String id);
+
   /// Archives / unarchives a broadcast (sets / clears `archivedAt`). A
   /// field-restricted client write — the `broadcasts` rule permits an admin /
   /// owning-branch manager to touch **only** the lifecycle fields, never content
@@ -120,6 +124,23 @@ class BroadcastRemoteDataSourceImpl implements BroadcastRemoteDataSource {
       await _broadcasts.doc(id).delete();
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to delete the broadcast.');
+    }
+  }
+
+  @override
+  Future<BroadcastModel?> getBroadcast(String id) async {
+    if (id.isEmpty) return null;
+    try {
+      final doc = await _broadcasts.doc(id).get();
+      final data = doc.data();
+      if (!doc.exists || data == null) return null;
+      return BroadcastModel.fromMap(data, id: doc.id);
+    } on FirebaseException catch (e, st) {
+      // A permission-denied here means the caller can't read this broadcast
+      // (not a recipient) — treat as "unavailable", never a crash.
+      developer.log('getBroadcast failed: ${e.code}',
+          name: 'communications', error: e, stackTrace: st);
+      return null;
     }
   }
 

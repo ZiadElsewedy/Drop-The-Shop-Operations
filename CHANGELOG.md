@@ -12,6 +12,49 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Fixed / Added (2026-07-10 — Notifications V2: pilot reliability + crash-safe deep links)
+
+Pilot-hardening pass on the notification system (`feature/notifications-v2`).
+The in-app Notification Center (grouping · read/unread · mark-all · archive ·
+pagination) was already built and is **unchanged** here except where a bug fix
+required it. Full technical doc: `docs/design/NOTIFICATIONS_V2.md`.
+
+- **One deep-link resolver, both tap surfaces (NEW `lib/features/notifications/domain/notification_deep_link.dart`).**
+  A pure, role-aware `resolveNotificationRoute(route, payload, role)` now backs
+  BOTH the in-app inbox tile (`NotificationsScreen._deepLink`) and the FCM push
+  handler (`main.dart onMessageTap`), so a task/broadcast/schedule/case/request
+  opens the SAME destination however it's tapped (foreground · background ·
+  cold-start · in-app). Returns `null` = guarded no-op (no safe target); the
+  caller falls back to the inbox. **Navigation never crashes** on a stale /
+  unknown / unauthorized notification. Route strings centralized as
+  `NotificationRoute.*` and referenced by the client producers.
+- **B1 (push data payload) — FIXED.** `onNotificationCreated` (functions) omitted
+  `requestId` and `swapId` from the FCM `data` block, so **request/swap push taps
+  had no target id** — the deep link was lost on a background/cold-start tap. All
+  ids the resolver reads are now forwarded (`taskId · caseId · requestId ·
+  broadcastId · swapId`). **Requires a functions deploy to take effect.**
+- **B2 / B4 (FCM tap routing) — FIXED.** The push tap handler previously routed
+  only `task_details` (everything else dumped you at the inbox); it now uses the
+  shared resolver, so case/request/schedule/broadcast push taps deep-link.
+- **B3 (broadcast deep-link) — FIXED.** `BroadcastDetailScreen` dead-ended on
+  "Broadcast unavailable" when the Communications feed wasn't loaded. Added
+  `BroadcastRepository.getBroadcast(id)` (+ datasource + `BroadcastCubit.fetchById`)
+  and a one-shot self-resolve so a cold notification tap shows the real message.
+- **B5 (foreground push) — FIXED.** `NotificationService.onForeground` now carries
+  the `data` payload; the foreground snackbar gained a tappable **"View"** action
+  that deep-links via the resolver (previously a text-only dead end).
+- **Android push config.** `AndroidManifest.xml` now declares `POST_NOTIFICATIONS`
+  (the Android 13+ runtime permission, without which every push is silently
+  dropped) and `INTERNET`.
+- **Tests.** New `notification_deep_link_test.dart` (resolver mapping for every
+  route/type + missing-id fallbacks + guarded no-op) and `notification_cubit_test.dart`
+  (read/unread count · archived-excluded · action delegation · pagination · reset).
+  Updated the tap-flow probe to assert the B3 fix, and corrected a stale
+  category-pills assertion (the enum has `Requests`). All notification tests pass.
+- **iOS push (deferred).** Still unconfigured (no entitlements / `aps-environment`
+  / background mode). Documented in the checklist; needs Xcode signing + an APNs
+  key. Not touched in this Android-first pass.
+
 ### Added (2026-07-08 — Community Hub / DROP Events: the flagship event workspace)
 
 A whole new flagship feature: **Community Hub** manages every internal and

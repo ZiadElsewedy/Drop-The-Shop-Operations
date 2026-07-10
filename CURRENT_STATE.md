@@ -11,12 +11,47 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
+**Last updated:** 2026-07-10 (Notifications V2 — pilot reliability + crash-safe deep links)
+**Version:** 1.0.0+1 · **Branch:** `feature/notifications-v2` (DROP — monochrome premium desktop UX)
 **Last updated:** 2026-07-08 (Community Hub / DROP Events — flagship event workspace)
 **Version:** 1.0.0+1 · **Branch:** `claude/community-hub-events-pzjvbp` (DROP — monochrome premium desktop UX)
 **Last updated:** 2026-07-08 (Requests closed out: analyzer clean + tests green)
 **Version:** 1.0.0+1 · **Branch:** `feature/ui-tasks` (DROP — monochrome premium desktop UX)
 **Last updated:** 2026-07-08 (Work Details design system + Create Work sheet UX)
 **Version:** 1.0.0+1 · **Branch:** `feature/work-management-system` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Notifications V2 — pilot reliability + crash-safe deep links (2026-07-10)
+
+Pilot-hardening pass (`feature/notifications-v2`). The in-app Notification Center
+was already mature (grouping · read/unread · mark-all · archive · pagination) and
+is **unchanged** except where a bug fix required it. This pass unified deep-link
+routing and closed real reliability bugs. Full technical doc:
+`docs/design/NOTIFICATIONS_V2.md`.
+
+- **One deep-link resolver, both tap surfaces.** New pure, role-aware
+  `resolveNotificationRoute` (`lib/features/notifications/domain/notification_deep_link.dart`)
+  backs BOTH the in-app inbox tile and the FCM push handler, so every notification
+  opens the same destination however it's tapped (foreground · background ·
+  cold-start · in-app). `null` = guarded no-op → caller falls back to the inbox;
+  **navigation never crashes** on a stale/unknown/unauthorized notification.
+- **Bugs fixed:** **B1** — the FCM `data` block (functions `onNotificationCreated`)
+  omitted `requestId`/`swapId`, breaking request/swap push deep-links (**needs a
+  functions deploy**); **B2/B4** — the push tap handler routed only `task_details`,
+  now uses the shared resolver; **B3** — broadcast deep-link dead-ended on
+  "Broadcast unavailable" (added `BroadcastRepository.getBroadcast` + a one-shot
+  self-resolve in the detail screen); **B5** — the foreground snackbar is now
+  actionable ("View" deep-links via the resolver).
+- **Android:** `AndroidManifest.xml` declares `POST_NOTIFICATIONS` (Android 13+
+  runtime permission — without it, pushes are silently dropped) + `INTERNET`.
+- **Tests:** new `notification_deep_link_test.dart` + `notification_cubit_test.dart`;
+  updated the tap-flow probe for the B3 fix; corrected a stale category-pills
+  assertion. `flutter analyze` clean on touched files; full suite **747 pass, 2
+  fail** (the 2 are the pre-existing desktop splash-framing tests — unrelated).
+- ⚠️ **Deferred (needs your machine):** deploy Cloud Functions for B1; **iOS push
+  is still unconfigured** (no entitlements / `aps-environment` / background mode) —
+  needs Xcode signing + an APNs key. See §6 of the design doc.
 
 ---
 

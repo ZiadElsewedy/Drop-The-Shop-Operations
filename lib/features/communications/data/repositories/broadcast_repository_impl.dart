@@ -35,6 +35,12 @@ class BroadcastRepositoryImpl implements BroadcastRepository {
           .map((models) => models.map((m) => m.toEntity()).toList());
 
   @override
+  Future<BroadcastEntity?> getBroadcast(String id) async {
+    final model = await _remote.getBroadcast(id);
+    return model?.toEntity();
+  }
+
+  @override
   Future<void> setArchived(String id, bool archived) async {
     try {
       await _remote.setArchived(id, archived);

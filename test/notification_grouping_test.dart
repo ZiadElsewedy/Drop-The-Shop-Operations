@@ -69,9 +69,17 @@ void main() {
       expect(NotificationCategory.tasks.matches(NotificationType.taskApproved),
           isFalse);
     });
-    test('pills are All / Tasks / Reviews / Cases / Schedule / Broadcast', () {
-      expect(NotificationCategory.values.map((c) => c.label).toList(),
-          ['All', 'Tasks', 'Reviews', 'Cases', 'Schedule', 'Broadcast']);
+    test('pills are All / Tasks / Reviews / Requests / Cases / Schedule / '
+        'Broadcast', () {
+      expect(NotificationCategory.values.map((c) => c.label).toList(), [
+        'All',
+        'Tasks',
+        'Reviews',
+        'Requests',
+        'Cases',
+        'Schedule',
+        'Broadcast',
+      ]);
     });
     test('swap notifications map to the Schedule category', () {
       for (final t in [

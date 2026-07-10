@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:drop/core/enums/notification_type.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
+import 'package:drop/features/notifications/domain/notification_deep_link.dart';
 import 'package:drop/features/notifications/domain/repositories/notification_repository.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 
@@ -112,7 +113,7 @@ class NotifyTaskEvent {
   Map<String, dynamic> _payloadFor(TaskEntity task, NotificationType type) {
     final payload = <String, dynamic>{
       'taskId': task.id,
-      'route': 'task_details',
+      'route': NotificationRoute.task,
     };
     if (type == NotificationType.taskRework) {
       payload['revisionNumber'] = task.revisionNumber;

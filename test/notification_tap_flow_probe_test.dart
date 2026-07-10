@@ -1,8 +1,11 @@
-// AUDIT PROBE (temporary — safe to delete): drives the REAL app router +
-// NotificationsScreen + broadcast deep-link with the real cubits over fakes,
-// reproducing the FCM broadcast-tap flow end to end:
-//   A) employee lands on /notifications (OS tap target) with a broadcast tile;
-//   B) admin taps the broadcast tile → /communications/:id detail;
+// Drives the REAL app router + NotificationsScreen + broadcast deep-link with
+// the real cubits over fakes, exercising the FCM broadcast-tap flow end to end
+// (Notifications V2 — deep-link regression coverage):
+//   A) employee lands on /notifications (OS tap target); tapping a broadcast is
+//      a guarded no-op (employees can't open broadcast detail);
+//   B) admin taps the broadcast tile → /communications/:id detail, which
+//      self-resolves the broadcast by id even though the feed was never loaded
+//      (B3 fix — previously dead-ended on "Broadcast unavailable");
 //   C) cold-start ordering: go('/notifications') BEFORE the router is attached
 //      with initialLocation '/', proving the role home never has to build.
 import 'dart:async';
@@ -109,6 +112,13 @@ class FakeBroadcastRepository implements BroadcastRepository {
   Future<void> setArchived(String id, bool archived) async {}
   @override
   Future<void> delete(String id) async {}
+  @override
+  Future<BroadcastEntity?> getBroadcast(String id) async {
+    for (final b in items) {
+      if (b.id == id) return b;
+    }
+    return null;
+  }
 }
 
 class FakeBranchRepository implements BranchRepository {
@@ -236,10 +246,12 @@ void main() {
     await tester.tap(find.text('Team Meeting'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    // FINDING: the detail screen does NOT fetch by id — with the Communications
-    // feed never opened (BroadcastCubit still `initial`), the deep link lands on
-    // the "Broadcast unavailable" empty state instead of the message.
-    expect(find.text('Broadcast unavailable'), findsOneWidget);
+    // B3 fix: the detail screen self-resolves the broadcast by id (one-shot
+    // fetch) even though the Communications feed was never opened, so the deep
+    // link lands on the real message — not the "Broadcast unavailable" state.
+    expect(find.text('Broadcast unavailable'), findsNothing);
+    // The resolved detail renders the broadcast's message body.
+    expect(find.text('All hands at 5 PM'), findsWidgets);
   });
 
   testWidgets(

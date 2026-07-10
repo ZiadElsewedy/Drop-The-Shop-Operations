@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:drop/core/enums/notification_type.dart';
 import 'package:drop/features/notifications/domain/entities/notification_entity.dart';
+import 'package:drop/features/notifications/domain/notification_deep_link.dart';
 import 'package:drop/features/notifications/domain/repositories/notification_repository.dart';
 import 'package:drop/features/schedule/domain/entities/shift_swap_entity.dart';
 
@@ -33,7 +34,7 @@ class NotifySwapEvent {
 
       final title = _title(type);
       final body = _body(swap, type);
-      final payload = {'swapId': swap.id, 'route': 'schedule'};
+      final payload = {'swapId': swap.id, 'route': NotificationRoute.schedule};
       final now = DateTime.now();
 
       await _repository.createMany([

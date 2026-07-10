@@ -28,7 +28,11 @@ class NotificationService {
   String? _currentToken;
 
   /// Set by the app to show foreground notifications in-app (e.g. a snackbar).
-  void Function(String? title, String? body)? onForeground;
+  /// Receives the push `data` payload too, so the in-app surface can offer a
+  /// tappable action that deep-links to the same destination a background tap
+  /// would (route · taskId · caseId · requestId · broadcastId).
+  void Function(String? title, String? body, Map<String, dynamic> data)?
+      onForeground;
 
   /// Set by the app to handle a notification **tap** (background-opened or
   /// cold-start launch). Receives the message `data` payload.
@@ -69,7 +73,7 @@ class NotificationService {
           return;
         }
         final n = message.notification;
-        if (n != null) onForeground?.call(n.title, n.body);
+        if (n != null) onForeground?.call(n.title, n.body, message.data);
       });
 
       // Tap handling — app opened from background by tapping the notification.
