@@ -6,26 +6,19 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/user_role.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/routes/route_names.dart';
 import 'package:drop/core/theme/app_colors.dart';
-import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/core/widgets/app_snackbar.dart';
-import 'package:drop/core/widgets/branch_avatar.dart';
-import 'package:drop/core/widgets/drop_logo.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/branch/domain/entities/branch_entity.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
-import 'package:drop/features/schedule/domain/schedule_week.dart';
-import 'package:drop/features/schedule/presentation/schedule_insights.dart';
-import 'package:drop/features/schedule/presentation/widgets/schedule_grid.dart';
+import 'package:drop/features/schedule/presentation/widgets/final_schedule_sheet.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
-
-const _exportSize = Size(1600, 900);
 
 /// Opens an opaque route on the root navigator so the final roster is shown
 /// above the authenticated desktop shell and sidebar.
@@ -58,7 +51,8 @@ Future<void> showScheduleFinalView({
 }
 
 /// A real export surface: the toolbar remains visible for navigation while the
-/// isolated 1600×900 [RepaintBoundary] is saved as a controls-free PNG.
+/// isolated landscape [RepaintBoundary] (the [FinalScheduleSheet]) is saved as a
+/// controls-free PNG.
 class ScheduleFinalView extends StatefulWidget {
   const ScheduleFinalView({
     super.key,
@@ -72,10 +66,13 @@ class ScheduleFinalView extends StatefulWidget {
   final WeeklyScheduleEntity schedule;
   final List<UserEntity> members;
   final BranchEntity? branch;
+
+  /// Retained for the editor's launch signature. The published sheet always
+  /// shows the whole week (both shifts), so this no longer narrows the output.
   final ScheduleShift? filter;
 
-  /// Last week's Saturday-night crew — keeps the printed short-rest cues
-  /// consistent with the editor grid across the week boundary.
+  /// Retained for the editor's launch signature. The redesigned sheet carries no
+  /// health/short-rest cues, so this is no longer consumed here.
   final Set<String> previousSaturdayNight;
 
   @override
@@ -94,6 +91,15 @@ class _ScheduleFinalViewState extends State<ScheduleFinalView> {
     router.go(RouteNames.homeForRole(user.role));
   }
 
+  /// The branch manager's name for the printed header (null when the roster has
+  /// no manager among its members).
+  String? _managerName() {
+    for (final m in widget.members) {
+      if (m.role == UserRole.manager) return userDisplayName(m);
+    }
+    return null;
+  }
+
   Future<void> _savePng() async {
     if (_saving) return;
     setState(() => _saving = true);
@@ -104,8 +110,8 @@ class _ScheduleFinalViewState extends State<ScheduleFinalView> {
               as RenderRepaintBoundary?;
       if (boundary == null) throw StateError('Export canvas is unavailable.');
 
-      // 1600×900 logical canvas → 2400×1350 PNG: crisp on Retina without an
-      // unnecessarily huge file or capturing any preview toolbar chrome.
+      // 1600-wide landscape sheet captured at 1.5× — crisp on Retina and for
+      // print, without an unnecessarily huge file or any preview toolbar chrome.
       final image = await boundary.toImage(pixelRatio: 1.5);
       final data = await image.toByteData(format: ui.ImageByteFormat.png);
       image.dispose();
@@ -175,9 +181,11 @@ class _ScheduleFinalViewState extends State<ScheduleFinalView> {
                           ),
                           child: RepaintBoundary(
                             key: _captureKey,
-                            child: SizedBox.fromSize(
-                              size: _exportSize,
-                              child: _ExportCanvas(widget: widget),
+                            child: FinalScheduleSheet(
+                              schedule: widget.schedule,
+                              members: widget.members,
+                              branch: widget.branch,
+                              managerName: _managerName(),
                             ),
                           ),
                         ),
@@ -263,289 +271,6 @@ class _PreviewToolbar extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ExportCanvas extends StatelessWidget {
-  const _ExportCanvas({required this.widget});
-
-  final ScheduleFinalView widget;
-
-  @override
-  Widget build(BuildContext context) {
-    final schedule = widget.schedule;
-    final members = widget.members;
-    final branchName = widget.branch?.name ?? 'Branch';
-    final insights = computeScheduleInsights(
-      schedule,
-      members,
-      filter: widget.filter,
-      previousSaturdayNight: widget.previousSaturdayNight,
-    );
-    final assignedUids = <String>{};
-    var assignmentCount = 0;
-    var staffedSlots = 0;
-    final visibleShifts = widget.filter == null ? 2 : 1;
-    for (final day in ScheduleDay.values) {
-      for (final shift in ScheduleShift.values) {
-        if (widget.filter != null && shift != widget.filter) continue;
-        final valid = validAssignments(
-          schedule.employeesFor(day, shift),
-          members,
-        );
-        assignedUids.addAll(valid);
-        assignmentCount += valid.length;
-        if (valid.isNotEmpty) staffedSlots++;
-      }
-    }
-    final totalSlots = ScheduleDay.values.length * visibleShifts;
-
-    // Presentation mode (Schedule 5.0): the print-clean roster — no dashed
-    // placeholders, hover/drag affordances or empty-state icons; every name
-    // shown; leave + day notes included when present.
-    final grid = ScheduleGrid(
-      schedule: schedule,
-      members: members,
-      filter: widget.filter,
-      insights: insights,
-      canEdit: false,
-      presentation: true,
-      railWidth: 96,
-      cellWidth: 180,
-      cellHeight: 184,
-      headerHeight: 60,
-      onCellTap: (_, _) {},
-    );
-
-    return ColoredBox(
-      color: AppColors.darkBg,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(52, 42, 52, 34),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _FinalHeader(
-              branch: widget.branch,
-              branchName: branchName,
-              weekLabel: ScheduleWeek.rangeLabel(schedule.weekStart),
-              shiftLabel: widget.filter?.label,
-            ),
-            const SizedBox(height: 18),
-            const Divider(height: 1, color: AppColors.darkBorder),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                _FactPill(
-                  icon: Icons.people_outline_rounded,
-                  value: '${assignedUids.length}',
-                  label: assignedUids.length == 1
-                      ? 'team member'
-                      : 'team members',
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                _FactPill(
-                  icon: Icons.assignment_ind_outlined,
-                  value: '$assignmentCount',
-                  label: assignmentCount == 1 ? 'assignment' : 'assignments',
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                _FactPill(
-                  icon: Icons.event_available_outlined,
-                  value: '$staffedSlots',
-                  label: staffedSlots == 1 ? 'staffed shift' : 'staffed shifts',
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                _FactPill(
-                  icon: Icons.event_busy_outlined,
-                  value: '${totalSlots - staffedSlots}',
-                  label: totalSlots - staffedSlots == 1
-                      ? 'open shift'
-                      : 'open shifts',
-                ),
-                if (insights.leaveEntries > 0) ...[
-                  const SizedBox(width: AppSpacing.sm),
-                  _FactPill(
-                    icon: Icons.beach_access_outlined,
-                    value: '${insights.leaveEntries}',
-                    label: 'on leave',
-                  ),
-                ],
-              ],
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
-              decoration: BoxDecoration(
-                color: const Color(0xFF0C0C0E),
-                borderRadius: AppRadius.cardAll,
-                border: Border.all(color: AppColors.darkBorder),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        'WEEKLY ROSTER',
-                        style: AppTypography.caption.copyWith(
-                          color: AppColors.textSecondary,
-                          letterSpacing: 1.15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Spacer(),
-                      const _LegendDot(
-                        color: AppColors.primary,
-                        label: 'Today',
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(height: grid.height, child: grid),
-                ],
-              ),
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                const DropLogo(height: 15, color: AppColors.textTertiary),
-                const SizedBox(width: 9),
-                Text(
-                  'OPERATIONS  /  STAFF SCHEDULE',
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textTertiary,
-                    letterSpacing: 1.15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const Spacer(),
-                const Text('Read-only roster snapshot', style: AppTypography.caption),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _FinalHeader extends StatelessWidget {
-  const _FinalHeader({
-    required this.branch,
-    required this.branchName,
-    required this.weekLabel,
-    required this.shiftLabel,
-  });
-
-  final BranchEntity? branch;
-  final String branchName;
-  final String weekLabel;
-  final String? shiftLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        BranchAvatar(
-          logoUrl: branch?.logoUrl,
-          name: branchName,
-          size: 52,
-          radius: 14,
-        ),
-        const SizedBox(width: AppSpacing.lg),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(branchName, style: AppTypography.h1),
-            const SizedBox(height: 3),
-            Text(
-              shiftLabel == null
-                  ? 'Weekly staff schedule'
-                  : '$shiftLabel shift schedule',
-              style: AppTypography.body,
-            ),
-          ],
-        ),
-        const Spacer(),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(
-              'WEEK OF',
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textTertiary,
-                letterSpacing: 1.25,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 5),
-            Text(weekLabel, style: AppTypography.h2),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-class _FactPill extends StatelessWidget {
-  const _FactPill({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
-
-  final IconData icon;
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
-      decoration: BoxDecoration(
-        color: AppColors.darkSurface,
-        borderRadius: AppRadius.fullAll,
-        border: Border.all(color: AppColors.darkBorder),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: AppColors.textSecondary),
-          const SizedBox(width: 7),
-          Text(
-            '$value ',
-            style: AppTypography.labelSmall.copyWith(
-              color: AppColors.textPrimary,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          Text(label, style: AppTypography.caption),
-        ],
-      ),
-    );
-  }
-}
-
-class _LegendDot extends StatelessWidget {
-  const _LegendDot({required this.color, required this.label});
-
-  final Color color;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        Text(label, style: AppTypography.caption),
-      ],
     );
   }
 }

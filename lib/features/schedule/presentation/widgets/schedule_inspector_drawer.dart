@@ -11,7 +11,6 @@ import 'package:drop/features/schedule/domain/employee_week_stats.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/health/schedule_health_analyzer.dart';
 import 'package:drop/features/schedule/presentation/schedule_insights.dart';
-import 'package:drop/features/schedule/presentation/widgets/schedule_health_card.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
 
 /// The Mac inspector drawer docked beside the schedule grid (Schedule V2).
@@ -32,7 +31,7 @@ class ScheduleInspectorDrawer extends StatelessWidget {
     required this.insights,
     required this.selectedUid,
     required this.onSelect,
-    this.width = 340,
+    this.onCollapse,
   });
 
   final WeeklyScheduleEntity schedule;
@@ -44,7 +43,11 @@ class ScheduleInspectorDrawer extends StatelessWidget {
   /// roster no longer contains them (the drawer falls back to the overview).
   final String? selectedUid;
   final ValueChanged<String?> onSelect;
-  final double width;
+
+  /// When provided, the rail shows a compact header with a collapse control
+  /// (the host hides the whole rail). Null on touch / in isolation tests, where
+  /// the drawer is just content and fills whatever width it's given.
+  final VoidCallback? onCollapse;
 
   UserEntity? get _selected {
     if (selectedUid == null) return null;
@@ -57,16 +60,58 @@ class ScheduleInspectorDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final selected = _selected;
+    final content = selected == null ? _overview() : _employee(selected);
     return Container(
-      width: width,
       decoration: const BoxDecoration(
-        border: Border(left: BorderSide(color: AppColors.darkBorder)),
+        // A softer hairline than the standard border — the rail should recede
+        // so the grid stays the hero (Schedule V2 layout rebalance). Fills the
+        // width the host gives it, so the rail can collapse / resize cleanly.
+        border: Border(left: BorderSide(color: Color(0x14FFFFFF))),
       ),
-      child: selected == null ? _overview() : _employee(selected),
+      child: onCollapse == null
+          ? content
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _railHeader(),
+                Expanded(child: content),
+              ],
+            ),
     );
   }
 
-  // ── Overview: week totals + health + team roster ───────────────
+  /// The rail's own chrome — a quiet identity label + a collapse control, so
+  /// the manager can dismiss the panel from within it (the grid then reclaims
+  /// the width). Only present when the host wires [onCollapse].
+  Widget _railHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 10, 4),
+      child: Row(
+        children: [
+          Expanded(child: _sectionLabel('Inspector')),
+          Tooltip(
+            message: 'Hide inspector',
+            child: InkWell(
+              onTap: onCollapse,
+              borderRadius: BorderRadius.circular(8),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(
+                  Icons.keyboard_double_arrow_right_rounded,
+                  size: 18,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Overview: week totals + team roster ────────────────────────
+  // The global Schedule Health moved out of the rail to the surface below the
+  // grid (Schedule V2 layout rebalance) — the rail stays light and focused.
   Widget _overview() {
     final roster = [...members]
       ..sort((a, b) => userDisplayName(a)
@@ -83,10 +128,6 @@ class ScheduleInspectorDrawer extends StatelessWidget {
           _statRow('On leave', '${insights.leaveEntries}'),
         _statRow('Open shifts', '${insights.openCount}'),
         _statRow('People scheduled', '${insights.scheduledPeople}'),
-        const SizedBox(height: AppSpacing.lg),
-        _sectionLabel('Schedule health'),
-        const SizedBox(height: AppSpacing.sm),
-        ScheduleHealthCard(report: report),
         if (roster.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.lg),
           _sectionLabel('Team · tap for detail'),

@@ -3,6 +3,7 @@ import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/features/schedule/domain/shift_hours.dart';
+import 'package:drop/features/schedule/domain/shift_plan.dart';
 
 part 'weekly_schedule_entity.freezed.dart';
 
@@ -47,6 +48,13 @@ class WeeklyScheduleEntity with _$WeeklyScheduleEntity {
     /// never from a hardcoded weekend rule.
     @Default(<ScheduleDay, Map<ScheduleShift, ShiftHours>>{})
     Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> shiftHours,
+
+    /// The week's **frozen shift-hours snapshot** (Schedule V2 · Pillar 5),
+    /// captured from the branch's shift templates when the week was created.
+    /// Resolves *between* the per-slot [shiftHours] override and the hardcoded
+    /// [ShiftHours.standard] fallback — see [hoursFor]. **Null on every legacy
+    /// week**, which therefore resolves exactly as before (standard hours).
+    ShiftPlan? shiftPlan,
 
     /// uid of the manager/admin who created the schedule.
     String? createdBy,
@@ -99,12 +107,20 @@ class WeeklyScheduleEntity with _$WeeklyScheduleEntity {
   /// [uid]'s leave on [day], or null when they're available.
   LeaveType? leaveTypeOf(String uid, ScheduleDay day) => leaveOn(day)[uid];
 
-  /// The **configured hours** for [day] + [shift] — this week's override if the
-  /// manager set one, else the standing [ShiftHours.standard]. The single entry
-  /// point for every time display, countdown and midnight computation; nothing
-  /// should read a hardcoded weekend end time.
+  /// The **configured hours** for [day] + [shift] — the single entry point for
+  /// every time display, countdown and midnight computation; nothing should read
+  /// a hardcoded weekend end time. Resolution order (Schedule V2 · Pillar 5):
+  ///  1. the per-slot [shiftHours] override the manager set this week;
+  ///  2. else the week's frozen [shiftPlan] snapshot (from the branch templates
+  ///     when the week was created);
+  ///  3. else the hardcoded [ShiftHours.standard].
+  ///
+  /// A legacy week (null [shiftPlan], no override) skips step 2 → identical to
+  /// the pre-template behaviour.
   ShiftHours hoursFor(ScheduleDay day, ScheduleShift shift) =>
-      shiftHours[day]?[shift] ?? ShiftHours.standard(day, shift);
+      shiftHours[day]?[shift] ??
+      shiftPlan?.forSlot(day, shift) ??
+      ShiftHours.standard(day, shift);
 
   /// Whether [day]/[shift] carries a custom override (vs. the standing default).
   bool hasHoursOverride(ScheduleDay day, ScheduleShift shift) =>

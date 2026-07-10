@@ -47,10 +47,14 @@ import 'package:drop/features/statistics/data/repositories/statistics_repository
 import 'package:drop/features/statistics/domain/repositories/statistics_repository.dart';
 import 'package:drop/features/statistics/presentation/cubit/statistics_cubit.dart';
 import 'package:drop/features/schedule/data/datasources/schedule_remote_datasource.dart';
+import 'package:drop/features/schedule/data/datasources/shift_template_remote_datasource.dart';
 import 'package:drop/features/schedule/data/repositories/schedule_repository_impl.dart';
+import 'package:drop/features/schedule/data/repositories/shift_template_repository_impl.dart';
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
+import 'package:drop/features/schedule/domain/repositories/shift_template_repository.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:drop/features/schedule/presentation/cubit/shift_swap_cubit.dart';
+import 'package:drop/features/schedule/presentation/cubit/shift_template_cubit.dart';
 import 'package:drop/features/operations/presentation/cubit/branch_operations_cubit.dart';
 import 'package:drop/features/communications/data/datasources/broadcast_remote_datasource.dart';
 import 'package:drop/features/communications/data/repositories/broadcast_repository_impl.dart';
@@ -108,6 +112,12 @@ class AppDependencies {
 
   // ─── Weekly schedule + shift swaps (Phase 7) ────────────────
   static late final ScheduleCubit scheduleCubit;
+
+  /// Shift templates (Schedule V2 · Pillar 5). The repository is shared; the
+  /// manager cubit is created on demand by the template sheet.
+  static late final ShiftTemplateRepository shiftTemplateRepository;
+  static ShiftTemplateCubit createShiftTemplateCubit() =>
+      ShiftTemplateCubit(shiftTemplateRepository);
   static late final ShiftSwapCubit shiftSwapCubit;
 
   // ─── Branch Operations cockpit (task→operations redesign) ───
@@ -249,6 +259,12 @@ class AppDependencies {
       ),
     );
 
+    // Shift templates (Schedule V2 · Pillar 5) — reused by scheduleCubit (to
+    // snapshot new weeks + apply scoped hours edits) and the template manager.
+    shiftTemplateRepository = ShiftTemplateRepositoryImpl(
+      ShiftTemplateRemoteDataSourceImpl(FirebaseFirestore.instance),
+    );
+
     taskCubit = TaskCubit(
       repository: taskRepository,
       branchRepository: branchRepository,
@@ -332,8 +348,11 @@ class AppDependencies {
 
     // ─── Weekly schedule + shift swaps (Phase 7) ──────────────
     // (scheduleRepository built earlier, above, so TaskCubit could use it.)
-    scheduleCubit =
-        ScheduleCubit(scheduleRepository, GetUsersByBranch(authRepository));
+    scheduleCubit = ScheduleCubit(
+      scheduleRepository,
+      GetUsersByBranch(authRepository),
+      shiftTemplateRepository,
+    );
     shiftSwapCubit = ShiftSwapCubit(
       scheduleRepository,
       NotifySwapEvent(notificationRepository),

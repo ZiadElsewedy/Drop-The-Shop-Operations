@@ -266,6 +266,18 @@ service cloud.firestore {
       allow update, delete: if canReachBranch(resource.data.get('branchId', ''));
     }
 
+    // ── Shift templates (Schedule V2 · Pillar 5) ───────────────────
+    // Reusable per-branch shift hours (`{branch}__{role}`). Managed by the
+    // branch's manager (and admin); readable by any branch member so hour
+    // displays resolve. Mirrors `weekly_schedules` scoping exactly.
+    match /shift_templates/{templateId} {
+      allow read: if resource == null
+        || canReachBranch(resource.data.get('branchId', ''))
+        || resource.data.get('branchId', '') == selfBranch();
+      allow create: if canReachBranch(request.resource.data.get('branchId', ''));
+      allow update, delete: if canReachBranch(resource.data.get('branchId', ''));
+    }
+
     // ── Shift swaps (Phase 7) ──────────────────────────────────────
     // A swap request between two employees, approved by the branch manager.
     //   read   — admin/own-branch manager, OR the requester/target employee.

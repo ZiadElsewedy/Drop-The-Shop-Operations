@@ -71,7 +71,8 @@ void main() {
     await pump(tester, selectedUid: null, onSelect: picked.add);
 
     expect(find.text('THIS WEEK'), findsOneWidget);
-    expect(find.text('SCHEDULE HEALTH'), findsOneWidget);
+    // Global schedule health moved out of the rail to the below-grid surface.
+    expect(find.text('SCHEDULE HEALTH'), findsNothing);
     expect(find.text('TEAM · TAP FOR DETAIL'), findsOneWidget);
     // The roster row: short name + position.
     expect(find.text('Ziad E.'), findsOneWidget);

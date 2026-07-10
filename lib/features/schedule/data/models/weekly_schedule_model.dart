@@ -5,6 +5,7 @@ import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/shift_hours.dart';
+import 'package:drop/features/schedule/domain/shift_plan.dart';
 
 /// Firestore (de)serialization for [WeeklyScheduleEntity] — collection
 /// `weekly_schedules/{id}`. The `assignments` map is stored as
@@ -19,6 +20,7 @@ class WeeklyScheduleModel {
   final Map<ScheduleDay, String> dayNotes;
   final Map<ScheduleDay, Map<String, LeaveType>> leave;
   final Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> shiftHours;
+  final ShiftPlan? shiftPlan;
   final String? createdBy;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -31,6 +33,7 @@ class WeeklyScheduleModel {
     this.dayNotes = const {},
     this.leave = const {},
     this.shiftHours = const {},
+    this.shiftPlan,
     this.createdBy,
     this.createdAt,
     this.updatedAt,
@@ -89,6 +92,8 @@ class WeeklyScheduleModel {
       dayNotes: dayNotes,
       leave: leave,
       shiftHours: shiftHours,
+      // Absent on every legacy doc → null → the week resolves standard hours.
+      shiftPlan: ShiftPlan.fromMap(map['shiftPlan']),
       createdBy: map['createdBy'] as String?,
       createdAt: map.date('createdAt'),
       updatedAt: map.date('updatedAt'),
@@ -104,24 +109,29 @@ class WeeklyScheduleModel {
         dayNotes: e.dayNotes,
         leave: e.leave,
         shiftHours: e.shiftHours,
+        shiftPlan: e.shiftPlan,
         createdBy: e.createdBy,
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
       );
 
   /// An empty schedule for [branchId] in the given [weekStart] week, with every
-  /// day/shift seeded to an empty list so the roster grid is stable.
+  /// day/shift seeded to an empty list so the roster grid is stable. The
+  /// optional [shiftPlan] is the branch's shift-hours snapshot captured at
+  /// creation (Schedule V2 · Pillar 5); null keeps the week on standard hours.
   factory WeeklyScheduleModel.empty({
     required String id,
     required String branchId,
     required DateTime weekStart,
     String? createdBy,
+    ShiftPlan? shiftPlan,
   }) =>
       WeeklyScheduleModel(
         id: id,
         branchId: branchId,
         weekStart: weekStart,
         createdBy: createdBy,
+        shiftPlan: shiftPlan,
         assignments: {
           for (final day in ScheduleDay.values)
             day: {for (final shift in ScheduleShift.values) shift: <String>[]},
@@ -161,6 +171,7 @@ class WeeklyScheduleModel {
                   shiftEntry.key.value: shiftEntry.value.toMap(),
               },
           },
+        if (shiftPlan != null) 'shiftPlan': shiftPlan!.toMap(),
         'createdBy': createdBy,
       };
 
@@ -172,6 +183,7 @@ class WeeklyScheduleModel {
         dayNotes: dayNotes,
         leave: leave,
         shiftHours: shiftHours,
+        shiftPlan: shiftPlan,
         createdBy: createdBy,
         createdAt: createdAt,
         updatedAt: updatedAt,

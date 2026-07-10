@@ -144,23 +144,29 @@ Each pillar states **Goal · Architecture · UX · Logic · Risk · Out-of-scope
 
 **Pillar 3 is complete.** Next: Pillar 4 (Shift Templates) — still gated behind its own mini-design + owner GO.
 
-### Pillar 4 — Shift Templates (the bounded 🟡)
-- **Goal:** named, reusable shift-hour templates (e.g. Morning 08:30→16:30, Weekday Night 15:00→23:00) with an explicit change scope. **Never silently overwrite historical schedules.**
-- **Architecture:** build on `shift_hours.dart`. Introduce a small template store (named `{label, morningHours, nightHours}`). When hours are edited, present three choices: **① Only this week** (writes the existing per-week `shiftHours` override — `ScheduleCubit.setShiftHours`), **② Future schedules** (updates the template; unpublished/future weeks resolve it at build time), **③ Update template globally**. Historical / already-resolved weeks keep their frozen `shiftHours` snapshot regardless.
-- **UX:** template picker in the day-hours editor; a 3-way radio on save (mirrors the brief's mock exactly).
-- **Logic:** resolution order per cell = frozen per-week override → referenced template → standard default. History-safety is structural: past weeks always carry their own snapshot.
-- **Risk:** **MED–HIGH** — this is the only pillar that changes the data model + resolution rules. **Requires its own mini-design + unit tests before code, and an explicit owner GO.**
-- **Out-of-scope:** versioning of templates, template audit trail (❌).
-- **Done-when:** templates are named + reusable; the 3-way scope choice works; a template edit provably never mutates a historical week (test-guarded).
+### Pillar 4 — Shift Templates (the bounded 🟡) ✅ (shipped 2026-07-09)
+> **Sequencing note:** the owner shipped Final View first and called this "Pillar 5" in the roadmap; it is the doc's Pillar 4. **Design-reviewed + owner-approved ("as proposed") before any code**, per the gate below.
+- **Goal (delivered):** reusable, **per-branch** shift-hour templates with an explicit change scope. **Never silently overwrites historical schedules.**
+- **Architecture (as built):** a dedicated **`shift_templates/{id}`** collection (per-branch, keyed `{branch}__{role}`) — a template = `{ name, role, ShiftHours }` reusing the overnight-aware `shift_hours.dart`. Three standing roles (Morning · Weekday night · Weekend night) + a reserved `custom`; seeded lazily to match `ShiftHours.standard` (behaviour-neutral). **History-safety is a per-week snapshot:** the week doc carries an additive `shiftPlan` (morning/weekday-night/weekend-night `ShiftHours`) captured **at creation**, so `WeeklyScheduleEntity.hoursFor` resolves **per-slot override → the week's own snapshot → standard**. `hoursFor` stays **entity-only** — no live templates threaded into the grid / employee views / Final View (those frozen surfaces are untouched); a legacy week (no snapshot) resolves standard, unchanged.
+- **The 3-way scope** (`ScheduleCubit.applyShiftHours`): **① This week only** (the existing per-slot `setShiftHours` override), **② Future schedules** (updates the template — only weeks created afterward snapshot it), **③ Update globally** (updates the template **+** `ScheduleRepository.restampShiftPlan` onto this week + every future existing week; past weeks stay frozen).
+- **UX:** a simple template-manager sheet (`shift_templates_sheet.dart`) + the "Apply changes to…" scope dialog (`shift_hours_scope_dialog.dart`), reached from the day sheet's *Shift hours* section; the day-sheet hours editor routes through the scope dialog. No enterprise config screens.
+- **Layers (modular):** enums `shift_template_role` + `shift_hours_scope`; domain `shift_plan.dart`, `shift_template.dart` (+ `ShiftTemplateSet` + validation), `repositories/shift_template_repository.dart`; data model/datasource/repo; `ShiftTemplateCubit`; extended `ScheduleCubit`/`ScheduleRepository`; DI. Rules: additive `shift_templates` block mirroring `weekly_schedules` (**deploy pending**).
+- **Risk:** MED–HIGH (data model + resolution) — realised LOW via additive/opt-in + snapshot history-safety + no frozen-surface changes.
+- **Out-of-scope (still ❌):** template versioning / audit trail; custom named per-slot templates ship **data-model-ready but UI-light** (future).
+- **Done:** templates reusable + configurable; the 3-way scope works; a template edit provably never mutates a historical week — **test-guarded** (`shift_template_*_test.dart`, 24 tests). Suite **681 pass / 3 pre-existing fail**.
 
-### Pillar 5 — Final View & Export Polish
-- **Goal:** tighten the already-shipped Final View toward a "premium branded Excel sheet."
-- **Architecture:** `pages/schedule_final_view.dart` already = branded read-only roster + PNG export. Refine typography/contrast; columns Employee · Mon–Sun · Notes; cell tokens M / N / OFF / Leave / Vacation. Keep PNG; add PDF **only if** trivial via the existing capture→print path.
-- **UX:** pure presentation — no builder / health / assignment controls (already the rule).
-- **Logic:** none new. Format only.
-- **Risk:** **LOW.**
-- **Out-of-scope:** CSV/Excel (❌ #20).
-- **Done-when:** roster reads as an export-quality sheet; PNG intact.
+### Pillar 5 — Final View Redesign ✅ (shipped 2026-07-09)
+> **Sequencing note:** the owner pulled this **ahead of Pillar 4 (Shift Templates)** and called it "Pillar 4 — Final View Redesign." Shift Templates + Metadata/History remain deferred behind it.
+
+- **Goal (delivered):** the Final View was **redesigned from scratch** into a premium, read-only, print/export-ready schedule — a modern spreadsheet (Apple Numbers / Notion tables) in DROP's monochrome language. Not a polish pass; a rebuild.
+- **Architecture (as built):** a **dedicated presentation surface** `widgets/final_schedule_sheet.dart` (`FinalScheduleSheet`) — *not* the editor with another mode. `pages/schedule_final_view.dart` keeps only the route/chrome (`showScheduleFinalView` launch signature, the preview toolbar, and the `RepaintBoundary`→`toImage`→Downloads **PNG export**) and hosts the sheet. The old grid-reuse `_ExportCanvas` + fact-pills were deleted.
+- **Layout:** one **employee per row** × **day per column** (Sun→Sat + dates), a single scannable **token per cell** (`M`·`N`·`M/N`·`OFF`·`LEAVE`·`VAC`), a document header (DROP · branch · Week of · Generated · Manager), a **day-notes row** (only when notes exist), and a legend. Fixed-width **1600 landscape document**, natural height (≈ A4-landscape for a typical roster), `FittedBox`-scaled to any screen; subtle zebra + hairline rules, no chips/avatars/heavy shadows.
+- **UX:** pure presentation — no drag/inspector/health/analytics/suggestions/builder controls. Employee names lead; shift tokens are the scan target; whitespace carries the rest.
+- **Logic:** none new — reads `WeeklyScheduleEntity` / `UserEntity` / `ShiftHours` / `LeaveType` / `ScheduleWeek` / `AppDateFormatter` only.
+- **Risk:** LOW (presentation-only; frozen surfaces untouched).
+- **Out-of-scope (still ❌):** PDF/CSV/Excel + any export-engine work (#20) — **PNG only**, unchanged.
+- **Tests:** `schedule_final_view_test.dart` rewritten (7 — rendering, large roster, empty notes, export layout/landscape, page + responsiveness, filename). Suite **657 pass / 3 pre-existing fail**.
+- **Done:** roster reads as an export-quality sheet; PNG intact; read-only; responsive; tests green; docs updated.
 
 ### Pillar 6 — Motion & Accessibility
 - **Goal:** subtle Apple-philosophy motion + a11y pass across the new surfaces.

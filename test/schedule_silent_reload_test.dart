@@ -7,6 +7,7 @@ import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.da
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_state.dart';
+import 'support/fake_shift_template_repository.dart';
 
 /// Stabilization guard: a same-scope [ScheduleCubit.load] (screen revisit,
 /// pull-to-refresh) must NOT emit `loading` — the schedule on screen stays
@@ -45,7 +46,8 @@ void main() {
   late List<ScheduleState> emitted;
 
   setUp(() {
-    cubit = ScheduleCubit(_StubRepo(), _FakeGetUsersByBranch());
+    cubit = ScheduleCubit(
+        _StubRepo(), _FakeGetUsersByBranch(), FakeShiftTemplateRepository());
     emitted = [];
     cubit.stream.listen(emitted.add);
   });

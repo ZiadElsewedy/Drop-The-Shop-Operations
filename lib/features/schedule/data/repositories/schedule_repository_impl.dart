@@ -12,6 +12,7 @@ import 'package:drop/features/schedule/domain/entities/shift_swap_entity.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
 import 'package:drop/features/schedule/domain/schedule_week.dart';
+import 'package:drop/features/schedule/domain/shift_plan.dart';
 
 class ScheduleRepositoryImpl implements ScheduleRepository {
   final ScheduleRemoteDataSource _remote;
@@ -54,6 +55,7 @@ class ScheduleRepositoryImpl implements ScheduleRepository {
     required String branchId,
     required DateTime weekStart,
     String? createdBy,
+    ShiftPlan? shiftPlan,
   }) async {
     try {
       final start = ScheduleWeek.startOf(weekStart);
@@ -63,9 +65,27 @@ class ScheduleRepositoryImpl implements ScheduleRepository {
           branchId: branchId,
           weekStart: start,
           createdBy: createdBy,
+          shiftPlan: shiftPlan,
         ),
       );
       return created.toEntity();
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> restampShiftPlan({
+    required String branchId,
+    required DateTime fromWeek,
+    required ShiftPlan plan,
+  }) async {
+    try {
+      await _remote.restampShiftPlan(
+        branchId: branchId,
+        fromWeek: ScheduleWeek.startOf(fromWeek),
+        plan: plan,
+      );
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

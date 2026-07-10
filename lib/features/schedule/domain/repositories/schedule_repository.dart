@@ -5,6 +5,7 @@ import 'package:drop/core/enums/swap_status.dart';
 import 'package:drop/features/schedule/domain/entities/shift_swap_entity.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/shift_hours.dart';
+import 'package:drop/features/schedule/domain/shift_plan.dart';
 
 /// Contract for weekly-schedule + shift-swap data access (Phase 7). Branch/role
 /// access is enforced server-side by `firestore.rules` (admin: all branches;
@@ -21,11 +22,24 @@ abstract class ScheduleRepository {
   /// Every branch's schedules — admin only.
   Future<List<WeeklyScheduleEntity>> getAllSchedules();
 
-  /// Creates an empty schedule for ([branchId], [weekStart]).
+  /// Creates an empty schedule for ([branchId], [weekStart]). [shiftPlan] is the
+  /// branch's shift-hours snapshot captured at creation (Schedule V2 · Pillar 5);
+  /// null keeps the week on standard hours (legacy behaviour).
   Future<WeeklyScheduleEntity> createSchedule({
     required String branchId,
     required DateTime weekStart,
     String? createdBy,
+    ShiftPlan? shiftPlan,
+  });
+
+  /// **Global template change** (Schedule V2 · Pillar 5): re-stamps [plan] onto
+  /// the frozen snapshot of every existing week for [branchId] with
+  /// `weekStart >= fromWeek` (current + future already-created weeks). Past weeks
+  /// are never touched, so history stays frozen.
+  Future<void> restampShiftPlan({
+    required String branchId,
+    required DateTime fromWeek,
+    required ShiftPlan plan,
   });
 
   /// Adds [employeeId] to a (day, shift) slot of the schedule [scheduleId].

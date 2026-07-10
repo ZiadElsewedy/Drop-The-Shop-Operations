@@ -9,6 +9,7 @@ import 'package:drop/features/schedule/domain/repositories/schedule_repository.d
 import 'package:drop/features/schedule/domain/schedule_week.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_cubit.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_grid.dart';
+import 'support/fake_shift_template_repository.dart';
 
 /// Schedule 3.1 — drag one person ONTO another and the two trade slots.
 /// Covers the cubit's [ScheduleCubit.exchange] (assign-first ordering +
@@ -70,7 +71,8 @@ void main() {
 
     setUp(() async {
       repo = _RecordingRepo();
-      cubit = ScheduleCubit(repo, _FakeGetUsersByBranch());
+      cubit = ScheduleCubit(
+          repo, _FakeGetUsersByBranch(), FakeShiftTemplateRepository());
       await cubit.load(branchId: 'b1');
       repo.calls.clear();
     });

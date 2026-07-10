@@ -17,6 +17,8 @@ import 'package:drop/features/schedule/presentation/widgets/employee_picker_shee
 import 'package:drop/features/schedule/presentation/widgets/employee_row.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
 import 'package:drop/features/schedule/presentation/widgets/sheet_chrome.dart';
+import 'package:drop/features/schedule/presentation/widgets/shift_hours_scope_dialog.dart';
+import 'package:drop/features/schedule/presentation/widgets/shift_templates_sheet.dart';
 
 /// Opens the day sheet for a schedule day — the home of the day's **note**
 /// (Inventory · Big delivery · …) and its **leave entries** (annual / sick /
@@ -233,6 +235,24 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
         const SizedBox(height: AppSpacing.xs),
         for (final shift in ScheduleShift.values)
           _shiftHoursRow(context, schedule, shift),
+        if (widget.canEdit)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => showShiftTemplatesSheet(
+                context,
+                branchId: schedule.branchId,
+                canEdit: widget.canEdit,
+              ),
+              icon: const Icon(Icons.tune_rounded, size: 16),
+              label: const Text('Manage shift templates'),
+              style: TextButton.styleFrom(
+                foregroundColor: AppColors.textSecondary,
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm, vertical: 4),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -318,8 +338,16 @@ class _DayDetailsSheetState extends State<DayDetailsSheet> {
     var end = picked.hour * 60 + picked.minute;
     // End at/before start → it closes the next day (overnight).
     if (end <= hours.startMinutes) end += 1440;
-    await cubit.setShiftHours(
-        day, shift, ShiftHours(hours.startMinutes, end));
+    final newHours = ShiftHours(hours.startMinutes, end);
+    if (!context.mounted) return;
+    // Schedule V2 · Pillar 5 — how far does the change reach? This week only
+    // (a per-slot override), future schedules (the template), or globally.
+    final scope = await showShiftHoursScopeDialog(
+      context,
+      title: '${shift.label} hours · ${day.label}',
+    );
+    if (scope == null) return;
+    await cubit.applyShiftHours(day, shift, newHours, scope);
   }
 
   /// Neutral staffing facts for the day — counts, never targets.

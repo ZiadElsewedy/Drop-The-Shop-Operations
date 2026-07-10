@@ -8,6 +8,7 @@ class AppConstants {
   static const String recurringTaskTemplatesCollection = 'recurringTaskTemplates';
   static const String branchesCollection = 'branches';
   static const String weeklySchedulesCollection = 'weekly_schedules';
+  static const String shiftTemplatesCollection = 'shift_templates';
   static const String shiftSwapsCollection = 'shift_swaps';
   static const String broadcastsCollection = 'broadcasts';
   static const String notificationsCollection = 'notifications';

@@ -44,6 +44,13 @@ mixin _$WeeklyScheduleEntity {
   Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> get shiftHours =>
       throw _privateConstructorUsedError;
 
+  /// The week's **frozen shift-hours snapshot** (Schedule V2 · Pillar 5),
+  /// captured from the branch's shift templates when the week was created.
+  /// Resolves *between* the per-slot [shiftHours] override and the hardcoded
+  /// [ShiftHours.standard] fallback — see [hoursFor]. **Null on every legacy
+  /// week**, which therefore resolves exactly as before (standard hours).
+  ShiftPlan? get shiftPlan => throw _privateConstructorUsedError;
+
   /// uid of the manager/admin who created the schedule.
   String? get createdBy => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
@@ -71,6 +78,7 @@ abstract class $WeeklyScheduleEntityCopyWith<$Res> {
     Map<ScheduleDay, String> dayNotes,
     Map<ScheduleDay, Map<String, LeaveType>> leave,
     Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> shiftHours,
+    ShiftPlan? shiftPlan,
     String? createdBy,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -102,6 +110,7 @@ class _$WeeklyScheduleEntityCopyWithImpl<
     Object? dayNotes = null,
     Object? leave = null,
     Object? shiftHours = null,
+    Object? shiftPlan = freezed,
     Object? createdBy = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
@@ -136,6 +145,10 @@ class _$WeeklyScheduleEntityCopyWithImpl<
                 ? _value.shiftHours
                 : shiftHours // ignore: cast_nullable_to_non_nullable
                       as Map<ScheduleDay, Map<ScheduleShift, ShiftHours>>,
+            shiftPlan: freezed == shiftPlan
+                ? _value.shiftPlan
+                : shiftPlan // ignore: cast_nullable_to_non_nullable
+                      as ShiftPlan?,
             createdBy: freezed == createdBy
                 ? _value.createdBy
                 : createdBy // ignore: cast_nullable_to_non_nullable
@@ -171,6 +184,7 @@ abstract class _$$WeeklyScheduleEntityImplCopyWith<$Res>
     Map<ScheduleDay, String> dayNotes,
     Map<ScheduleDay, Map<String, LeaveType>> leave,
     Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> shiftHours,
+    ShiftPlan? shiftPlan,
     String? createdBy,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -198,6 +212,7 @@ class __$$WeeklyScheduleEntityImplCopyWithImpl<$Res>
     Object? dayNotes = null,
     Object? leave = null,
     Object? shiftHours = null,
+    Object? shiftPlan = freezed,
     Object? createdBy = freezed,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
@@ -232,6 +247,10 @@ class __$$WeeklyScheduleEntityImplCopyWithImpl<$Res>
             ? _value._shiftHours
             : shiftHours // ignore: cast_nullable_to_non_nullable
                   as Map<ScheduleDay, Map<ScheduleShift, ShiftHours>>,
+        shiftPlan: freezed == shiftPlan
+            ? _value.shiftPlan
+            : shiftPlan // ignore: cast_nullable_to_non_nullable
+                  as ShiftPlan?,
         createdBy: freezed == createdBy
             ? _value.createdBy
             : createdBy // ignore: cast_nullable_to_non_nullable
@@ -263,6 +282,7 @@ class _$WeeklyScheduleEntityImpl extends _WeeklyScheduleEntity {
         const <ScheduleDay, Map<String, LeaveType>>{},
     final Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> shiftHours =
         const <ScheduleDay, Map<ScheduleShift, ShiftHours>>{},
+    this.shiftPlan,
     this.createdBy,
     this.createdAt,
     this.updatedAt,
@@ -341,6 +361,14 @@ class _$WeeklyScheduleEntityImpl extends _WeeklyScheduleEntity {
     return EqualUnmodifiableMapView(_shiftHours);
   }
 
+  /// The week's **frozen shift-hours snapshot** (Schedule V2 · Pillar 5),
+  /// captured from the branch's shift templates when the week was created.
+  /// Resolves *between* the per-slot [shiftHours] override and the hardcoded
+  /// [ShiftHours.standard] fallback — see [hoursFor]. **Null on every legacy
+  /// week**, which therefore resolves exactly as before (standard hours).
+  @override
+  final ShiftPlan? shiftPlan;
+
   /// uid of the manager/admin who created the schedule.
   @override
   final String? createdBy;
@@ -351,7 +379,7 @@ class _$WeeklyScheduleEntityImpl extends _WeeklyScheduleEntity {
 
   @override
   String toString() {
-    return 'WeeklyScheduleEntity(id: $id, branchId: $branchId, weekStart: $weekStart, assignments: $assignments, dayNotes: $dayNotes, leave: $leave, shiftHours: $shiftHours, createdBy: $createdBy, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'WeeklyScheduleEntity(id: $id, branchId: $branchId, weekStart: $weekStart, assignments: $assignments, dayNotes: $dayNotes, leave: $leave, shiftHours: $shiftHours, shiftPlan: $shiftPlan, createdBy: $createdBy, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -374,6 +402,8 @@ class _$WeeklyScheduleEntityImpl extends _WeeklyScheduleEntity {
               other._shiftHours,
               _shiftHours,
             ) &&
+            (identical(other.shiftPlan, shiftPlan) ||
+                other.shiftPlan == shiftPlan) &&
             (identical(other.createdBy, createdBy) ||
                 other.createdBy == createdBy) &&
             (identical(other.createdAt, createdAt) ||
@@ -392,6 +422,7 @@ class _$WeeklyScheduleEntityImpl extends _WeeklyScheduleEntity {
     const DeepCollectionEquality().hash(_dayNotes),
     const DeepCollectionEquality().hash(_leave),
     const DeepCollectionEquality().hash(_shiftHours),
+    shiftPlan,
     createdBy,
     createdAt,
     updatedAt,
@@ -419,6 +450,7 @@ abstract class _WeeklyScheduleEntity extends WeeklyScheduleEntity {
     final Map<ScheduleDay, String> dayNotes,
     final Map<ScheduleDay, Map<String, LeaveType>> leave,
     final Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> shiftHours,
+    final ShiftPlan? shiftPlan,
     final String? createdBy,
     final DateTime? createdAt,
     final DateTime? updatedAt,
@@ -455,6 +487,14 @@ abstract class _WeeklyScheduleEntity extends WeeklyScheduleEntity {
   /// never from a hardcoded weekend rule.
   @override
   Map<ScheduleDay, Map<ScheduleShift, ShiftHours>> get shiftHours;
+
+  /// The week's **frozen shift-hours snapshot** (Schedule V2 · Pillar 5),
+  /// captured from the branch's shift templates when the week was created.
+  /// Resolves *between* the per-slot [shiftHours] override and the hardcoded
+  /// [ShiftHours.standard] fallback — see [hoursFor]. **Null on every legacy
+  /// week**, which therefore resolves exactly as before (standard hours).
+  @override
+  ShiftPlan? get shiftPlan;
 
   /// uid of the manager/admin who created the schedule.
   @override

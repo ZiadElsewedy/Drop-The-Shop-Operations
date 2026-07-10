@@ -12,6 +12,178 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Changed (2026-07-10 — Schedule Builder UX polish: calm, grid-first, presentation-only, `feature/schedule-optimization`)
+
+Owner-directed **presentation-only** refinement of the manager/admin Schedule
+Builder — no data model, business logic, Firestore, Cubit, analyzer, or save-path
+change (every edit/save/drag/swap path is byte-identical). The screen was
+presenting the grid, week stats, health, insights, legend and the team inspector
+all at once; it now reads **calm and grid-first**, with everything secondary
+demoted behind interaction.
+
+- **Contextual inspector rail** (`manager_schedule_view.dart` desktop branch):
+  the right rail (`schedule_inspector_drawer.dart` — This Week totals + Team +
+  per-employee detail) is now a **collapsible, resizable workspace** instead of a
+  permanent fixture. A toolbar toggle (`view_sidebar`) opens/closes it; a
+  draggable splitter resizes it (280–460px); state is **remembered for the
+  session** (open + width, via `_InspectorPrefs`, matching Focus Mode's
+  in-session model — no local-prefs store exists yet). It is **hidden by default
+  on the narrower desktop tier** (1024–1600) and **open by default on ultrawide**
+  (≥1600). When collapsed the grid **reclaims the width automatically**
+  (`ClipRect` + `OverflowBox` + `AnimatedContainer`, reduced-motion honoured, drag
+  suppresses the animation). The drawer gained an optional in-rail collapse
+  header and now **fills the width it's given** (fixed `width` param removed).
+- **Below-grid review band lightened** (`schedule_overview_surface.dart`
+  rewritten): the three competing bordered cards became **one borderless,
+  typography-led band** parted by hairlines (no large dark blocks). **Health**
+  keeps its score / category chips / top findings but at reduced weight (score
+  36→32px, at most 3 one-liners). **Insights** trimmed to a few attention-fact
+  lines (the totals paragraph dropped — totals live in the rail). **Legend** is
+  now **near-invisible — collapsed by default** to a single quiet line, expanding
+  only on tap (it exists for learning).
+- **More breathing room around the grid**: the left column's vertical rhythm was
+  opened up (top `md`→`lg`, grid→band `lg`→`xl`, bottom `xl`→`xxl`), so the eye
+  lands on the grid first.
+- **Tests:** `schedule_overview_surface_test.dart` updated for the collapsed
+  legend (+1 legend expand/collapse test); `schedule_inspector_drawer_test.dart`
+  unchanged and green. `flutter analyze` clean; full suite **682 pass / 3
+  pre-existing fail** (the documented splash-centering ×2 + stale
+  notification-grouping, all in untouched files). **Frozen pending owner
+  on-device review.**
+
+### Added (2026-07-09 — Schedule V2, Pillar 5: Shift Templates & configurable shift system, `feature/schedule-optimization`)
+
+The **first pillar to extend the scheduling data model** — the hardcoded
+Morning/Night hours become **reusable, per-branch Shift Templates**. **Additive
+and backward-compatible by construction:** every legacy schedule resolves exactly
+as before, and the frozen surfaces (Final View · Health Analyzer · Inspector ·
+Grid interactions · Assignment chips · Desktop layout · Export flow · Routes)
+were **not touched**. Design-reviewed + owner-approved before code.
+
+- **Data model (additive):**
+  - New collection **`shift_templates/{id}`** — per-branch library keyed
+    `{branch}__{role}`. A template = `{ branchId, name, role, startMinutes,
+    endMinutes }` reusing the overnight-aware `ShiftHours`. Three standing roles
+    (Morning · Weekday night · Weekend night) + a reserved `custom` (future).
+    **Seeded lazily** with defaults matching the old `ShiftHours.standard`, so
+    adopting templates is behaviour-neutral.
+  - The week doc (`weekly_schedules/{id}`) gains an **optional `shiftPlan`
+    snapshot** (morning / weekday-night / weekend-night `ShiftHours`), captured
+    **at creation** from the branch's current templates. **Absent on every legacy
+    week.** The existing per-slot `shiftHours` override is unchanged.
+- **Resolution (one entity-only seam):** `WeeklyScheduleEntity.hoursFor` now
+  resolves **per-slot override → the week's `shiftPlan` snapshot →
+  `ShiftHours.standard`**. A legacy week (no snapshot) skips the middle step →
+  **identical** to before, so nothing that reads `hoursFor` (grid, employee views,
+  Final View, `shift_window`) changed or was threaded new state.
+- **History-safe by construction:** each week freezes its own snapshot, so a later
+  template edit can never rewrite a past week.
+- **The 3-way edit scope** (`ScheduleCubit.applyShiftHours`): **This week only** →
+  a frozen per-slot override (the existing `setShiftHours`); **Future schedules**
+  → updates the template (only weeks created afterward snapshot it); **Update
+  globally** → updates the template **and** re-stamps this week + every future
+  existing week (`ScheduleRepository.restampShiftPlan`; past weeks stay frozen).
+- **UI (simple, no enterprise config):** a **Shift-templates manager sheet**
+  (view templates · hours · which slots each drives · edit hours) reached from the
+  day sheet's *Shift hours* section, plus the **"Apply changes to…" scope dialog**;
+  the day-sheet hours editor now routes through it. Overnight is native (`end >
+  1440`); validation covers empty/duplicate names + invalid ranges.
+- **Architecture (modular):** `core/enums/shift_template_role.dart` +
+  `shift_hours_scope.dart`; domain `shift_plan.dart`, `shift_template.dart`
+  (`ShiftTemplate` + `ShiftTemplateSet` + validation), `repositories/
+  shift_template_repository.dart`; data `models/shift_template_model.dart`,
+  `datasources/shift_template_remote_datasource.dart`, `repositories/
+  shift_template_repository_impl.dart`; presentation `cubit/shift_template_cubit
+  .dart` (+ state), widgets `shift_hours_scope_dialog.dart` +
+  `shift_templates_sheet.dart`. `ScheduleCubit` gains the template repo (snapshot
+  + scoped edits); `ScheduleRepository`/datasource gain `createSchedule(shiftPlan)`
+  + `restampShiftPlan`. Wired in `injection.dart`.
+- **Rules:** additive `match /shift_templates/{id}` mirroring `weekly_schedules`
+  (`canReachBranch` → manager+admin CRUD their branch, members read).
+  **⚠️ Needs a `firestore.rules` deploy before managers can use templates.**
+- **Tests (+24):** `shift_template_test.dart` (role mapping, plan resolution,
+  **legacy → standard**, overnight, `ShiftTemplateSet` plan/defaults/validation),
+  `shift_template_model_test.dart` (template + week-snapshot round-trip,
+  **legacy doc → null → standard**), `shift_template_cubit_test.dart`
+  (**this-week vs future vs global** writes + snapshot-on-create),
+  `shift_hours_scope_dialog_test.dart` (the picker). `flutter analyze` clean;
+  full suite **681 pass / 3 pre-existing fail**. Out-of-scope kept out (no
+  metadata/history/versioning/publishing/analytics/auto-scheduling/AI). Pillar 5
+  frozen pending review.
+
+### Changed (2026-07-09 — Schedule V2, Pillar 4: Final View redesign, `feature/schedule-optimization`)
+
+The **Final View was redesigned from scratch** into a premium, **read-only,
+print/export-ready** schedule — a modern spreadsheet (Apple Numbers / Notion
+tables) in DROP's monochrome language. **Presentation only.** The frozen surfaces
+(Health Analyzer · Inspector · Grid interactions · Assignment chips · Desktop
+layout · Domain models · Firestore · Cubits · Routes) were **not touched**.
+
+- **Added — `final_schedule_sheet.dart`** (`FinalScheduleSheet`, a dedicated,
+  testable presentation surface — *not* the editor with another mode): one
+  **employee per row**, one **day per column** (Sun→Sat with dates), and a single
+  scannable **token per cell** — `M` · `N` · `M/N` · `OFF` · `LEAVE` · `VAC`. A
+  document header (DROP · branch · **Week of** · **Generated** · **Manager**), a
+  bottom **day-notes row** (only when notes exist), and a **legend**. Typography +
+  whitespace carry the hierarchy: employee names lead, shift tokens are the scan
+  target; subtle zebra rows + hairline column rules, no chips/avatars/heavy
+  shadows. Designed as a **fixed-width (1600) landscape document** with natural
+  height (≈ A4-landscape for a typical roster), `FittedBox`-scaled to any screen —
+  so it exports consistently to PNG/print/PDF.
+- **Removed everything editor-ish from the Final View:** the old grid-reuse export
+  canvas (`_ExportCanvas`) and its `_FinalHeader` / `_FactPill` / `_LegendDot`
+  helpers are gone — no drag/drop, inspector, health, analytics/fact-pills,
+  suggestions, or builder controls in the published view.
+- **Kept intact:** the launch signature (`showScheduleFinalView(...)`, so the
+  editor toolbar is unchanged), the **PNG export** mechanism
+  (`RepaintBoundary` → `toImage(1.5×)` → Downloads), the preview toolbar
+  (Back · Dashboard · Save PNG), and `scheduleExportFilename`. The `filter` /
+  `previousSaturdayNight` params are retained for the launch signature but the
+  published sheet always shows the whole week (no health cues).
+- **Reuse only:** reads `WeeklyScheduleEntity` / `UserEntity` / `ShiftHours` /
+  `LeaveType` / `ScheduleWeek` / `AppDateFormatter` — **no new scheduling logic.**
+- **Tests — `schedule_final_view_test.dart` rewritten (7):** sheet rendering
+  (header/tokens/legend/day-notes), **empty notes** (no notes row), **large
+  roster** (22 people, no overflow), **export layout** (fixed 1600 width,
+  landscape), page integration + toolbar, and **responsiveness** (narrow tablet +
+  wide desktop both scale without overflow) + the stable filename. `flutter
+  analyze` clean; full suite **657 pass / 3 pre-existing fail**. No
+  schema/rules/functions/DI/route/dependency change. **Final View frozen pending
+  review.**
+
+### Changed (2026-07-09 — Schedule screen layout rebalance, `feature/schedule-optimization`)
+
+A **presentation-only** rebalance of the manager/admin schedule screen so the
+**grid is unambiguously the hero**, the right rail stays light, and the space
+that used to sit empty below the grid earns its keep. **No business logic / no
+domain change** — the frozen Pillar-3 analyzer and every edit/save path are
+untouched; this only moves and re-dresses existing widgets.
+
+- **Added — `schedule_overview_surface.dart`** (`ScheduleOverviewSurface`): the
+  new **secondary information surface below the grid**. A calm, Apple/Linear-style
+  band of three compact cards laid out across the available width (three columns
+  on desktop, folding to two then one as it narrows):
+  - **Schedule Health** — a **prominent 0–100 score** + status, the five-category
+    breakdown (tap a lens to filter), and the **top findings as one-liners**; each
+    finding's fix (the explanation) is revealed **only on tap** (“View →”).
+  - **Insights** — the week's attention facts (open cover · single cover ·
+    double-booked · short rest · leave clash) + a quiet totals line, distinct from
+    the rail's summary and from Health's findings.
+  - **Legend** — shift hours, leave types, and the drag/drop hints.
+- **Moved the global Schedule Health out of the right rail** into that surface, so
+  the inspector rail is now just **Weekly summary + Team list + contextual
+  employee detail**. The rail is also **narrower (340→300)** with a **softer
+  hairline divider**, so it recedes behind the grid.
+- **Removed — `schedule_health_card.dart`** (+ its test): fully superseded by the
+  surface's richer, dashboard-style health block. The `_gridHint` row was folded
+  into the Legend card.
+- **Verification:** `flutter analyze` clean; new `schedule_overview_surface_test.dart`
+  (4 — layout, prominent score, tap-to-reveal fix, category filter, calm healthy
+  state) + inspector test updated (health no longer in the rail). Full suite **653
+  pass / 3 pre-existing fail**. No schema/rules/functions/DI/route/dependency
+  change. **Schedule screen is frozen pending review; next milestone: Final View
+  redesign.**
+
 ### Added (2026-07-09 — Schedule V2, Pillar 3: Health Analyzer, `feature/schedule-optimization`)
 
 Third pillar of **Schedule V2** — Schedule Health rebuilt from a single function

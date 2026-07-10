@@ -6,6 +6,7 @@ import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_cubit.dart';
+import 'support/fake_shift_template_repository.dart';
 
 /// Schedule 4.0 — undo. After a move / exchange / remove the cubit records
 /// the exact inverse; [ScheduleCubit.undoLast] replays it once within the
@@ -57,7 +58,8 @@ void main() {
 
   setUp(() async {
     repo = _RecordingRepo();
-    cubit = ScheduleCubit(repo, _FakeGetUsersByBranch());
+    cubit =
+        ScheduleCubit(repo, _FakeGetUsersByBranch(), FakeShiftTemplateRepository());
     await cubit.load(branchId: 'b1');
     repo.calls.clear();
   });

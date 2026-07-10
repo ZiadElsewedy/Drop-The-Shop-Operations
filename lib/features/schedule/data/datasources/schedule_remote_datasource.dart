@@ -13,6 +13,7 @@ import 'package:drop/features/schedule/data/models/shift_swap_model.dart';
 import 'package:drop/features/schedule/data/models/weekly_schedule_model.dart';
 import 'package:drop/features/schedule/domain/schedule_week.dart';
 import 'package:drop/features/schedule/domain/shift_hours.dart';
+import 'package:drop/features/schedule/domain/shift_plan.dart';
 
 /// Firestore access for the weekly schedule + shift swaps (Phase 7). Schedules
 /// live at `weekly_schedules/{branchId_yyyy-MM-dd}` (deterministic id → one doc
@@ -59,6 +60,15 @@ abstract class ScheduleRemoteDataSource {
     required ScheduleDay day,
     required ScheduleShift shift,
     required ShiftHours? hours,
+  });
+
+  /// Re-stamps [plan] onto every `weekly_schedules` doc for [branchId] with
+  /// `weekStart >= fromWeek` (the "update template globally" scope). Past weeks
+  /// are skipped so history stays frozen.
+  Future<void> restampShiftPlan({
+    required String branchId,
+    required DateTime fromWeek,
+    required ShiftPlan plan,
   });
 
   // ── Shift swaps ──
@@ -246,6 +256,34 @@ class ScheduleRemoteDataSourceImpl implements ScheduleRemoteDataSource {
       });
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to update the shift hours.');
+    }
+  }
+
+  @override
+  Future<void> restampShiftPlan({
+    required String branchId,
+    required DateTime fromWeek,
+    required ShiftPlan plan,
+  }) async {
+    try {
+      final snap =
+          await _schedules.where('branchId', isEqualTo: branchId).get();
+      final planMap = plan.toMap();
+      final batch = _firestore.batch();
+      var touched = 0;
+      for (final doc in snap.docs) {
+        final ws = (doc.data()['weekStart'] as Timestamp?)?.toDate();
+        // Only current + future already-created weeks; the past stays frozen.
+        if (ws == null || ws.isBefore(fromWeek)) continue;
+        batch.update(doc.reference, {
+          'shiftPlan': planMap,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        touched++;
+      }
+      if (touched > 0) await batch.commit();
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to update future schedules.');
     }
   }
 

@@ -2,12 +2,15 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/enums/shift_hours_scope.dart';
+import 'package:drop/core/enums/shift_template_role.dart';
 import 'package:drop/core/errors/failures.dart';
 import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
+import 'package:drop/features/schedule/domain/repositories/shift_template_repository.dart';
 import 'package:drop/features/schedule/domain/schedule_week.dart';
 import 'package:drop/features/schedule/domain/shift_hours.dart';
 import 'schedule_state.dart';
@@ -20,12 +23,13 @@ import 'schedule_state.dart';
 class ScheduleCubit extends Cubit<ScheduleState> {
   final ScheduleRepository _repository;
   final GetUsersByBranch _getUsersByBranch;
+  final ShiftTemplateRepository _templates;
 
   String _branchId = '';
   DateTime _weekStart = ScheduleWeek.currentWeekStart();
   Set<String> _previousSaturdayNight = const {};
 
-  ScheduleCubit(this._repository, this._getUsersByBranch)
+  ScheduleCubit(this._repository, this._getUsersByBranch, this._templates)
       : super(const ScheduleState.initial());
 
   String get branchId => _branchId;
@@ -75,14 +79,21 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   Future<void> refresh() => load(branchId: _branchId, weekStart: _weekStart);
 
-  /// Creates an empty schedule for the current (branch, week).
+  /// Creates an empty schedule for the current (branch, week). The branch's
+  /// current shift templates are **snapshotted** onto the new week (Schedule V2
+  /// · Pillar 5), freezing its hours so later template edits never rewrite it. A
+  /// branch with no templates snapshots nothing → standard hours (legacy).
   Future<void> createSchedule({String? createdBy}) {
     if (_branchId.isEmpty) return Future.value();
-    return _mutate(() => _repository.createSchedule(
-          branchId: _branchId,
-          weekStart: _weekStart,
-          createdBy: createdBy,
-        ));
+    return _mutate(() async {
+      final set = await _templates.getSet(_branchId);
+      await _repository.createSchedule(
+        branchId: _branchId,
+        weekStart: _weekStart,
+        createdBy: createdBy,
+        shiftPlan: set.isEmpty ? null : set.plan,
+      );
+    });
   }
 
   Future<bool> assign(ScheduleDay day, ScheduleShift shift, String uid) =>
@@ -226,6 +237,41 @@ class ScheduleCubit extends Cubit<ScheduleState> {
             shift: shift,
             hours: hours,
           ));
+
+  /// Applies a shift-hours edit at the manager's chosen [scope] (Schedule V2 ·
+  /// Pillar 5):
+  ///  - [ShiftHoursScope.thisWeek] → a frozen per-slot override on this week
+  ///    (the existing [setShiftHours]);
+  ///  - [ShiftHoursScope.future] → updates the branch template for the slot's
+  ///    standing role; only weeks created afterward snapshot the new hours;
+  ///  - [ShiftHoursScope.global] → updates the template **and** re-stamps this
+  ///    week + every future existing week (past weeks stay frozen).
+  Future<bool> applyShiftHours(
+    ScheduleDay day,
+    ScheduleShift shift,
+    ShiftHours hours,
+    ShiftHoursScope scope,
+  ) {
+    if (scope == ShiftHoursScope.thisWeek) {
+      return setShiftHours(day, shift, hours);
+    }
+    return _mutate(() async {
+      // ensureDefaults guarantees the three standing role templates exist.
+      final set = await _templates.ensureDefaults(_branchId);
+      final role = ShiftTemplateRole.forSlot(day, shift);
+      final template = set.forRole(role);
+      if (template != null) {
+        await _templates.upsertTemplate(template.copyWith(hours: hours));
+      }
+      if (scope == ShiftHoursScope.global) {
+        await _repository.restampShiftPlan(
+          branchId: _branchId,
+          fromWeek: _weekStart,
+          plan: set.plan.withRole(role, hours),
+        );
+      }
+    });
+  }
 
   // ── Undo (Schedule 4.0) ────────────────────────────────────────
   /// The inverse of the last direct roster edit (move / exchange / remove),
