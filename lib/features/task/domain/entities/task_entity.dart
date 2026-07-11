@@ -143,6 +143,13 @@ class TaskEntity with _$TaskEntity {
     /// unless a retention `deleteAfterDays` is explicitly configured), so
     /// statistics and deep-links keep working.
     DateTime? archivedAt,
+    /// Optimistic-concurrency counter, bumped by the server-authoritative
+    /// transition path (`TaskRepository.transitionTask`) on every lifecycle move.
+    /// A plain content edit never writes it. Additive — missing on any doc
+    /// predating it → 0 (no migration). Not persisted by `TaskModel.toMap` (the
+    /// transaction owns it, exactly like `createdAt`/`updatedAt`), so a stale
+    /// client edit can never regress it. Read-only to the UI.
+    @Default(0) int version,
   }) = _TaskEntity;
 
   /// Whether anyone is assigned — a named assignee, or (for a shift task) the

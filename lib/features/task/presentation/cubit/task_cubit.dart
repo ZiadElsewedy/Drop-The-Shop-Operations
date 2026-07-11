@@ -460,10 +460,12 @@ class TaskCubit extends Cubit<TaskState> {
       );
     }
 
-    // Audit: the task was created + assigned (who assigned it = the actor).
+    // Audit: the task was created (assignment details ride in the metadata).
+    // Previously logged as `taskAssigned`, which fired even for an unassigned
+    // task; creation and assignment are now distinct facts (P1-4).
     _trackTask(
       created!,
-      AuditEventType.taskAssigned,
+      AuditEventType.taskCreated,
       metadata: {
         'assignmentType': created!.assignmentType.value,
         'priority': created!.priority.value,
@@ -521,25 +523,35 @@ class TaskCubit extends Cubit<TaskState> {
       }
       await _updateTask(next);
     });
-    if (ok && added.isNotEmpty && _user != null) {
-      await _notifyTaskEvent(
-        task: task,
-        type: NotificationType.taskAssigned,
-        actor: _user!,
-        recipientOverride: added,
-      );
-      _trackTask(task, AuditEventType.taskAssigned,
-          metadata: {'assignedTo': added});
+    if (ok && _user != null) {
+      // Notify + audit only the newly-added assignees for the assignment fact…
+      if (added.isNotEmpty) {
+        await _notifyTaskEvent(
+          task: task,
+          type: NotificationType.taskAssigned,
+          actor: _user!,
+          recipientOverride: added,
+        );
+        _trackTask(task, AuditEventType.taskAssigned,
+            metadata: {'assignedTo': added});
+      }
+      // …and always audit the edit itself (P1-4 — was previously unaudited).
+      _trackTask(task, AuditEventType.taskUpdated);
     }
   }
 
   Future<void> deleteTask(String taskId) async {
-    if (_taskById(taskId)?.status == TaskStatus.approved) {
+    final existing = _taskById(taskId);
+    if (existing?.status == TaskStatus.approved) {
       _emitTransientError(
           'Approved tasks are locked. Reopen the task before deleting it.');
       return;
     }
-    await _mutate(() => _deleteTask(taskId));
+    final ok = await _mutate(() => _deleteTask(taskId));
+    // Audit the deletion (P1-4 — previously unaudited).
+    if (ok && existing != null) {
+      _trackTask(existing, AuditEventType.taskDeleted);
+    }
   }
 
   /// Admin escape hatch — reopens an approved task for correction. Moves it back
@@ -549,28 +561,32 @@ class TaskCubit extends Cubit<TaskState> {
   /// task out of `approved`.
   Future<void> reopenTask(TaskEntity task) async {
     if (task.status != TaskStatus.approved) return;
-    await _mutate(() async {
-      final now = DateTime.now();
-      await _updateTask(task.copyWith(
-        status: TaskStatus.started,
-        approvedBy: null,
-        approvedAt: null,
+    final now = DateTime.now();
+    final ok = await _transition(
+      task,
+      from: const {TaskStatus.approved},
+      patch: {
+        'status': TaskStatus.started.value,
+        'approvedBy': null,
+        'approvedAt': null,
         // Reopening a task that the retention pass had archived brings it back
         // into active views (it's no longer an approved historical record).
-        archivedAt: null,
-        requiresRework: false,
-        activityLog: [
-          ...task.activityLog,
-          ActivityEntry(
-            status: TaskStatus.started.value,
-            actorId: _user?.uid ?? '',
-            actorName: _user?.displayName,
-            at: now,
-            note: 'Reopened for changes',
-          ),
-        ],
-      ));
-    });
+        'archivedAt': null,
+        'requiresRework': false,
+      },
+      appendLog: [
+        ActivityEntry(
+          status: TaskStatus.started.value,
+          actorId: _user?.uid ?? '',
+          actorName: _user?.displayName,
+          at: now,
+          note: 'Reopened for changes',
+        ),
+      ],
+    );
+    // Audit the reopen — undoing a locked, reviewed record is the single most
+    // consequential admin action, so it must leave a trail (P1-4).
+    if (ok) _trackTask(task, AuditEventType.taskReopened);
   }
 
   Future<void> assignEmployees({
@@ -591,7 +607,7 @@ class TaskCubit extends Cubit<TaskState> {
           employeeIds: employeeIds,
           assignedShiftId: shiftId,
         ));
-    // Notify the newly-assigned employees (best-effort).
+    // Notify + audit the newly-assigned employees (best-effort).
     if (ok && added.isNotEmpty && existing != null && _user != null) {
       await _notifyTaskEvent(
         task: existing.copyWith(assigneeIds: employeeIds),
@@ -599,43 +615,46 @@ class TaskCubit extends Cubit<TaskState> {
         actor: _user!,
         recipientOverride: added,
       );
+      _trackTask(existing, AuditEventType.taskAssigned,
+          metadata: {'assignedTo': added});
     }
   }
 
   Future<void> approveTask(TaskEntity task, {String? reviewNotes}) async {
-    final ok = await _transitionMutate(
+    final now = DateTime.now();
+    final ok = await _transition(
       task,
-      TaskStatus.approved,
-      () async {
-        final now = DateTime.now();
-        await _updateTask(task.copyWith(
-          status: TaskStatus.approved,
-          approvedBy: _user?.uid,
-          approvedAt: now,
-          reviewNotes: reviewNotes,
-          requiresRework: false,
-          activityLog: [
-            ...task.activityLog,
-            ActivityEntry(
-              status: TaskStatus.approved.value,
-              actorId: _user?.uid ?? '',
-              actorName: _user?.displayName,
-              at: now,
-              note: reviewNotes,
-            ),
-          ],
-        ));
-        if (task.recurrence != null &&
-            task.recurrence!.frequency.value != 'none') {
-          await _spawnNextRecurrence(task);
-        }
+      from: const {TaskStatus.waitingReview},
+      patch: {
+        'status': TaskStatus.approved.value,
+        'approvedBy': _user?.uid,
+        'approvedAt': now,
+        'reviewNotes': reviewNotes,
+        'requiresRework': false,
       },
+      appendLog: [
+        ActivityEntry(
+          status: TaskStatus.approved.value,
+          actorId: _user?.uid ?? '',
+          actorName: _user?.displayName,
+          at: now,
+          note: reviewNotes,
+        ),
+      ],
     );
     if (ok && _user != null) {
+      // Spawn the next recurrence AFTER the atomic approve — only the reviewer
+      // that actually won the transition reaches here, so two concurrent
+      // approves can never both spawn an instance (a stale one hits a conflict).
+      if (task.recurrence != null &&
+          task.recurrence!.frequency.value != 'none') {
+        await _spawnNextRecurrence(task);
+      }
       await _notifyTaskEvent(
         task: task,
         type: NotificationType.taskApproved,
         actor: _user!,
+        recipientOverride: await _reviewRecipients(task),
       );
       _trackTask(task, AuditEventType.taskApproved, metadata: {
         if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
@@ -650,34 +669,31 @@ class TaskCubit extends Cubit<TaskState> {
   /// terminal [rejectTask].
   Future<void> reworkTask(TaskEntity task, {String? reviewNotes}) async {
     final nextRevision = task.revisionNumber + 1;
-    final ok = await _transitionMutate(
+    final now = DateTime.now();
+    final ok = await _transition(
       task,
-      TaskStatus.rejected,
-      () async {
-        final now = DateTime.now();
-        await _updateTask(task.copyWith(
-          status: TaskStatus.rejected,
-          requiresRework: true,
-          revisionNumber: nextRevision,
-          rejectionReason: reviewNotes,
-          rejectedBy: _user?.uid,
-          rejectedAt: now,
-          reviewNotes: reviewNotes,
-          activityLog: [
-            ...task.activityLog,
-            ActivityEntry(
-              // Stored as `rejected` so the existing timeline rendering is
-              // unchanged; the rework distinction lives in requiresRework /
-              // revisionNumber + the notification type.
-              status: TaskStatus.rejected.value,
-              actorId: _user?.uid ?? '',
-              actorName: _user?.displayName,
-              at: now,
-              note: reviewNotes,
-            ),
-          ],
-        ));
+      from: const {TaskStatus.waitingReview},
+      patch: {
+        'status': TaskStatus.rejected.value,
+        'requiresRework': true,
+        'revisionNumber': nextRevision,
+        'rejectionReason': reviewNotes,
+        'rejectedBy': _user?.uid,
+        'rejectedAt': now,
+        'reviewNotes': reviewNotes,
       },
+      appendLog: [
+        ActivityEntry(
+          // Stored as `rejected` so the existing timeline rendering is
+          // unchanged; the rework distinction lives in requiresRework /
+          // revisionNumber + the notification type.
+          status: TaskStatus.rejected.value,
+          actorId: _user?.uid ?? '',
+          actorName: _user?.displayName,
+          at: now,
+          note: reviewNotes,
+        ),
+      ],
     );
     if (ok && _user != null) {
       await _notifyTaskEvent(
@@ -688,6 +704,7 @@ class TaskCubit extends Cubit<TaskState> {
         ),
         type: NotificationType.taskRework,
         actor: _user!,
+        recipientOverride: await _reviewRecipients(task),
       );
       _trackTask(task, AuditEventType.taskReworkRequested, metadata: {
         'revision': nextRevision,
@@ -700,36 +717,34 @@ class TaskCubit extends Cubit<TaskState> {
   /// the revision count or flag rework; notifies the assignees
   /// ([NotificationType.taskRejected] → red `Rejected` badge).
   Future<void> rejectTask(TaskEntity task, {String? reviewNotes}) async {
-    final ok = await _transitionMutate(
+    final now = DateTime.now();
+    final ok = await _transition(
       task,
-      TaskStatus.rejected,
-      () async {
-        final now = DateTime.now();
-        await _updateTask(task.copyWith(
-          status: TaskStatus.rejected,
-          requiresRework: false,
-          rejectionReason: reviewNotes,
-          rejectedBy: _user?.uid,
-          rejectedAt: now,
-          reviewNotes: reviewNotes,
-          activityLog: [
-            ...task.activityLog,
-            ActivityEntry(
-              status: TaskStatus.rejected.value,
-              actorId: _user?.uid ?? '',
-              actorName: _user?.displayName,
-              at: now,
-              note: reviewNotes,
-            ),
-          ],
-        ));
+      from: const {TaskStatus.waitingReview},
+      patch: {
+        'status': TaskStatus.rejected.value,
+        'requiresRework': false,
+        'rejectionReason': reviewNotes,
+        'rejectedBy': _user?.uid,
+        'rejectedAt': now,
+        'reviewNotes': reviewNotes,
       },
+      appendLog: [
+        ActivityEntry(
+          status: TaskStatus.rejected.value,
+          actorId: _user?.uid ?? '',
+          actorName: _user?.displayName,
+          at: now,
+          note: reviewNotes,
+        ),
+      ],
     );
     if (ok && _user != null) {
       await _notifyTaskEvent(
         task: task.copyWith(rejectionReason: reviewNotes),
         type: NotificationType.taskRejected,
         actor: _user!,
+        recipientOverride: await _reviewRecipients(task),
       );
       _trackTask(task, AuditEventType.taskRejected, metadata: {
         if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
@@ -739,25 +754,21 @@ class TaskCubit extends Cubit<TaskState> {
 
   // ─── Employee actions ──────────────────────────────────────────
   Future<void> startTask(TaskEntity task) async {
-    final ok = await _transitionMutate(
+    final now = DateTime.now();
+    // pending → started (a fresh task) or rejected → started (redoing a
+    // reworked/rejected task); both are legal predecessors, unchanged.
+    final ok = await _transition(
       task,
-      TaskStatus.started,
-      () async {
-        final now = DateTime.now();
-        await _updateTask(task.copyWith(
-          status: TaskStatus.started,
-          startedAt: now,
-          activityLog: [
-            ...task.activityLog,
-            ActivityEntry(
-              status: TaskStatus.started.value,
-              actorId: _user?.uid ?? '',
-              actorName: _user?.displayName,
-              at: now,
-            ),
-          ],
-        ));
-      },
+      from: const {TaskStatus.pending, TaskStatus.rejected},
+      patch: {'status': TaskStatus.started.value, 'startedAt': now},
+      appendLog: [
+        ActivityEntry(
+          status: TaskStatus.started.value,
+          actorId: _user?.uid ?? '',
+          actorName: _user?.displayName,
+          at: now,
+        ),
+      ],
     );
     if (ok) _trackTask(task, AuditEventType.taskStarted);
   }
@@ -810,9 +821,13 @@ class TaskCubit extends Cubit<TaskState> {
     if (task.activityLog.any((e) => e.status == eventId)) {
       return Future<void>.value();
     }
-    return _mutate(() => _updateTask(task.copyWith(
-          activityLog: [
-            ...task.activityLog,
+    // Pure log append (a per-type milestone, no core-status change) — atomic
+    // against the server's current log so it never clobbers a concurrent write.
+    return _mutate(() => _repository.transitionTask(
+          taskId: task.id,
+          expectedFrom: const {},
+          patch: const {},
+          appendLog: [
             ActivityEntry(
               status: eventId,
               actorId: _user?.uid ?? '',
@@ -821,7 +836,7 @@ class TaskCubit extends Cubit<TaskState> {
               note: note,
             ),
           ],
-        )));
+        ));
   }
 
   /// Appends a manager/admin operational **note** to the task's timeline WITHOUT
@@ -835,9 +850,13 @@ class TaskCubit extends Cubit<TaskState> {
   }) {
     final text = note.trim();
     if (text.isEmpty) return Future<void>.value();
-    return _mutate(() => _updateTask(task.copyWith(
-          activityLog: [
-            ...task.activityLog,
+    // Pure log append (manager note, no status change) — atomic against the
+    // server's current log so it can't clobber a concurrent transition's entry.
+    return _mutate(() => _repository.transitionTask(
+          taskId: task.id,
+          expectedFrom: const {},
+          patch: const {},
+          appendLog: [
             ActivityEntry(
               status: category.activityStatus,
               actorId: _user?.uid ?? '',
@@ -846,7 +865,7 @@ class TaskCubit extends Cubit<TaskState> {
               note: text,
             ),
           ],
-        )));
+        ));
   }
 
   Future<void> submitForReview(TaskEntity task) async {
@@ -857,27 +876,24 @@ class TaskCubit extends Cubit<TaskState> {
           submission.firstError ?? "This task isn't ready to submit yet.");
       return;
     }
-    final ok = await _transitionMutate(
+    final now = DateTime.now();
+    final ok = await _transition(
       task,
-      TaskStatus.waitingReview,
-      () async {
-        final now = DateTime.now();
-        await _updateTask(task.copyWith(
-          status: TaskStatus.waitingReview,
-          submittedAt: now,
-          // Resubmitting clears the rework flag (the redo is in for review).
-          requiresRework: false,
-          activityLog: [
-            ...task.activityLog,
-            ActivityEntry(
-              status: TaskStatus.waitingReview.value,
-              actorId: _user?.uid ?? '',
-              actorName: _user?.displayName,
-              at: now,
-            ),
-          ],
-        ));
+      from: const {TaskStatus.started, TaskStatus.completed},
+      patch: {
+        'status': TaskStatus.waitingReview.value,
+        'submittedAt': now,
+        // Resubmitting clears the rework flag (the redo is in for review).
+        'requiresRework': false,
       },
+      appendLog: [
+        ActivityEntry(
+          status: TaskStatus.waitingReview.value,
+          actorId: _user?.uid ?? '',
+          actorName: _user?.displayName,
+          at: now,
+        ),
+      ],
     );
     if (ok && _user != null) {
       await _notifyTaskEvent(
@@ -1039,16 +1055,24 @@ class TaskCubit extends Cubit<TaskState> {
         }
       }
       final now = DateTime.now();
-      await _updateTask(task.copyWith(
-        status: TaskStatus.waitingReview,
-        submittedAt: now,
-        notes: notes ?? task.notes,
-        // Resubmitting clears the rework flag (the redo is in for review).
-        requiresRework: false,
-        // Mirror the first image to the legacy field for back-compat.
-        proofImageUrl: firstImage ?? task.proofImageUrl,
-        activityLog: [
-          ...task.activityLog,
+      // Atomic finalize: the uploads have already succeeded (immutable Storage
+      // objects), so verify the task is STILL `started` on the server and append
+      // both events to the server's current log in one transaction. If another
+      // device beat us to it, this throws a ConflictFailure (handled below) —
+      // the just-uploaded objects orphan and are reclaimed by the orphan-GC pass.
+      await _repository.transitionTask(
+        taskId: task.id,
+        expectedFrom: {TaskStatus.started.value},
+        patch: {
+          'status': TaskStatus.waitingReview.value,
+          'submittedAt': now,
+          'notes': notes ?? task.notes,
+          // Resubmitting clears the rework flag (the redo is in for review).
+          'requiresRework': false,
+          // Mirror the first image to the legacy field for back-compat.
+          'proofImageUrl': firstImage ?? task.proofImageUrl,
+        },
+        appendLog: [
           ActivityEntry(
             status: TaskStatus.completed.value,
             actorId: _user?.uid ?? '',
@@ -1064,7 +1088,7 @@ class TaskCubit extends Cubit<TaskState> {
             at: now.add(const Duration(milliseconds: 1)),
           ),
         ],
-      ));
+      );
 
       // Success — evidence is committed, so drop the retry cache.
       _uploadedCache.clear();
@@ -1427,17 +1451,55 @@ class TaskCubit extends Cubit<TaskState> {
     }
   }
 
-  Future<bool> _transitionMutate(
-    TaskEntity task,
-    TaskStatus to,
-    Future<void> Function() action,
-  ) {
-    if (!_canTransition(task.status, to)) {
+  /// Atomic lifecycle move — the server-authoritative replacement for the old
+  /// read-modify-write. A fast client pre-check that [task] is in one of [from]
+  /// (skips a pointless transaction on an obviously-illegal action), then
+  /// delegates to [TaskRepository.transitionTask], which re-verifies [from]
+  /// inside a Firestore transaction and appends [appendLog] to the SERVER's
+  /// current activity log (so a concurrent reviewer can't clobber history or
+  /// double-fire a transition). A [ConflictFailure] — someone moved the task
+  /// first — surfaces the benign refresh notice through [_mutate]; the realtime
+  /// stream then delivers the true state. Returns true only when it committed.
+  ///
+  /// [from] is the legal predecessor set (the task's state machine, previously
+  /// encoded in `_canTransition`). [patch] carries only the fields this move
+  /// changes (DateTime values are encoded at the data boundary); an explicit
+  /// `null` clears a field (e.g. `approvedBy` on reopen).
+  Future<bool> _transition(
+    TaskEntity task, {
+    required Set<TaskStatus> from,
+    required Map<String, Object?> patch,
+    required List<ActivityEntry> appendLog,
+  }) {
+    if (!from.contains(task.status)) {
       _emitTransientError(
           "That action isn't allowed for this task's current status.");
       return Future.value(false);
     }
-    return _mutate(action);
+    return _mutate(() => _repository.transitionTask(
+          taskId: task.id,
+          expectedFrom: {for (final s in from) s.value},
+          patch: patch,
+          appendLog: appendLog,
+        ));
+  }
+
+  /// Recipients for a manager/admin review action (approve / reject / rework).
+  /// Null for an individual/team task → [NotifyTaskEvent] falls back to
+  /// [TaskEntity.assigneeIds]. A shift task has no named assignees, so resolve
+  /// the employees rostered on its shift that day (mirrors assignment) — without
+  /// this the person who did the work is never told the review outcome. An empty
+  /// list means nobody is rostered (valid — simply no recipients).
+  Future<List<String>?> _reviewRecipients(TaskEntity task) async {
+    if (task.assignmentType != TaskAssignmentType.shift) return null;
+    final shift = task.shift;
+    final branchId = task.branchId;
+    if (shift == null || branchId == null || branchId.isEmpty) return const [];
+    return _shiftRecipients(
+      branchId: branchId,
+      shift: shift,
+      day: task.instanceDate ?? task.deadline ?? DateTime.now(),
+    );
   }
 
   /// Emits a one-shot error (for the UI's snackbar listener) then immediately
@@ -1446,24 +1508,6 @@ class TaskCubit extends Cubit<TaskState> {
     final prev = _tasks;
     emit(TaskState.error(message));
     emit(TaskState.loaded(prev, directory: _directory));
-  }
-
-  static bool _canTransition(TaskStatus from, TaskStatus to) {
-    switch (from) {
-      case TaskStatus.pending:
-        return to == TaskStatus.started;
-      case TaskStatus.started:
-        // completeAndSubmit goes started → waitingReview directly (skipping completed)
-        return to == TaskStatus.completed || to == TaskStatus.waitingReview;
-      case TaskStatus.completed:
-        return to == TaskStatus.waitingReview;
-      case TaskStatus.waitingReview:
-        return to == TaskStatus.approved || to == TaskStatus.rejected;
-      case TaskStatus.rejected:
-        return to == TaskStatus.started;
-      case TaskStatus.approved:
-        return false;
-    }
   }
 
   @override

@@ -10,6 +10,7 @@ import 'package:drop/core/media/media_upload_service.dart';
 import 'package:drop/features/task/data/models/recurring_task_template_model.dart';
 import 'package:drop/features/task/data/models/task_model.dart';
 import 'package:drop/features/task/data/models/task_template_model.dart';
+import 'package:drop/features/task/domain/entities/activity_entry.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 
 abstract class TaskRemoteDataSource {
@@ -36,6 +37,22 @@ abstract class TaskRemoteDataSource {
   /// task materialized this way sorts correctly forever after.
   Future<TaskModel?> createTaskWithId(TaskModel task);
   Future<void> updateTask(TaskModel task);
+
+  /// Atomically moves a task through its lifecycle inside a Firestore
+  /// transaction — the ONLY consistent way to change status or append to the
+  /// activity log. Re-reads the doc, and if [expectedFrom] is non-empty and the
+  /// current `status` isn't in it, throws [ConflictException] (someone moved the
+  /// task first). Otherwise it appends [appendLog] to the **server's** current
+  /// `activityLog` (never a stale client array), merges [patch] (DateTime values
+  /// auto-encoded), and bumps `version`. Pass an empty [expectedFrom] for a pure
+  /// log append with no status precondition (notes / work-event milestones).
+  Future<void> transitionTask({
+    required String taskId,
+    required Set<String> expectedFrom,
+    required Map<String, Object?> patch,
+    required List<ActivityEntry> appendLog,
+  });
+
   Future<void> deleteTask(String taskId);
   Future<void> assignTask({
     required String taskId,
@@ -203,17 +220,87 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     }
   }
 
+  // Fields whose authority is the transactional transition path
+  // ([transitionTask]). A plain content update (edit / checklist tick / work-data
+  // patch) must NEVER write them from a possibly-stale client snapshot, or it
+  // could clobber the activity log or regress a lifecycle field it never meant to
+  // touch. Stripping them makes [updateTask] a pure content write; every
+  // lifecycle move + log append goes through [transitionTask] instead.
+  static const Set<String> _transitionOwnedFields = {
+    'activityLog', 'version', 'status',
+    'startedAt', 'submittedAt',
+    'approvedBy', 'approvedAt', 'rejectedBy', 'rejectedAt',
+    'reviewNotes', 'rejectionReason', 'revisionNumber', 'requiresRework',
+    'archivedAt',
+  };
+
   @override
   Future<void> updateTask(TaskModel task) async {
     try {
+      final content = task.toMap()
+        ..removeWhere((k, _) => _transitionOwnedFields.contains(k));
       await _tasks.doc(task.id).set({
-        ...task.toMap(),
+        ...content,
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to update task.');
     }
   }
+
+  @override
+  Future<void> transitionTask({
+    required String taskId,
+    required Set<String> expectedFrom,
+    required Map<String, Object?> patch,
+    required List<ActivityEntry> appendLog,
+  }) async {
+    try {
+      await _firestore.runTransaction((txn) async {
+        final ref = _tasks.doc(taskId);
+        final snap = await txn.get(ref);
+        if (!snap.exists || snap.data() == null) {
+          throw const ConflictException(
+              'This task no longer exists — it may have been removed.');
+        }
+        final data = snap.data()!;
+        final status = data['status'] as String? ?? 'pending';
+        if (expectedFrom.isNotEmpty && !expectedFrom.contains(status)) {
+          // Someone changed the task between the client's read and this write.
+          throw const ConflictException(
+              'This task was just updated by someone else. It has been refreshed.');
+        }
+        // Append to the SERVER's current log (the fix for the lost-update race)
+        // and bump the concurrency counter from the server's current value.
+        final serverLog =
+            (data['activityLog'] as List?)?.toList() ?? <dynamic>[];
+        final version = (data['version'] as num?)?.toInt() ?? 0;
+        txn.set(
+          ref,
+          {
+            for (final e in patch.entries) e.key: _encodeTransitionValue(e.value),
+            'activityLog': [
+              ...serverLog,
+              ...TaskModel.encodeActivityLog(appendLog),
+            ],
+            'version': version + 1,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      });
+    } on ConflictException {
+      rethrow;
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to update task.');
+    }
+  }
+
+  // Firestore can't store a raw DateTime; encode patch values on the boundary
+  // (scalars pass through untouched, incl. an explicit null used to clear a
+  // field like approvedBy on reopen).
+  static Object? _encodeTransitionValue(Object? v) =>
+      v is DateTime ? Timestamp.fromDate(v) : v;
 
   @override
   Future<void> deleteTask(String taskId) async {

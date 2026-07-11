@@ -26,7 +26,11 @@ import 'package:drop/core/enums/audit_entity_type.dart';
 /// `trackEvent` call — see `docs/design/AUDIT_LOG.md` §"Add a new event type").
 enum AuditEventType {
   // ── Task lifecycle (LIVE — TaskCubit) ──────────────────────────
+  taskCreated('task.created', AuditEntityType.task, 'Task created'),
   taskAssigned('task.assigned', AuditEntityType.task, 'Task assigned'),
+  taskUpdated('task.updated', AuditEntityType.task, 'Task edited'),
+  taskDeleted('task.deleted', AuditEntityType.task, 'Task deleted'),
+  taskReopened('task.reopened', AuditEntityType.task, 'Task reopened'),
   taskStarted('task.started', AuditEntityType.task, 'Task started'),
   taskCompleted('task.completed', AuditEntityType.task, 'Task completed'),
   taskApproved('task.approved', AuditEntityType.task, 'Task approved'),

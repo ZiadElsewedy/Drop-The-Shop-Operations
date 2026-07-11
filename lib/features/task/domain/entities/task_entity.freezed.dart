@@ -159,6 +159,14 @@ mixin _$TaskEntity {
   /// statistics and deep-links keep working.
   DateTime? get archivedAt => throw _privateConstructorUsedError;
 
+  /// Optimistic-concurrency counter, bumped by the server-authoritative
+  /// transition path (`TaskRepository.transitionTask`) on every lifecycle move.
+  /// A plain content edit never writes it. Additive — missing on any doc
+  /// predating it → 0 (no migration). Not persisted by `TaskModel.toMap` (the
+  /// transaction owns it, exactly like `createdAt`/`updatedAt`), so a stale
+  /// client edit can never regress it. Read-only to the UI.
+  int get version => throw _privateConstructorUsedError;
+
   /// Create a copy of TaskEntity
   /// with the given fields replaced by the non-null parameter values.
   @JsonKey(includeFromJson: false, includeToJson: false)
@@ -211,6 +219,7 @@ abstract class $TaskEntityCopyWith<$Res> {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? archivedAt,
+    int version,
   });
 
   $RecurrenceConfigCopyWith<$Res>? get recurrence;
@@ -268,6 +277,7 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? archivedAt = freezed,
+    Object? version = null,
   }) {
     return _then(
       _value.copyWith(
@@ -419,6 +429,10 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
                 ? _value.archivedAt
                 : archivedAt // ignore: cast_nullable_to_non_nullable
                       as DateTime?,
+            version: null == version
+                ? _value.version
+                : version // ignore: cast_nullable_to_non_nullable
+                      as int,
           )
           as $Val,
     );
@@ -486,6 +500,7 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? archivedAt,
+    int version,
   });
 
   @override
@@ -543,6 +558,7 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
     Object? archivedAt = freezed,
+    Object? version = null,
   }) {
     return _then(
       _$TaskEntityImpl(
@@ -694,6 +710,10 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.archivedAt
             : archivedAt // ignore: cast_nullable_to_non_nullable
                   as DateTime?,
+        version: null == version
+            ? _value.version
+            : version // ignore: cast_nullable_to_non_nullable
+                  as int,
       ),
     );
   }
@@ -740,6 +760,7 @@ class _$TaskEntityImpl extends _TaskEntity {
     this.createdAt,
     this.updatedAt,
     this.archivedAt,
+    this.version = 0,
   }) : _assigneeIds = assigneeIds,
        _checklist = checklist,
        _referenceAttachments = referenceAttachments,
@@ -983,9 +1004,19 @@ class _$TaskEntityImpl extends _TaskEntity {
   @override
   final DateTime? archivedAt;
 
+  /// Optimistic-concurrency counter, bumped by the server-authoritative
+  /// transition path (`TaskRepository.transitionTask`) on every lifecycle move.
+  /// A plain content edit never writes it. Additive — missing on any doc
+  /// predating it → 0 (no migration). Not persisted by `TaskModel.toMap` (the
+  /// transaction owns it, exactly like `createdAt`/`updatedAt`), so a stale
+  /// client edit can never regress it. Read-only to the UI.
+  @override
+  @JsonKey()
+  final int version;
+
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, workType: $workType, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, data: $data, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, startsAt: $startsAt, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, workType: $workType, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, data: $data, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, startsAt: $startsAt, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt, version: $version)';
   }
 
   @override
@@ -1067,7 +1098,8 @@ class _$TaskEntityImpl extends _TaskEntity {
             (identical(other.updatedAt, updatedAt) ||
                 other.updatedAt == updatedAt) &&
             (identical(other.archivedAt, archivedAt) ||
-                other.archivedAt == archivedAt));
+                other.archivedAt == archivedAt) &&
+            (identical(other.version, version) || other.version == version));
   }
 
   @override
@@ -1110,6 +1142,7 @@ class _$TaskEntityImpl extends _TaskEntity {
     createdAt,
     updatedAt,
     archivedAt,
+    version,
   ]);
 
   /// Create a copy of TaskEntity
@@ -1160,6 +1193,7 @@ abstract class _TaskEntity extends TaskEntity {
     final DateTime? createdAt,
     final DateTime? updatedAt,
     final DateTime? archivedAt,
+    final int version,
   }) = _$TaskEntityImpl;
   const _TaskEntity._() : super._();
 
@@ -1337,6 +1371,15 @@ abstract class _TaskEntity extends TaskEntity {
   /// statistics and deep-links keep working.
   @override
   DateTime? get archivedAt;
+
+  /// Optimistic-concurrency counter, bumped by the server-authoritative
+  /// transition path (`TaskRepository.transitionTask`) on every lifecycle move.
+  /// A plain content edit never writes it. Additive — missing on any doc
+  /// predating it → 0 (no migration). Not persisted by `TaskModel.toMap` (the
+  /// transaction owns it, exactly like `createdAt`/`updatedAt`), so a stale
+  /// client edit can never regress it. Read-only to the UI.
+  @override
+  int get version;
 
   /// Create a copy of TaskEntity
   /// with the given fields replaced by the non-null parameter values.

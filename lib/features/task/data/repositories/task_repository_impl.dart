@@ -9,6 +9,7 @@ import 'package:drop/features/task/data/datasources/task_remote_datasource.dart'
 import 'package:drop/features/task/data/models/recurring_task_template_model.dart';
 import 'package:drop/features/task/data/models/task_model.dart';
 import 'package:drop/features/task/data/models/task_template_model.dart';
+import 'package:drop/features/task/domain/entities/activity_entry.dart';
 import 'package:drop/features/task/domain/entities/recurring_task_template_entity.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
@@ -120,6 +121,27 @@ class TaskRepositoryImpl implements TaskRepository {
   Future<void> updateTask(TaskEntity task) async {
     try {
       await _remote.updateTask(TaskModel.fromEntity(task));
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
+  Future<void> transitionTask({
+    required String taskId,
+    required Set<String> expectedFrom,
+    required Map<String, Object?> patch,
+    required List<ActivityEntry> appendLog,
+  }) async {
+    try {
+      await _remote.transitionTask(
+        taskId: taskId,
+        expectedFrom: expectedFrom,
+        patch: patch,
+        appendLog: appendLog,
+      );
+    } on ConflictException catch (e) {
+      throw ConflictFailure(e.message);
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

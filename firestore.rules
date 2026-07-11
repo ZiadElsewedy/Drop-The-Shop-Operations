@@ -192,11 +192,33 @@ service cloud.firestore {
                  == resource.data.get('createdBy', '')
             && request.resource.data.get('status', 'pending') != 'approved'
             && request.resource.data.get('status', 'pending') != 'rejected'
-            // employees can't forge review attribution
+            // employees can't forge review attribution…
             && request.resource.data.get('approvedBy', '')
                  == resource.data.get('approvedBy', '')
             && request.resource.data.get('rejectedBy', '')
-                 == resource.data.get('rejectedBy', ''));
+                 == resource.data.get('rejectedBy', '')
+            // …nor the rest of the review record (P1-5): the reviewer's notes,
+            // the rework counter, and the review timestamps are manager/admin
+            // territory. An employee's legitimate writes (start / submit / tick a
+            // checklist item / add proof) never touch these, so freezing them
+            // costs nothing and stops a crafted client rewriting the verdict.
+            && request.resource.data.get('reviewNotes', '')
+                 == resource.data.get('reviewNotes', '')
+            && request.resource.data.get('rejectionReason', '')
+                 == resource.data.get('rejectionReason', '')
+            && request.resource.data.get('revisionNumber', 0)
+                 == resource.data.get('revisionNumber', 0)
+            && request.resource.data.get('approvedAt', null)
+                 == resource.data.get('approvedAt', null)
+            && request.resource.data.get('rejectedAt', null)
+                 == resource.data.get('rejectedAt', null)
+            // The activity log is append-only history: an employee may GROW it
+            // (start / submit append entries) but never shrink or rewrite it, so
+            // a manager's past rejection note can't be deleted. Size-only check —
+            // rules can't diff array contents, but preventing shrink closes the
+            // "erase history" path; entry contents stay observable in the log.
+            && request.resource.data.get('activityLog', []).size()
+                 >= resource.data.get('activityLog', []).size());
 
       // Approved tasks can't be deleted either (reopen first). Matches the lock
       // above so a reviewed record can't be silently removed.

@@ -59,6 +59,7 @@ class TaskModel {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final DateTime? archivedAt;
+  final int version;
 
   const TaskModel({
     required this.id,
@@ -98,6 +99,7 @@ class TaskModel {
     this.createdAt,
     this.updatedAt,
     this.archivedAt,
+    this.version = 0,
   });
 
   factory TaskModel.fromMap(Map<String, dynamic> map, {String? id}) => TaskModel(
@@ -138,6 +140,7 @@ class TaskModel {
         createdAt: map.date('createdAt'),
         updatedAt: map.date('updatedAt'),
         archivedAt: map.date('archivedAt'),
+        version: (map['version'] as num?)?.toInt() ?? 0,
       );
 
   factory TaskModel.fromEntity(TaskEntity e) => TaskModel(
@@ -178,10 +181,13 @@ class TaskModel {
         createdAt: e.createdAt,
         updatedAt: e.updatedAt,
         archivedAt: e.archivedAt,
+        version: e.version,
       );
 
   /// Persisted fields. `createdAt`/`updatedAt` are written by the datasource as
-  /// server timestamps, so they are intentionally not included here. `deadline`
+  /// server timestamps, so they are intentionally not included here. `version`
+  /// is likewise omitted — it is owned by the transactional transition path
+  /// (`transitionTask`), so a plain write can never regress it. `deadline`
   /// is converted to a [Timestamp] when present. `assignedEmployeeId` mirrors
   /// the primary assignee for backward compatibility (rules / statistics).
   Map<String, dynamic> toMap() => {
@@ -267,6 +273,7 @@ class TaskModel {
         createdAt: createdAt,
         updatedAt: updatedAt,
         archivedAt: archivedAt,
+        version: version,
       );
 
   TaskEntity toEntity() => TaskEntity(
@@ -307,7 +314,16 @@ class TaskModel {
         createdAt: createdAt,
         updatedAt: updatedAt,
         archivedAt: archivedAt,
+        version: version,
       );
+
+  /// Serializes activity entries to their Firestore map form — the single
+  /// encoder, reused by the transactional transition path (which appends to the
+  /// server's current log outside `toMap`). Public so the datasource can encode
+  /// the entries it appends without duplicating the shape.
+  static List<Map<String, dynamic>> encodeActivityLog(
+          List<ActivityEntry> log) =>
+      _activityLogToList(log);
 
   /// Reads `assigneeIds` (array); falls back to the legacy single
   /// `assignedEmployeeId` string for documents written before Phase 9.

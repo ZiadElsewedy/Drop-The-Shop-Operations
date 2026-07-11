@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/media/media_upload_service.dart';
+import 'package:drop/features/task/domain/entities/activity_entry.dart';
 import 'package:drop/features/task/domain/entities/recurring_task_template_entity.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
@@ -51,8 +52,24 @@ abstract class TaskRepository {
   /// Function uses, so the two can never double-create the same day's instance.
   Future<TaskEntity?> createTaskWithId(TaskEntity task);
 
-  /// Updates an existing task (manager/admin full edit; employee limited fields).
+  /// Updates an existing task's **content** (manager/admin full edit; employee
+  /// limited fields). Never touches status, the activity log, or any review
+  /// field — those move only through [transitionTask].
   Future<void> updateTask(TaskEntity task);
+
+  /// Atomically moves a task through its lifecycle: verifies the current status
+  /// is one of [expectedFrom] (empty = no precondition, for a pure log append),
+  /// appends [appendLog] to the server's current activity log, merges [patch],
+  /// and bumps the task's `version` — all inside one Firestore transaction, so
+  /// concurrent reviewers can't lose each other's history or double-fire a
+  /// transition. Throws a [ConflictFailure] when the precondition fails (someone
+  /// moved the task first); the realtime stream then delivers the true state.
+  Future<void> transitionTask({
+    required String taskId,
+    required Set<String> expectedFrom,
+    required Map<String, Object?> patch,
+    required List<ActivityEntry> appendLog,
+  });
 
   /// Deletes a task (manager/admin).
   Future<void> deleteTask(String taskId);
