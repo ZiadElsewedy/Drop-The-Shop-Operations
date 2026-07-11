@@ -2,9 +2,12 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:drop/core/enums/audit_event_type.dart';
 import 'package:drop/core/enums/request_type.dart';
 import 'package:drop/core/utils/app_logger.dart';
 import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/audit/domain/entities/audit_actor.dart';
+import 'package:drop/features/audit/domain/services/event_tracking_service.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/branch/domain/repositories/branch_repository.dart';
 import 'package:drop/features/requests/domain/entities/request_entity.dart';
@@ -12,8 +15,7 @@ import 'package:drop/features/requests/domain/repositories/request_repository.da
 import 'package:drop/features/requests/domain/usecases/create_request.dart';
 import 'package:drop/features/requests/domain/usecases/upload_request_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
-import 'package:drop/features/task/presentation/cubit/task_cubit.dart'
-    show PickedAttachment;
+import 'package:drop/core/media/picked_attachment.dart';
 import 'requests_list_state.dart';
 
 /// Drives the employee approval-requests inbox (the list) for all three roles.
@@ -33,6 +35,9 @@ class RequestsListCubit extends Cubit<RequestsListState> {
   final CreateRequest _createRequest;
   final UploadRequestAttachment _uploadAttachment;
 
+  /// Immutable audit trail (optional — null in tests that don't exercise it).
+  final EventTrackingService? _eventTracking;
+
   UserEntity? _user;
   StreamSubscription<List<RequestEntity>>? _sub;
   bool _mutating = false;
@@ -45,6 +50,7 @@ class RequestsListCubit extends Cubit<RequestsListState> {
     required this._branchRepository,
     required this._createRequest,
     required this._uploadAttachment,
+    this._eventTracking,
   }) : super(const RequestsListState.initial());
 
   List<RequestEntity> get _requests =>
@@ -170,6 +176,14 @@ class RequestsListCubit extends Cubit<RequestsListState> {
         lastEventPreview: message.isNotEmpty ? message : type.label,
       );
       final created = await _createRequest(entity);
+      // Audit: an approval request was filed (best-effort, fire-and-forget).
+      _eventTracking?.trackEvent(
+        type: AuditEventType.requestCreated,
+        actor: AuditActor.of(user),
+        entityId: created.id,
+        branchId: created.branchId,
+        metadata: {'requestType': type.value},
+      );
       return created;
     } on Failure catch (e) {
       emit(RequestsListState.error(e.message));

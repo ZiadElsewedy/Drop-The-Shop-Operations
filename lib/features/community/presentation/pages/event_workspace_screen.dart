@@ -380,8 +380,10 @@ class _WorkspaceMenu extends StatelessWidget {
   Future<void> _pickCover(BuildContext context) async {
     final cubit = context.read<EventWorkspaceCubit>();
     try {
-      final picked = await ImagePicker()
-          .pickImage(source: ImageSource.gallery, maxWidth: 2000);
+      // imageQuality re-encodes the pick → strips EXIF/GPS metadata and shrinks
+      // the upload (the hero cover has no other compression step).
+      final picked = await ImagePicker().pickImage(
+          source: ImageSource.gallery, maxWidth: 2000, imageQuality: 80);
       if (picked == null) return;
       await cubit.setHeroImage(File(picked.path));
     } catch (_) {

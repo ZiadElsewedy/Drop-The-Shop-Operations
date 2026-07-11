@@ -11,6 +11,8 @@
 > **Keep this current** — update it before finishing any task (see
 > [Documentation Maintenance](PROJECT_CONTEXT.md#5-documentation-maintenance)).
 
+**Last updated:** 2026-07-11 (Media upload FINAL hardening — cancellation · retry · analytics · orphan GC)
+**Version:** 1.0.0+1 · **Branch:** `feature/media-upload-v2` (DROP — monochrome premium desktop UX)
 **Last updated:** 2026-07-10 (Notifications V2 — pilot reliability + crash-safe deep links)
 **Version:** 1.0.0+1 · **Branch:** `feature/notifications-v2` (DROP — monochrome premium desktop UX)
 **Last updated:** 2026-07-08 (Community Hub / DROP Events — flagship event workspace)
@@ -19,6 +21,58 @@
 **Version:** 1.0.0+1 · **Branch:** `feature/ui-tasks` (DROP — monochrome premium desktop UX)
 **Last updated:** 2026-07-08 (Work Details design system + Create Work sheet UX)
 **Version:** 1.0.0+1 · **Branch:** `feature/work-management-system` (DROP — monochrome premium desktop UX)
+
+---
+
+## ✅ Media upload hardening — shared service · image editor · video compression (2026-07-11)
+
+Focused high-ROI pass on the media pipeline (`feature/media-upload-v2`). The pipeline
+was already mature (shared picker · state-driven progress overlay · immutable
+create-only Storage · gallery + fullscreen viewer) — this **hardens + enriches** it,
+no rewrite.
+
+- **One upload seam.** NEW `core/media/media_upload_service.dart` — the triplicated
+  task/case/request Storage-upload block now lives here once (all three delegate),
+  plus a long `Cache-Control` on every object. `PickedAttachment` moved to
+  `core/media`; new `core/utils/concurrent.dart` `mapPooled` caps submission uploads
+  at 3-in-flight with a smooth fixed-denominator progress bar.
+- **Image editor (mobile).** NEW `core/media/media_processing.dart` `editImage`
+  (`image_cropper`: crop/rotate/flip/aspect, monochrome) runs after a camera capture
+  and via a tap-to-edit affordance on each image thumbnail; edited bytes replace the
+  original. Gated on `supportsImageEditing` (desktop/web upload unedited).
+  AndroidManifest declares the uCrop activity.
+- **Video compression (mobile).** `compressVideo` (`video_compress`) transcodes before
+  upload behind a cancellable progress dialog; fails safe to the original. Gated on
+  `supportsVideoCompression`.
+- **Perf/cost fixes.** Killed the fullscreen video per-tick rebuild storm; `cacheWidth`
+  caps on fullscreen + thumbnail decode; `storage.rules` gained a binding `validMedia()`
+  size/type ceiling on the create paths; event-hero pick strips EXIF via `imageQuality`.
+- **Deps:** `image_cropper`, `video_compress` (mobile-gated). **Tests:** new
+  `concurrent_test.dart`; analyzer clean; suite unchanged (2 pre-existing splash
+  failures only).
+- **Final hardening pass (2026-07-11, last before merge):**
+  - **Upload cancellation** — `UploadCanceller`/`UploadCancelledException`
+    (`core/media`), threaded task use case→repo→datasource→service like
+    `onProgress`; overlay **Cancel** button → `TaskCubit.cancelSubmission()`;
+    aborts every active `UploadTask`, restores UI quietly, keeps media, hidden
+    during `finalizing` (so the doc write finishes). Crash-safe/idempotent.
+  - **Retry** — `_uploadedCache` (file path → result, per task) re-uploads only
+    what didn't already succeed (a Firestore-fail retry re-uploads nothing);
+    cleared on success/task change.
+  - **Analytics** — 4 new `AuditEventType`s (`media.upload_started/completed/
+    failed/cancelled`) via the existing `EventTrackingService` seam; metadata =
+    counts · bytes · `durationMs` · `compressionRatio` (from new
+    `PickedAttachment.originalBytes`).
+  - **Orphan GC** — opt-in 3rd sweep in `taskHousekeeping` (Admin SDK bypasses the
+    create-only rules); reconciles a task's `attachments/` vs referenced URLs,
+    deletes unreferenced past-grace objects; OFF unless
+    `config/taskRetention.gcOrphanAttachments`, `gcGraceHours`=48, skips a task on
+    any unparseable URL. **Needs functions deploy + the config flag.**
+  - Tests: `upload_canceller_test`. **Constraints kept:** no offline queue /
+    pause-resume / background uploads / reordering.
+- **Still deferred (P2):** reorder/replace · a11y Semantics + 44px targets ·
+  pause-video-on-swipe · `cached_network_image` disk cache · gallery-video duration
+  cap. **Owner deploy:** `storage.rules` + `functions` (orphan GC).
 
 ---
 

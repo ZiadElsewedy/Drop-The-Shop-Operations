@@ -29,6 +29,12 @@ class AppConstants {
   /// lives in Storage at `events/{id}/hero.<ext>`.
   static const String eventsCollection = 'events';
 
+  /// Immutable Event Tracking + Audit Log. One append-only document per important
+  /// business action (`audit_logs/{id}`) — who did what, to which entity, when,
+  /// from where. Never edited; never hard-deleted (admin soft-delete only). All
+  /// writes flow through the central `EventTrackingService`.
+  static const String auditLogsCollection = 'audit_logs';
+
   // ─── Communications Center — Phase 2 ──────────────────────────
   static const String broadcastTemplatesCollection = 'broadcastTemplates';
   static const String broadcastSchedulesCollection = 'broadcastSchedules';

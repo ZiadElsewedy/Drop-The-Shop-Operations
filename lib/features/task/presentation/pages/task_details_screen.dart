@@ -26,6 +26,7 @@ import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/domain/task_schedule.dart';
 import 'package:drop/features/task/domain/work_types/task_work_x.dart';
 import 'package:drop/features/task/presentation/attachment_format.dart';
+import 'package:drop/core/media/picked_attachment.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/cubit/task_state.dart';
 import 'package:drop/features/task/presentation/submission_progress.dart';
@@ -102,6 +103,8 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
                   child: SubmissionLoadingOverlay(
                     progress: live.progress ??
                         const SubmissionProgress(SubmissionStage.preparing),
+                    onCancel: () =>
+                        context.read<TaskCubit>().cancelSubmission(),
                   ),
                 ),
             ],

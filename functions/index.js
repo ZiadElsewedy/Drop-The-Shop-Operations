@@ -1630,6 +1630,67 @@ exports.generateShiftTaskInstances = onSchedule("every 24 hours", async () => {
  * pages by `approvedAt` with a cursor and skips already-archived docs, so it
  * never starves; the Storage ops are safe to repeat.
  */
+// Extracts the Storage object name from a Firebase download URL, e.g.
+// `https://…/o/tasks%2F{id}%2Fattachments%2F{stem}.jpg?alt=…` → `tasks/{id}/attachments/{stem}.jpg`.
+// Returns null when the URL isn't a parseable Storage download URL — the orphan
+// GC treats a null as "can't confirm the reference set" and skips the task.
+function objectNameFromUrl(url) {
+  try {
+    const m = String(url).match(/\/o\/([^?]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Reconciles ONE task's `attachments/` folder against the object names its doc
+// actually references, deleting unreferenced objects older than [graceCutoffMs].
+// SAFETY: if any referenced URL can't be parsed, the whole task is skipped (never
+// risk deleting evidence on incomplete information); objects newer than the grace
+// window are kept (an in-flight / retryable submission is never touched). Returns
+// the count deleted. The Admin SDK bypasses the create-only Storage rules.
+async function gcTaskOrphans(bucket, doc, graceCutoffMs) {
+  const t = doc.data() || {};
+  const referenced = new Set();
+  let parseFailed = false;
+  const addUrl = (url) => {
+    if (!url) return;
+    const name = objectNameFromUrl(url);
+    if (name) referenced.add(name);
+    else parseFailed = true;
+  };
+  for (const e of t.activityLog || []) {
+    for (const a of e.attachments || []) addUrl(a.url);
+  }
+  for (const a of t.referenceAttachments || []) addUrl(a.url);
+  if (t.proofImageUrl) addUrl(t.proofImageUrl);
+  if (parseFailed) {
+    logger.warn("orphan gc: unparseable reference, skipping task", { taskId: doc.id });
+    return 0;
+  }
+
+  let deleted = 0;
+  try {
+    const [files] = await bucket.getFiles({ prefix: `${TASKS}/${doc.id}/attachments/` });
+    for (const f of files) {
+      if (referenced.has(f.name)) continue; // still referenced → keep
+      try {
+        const [meta] = await f.getMetadata();
+        const created = Date.parse(meta.timeCreated || "");
+        if (!Number.isFinite(created) || created > graceCutoffMs) continue; // too new → keep
+        await f.delete();
+        deleted++;
+        logger.info("orphan gc: deleted", { taskId: doc.id, file: f.name });
+      } catch (e) {
+        logger.warn("orphan gc: object check/delete failed", { taskId: doc.id, file: f.name, error: String(e) });
+      }
+    }
+  } catch (e) {
+    logger.warn("orphan gc: list failed", { taskId: doc.id, error: String(e) });
+  }
+  return deleted;
+}
+
 exports.taskHousekeeping = onSchedule("every 24 hours", async () => {
   const now = Date.now();
   const nowTs = admin.firestore.Timestamp.fromMillis(now);
@@ -1638,7 +1699,13 @@ exports.taskHousekeeping = onSchedule("every 24 hours", async () => {
 
   // Config (defaults when the doc is absent). `deleteAfterDays` is opt-in: any
   // non-positive / missing value keeps soft archive forever.
-  let cfg = { archiveAfterDays: 30, coldTierImages: true, deleteAfterDays: null };
+  let cfg = {
+    archiveAfterDays: 30,
+    coldTierImages: true,
+    deleteAfterDays: null,
+    gcOrphanAttachments: false,
+    gcGraceHours: 48,
+  };
   try {
     const cSnap = await db.collection(CONFIG).doc("taskRetention").get();
     if (cSnap.exists) {
@@ -1649,6 +1716,11 @@ exports.taskHousekeeping = onSchedule("every 24 hours", async () => {
         coldTierImages: c.coldTierImages !== false,
         deleteAfterDays: Number.isFinite(c.deleteAfterDays) && c.deleteAfterDays > 0
           ? c.deleteAfterDays : null,
+        // Orphan attachment GC — OFF unless explicitly enabled (a delete sweep is
+        // risky; the owner enables it after reviewing this function).
+        gcOrphanAttachments: c.gcOrphanAttachments === true,
+        gcGraceHours: Number.isFinite(c.gcGraceHours) && c.gcGraceHours > 0
+          ? c.gcGraceHours : 48,
       };
     }
   } catch (_) {
@@ -1745,7 +1817,38 @@ exports.taskHousekeeping = onSchedule("every 24 hours", async () => {
     }
   }
 
-  logger.info("task housekeeping done", { archived, coldTiered, deleted });
+  // ── 3. GC ORPHANED ATTACHMENTS (opt-in) ──
+  // A cancelled / failed / interrupted submission (or a Firestore failure after a
+  // Storage success) can upload attachment objects whose URL never lands on the
+  // task doc; the client can't delete them (create-only Storage rules). This
+  // reconciles each task's `attachments/` folder against the URLs the doc
+  // references and deletes the unreferenced, past-grace objects. OFF by default —
+  // enable via `config/taskRetention.gcOrphanAttachments: true` (+ optional
+  // `gcGraceHours`, default 48). Newest-first + RUN_CAP bounds the scan.
+  let orphansDeleted = 0;
+  if (cfg.gcOrphanAttachments) {
+    const graceCutoff = now - cfg.gcGraceHours * 60 * 60 * 1000;
+    try {
+      let scanned = 0;
+      let last = null;
+      while (scanned < RUN_CAP) {
+        let q = db.collection(TASKS).orderBy("updatedAt", "desc").limit(BATCH_LIMIT);
+        if (last) q = q.startAfter(last);
+        const snap = await q.get();
+        if (snap.empty) break;
+        for (const doc of snap.docs) {
+          last = doc;
+          orphansDeleted += await gcTaskOrphans(bucket, doc, graceCutoff);
+        }
+        scanned += snap.size;
+        if (snap.size < BATCH_LIMIT) break;
+      }
+    } catch (err) {
+      logger.warn("orphan gc sweep failed", { error: String(err) });
+    }
+  }
+
+  logger.info("task housekeeping done", { archived, coldTiered, deleted, orphansDeleted });
 });
 
 /**

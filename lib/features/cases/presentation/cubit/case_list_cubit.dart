@@ -18,8 +18,7 @@ import 'package:drop/features/cases/domain/repositories/case_repository.dart';
 import 'package:drop/features/cases/domain/usecases/create_case.dart';
 import 'package:drop/features/cases/domain/usecases/upload_case_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
-import 'package:drop/features/task/presentation/cubit/task_cubit.dart'
-    show PickedAttachment;
+import 'package:drop/core/media/picked_attachment.dart';
 import 'case_list_state.dart';
 
 /// Drives the Case inbox (the list) for all three roles. The list is scoped by

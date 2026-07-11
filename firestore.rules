@@ -667,5 +667,38 @@ service cloud.firestore {
       allow create, update: if isSignedIn();
       allow delete: if false;
     }
+
+    // ── Audit log (immutable Event Tracking trail) ─────────────────
+    // One append-only record per important business action, written through the
+    // `EventTrackingService` (never by a feature directly). An entry is a fact
+    // about the past, so it is IMMUTABLE: created once, never edited, never hard
+    // deleted. The only mutation is an ADMIN SOFT DELETE (flip
+    // isDeleted/deletedAt/deletedBy and nothing else) — the record is retained,
+    // just hidden from normal reads.
+    //   read   — admin (all) · own-branch manager (their branch's history). An
+    //            employee has no audit-read need (auditing is a management tool).
+    //   create — any signed-in user may append an event AS THEMSELVES. `actorId`
+    //            is pinned to the caller so a client can NEVER forge another
+    //            user's history; the record must be born live (isDeleted false)
+    //            with a valid schemaVersion. `timestamp` is a server timestamp.
+    //   update — admin only, and ONLY the soft-delete field diff.
+    //   delete — never (no hard delete anywhere in the stack).
+    match /audit_logs/{id} {
+      allow read: if isAdmin()
+        || (isManager() && resource.data.get('branchId', '') == selfBranch());
+
+      allow create: if isSignedIn()
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('isDeleted', false) == false
+        && request.resource.data.get('schemaVersion', 0) is int
+        && request.resource.data.get('schemaVersion', 0) >= 1;
+
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['isDeleted', 'deletedAt', 'deletedBy'])
+        && request.resource.data.get('isDeleted', false) == true;
+
+      allow delete: if false;
+    }
   }
 }

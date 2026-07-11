@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:drop/core/constants/app_constants.dart';
 import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/media/media_upload_service.dart';
 import 'package:drop/features/task/data/models/recurring_task_template_model.dart';
 import 'package:drop/features/task/data/models/task_model.dart';
 import 'package:drop/features/task/data/models/task_template_model.dart';
@@ -46,6 +46,7 @@ abstract class TaskRemoteDataSource {
   /// Uploads one media file to `tasks/{taskId}/attachments/{id}.<ext>` (unique
   /// id, never overwrites) and returns the resolved [TaskAttachment]. Reports
   /// byte progress via [onProgress] (transferred, total) for the loading overlay.
+  /// Pass an [UploadCanceller] to make the upload abortable.
   Future<TaskAttachment> uploadAttachment({
     required String taskId,
     required File file,
@@ -53,6 +54,7 @@ abstract class TaskRemoteDataSource {
     required String uploadedBy,
     String? uploadedByName,
     int? durationMs,
+    UploadCanceller? canceller,
     void Function(int transferred, int total)? onProgress,
   });
 
@@ -72,9 +74,9 @@ abstract class TaskRemoteDataSource {
 
 class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
   final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
+  final MediaUploadService _media;
 
-  TaskRemoteDataSourceImpl(this._firestore, this._storage);
+  TaskRemoteDataSourceImpl(this._firestore, this._media);
 
   CollectionReference<Map<String, dynamic>> get _tasks =>
       _firestore.collection(AppConstants.tasksCollection);
@@ -242,11 +244,6 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     }
   }
 
-  /// Hard ceiling so a misconfigured/disabled Storage bucket or a dropped
-  /// connection fails cleanly instead of hanging the submit flow indefinitely.
-  /// Videos can be large, so the window is generous.
-  static const _uploadTimeout = Duration(seconds: 180);
-
   @override
   Future<TaskAttachment> uploadAttachment({
     required String taskId,
@@ -255,109 +252,28 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     required String uploadedBy,
     String? uploadedByName,
     int? durationMs,
+    UploadCanceller? canceller,
     void Function(int transferred, int total)? onProgress,
   }) async {
-    // Unique id per upload → files are never overwritten (each attachment is
-    // preserved). A fresh Firestore push id is a guaranteed-unique 20-char id.
-    final id = _tasks.doc().id;
-    final ext = _extensionFor(file.path, type);
-    final upload = _storage
-        .ref('${AppConstants.tasksCollection}/$taskId/attachments/$id.$ext')
-        .putFile(file, SettableMetadata(contentType: _contentType(ext, type)));
-    // Live byte progress for the shared loading overlay.
-    final sub = upload.snapshotEvents
-        .listen((s) => onProgress?.call(s.bytesTransferred, s.totalBytes));
-    try {
-      final snapshot = await upload.timeout(
-        _uploadTimeout,
-        onTimeout: () {
-          upload.cancel();
-          throw const ServerException(
-              'Upload timed out. Check your connection and try again.');
-        },
-      );
-      final url =
-          await snapshot.ref.getDownloadURL().timeout(const Duration(seconds: 30));
-      return TaskAttachment(
-        id: id,
-        url: url,
-        type: type,
-        uploadedAt: DateTime.now(),
-        uploadedBy: uploadedBy,
-        uploadedByName: uploadedByName,
-        durationMs: durationMs,
-      );
-    } on TimeoutException {
-      throw const ServerException(
-          'Upload timed out. Check your connection and try again.');
-    } on FirebaseException catch (e) {
-      throw ServerException(_storageError(e));
-    } finally {
-      await sub.cancel();
-    }
-  }
-
-  /// Lower-case file extension, falling back to a sensible default per [type].
-  static String _extensionFor(String path, AttachmentType type) {
-    final dot = path.lastIndexOf('.');
-    if (dot != -1 && dot < path.length - 1) {
-      final ext = path.substring(dot + 1).toLowerCase();
-      if (ext.isNotEmpty && ext.length <= 5) return ext;
-    }
-    return type.isVideo ? 'mp4' : 'jpg';
-  }
-
-  /// MIME type from extension (falls back to a generic image/video type).
-  static String _contentType(String ext, AttachmentType type) {
-    switch (ext) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      case 'heic':
-        return 'image/heic';
-      case 'gif':
-        return 'image/gif';
-      case 'mp4':
-        return 'video/mp4';
-      case 'mov':
-        return 'video/quicktime';
-      case 'm4v':
-        return 'video/x-m4v';
-      case 'webm':
-        return 'video/webm';
-      default:
-        return type.isVideo ? 'video/mp4' : 'image/jpeg';
-    }
-  }
-
-  /// Translates a Storage [FirebaseException] into an actionable message.
-  ///
-  /// The previous implementation blamed *every* failure on the network, which
-  /// masked the real cause: an `unauthorized` / `object-not-found` error almost
-  /// always means the Storage rules aren't deployed or the bucket isn't enabled
-  /// — not a bad connection. Surfacing the real code is what makes the proof
-  /// pipeline diagnosable in the field.
-  static String _storageError(FirebaseException e) {
-    switch (e.code) {
-      case 'unauthorized':
-      case 'unauthenticated':
-        return 'Upload was blocked by Storage permissions (${e.code}). '
-            'Firebase Storage rules likely need to be deployed.';
-      case 'object-not-found':
-      case 'bucket-not-found':
-      case 'project-not-found':
-        return 'Firebase Storage isn\'t set up for this project (${e.code}). '
-            'Enable Storage in the Firebase console, then retry.';
-      case 'retry-limit-exceeded':
-      case 'canceled':
-        return 'Upload failed — check your connection and try again.';
-      default:
-        return e.message ?? 'Upload failed (${e.code}).';
-    }
+    // The Storage mechanics (unique id → never overwritten, content-type,
+    // cache-control, progress, timeout, error translation) live once in
+    // [MediaUploadService]; this maps its result onto the task's attachment.
+    final media = await _media.upload(
+      basePath: '${AppConstants.tasksCollection}/$taskId/attachments',
+      file: file,
+      type: type,
+      canceller: canceller,
+      onProgress: onProgress,
+    );
+    return TaskAttachment(
+      id: media.id,
+      url: media.url,
+      type: type,
+      uploadedAt: DateTime.now(),
+      uploadedBy: uploadedBy,
+      uploadedByName: uploadedByName,
+      durationMs: durationMs,
+    );
   }
 
   // ─── Task templates ────────────────────────────────────────────

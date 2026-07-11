@@ -1,10 +1,13 @@
 import 'dart:io';
 import 'package:drop/core/enums/attachment_type.dart';
+import 'package:drop/core/media/media_upload_service.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/repositories/task_repository.dart';
 
 /// Uploads one media file (image / video) for a task and returns the resolved
-/// [TaskAttachment] (id, download url, type, uploader, time).
+/// [TaskAttachment] (id, download url, type, uploader, time). Pass an
+/// [UploadCanceller] to make the upload abortable (the submission overlay's
+/// Cancel button); it throws [UploadCancelledException] when cancelled.
 class UploadTaskAttachment {
   final TaskRepository _repository;
   const UploadTaskAttachment(this._repository);
@@ -16,6 +19,7 @@ class UploadTaskAttachment {
     required String uploadedBy,
     String? uploadedByName,
     int? durationMs,
+    UploadCanceller? canceller,
     void Function(int transferred, int total)? onProgress,
   }) =>
       _repository.uploadAttachment(
@@ -25,6 +29,7 @@ class UploadTaskAttachment {
         uploadedBy: uploadedBy,
         uploadedByName: uploadedByName,
         durationMs: durationMs,
+        canceller: canceller,
         onProgress: onProgress,
       );
 }

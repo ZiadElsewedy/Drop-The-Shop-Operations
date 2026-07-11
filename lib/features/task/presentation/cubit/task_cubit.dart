@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:developer' as developer;
-import 'dart:io';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/utils/app_logger.dart';
@@ -13,6 +12,12 @@ import 'package:drop/core/enums/task_status.dart';
 import 'package:drop/core/enums/task_type.dart';
 import 'package:drop/core/enums/template_repeat_mode.dart';
 import 'package:drop/core/errors/failures.dart';
+import 'package:drop/core/enums/audit_event_type.dart';
+import 'package:drop/core/media/media_upload_service.dart';
+import 'package:drop/core/media/picked_attachment.dart';
+import 'package:drop/core/utils/concurrent.dart';
+import 'package:drop/features/audit/domain/entities/audit_actor.dart';
+import 'package:drop/features/audit/domain/services/event_tracking_service.dart';
 import 'package:drop/features/notifications/domain/usecases/notify_task_event.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
@@ -41,17 +46,6 @@ import 'package:drop/features/task/domain/usecases/upload_task_attachment.dart';
 import 'package:drop/features/task/presentation/submission_progress.dart';
 import 'task_state.dart';
 
-/// A media file the employee has picked but not yet uploaded — the input to
-/// [TaskCubit.completeAndSubmit]. The cubit uploads each and turns it into a
-/// [TaskAttachment] on the submission event. [durationMs] is the captured video
-/// length (best-effort; null for images).
-class PickedAttachment {
-  const PickedAttachment(this.file, this.type, {this.durationMs});
-  final File file;
-  final AttachmentType type;
-  final int? durationMs;
-}
-
 /// Drives the task workflow for all three roles. The list loaded depends on the
 /// signed-in user's role (admin: all · manager: own branch · employee: tasks
 /// they're assigned to) and is **realtime** — a Firestore snapshot stream.
@@ -72,6 +66,10 @@ class TaskCubit extends Cubit<TaskState> {
   final GetUsersByBranch _getUsersByBranch;
   final NotifyTaskEvent _notifyTaskEvent;
 
+  /// Immutable audit trail (optional — null in tests that don't exercise it).
+  /// Every task-lifecycle write records one event through this single seam.
+  final EventTrackingService? _eventTracking;
+
   UserEntity? _user;
   /// One subscription per task source feeding the current scope. Admin/manager
   /// have exactly one (all tasks / branch tasks); an employee has one for their
@@ -84,6 +82,14 @@ class TaskCubit extends Cubit<TaskState> {
   // it survives rebuilds; carried on every `loaded` emit (incl. the stream).
   bool _submitting = false;
   SubmissionProgress? _submissionProgress;
+  /// Cancels the in-flight submission's uploads (the overlay's Cancel button).
+  /// Non-null only while [completeAndSubmit] is uploading.
+  UploadCanceller? _canceller;
+  /// Per-submission cache of already-uploaded attachments (file path → result),
+  /// so a retry after a partial failure/cancel re-uploads ONLY what didn't
+  /// already succeed. Scoped to one task; cleared on success or a task change.
+  final Map<String, TaskAttachment> _uploadedCache = {};
+  String? _uploadCacheTaskId;
   final Map<String, UserEntity> _directory = {};
   final Set<String> _fetchedBranches = {};
   final Map<String, String> _branchNames = {};
@@ -105,7 +111,30 @@ class TaskCubit extends Cubit<TaskState> {
     required this._uploadTaskAttachment,
     required this._getUsersByBranch,
     required this._notifyTaskEvent,
+    this._eventTracking,
   }) : super(const TaskState.initial());
+
+  /// Records an immutable audit event for a task action — best-effort and
+  /// fire-and-forget (the underlying write has already succeeded; the service
+  /// never throws). No-op when tracking isn't wired or the actor is unknown.
+  /// [entityId] is the task id, so an audit reader can pull a task's whole
+  /// history via `AuditRepository.forEntity`.
+  void _trackTask(
+    TaskEntity task,
+    AuditEventType type, {
+    Map<String, dynamic> metadata = const {},
+  }) {
+    final tracker = _eventTracking;
+    final user = _user;
+    if (tracker == null || user == null) return;
+    tracker.trackEvent(
+      type: type,
+      actor: AuditActor.of(user),
+      entityId: task.id,
+      branchId: task.branchId,
+      metadata: {'title': task.title, ...metadata},
+    );
+  }
 
   List<TaskEntity> get _tasks =>
       state.maybeWhen(loaded: (t, _, _, _, _) => t, orElse: () => const []);
@@ -430,6 +459,18 @@ class TaskCubit extends Cubit<TaskState> {
         recipientOverride: assigneeIds,
       );
     }
+
+    // Audit: the task was created + assigned (who assigned it = the actor).
+    _trackTask(
+      created!,
+      AuditEventType.taskAssigned,
+      metadata: {
+        'assignmentType': created!.assignmentType.value,
+        'priority': created!.priority.value,
+        if (isShift && shift != null) 'shift': shift.value,
+        if (!isShift && assigneeIds.isNotEmpty) 'assignedTo': assigneeIds,
+      },
+    );
   }
 
   /// The uids rostered on [shift] for [day] at [branchId] — the recipients for
@@ -487,6 +528,8 @@ class TaskCubit extends Cubit<TaskState> {
         actor: _user!,
         recipientOverride: added,
       );
+      _trackTask(task, AuditEventType.taskAssigned,
+          metadata: {'assignedTo': added});
     }
   }
 
@@ -594,6 +637,9 @@ class TaskCubit extends Cubit<TaskState> {
         type: NotificationType.taskApproved,
         actor: _user!,
       );
+      _trackTask(task, AuditEventType.taskApproved, metadata: {
+        if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
+      });
     }
   }
 
@@ -643,6 +689,10 @@ class TaskCubit extends Cubit<TaskState> {
         type: NotificationType.taskRework,
         actor: _user!,
       );
+      _trackTask(task, AuditEventType.taskReworkRequested, metadata: {
+        'revision': nextRevision,
+        if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
+      });
     }
   }
 
@@ -681,30 +731,36 @@ class TaskCubit extends Cubit<TaskState> {
         type: NotificationType.taskRejected,
         actor: _user!,
       );
+      _trackTask(task, AuditEventType.taskRejected, metadata: {
+        if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
+      });
     }
   }
 
   // ─── Employee actions ──────────────────────────────────────────
-  Future<void> startTask(TaskEntity task) => _transitionMutate(
-        task,
-        TaskStatus.started,
-        () async {
-          final now = DateTime.now();
-          await _updateTask(task.copyWith(
-            status: TaskStatus.started,
-            startedAt: now,
-            activityLog: [
-              ...task.activityLog,
-              ActivityEntry(
-                status: TaskStatus.started.value,
-                actorId: _user?.uid ?? '',
-                actorName: _user?.displayName,
-                at: now,
-              ),
-            ],
-          ));
-        },
-      );
+  Future<void> startTask(TaskEntity task) async {
+    final ok = await _transitionMutate(
+      task,
+      TaskStatus.started,
+      () async {
+        final now = DateTime.now();
+        await _updateTask(task.copyWith(
+          status: TaskStatus.started,
+          startedAt: now,
+          activityLog: [
+            ...task.activityLog,
+            ActivityEntry(
+              status: TaskStatus.started.value,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: now,
+            ),
+          ],
+        ));
+      },
+    );
+    if (ok) _trackTask(task, AuditEventType.taskStarted);
+  }
 
   Future<void> toggleChecklistItem(TaskEntity task, String itemId) {
     final updated = [
@@ -865,9 +921,23 @@ class TaskCubit extends Cubit<TaskState> {
     }
     if (_user == null || _mutating) return false;
 
+    // The retry cache is scoped to one task — a different task starts fresh so a
+    // stale entry can never be reused across submissions.
+    if (_uploadCacheTaskId != task.id) {
+      _uploadedCache.clear();
+      _uploadCacheTaskId = task.id;
+    }
+
+    final hasMedia = attachments.isNotEmpty;
+    final imageCount = attachments.where((a) => a.type.isImage).length;
+    final videoCount = attachments.where((a) => a.type.isVideo).length;
+
     final prev = _tasks;
     _mutating = true;
     _submitting = true;
+    final canceller = UploadCanceller();
+    _canceller = canceller;
+    final stopwatch = Stopwatch()..start();
 
     // Throttled progress → state: emit only on a stage change or a whole-percent
     // change, so the screen never rebuilds faster than it needs to.
@@ -886,40 +956,79 @@ class TaskCubit extends Cubit<TaskState> {
           submissionProgress: p));
     }
 
+    void clearSubmissionState() {
+      _mutating = false;
+      _submitting = false;
+      _submissionProgress = null;
+      _canceller = null;
+    }
+
     try {
       setProgress(const SubmissionProgress(SubmissionStage.preparing));
 
-      // Upload in parallel (order preserved by Future.wait), reporting aggregate
-      // byte progress. Any failure throws → the write is aborted and the real
-      // error surfaced, keeping the employee's selection.
-      setProgress(const SubmissionProgress(SubmissionStage.uploading));
+      // Fixed, accurate denominator up front (summed file sizes) so the pooled
+      // upload shows a smooth bar — otherwise the total would jump as each file
+      // starts, since only a few are ever in flight at once.
       final transferred = List<int>.filled(attachments.length, 0);
-      final totals = List<int>.filled(attachments.length, 0);
+      final totals = <int>[for (final a in attachments) await a.file.length()];
+      final totalBytes = totals.fold(0, (a, b) => a + b);
       void report() => setProgress(SubmissionProgress(
             SubmissionStage.uploading,
             transferredBytes: transferred.fold(0, (a, b) => a + b),
-            totalBytes: totals.fold(0, (a, b) => a + b),
+            totalBytes: totalBytes,
           ));
 
-      final futures = <Future<TaskAttachment>>[];
-      for (var i = 0; i < attachments.length; i++) {
-        final idx = i; // capture per-iteration for the progress closure
-        final a = attachments[idx];
-        futures.add(_uploadTaskAttachment(
-          taskId: task.id,
-          file: a.file,
-          type: a.type,
-          uploadedBy: _user?.uid ?? '',
-          uploadedByName: _user?.displayName,
-          durationMs: a.durationMs,
-          onProgress: (sent, total) {
-            transferred[idx] = sent;
-            totals[idx] = total;
-            report();
-          },
-        ));
+      // Analytics: the upload attempt started (best-effort, never blocks).
+      if (hasMedia) {
+        _trackTask(task, AuditEventType.mediaUploadStarted, metadata: {
+          'fileCount': attachments.length,
+          'imageCount': imageCount,
+          'videoCount': videoCount,
+          'totalBytes': totalBytes,
+        });
       }
-      final uploaded = await Future.wait(futures);
+
+      // Reuse anything a previous (failed / cancelled) attempt already uploaded,
+      // so a retry only re-uploads what's actually missing.
+      final results = List<TaskAttachment?>.filled(attachments.length, null);
+      for (var i = 0; i < attachments.length; i++) {
+        final cached = _uploadedCache[attachments[i].file.path];
+        if (cached != null) {
+          results[i] = cached;
+          transferred[i] = totals[i]; // already done → counts as fully sent
+        }
+      }
+      report(); // enters the uploading stage at (cached)/total before first byte
+
+      // Upload only the not-yet-uploaded files, with bounded concurrency and a
+      // shared canceller so the overlay's Cancel aborts every active upload. Any
+      // failure throws → the write is aborted and the real error surfaced,
+      // keeping the employee's selection.
+      final pending = <Future<void> Function()>[];
+      for (var i = 0; i < attachments.length; i++) {
+        if (results[i] != null) continue; // cache hit — skip the upload
+        final idx = i;
+        final a = attachments[idx];
+        pending.add(() async {
+          final uploaded = await _uploadTaskAttachment(
+            taskId: task.id,
+            file: a.file,
+            type: a.type,
+            uploadedBy: _user?.uid ?? '',
+            uploadedByName: _user?.displayName,
+            durationMs: a.durationMs,
+            canceller: canceller,
+            onProgress: (sent, _) {
+              transferred[idx] = sent;
+              report();
+            },
+          );
+          results[idx] = uploaded;
+          _uploadedCache[a.file.path] = uploaded; // remember for a retry
+        });
+      }
+      await mapPooled(3, pending);
+      final uploaded = results.cast<TaskAttachment>();
 
       setProgress(const SubmissionProgress(SubmissionStage.finalizing));
       String? firstImage;
@@ -957,9 +1066,11 @@ class TaskCubit extends Cubit<TaskState> {
         ],
       ));
 
-      _mutating = false;
-      _submitting = false;
-      _submissionProgress = null;
+      // Success — evidence is committed, so drop the retry cache.
+      _uploadedCache.clear();
+      _uploadCacheTaskId = null;
+      clearSubmissionState();
+      stopwatch.stop();
       // The Firestore write already pushed the new state through the stream;
       // emit once more to clear the submission flags immediately.
       if (!isClosed) {
@@ -973,23 +1084,86 @@ class TaskCubit extends Cubit<TaskState> {
           actor: _user!,
         );
       }
+      // Audit: the business facts (unchanged), plus upload analytics with metrics.
+      _trackTask(task, AuditEventType.taskCompleted,
+          metadata: {'attachments': uploaded.length});
+      if (uploaded.isNotEmpty) {
+        _trackTask(task, AuditEventType.taskPhotoUploaded, metadata: {
+          'count': uploaded.length,
+          'storagePaths': [for (final a in uploaded) a.url],
+        });
+        // compressionRatio = compressed / original across the videos that were
+        // compressed (originalBytes captured at pick time); null when none were.
+        var origBytes = 0;
+        var compBytes = 0;
+        for (var i = 0; i < attachments.length; i++) {
+          final ob = attachments[i].originalBytes;
+          if (ob != null && ob > 0) {
+            origBytes += ob;
+            compBytes += totals[i];
+          }
+        }
+        _trackTask(task, AuditEventType.mediaUploadCompleted, metadata: {
+          'fileCount': uploaded.length,
+          'imageCount': imageCount,
+          'videoCount': videoCount,
+          'totalBytes': totalBytes,
+          'durationMs': stopwatch.elapsedMilliseconds,
+          if (origBytes > 0) 'compressionRatio': compBytes / origBytes,
+        });
+      }
       return true;
+    } on UploadCancelledException {
+      // Clean cancel — no error snackbar, keep the selection, and KEEP the retry
+      // cache so a re-submit reuses whatever already uploaded.
+      clearSubmissionState();
+      stopwatch.stop();
+      if (!isClosed) emit(TaskState.loaded(prev, directory: _directory));
+      if (hasMedia) {
+        _trackTask(task, AuditEventType.mediaUploadCancelled, metadata: {
+          'fileCount': attachments.length,
+          'uploadedCount': _uploadedCache.length,
+          'durationMs': stopwatch.elapsedMilliseconds,
+        });
+      }
+      return false;
     } on Failure catch (e) {
-      _mutating = false;
-      _submitting = false;
-      _submissionProgress = null;
+      clearSubmissionState();
+      stopwatch.stop();
       emit(TaskState.error(e.message));
       emit(TaskState.loaded(prev, directory: _directory));
+      if (hasMedia) {
+        _trackTask(task, AuditEventType.mediaUploadFailed, metadata: {
+          'fileCount': attachments.length,
+          'uploadedCount': _uploadedCache.length,
+          'durationMs': stopwatch.elapsedMilliseconds,
+          'error': e.message,
+        });
+      }
       return false;
     } catch (_) {
-      _mutating = false;
-      _submitting = false;
-      _submissionProgress = null;
+      clearSubmissionState();
+      stopwatch.stop();
       emit(const TaskState.error('Something went wrong. Please try again.'));
       emit(TaskState.loaded(prev, directory: _directory));
+      if (hasMedia) {
+        _trackTask(task, AuditEventType.mediaUploadFailed, metadata: {
+          'fileCount': attachments.length,
+          'uploadedCount': _uploadedCache.length,
+          'durationMs': stopwatch.elapsedMilliseconds,
+        });
+      }
       return false;
     }
   }
+
+  /// Cancels the in-flight submission's uploads (the overlay's Cancel button):
+  /// aborts every active Firebase upload; the submission then unwinds through
+  /// [UploadCancelledException] and restores the UI, keeping the picked media.
+  /// No-op when nothing is uploading, and harmless once the upload phase is done
+  /// (the Firestore write is allowed to finish so uploaded evidence isn't
+  /// orphaned mid-commit — the overlay hides Cancel during finalizing).
+  void cancelSubmission() => _canceller?.cancel();
 
   // ─── Picker support ────────────────────────────────────────────
   Future<List<UserEntity>> branchEmployees(String branchId) async {

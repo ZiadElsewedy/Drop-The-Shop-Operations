@@ -11,8 +11,7 @@ import 'package:drop/core/widgets/adaptive_scaffold.dart';
 import 'package:drop/core/widgets/premium_button.dart';
 import 'package:drop/features/requests/presentation/cubit/requests_list_cubit.dart';
 import 'package:drop/features/requests/presentation/request_format.dart';
-import 'package:drop/features/task/presentation/cubit/task_cubit.dart'
-    show PickedAttachment;
+import 'package:drop/core/media/picked_attachment.dart';
 import 'package:drop/features/task/presentation/widgets/attachment_picker.dart';
 
 /// The fast, premium request-filing flow — pick a type, write one short

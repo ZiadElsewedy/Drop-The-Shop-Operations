@@ -9,6 +9,20 @@ import 'dart:io' show Platform;
 bool get supportsCameraCapture =>
     !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
+/// Whether the in-app image editor (crop / rotate / flip / aspect) can run.
+/// Backed by `image_cropper`, which has no desktop (macOS/Windows/Linux)
+/// implementation — calling it there throws `MissingPluginException`. Gate every
+/// editor affordance on this so desktop simply uploads the picked image
+/// unedited. Kept mobile-only (web isn't a target and needs extra JS setup).
+bool get supportsImageEditing =>
+    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+/// Whether client-side video transcoding can run before upload. Backed by
+/// `video_compress`, which is Android/iOS only — desktop/web fall back to
+/// uploading the original video untouched.
+bool get supportsVideoCompression =>
+    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
 /// Whether this build can actually complete FCM push registration. Push is
 /// mobile-only today: the macOS Runner has **no `aps-environment` (Push
 /// Notifications) entitlement**, so the APNS token never arrives and every

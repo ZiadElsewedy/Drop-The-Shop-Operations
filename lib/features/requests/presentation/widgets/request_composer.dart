@@ -5,8 +5,7 @@ import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
-import 'package:drop/features/task/presentation/cubit/task_cubit.dart'
-    show PickedAttachment;
+import 'package:drop/core/media/picked_attachment.dart';
 import 'package:drop/features/task/presentation/widgets/attachment_picker.dart';
 
 /// The comment composer pinned at the bottom of a request detail. Text + optional

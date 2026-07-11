@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/media/media_upload_service.dart';
 import 'package:drop/core/errors/exceptions.dart';
 import 'package:drop/core/errors/failures.dart';
 import 'package:drop/features/task/data/datasources/task_remote_datasource.dart';
@@ -158,6 +159,7 @@ class TaskRepositoryImpl implements TaskRepository {
     required String uploadedBy,
     String? uploadedByName,
     int? durationMs,
+    UploadCanceller? canceller,
     void Function(int transferred, int total)? onProgress,
   }) async {
     try {
@@ -168,11 +170,14 @@ class TaskRepositoryImpl implements TaskRepository {
         uploadedBy: uploadedBy,
         uploadedByName: uploadedByName,
         durationMs: durationMs,
+        canceller: canceller,
         onProgress: onProgress,
       );
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }
+    // UploadCancelledException is intentionally NOT caught here — it isn't a
+    // failure; it propagates to the cubit which restores the UI quietly.
   }
 
   // ─── Task templates ────────────────────────────────────────────

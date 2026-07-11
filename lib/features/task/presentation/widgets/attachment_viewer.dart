@@ -147,6 +147,11 @@ class _ImagePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Cap decode resolution so an oversized (legacy / reference) image can't blow
+    // memory, while keeping ~2x headroom so pinch-zoom stays crisp. cacheWidth
+    // only ever downscales, so a normal (≤1600px) upload is unaffected.
+    final mq = MediaQuery.of(context);
+    final decodeWidth = (mq.size.width * mq.devicePixelRatio * 2).round();
     return InteractiveViewer(
       minScale: 1,
       maxScale: 5,
@@ -154,6 +159,7 @@ class _ImagePage extends StatelessWidget {
         child: Image.network(
           url,
           fit: BoxFit.contain,
+          cacheWidth: decodeWidth,
           loadingBuilder: (context, child, progress) => progress == null
               ? child
               : const Center(
@@ -183,6 +189,7 @@ class _VideoPageState extends State<_VideoPage> {
   late final VideoPlayerController _controller;
   bool _ready = false;
   bool _failed = false;
+  bool _playing = false;
 
   @override
   void initState() {
@@ -193,24 +200,30 @@ class _VideoPageState extends State<_VideoPage> {
       }).catchError((_) {
         if (mounted) setState(() => _failed = true);
       });
-    _controller.addListener(_onTick);
+    // Rebuild ONLY when play/pause flips. The scrubber (VideoProgressIndicator)
+    // listens to the controller itself, so rebuilding the whole page on every
+    // playback tick (~60fps) was pure waste — this drops it to one rebuild per
+    // play/pause.
+    _controller.addListener(_onPlayingChanged);
   }
 
-  void _onTick() {
-    if (mounted) setState(() {});
+  void _onPlayingChanged() {
+    final playing = _controller.value.isPlaying;
+    if (playing != _playing && mounted) {
+      setState(() => _playing = playing);
+    }
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onTick);
+    _controller.removeListener(_onPlayingChanged);
     _controller.dispose();
     super.dispose();
   }
 
   void _toggle() {
-    setState(() {
-      _controller.value.isPlaying ? _controller.pause() : _controller.play();
-    });
+    // play()/pause() notify synchronously → _onPlayingChanged updates the overlay.
+    _controller.value.isPlaying ? _controller.pause() : _controller.play();
   }
 
   @override
@@ -225,7 +238,7 @@ class _VideoPageState extends State<_VideoPage> {
         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
       );
     }
-    final playing = _controller.value.isPlaying;
+    final playing = _playing;
     return GestureDetector(
       onTap: _toggle,
       child: Stack(

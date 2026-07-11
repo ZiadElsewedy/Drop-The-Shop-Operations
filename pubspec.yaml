@@ -49,8 +49,14 @@ dependencies:
 
   # Media
   image_picker: ^1.1.2
+  # In-app crop / rotate / flip / aspect editor (mobile only — gated off on
+  # desktop/web via `supportsImageEditing`).
+  image_cropper: ^9.0.0
   video_player: ^2.9.2
   video_thumbnail: ^0.5.3
+  # Client-side video transcode before upload (mobile only — gated off on
+  # desktop/web via `supportsVideoCompression`).
+  video_compress: ^3.1.4
 
   # Storage
   flutter_secure_storage: ^9.2.2

@@ -2,6 +2,16 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
+    // Media (image/video) attachments must be a sane size + type. The client
+    // caps sizes before upload, but Storage rules are the only *binding*
+    // ceiling — this stops a buggy/rogue authenticated client from writing an
+    // oversized or non-media object under the create-only attachment paths.
+    // 220MB covers the 200MB uncompressed-video cap plus overhead.
+    function validMedia() {
+      return request.resource.size < 220 * 1024 * 1024
+          && request.resource.contentType.matches('(image|video)/.*');
+    }
+
     // Profile media: users/{uid}/avatar.jpg and users/{uid}/cover.jpg.
     // Any signed-in user may read; only the owner may write their own files.
     match /users/{uid}/{file} {
@@ -26,7 +36,7 @@ service firebase.storage {
     // unguessable 20-char auto-ids.
     match /tasks/{taskId}/{allPaths=**} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && validMedia();
       allow update, delete: if false;
     }
 
@@ -38,7 +48,7 @@ service firebase.storage {
     // message (firestore.rules); case ids are unguessable 20-char auto-ids.
     match /cases/{caseId}/{allPaths=**} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && validMedia();
       allow update, delete: if false;
     }
 
@@ -51,7 +61,7 @@ service firebase.storage {
     // auto-ids.
     match /requests/{requestId}/{allPaths=**} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null;
+      allow create: if request.auth != null && validMedia();
       allow update, delete: if false;
     }
 

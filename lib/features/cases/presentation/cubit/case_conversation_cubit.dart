@@ -14,8 +14,7 @@ import 'package:drop/features/cases/domain/usecases/change_case_status.dart';
 import 'package:drop/features/cases/domain/usecases/send_case_message.dart';
 import 'package:drop/features/cases/domain/usecases/upload_case_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
-import 'package:drop/features/task/presentation/cubit/task_cubit.dart'
-    show PickedAttachment;
+import 'package:drop/core/media/picked_attachment.dart';
 import 'case_conversation_state.dart';
 
 /// Drives ONE open case — created per selected case (desktop) or per pushed

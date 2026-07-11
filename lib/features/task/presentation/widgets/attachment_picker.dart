@@ -11,7 +11,8 @@ import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/core/utils/platform_capabilities.dart';
 import 'package:drop/core/widgets/app_snackbar.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
-import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
+import 'package:drop/core/media/media_processing.dart';
+import 'package:drop/core/media/picked_attachment.dart';
 import 'package:drop/features/task/presentation/widgets/video_thumbnail_image.dart';
 
 /// Media picker (Phase 10) — attach multiple images (and, when [allowVideo],
@@ -114,6 +115,9 @@ class AttachmentPickerField extends StatelessWidget {
                 _SelectedTile(
                   attachment: attachments[i],
                   onRemove: () => _removeAt(i),
+                  onEdit: (attachments[i].type.isImage && supportsImageEditing)
+                      ? () => _editAt(context, i)
+                      : null,
                 ),
               _AddTile(onTap: () => _openMenu(context)),
             ],
@@ -203,7 +207,9 @@ class AttachmentPickerField extends StatelessWidget {
 
   // ── Pickers ──────────────────────────────────────────────────────
   // Photos are resized + recompressed by image_picker before upload (the
-  // pre-upload optimization), per AttachmentLimits.
+  // pre-upload optimization), per AttachmentLimits. On mobile the user can then
+  // crop/rotate each one — automatically after a camera capture, or by tapping a
+  // thumbnail.
   Future<void> _pickPhotos(BuildContext context) async {
     try {
       final picked = await ImagePicker().pickMultiImage(
@@ -212,8 +218,9 @@ class AttachmentPickerField extends StatelessWidget {
       );
       if (picked.isEmpty) return;
       if (!context.mounted) return;
-      await _commit(
-          context, [for (final x in picked) (x, AttachmentType.image, null)]);
+      await _commit(context, [
+        for (final x in picked) (File(x.path), AttachmentType.image, null, null)
+      ]);
     } catch (_) {
       if (context.mounted) AppSnackbar.error(context, 'Could not add photos.');
     }
@@ -227,7 +234,15 @@ class AttachmentPickerField extends StatelessWidget {
         maxWidth: AttachmentLimits.imageMaxWidth,
       );
       if (x == null || !context.mounted) return;
-      await _commit(context, [(x, AttachmentType.image, null)]);
+      // Offer the editor immediately after capture — the natural moment to
+      // straighten/crop proof before it's added. A cancel keeps the original.
+      var file = File(x.path);
+      if (supportsImageEditing) {
+        final edited = await MediaProcessing.editImage(file);
+        if (edited != null) file = edited;
+        if (!context.mounted) return;
+      }
+      await _commit(context, [(file, AttachmentType.image, null, null)]);
     } catch (_) {
       if (context.mounted) AppSnackbar.error(context, 'Could not take a photo.');
     }
@@ -239,8 +254,20 @@ class AttachmentPickerField extends StatelessWidget {
           source: source, maxDuration: AttachmentLimits.maxVideoDuration);
       if (x == null) return;
       final durationMs = await _videoDurationMs(x.path); // no context use
+      var file = File(x.path);
+      int? originalBytes;
+      // Transcode to a much smaller file before upload (mobile only). A failure
+      // falls back to the original; an explicit user cancel aborts adding it.
+      if (supportsVideoCompression) {
+        originalBytes = await file.length(); // pre-compression size (for ratio)
+        if (!context.mounted) return;
+        final out = await _compressVideoWithProgress(context, file);
+        if (out == null) return; // user cancelled compression
+        file = out;
+      }
       if (!context.mounted) return;
-      await _commit(context, [(x, AttachmentType.video, durationMs)]);
+      await _commit(
+          context, [(file, AttachmentType.video, durationMs, originalBytes)]);
     } catch (_) {
       if (context.mounted) AppSnackbar.error(context, 'Could not add the video.');
     }
@@ -262,19 +289,43 @@ class AttachmentPickerField extends StatelessWidget {
     }
   }
 
+  /// Re-opens the editor for an already-picked image at [i] and replaces it with
+  /// the edited version (a cancel/failure leaves it unchanged). Images only.
+  Future<void> _editAt(BuildContext context, int i) async {
+    if (i < 0 || i >= attachments.length) return;
+    final a = attachments[i];
+    if (!a.type.isImage) return;
+    final edited = await MediaProcessing.editImage(a.file);
+    if (edited == null) return;
+    final next = [...attachments];
+    next[i] = PickedAttachment(edited, a.type, durationMs: a.durationMs);
+    onChanged(next);
+  }
+
+  /// Runs [file] through video compression behind a cancellable progress dialog.
+  /// Returns the compressed file, the original on a (silent) compression
+  /// failure, or null if the user cancelled (→ don't add the video).
+  Future<File?> _compressVideoWithProgress(BuildContext context, File file) =>
+      showDialog<File?>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _VideoCompressDialog(source: file),
+      );
+
   /// Validates each picked file against the count + size limits, appends the
   /// accepted ones, and surfaces the first rejection reason (once).
   Future<void> _commit(BuildContext context,
-      List<(XFile, AttachmentType, int?)> incoming) async {
+      List<(File, AttachmentType, int?, int?)> incoming) async {
     final next = [...attachments];
     String? reason;
-    for (final (file, type, durationMs) in incoming) {
+    for (final (file, type, durationMs, originalBytes) in incoming) {
       final r = await _rejectReason(next, file, type);
       if (r != null) {
         reason ??= r;
         continue;
       }
-      next.add(PickedAttachment(File(file.path), type, durationMs: durationMs));
+      next.add(PickedAttachment(file, type,
+          durationMs: durationMs, originalBytes: originalBytes));
     }
     onChanged(next);
     if (reason != null && context.mounted) AppSnackbar.error(context, reason);
@@ -282,8 +333,9 @@ class AttachmentPickerField extends StatelessWidget {
 
   /// Why a picked file can't be added (count / per-type size), or null if it's
   /// fine. Pure of [BuildContext] so it never crosses an async gap with the UI.
+  /// Size is checked on the final (edited / compressed) file.
   Future<String?> _rejectReason(
-      List<PickedAttachment> current, XFile file, AttachmentType type) async {
+      List<PickedAttachment> current, File file, AttachmentType type) async {
     // Count already-uploaded refs too so the cap spans both groups.
     final images =
         _existingImages + current.where((a) => a.type.isImage).length;
@@ -294,7 +346,7 @@ class AttachmentPickerField extends StatelessWidget {
     if (type.isVideo && videos >= AttachmentLimits.maxVideos) {
       return 'Up to ${AttachmentLimits.maxVideos} videos.';
     }
-    final size = await File(file.path).length();
+    final size = await file.length();
     if (size > AttachmentLimits.maxBytesFor(type)) {
       final what = type.isVideo ? 'video' : 'photo';
       return 'Each $what must be under ${AttachmentLimits.maxMbFor(type)} MB.';
@@ -304,9 +356,17 @@ class AttachmentPickerField extends StatelessWidget {
 }
 
 class _SelectedTile extends StatelessWidget {
-  const _SelectedTile({required this.attachment, required this.onRemove});
+  const _SelectedTile({
+    required this.attachment,
+    required this.onRemove,
+    this.onEdit,
+  });
   final PickedAttachment attachment;
   final VoidCallback onRemove;
+
+  /// Tapping the tile opens the editor. Non-null only for editable (image) tiles
+  /// on a platform that supports editing; a small pencil badge advertises it.
+  final VoidCallback? onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -317,14 +377,20 @@ class _SelectedTile extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          ClipRRect(
-            borderRadius: AppRadius.mdAll,
-            child: SizedBox(
-              width: size,
-              height: size,
-              child: attachment.type.isImage
-                  ? Image.file(attachment.file, fit: BoxFit.cover)
-                  : VideoThumbnailImage(source: attachment.file.path),
+          GestureDetector(
+            onTap: onEdit, // no-op for videos / when editing is unsupported
+            child: ClipRRect(
+              borderRadius: AppRadius.mdAll,
+              child: SizedBox(
+                width: size,
+                height: size,
+                // cacheWidth caps decode memory — a 1600px pick rendered at 72px
+                // must not decode at full resolution.
+                child: attachment.type.isImage
+                    ? Image.file(attachment.file,
+                        fit: BoxFit.cover, cacheWidth: 216)
+                    : VideoThumbnailImage(source: attachment.file.path),
+              ),
             ),
           ),
           if (attachment.type.isVideo)
@@ -332,6 +398,20 @@ class _SelectedTile extends StatelessWidget {
               child: Center(
                 child: Icon(Icons.play_circle_fill_rounded,
                     color: Colors.white70, size: 26),
+              ),
+            ),
+          if (onEdit != null)
+            const Positioned(
+              left: 4,
+              bottom: 4,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                    color: Colors.black54, shape: BoxShape.circle),
+                child: Padding(
+                  padding: EdgeInsets.all(3),
+                  child:
+                      Icon(Icons.edit_rounded, size: 12, color: Colors.white),
+                ),
               ),
             ),
           Positioned(
@@ -470,6 +550,84 @@ class _MenuRow extends StatelessWidget {
       leading: Icon(icon, color: AppColors.textSecondary),
       title: Text(label, style: AppTypography.label),
       onTap: onTap,
+    );
+  }
+}
+
+/// Cancellable progress dialog shown while a picked video is transcoded. Owns
+/// the compression lifecycle and pops with the result: the compressed file, the
+/// original on a compression failure (so the pick is never lost), or null when
+/// the user cancels (→ the video isn't added).
+class _VideoCompressDialog extends StatefulWidget {
+  const _VideoCompressDialog({required this.source});
+  final File source;
+
+  @override
+  State<_VideoCompressDialog> createState() => _VideoCompressDialogState();
+}
+
+class _VideoCompressDialogState extends State<_VideoCompressDialog> {
+  double _progress = 0;
+  bool _cancelled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _run();
+  }
+
+  Future<void> _run() async {
+    final result = await MediaProcessing.compressVideo(
+      widget.source,
+      onProgress: (p) {
+        if (mounted) setState(() => _progress = p);
+      },
+    );
+    if (!mounted) return;
+    // Cancel → don't add (null). Failure (null, not cancelled) → keep original.
+    Navigator.of(context).pop(_cancelled ? null : (result ?? widget.source));
+  }
+
+  void _cancel() {
+    setState(() => _cancelled = true);
+    MediaProcessing.cancelVideoCompression();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        backgroundColor: AppColors.darkSurfaceElevated,
+        title: const Text('Compressing video', style: AppTypography.h3),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(99),
+              child: LinearProgressIndicator(
+                value: _progress > 0 ? (_progress / 100).clamp(0.0, 1.0) : null,
+                minHeight: 6,
+                backgroundColor: AppColors.darkBg,
+                valueColor: const AlwaysStoppedAnimation(AppColors.primary),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              _cancelled ? 'Cancelling…' : '${_progress.round()}%',
+              style: AppTypography.caption,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: _cancelled ? null : _cancel,
+            child: const Text('Cancel',
+                style: TextStyle(color: AppColors.textSecondary)),
+          ),
+        ],
+      ),
     );
   }
 }

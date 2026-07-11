@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/media/media_upload_service.dart';
 import 'package:drop/features/task/domain/entities/recurring_task_template_entity.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
@@ -79,6 +80,7 @@ abstract class TaskRepository {
     required String uploadedBy,
     String? uploadedByName,
     int? durationMs,
+    UploadCanceller? canceller,
     void Function(int transferred, int total)? onProgress,
   });
 

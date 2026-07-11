@@ -12,6 +12,112 @@ and [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added / Fixed (2026-07-11 — Media upload FINAL hardening: cancellation · retry · analytics · orphan GC)
+
+The last production-hardening pass before merge (`feature/media-upload-v2`). Lean,
+no feature creep — no offline queue, no pause/resume, no background uploads, no
+reordering. Four priorities:
+
+**Upload cancellation (P1).** New `UploadCanceller` + `UploadCancelledException`
+(`core/media/media_upload_service.dart`), threaded through the task upload chain
+exactly like `onProgress` (use case → repo → datasource → service). The submission
+overlay gained a **Cancel** button (interactive over a tap-absorbing barrier; shows
+"Cancelling…" then disappears) wired to new `TaskCubit.cancelSubmission()`. Cancel
+aborts every active Firebase `UploadTask`; the submission unwinds through
+`UploadCancelledException` and restores the UI **quietly** (no error), keeping the
+picked media and never leaving the cubit in a submitting state. Cancel is **hidden
+during `finalizing`** so the Firestore write always finishes (uploaded evidence is
+never orphaned mid-commit). Idempotent and crash-safe across every edge (cancel
+during preparing / uploading / finalizing / already-done / double-tap).
+
+**Retry improvements (P2).** A per-submission `_uploadedCache` (file path → result,
+scoped to one task) means a retry after a partial failure/cancel re-uploads **only
+what didn't already succeed** — a Firestore-fail-after-upload retry re-uploads
+nothing. Cleared on success or a task change; kept across a failure/cancel so the
+retry benefits. No job scheduler, no offline queue.
+
+**Upload analytics (P3).** Four new `AuditEventType`s (`media.upload_started` /
+`_completed` / `_failed` / `_cancelled`) recorded through the **existing**
+`EventTrackingService` seam (reusing `_trackTask`), targeting the task entity so
+they sit in its audit history. Metadata: `fileCount · imageCount · videoCount ·
+totalBytes · durationMs` (a `Stopwatch`) · `uploadedCount` (on failure/cancel) ·
+`compressionRatio` (compressed/original, from a new `PickedAttachment.originalBytes`
+captured at video-compress time). Best-effort; never blocks the submit.
+
+**Storage integrity / orphan GC (P4).** The Admin SDK **bypasses** the create-only
+Storage rules, so server-side cleanup is possible. Added an **opt-in** third sweep
+to the existing `taskHousekeeping` Cloud Function: it reconciles each task's
+`attachments/` folder against the URLs the doc references and deletes the
+unreferenced, **past-grace** objects. Safeguards: OFF unless
+`config/taskRetention.gcOrphanAttachments: true`; a `gcGraceHours` window (default
+48h) so in-flight/retryable uploads are untouched; **skips a task entirely if any
+referenced URL can't be parsed** (never deletes on incomplete info); newest-first +
+`RUN_CAP` bounded; logs every deletion. **Needs a functions deploy** (and the config
+flag) to activate.
+
+**Tests:** new `upload_canceller_test.dart` (state machine + exception type).
+`flutter analyze` clean on touched files; full suite unchanged (only the 2
+pre-existing splash-centering failures). **Deploy:** functions (for the GC).
+
+### Added / Fixed / Refactored (2026-07-11 — Media upload hardening: shared service + image editor + video compression)
+
+Focused high-ROI pass on the media pipeline (`feature/media-upload-v2`, branched
+off the notifications work). The pipeline was already mature (shared picker,
+state-driven progress overlay, immutable create-only Storage, gallery + fullscreen
+viewer) — this **hardens and enriches** it, not a rewrite.
+
+**Refactored — one upload seam (kills triplication).**
+- NEW `lib/core/media/media_upload_service.dart` (`MediaUploadService`) is the
+  single Storage-upload path. The `uploadAttachment` + `_extensionFor` +
+  `_contentType` + `_storageError` + 180s-timeout block that was copied verbatim
+  across the **task / case / request** datasources now lives here once; all three
+  delegate. Behaviour preserved, plus a long `Cache-Control` (`public, max-age=604800`)
+  on every object → fewer repeat Firebase downloads on the review/gallery surfaces
+  (media is immutable, so it caches hard).
+- NEW `lib/core/media/picked_attachment.dart` — `PickedAttachment` moved out of
+  `task_cubit` into `core` (cases/requests no longer import a task cubit for it).
+- NEW `lib/core/utils/concurrent.dart` (`mapPooled`) — task submission uploads with
+  a **concurrency cap of 3** (not unbounded `Future.wait`) so a multi-video submit
+  can't saturate a mobile connection; progress uses a **fixed denominator** (summed
+  file sizes) so the bar stays smooth.
+
+**Added — image editor before upload.**
+- NEW `lib/core/media/media_processing.dart` `editImage` wraps `image_cropper`
+  (crop / rotate / flip / aspect presets / reset), themed monochrome. Edited bytes
+  replace the original (original never uploaded); the re-encode strips EXIF. Wired
+  into `AttachmentPickerField`: opens automatically after a camera capture, and every
+  image thumbnail gets a **tap-to-edit** affordance (pencil badge).
+- Mobile only — gated on new `supportsImageEditing` (platform_capabilities); macOS
+  desktop/web upload unedited (image_cropper has no desktop impl). AndroidManifest
+  declares the uCrop activity.
+
+**Added — client-side video compression.**
+- `media_processing.compressVideo` (`video_compress`) transcodes a picked video to a
+  medium-quality file **before** upload behind a cancellable progress dialog — the
+  biggest Storage/egress saving. A failure falls back to the original (a pick is
+  never lost); an explicit cancel aborts adding it. Gated on `supportsVideoCompression`.
+
+**Fixed — performance / cost.**
+- Fullscreen `_VideoPage` no longer `setState`s on every playback tick (~60fps) — it
+  rebuilds only when play/pause flips (the scrubber self-updates). Fullscreen images
+  decode with a `cacheWidth` cap; picker thumbnails decode at 216px.
+- `storage.rules`: the task/case/request **create** rules gained a binding
+  `validMedia()` ceiling (`size < 220MB` + `contentType` is image/video) — client
+  caps aren't binding server-side. Event-hero pick now passes `imageQuality` (strips
+  EXIF + shrinks the only image with no compression step). **Rules need a deploy.**
+
+**Dependencies:** `image_cropper: ^9.0.0`, `video_compress: ^3.1.4` (both mobile-gated).
+
+**Tests:** new `concurrent_test.dart` (mapPooled order / concurrency cap / first-error
+stop / clamp). `flutter analyze` clean on touched files; full suite unchanged (only the
+2 pre-existing splash-centering failures).
+
+**Deferred (fast P2 follow-up):** upload-cancel on the submission overlay · per-file
+retry queue · reorder / explicit replace · a11y Semantics + 44px hit targets ·
+pause-video-on-swipe · `cached_network_image` disk cache · gallery-video duration cap.
+**Owner-machine deploy:** `storage.rules`; optional Storage orphan-GC function (a
+partial-upload failure can orphan already-uploaded blobs — documented, not built).
+
 ### Fixed / Added (2026-07-10 — Notifications V2: pilot reliability + crash-safe deep links)
 
 Pilot-hardening pass on the notification system (`feature/notifications-v2`).

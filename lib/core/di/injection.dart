@@ -3,6 +3,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:drop/core/media/media_upload_service.dart';
 import 'package:drop/core/services/case_seen_store.dart';
 import 'package:drop/core/services/notification_service.dart';
 import 'package:drop/features/auth/data/datasources/auth_remote_datasource.dart';
@@ -99,6 +100,10 @@ import 'package:drop/features/community/data/repositories/event_repository_impl.
 import 'package:drop/features/community/domain/repositories/event_repository.dart';
 import 'package:drop/features/community/presentation/cubit/community_hub_cubit.dart';
 import 'package:drop/features/community/presentation/cubit/event_workspace_cubit.dart';
+import 'package:drop/features/audit/data/datasources/audit_remote_datasource.dart';
+import 'package:drop/features/audit/data/repositories/audit_repository_impl.dart';
+import 'package:drop/features/audit/domain/repositories/audit_repository.dart';
+import 'package:drop/features/audit/domain/services/event_tracking_service.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart' show UserEntity;
 
 class AppDependencies {
@@ -191,6 +196,7 @@ class AppDependencies {
         uploadAttachment: _uploadRequestAttachment,
         user: user,
         requestId: requestId,
+        eventTracking: eventTracking,
       );
 
   /// Community Hub / DROP Events — the hub list cubit (singleton, app-wide).
@@ -215,6 +221,15 @@ class AppDependencies {
   /// Phase 3 task foundation, activated by the Phase 4 [taskCubit] + use cases.
   static late final TaskRepository taskRepository;
 
+  // ─── Event Tracking + Audit Log (immutable audit trail) ─────
+  /// The single write seam every feature calls to record an audited business
+  /// action. Passed into the producing cubits (TaskCubit, Requests) below.
+  static late final EventTrackingService eventTracking;
+
+  /// Read side of the audit trail (kept for a future audit-log admin view). The
+  /// repository is the only thing that touches the `audit_logs` collection.
+  static late final AuditRepository auditRepository;
+
   static void init() {
     final authRemoteDataSource = AuthRemoteDataSourceImpl(FirebaseAuth.instance);
     final userRemoteDataSource = UserRemoteDataSourceImpl(FirebaseFirestore.instance);
@@ -222,9 +237,13 @@ class AppDependencies {
       FirebaseFirestore.instance,
       FirebaseStorage.instance,
     );
+    // Single seam for all media (image/video) uploads to Storage — task
+    // evidence and case + request attachments all route through it (adds
+    // cache-control metadata + central error translation in one place).
+    final mediaUploadService = MediaUploadService(FirebaseStorage.instance);
     final taskRemoteDataSource = TaskRemoteDataSourceImpl(
       FirebaseFirestore.instance,
-      FirebaseStorage.instance,
+      mediaUploadService,
     );
 
     final AuthRepository authRepository =
@@ -249,6 +268,15 @@ class AppDependencies {
       NotificationRemoteDataSourceImpl(
           FirebaseFirestore.instance, FirebaseFunctions.instance),
     );
+
+    // Event Tracking + Audit Log is built early too — its single write seam
+    // ([eventTracking]) is injected into the producing cubits (TaskCubit +
+    // Requests) below. All audit writes flow through the service; nothing else
+    // touches the `audit_logs` collection.
+    auditRepository = AuditRepositoryImpl(
+      AuditRemoteDataSourceImpl(FirebaseFirestore.instance),
+    );
+    eventTracking = EventTrackingService(auditRepository);
 
     authCubit = AuthCubit(
       repository: authRepository,
@@ -300,6 +328,7 @@ class AppDependencies {
       uploadTaskAttachment: UploadTaskAttachment(taskRepository),
       getUsersByBranch: GetUsersByBranch(authRepository),
       notifyTaskEvent: NotifyTaskEvent(notificationRepository),
+      eventTracking: eventTracking,
     );
 
     // ─── Case Management (private conversation until resolution) ─────────
@@ -311,7 +340,7 @@ class AppDependencies {
     final CaseRepository caseRepository = CaseRepositoryImpl(
       CaseRemoteDataSourceImpl(
         FirebaseFirestore.instance,
-        FirebaseStorage.instance,
+        mediaUploadService,
       ),
     );
     _caseRepository = caseRepository;
@@ -337,7 +366,7 @@ class AppDependencies {
     final RequestRepository requestRepository = RequestRepositoryImpl(
       RequestRemoteDataSourceImpl(
         FirebaseFirestore.instance,
-        FirebaseStorage.instance,
+        mediaUploadService,
       ),
     );
     _requestRepository = requestRepository;
@@ -349,6 +378,7 @@ class AppDependencies {
       branchRepository: branchRepository,
       createRequest: CreateRequest(requestRepository),
       uploadAttachment: _uploadRequestAttachment,
+      eventTracking: eventTracking,
     );
 
     // ─── Community Hub / DROP Events ────────────────────────────────────

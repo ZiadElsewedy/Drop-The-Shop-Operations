@@ -11,77 +11,135 @@ import 'package:drop/features/task/presentation/submission_progress.dart';
 /// progress bar, the percentage, and transferred / total MB. Because it's driven
 /// by cubit state (not a dialog), exactly one ever exists and it survives
 /// rebuilds / navigation.
-class SubmissionLoadingOverlay extends StatelessWidget {
-  const SubmissionLoadingOverlay({super.key, required this.progress});
+class SubmissionLoadingOverlay extends StatefulWidget {
+  const SubmissionLoadingOverlay({
+    super.key,
+    required this.progress,
+    this.onCancel,
+  });
 
   final SubmissionProgress progress;
 
+  /// Cancels the in-flight upload. When null (or once finalizing), no Cancel
+  /// affordance is shown — the Firestore write must finish so already-uploaded
+  /// evidence isn't orphaned mid-commit.
+  final VoidCallback? onCancel;
+
+  @override
+  State<SubmissionLoadingOverlay> createState() =>
+      _SubmissionLoadingOverlayState();
+}
+
+class _SubmissionLoadingOverlayState extends State<SubmissionLoadingOverlay> {
+  bool _cancelRequested = false;
+
   @override
   Widget build(BuildContext context) {
+    final progress = widget.progress;
     final uploading = progress.stage == SubmissionStage.uploading;
     final currentIdx = SubmissionStage.values.indexOf(progress.stage);
-    return AbsorbPointer(
-      child: Container(
-        color: Colors.black.withAlpha(175),
-        alignment: Alignment.center,
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 340),
-          child: Container(
+    // Offer Cancel only while there's still an upload to stop.
+    final canCancel = widget.onCancel != null &&
+        progress.stage != SubmissionStage.finalizing;
+    return Stack(
+      children: [
+        // Dim barrier — absorbs taps so the screen underneath stays inert while
+        // the interactive card (with Cancel) sits on top.
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: () {},
+            behavior: HitTestBehavior.opaque,
+            child: ColoredBox(color: Colors.black.withAlpha(175)),
+          ),
+        ),
+        Center(
+          child: Padding(
             padding: const EdgeInsets.all(AppSpacing.xl),
-            decoration: BoxDecoration(
-              color: AppColors.darkSurfaceElevated,
-              borderRadius: AppRadius.xlAll,
-              border: Border.all(color: AppColors.darkBorder),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Submitting task', style: AppTypography.h3),
-                const SizedBox(height: AppSpacing.lg),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(99),
-                  child: LinearProgressIndicator(
-                    value: uploading ? progress.fraction : null,
-                    minHeight: 6,
-                    backgroundColor: AppColors.darkBg,
-                    valueColor:
-                        const AlwaysStoppedAnimation(AppColors.primary),
-                  ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 340),
+              child: Container(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                decoration: BoxDecoration(
+                  color: AppColors.darkSurfaceElevated,
+                  borderRadius: AppRadius.xlAll,
+                  border: Border.all(color: AppColors.darkBorder),
                 ),
-                const SizedBox(height: AppSpacing.sm),
-                Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      uploading && progress.percent != null
-                          ? '${progress.percent}%'
-                          : progress.stage.label,
-                      style: AppTypography.label
-                          .copyWith(color: AppColors.textSecondary),
+                    const Text('Submitting task', style: AppTypography.h3),
+                    const SizedBox(height: AppSpacing.lg),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(99),
+                      child: LinearProgressIndicator(
+                        value: uploading ? progress.fraction : null,
+                        minHeight: 6,
+                        backgroundColor: AppColors.darkBg,
+                        valueColor:
+                            const AlwaysStoppedAnimation(AppColors.primary),
+                      ),
                     ),
-                    const Spacer(),
-                    if (progress.sizeLabel != null)
-                      Text(progress.sizeLabel!,
-                          style: AppTypography.caption),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      children: [
+                        Text(
+                          uploading && progress.percent != null
+                              ? '${progress.percent}%'
+                              : progress.stage.label,
+                          style: AppTypography.label
+                              .copyWith(color: AppColors.textSecondary),
+                        ),
+                        const Spacer(),
+                        if (progress.sizeLabel != null)
+                          Text(progress.sizeLabel!, style: AppTypography.caption),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    for (final stage in SubmissionStage.values)
+                      _StageRow(
+                        label: stage.label,
+                        state: () {
+                          final idx = SubmissionStage.values.indexOf(stage);
+                          if (idx < currentIdx) return _StageState.done;
+                          if (idx == currentIdx) return _StageState.active;
+                          return _StageState.pending;
+                        }(),
+                      ),
+                    if (canCancel) ...[
+                      const Divider(
+                          color: AppColors.darkBorder, height: AppSpacing.xl),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: _cancelRequested
+                              ? null
+                              : () {
+                                  setState(() => _cancelRequested = true);
+                                  widget.onCancel!.call();
+                                },
+                          icon: Icon(Icons.close_rounded,
+                              size: 18,
+                              color: _cancelRequested
+                                  ? AppColors.textTertiary
+                                  : AppColors.textSecondary),
+                          label: Text(
+                            _cancelRequested ? 'Cancelling…' : 'Cancel upload',
+                            style: AppTypography.label.copyWith(
+                                color: _cancelRequested
+                                    ? AppColors.textTertiary
+                                    : AppColors.textSecondary),
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                for (final stage in SubmissionStage.values)
-                  _StageRow(
-                    label: stage.label,
-                    state: () {
-                      final idx = SubmissionStage.values.indexOf(stage);
-                      if (idx < currentIdx) return _StageState.done;
-                      if (idx == currentIdx) return _StageState.active;
-                      return _StageState.pending;
-                    }(),
-                  ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

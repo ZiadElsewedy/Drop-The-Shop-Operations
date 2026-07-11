@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:drop/core/enums/audit_event_type.dart';
 import 'package:drop/core/enums/request_status.dart';
 import 'package:drop/core/errors/failures.dart';
+import 'package:drop/features/audit/domain/entities/audit_actor.dart';
+import 'package:drop/features/audit/domain/services/event_tracking_service.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/requests/domain/entities/request_entity.dart';
 import 'package:drop/features/requests/domain/entities/request_event.dart';
@@ -13,8 +16,7 @@ import 'package:drop/features/requests/domain/usecases/add_request_comment.dart'
 import 'package:drop/features/requests/domain/usecases/change_request_status.dart';
 import 'package:drop/features/requests/domain/usecases/upload_request_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
-import 'package:drop/features/task/presentation/cubit/task_cubit.dart'
-    show PickedAttachment;
+import 'package:drop/core/media/picked_attachment.dart';
 import 'request_detail_state.dart';
 
 /// Drives ONE open request — created per selected request (desktop) or per pushed
@@ -32,6 +34,9 @@ class RequestDetailCubit extends Cubit<RequestDetailState> {
   final UserEntity? _user;
   final String requestId;
 
+  /// Immutable audit trail (optional — null in tests that don't exercise it).
+  final EventTrackingService? _eventTracking;
+
   StreamSubscription<RequestEntity?>? _requestSub;
   StreamSubscription<List<RequestEvent>>? _eventsSub;
   RequestEntity? _request;
@@ -46,6 +51,7 @@ class RequestDetailCubit extends Cubit<RequestDetailState> {
     required this._uploadAttachment,
     required this._user,
     required this.requestId,
+    this._eventTracking,
   }) : super(const RequestDetailState.loading()) {
     _start();
   }
@@ -104,6 +110,18 @@ class RequestDetailCubit extends Cubit<RequestDetailState> {
         decidedBy: to.isDecision ? user.uid : null,
         decidedByName: to.isDecision ? user.displayName : null,
       );
+      // Audit: the approver's decision (best-effort, fire-and-forget).
+      if (to.isDecision) {
+        _eventTracking?.trackEvent(
+          type: to.isApproved
+              ? AuditEventType.requestApproved
+              : AuditEventType.requestRejected,
+          actor: AuditActor.of(user),
+          entityId: requestId,
+          branchId: r.branchId,
+          metadata: {'requestType': r.type.value},
+        );
+      }
     } on Failure catch (e) {
       emit(RequestDetailState.error(e.message));
     } catch (_) {

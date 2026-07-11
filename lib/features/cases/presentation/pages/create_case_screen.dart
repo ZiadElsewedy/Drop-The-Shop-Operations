@@ -14,8 +14,7 @@ import 'package:drop/features/auth/presentation/widgets/app_button.dart';
 import 'package:drop/features/auth/presentation/widgets/app_text_field.dart';
 import 'package:drop/features/cases/presentation/case_format.dart';
 import 'package:drop/features/cases/presentation/cubit/case_list_cubit.dart';
-import 'package:drop/features/task/presentation/cubit/task_cubit.dart'
-    show PickedAttachment;
+import 'package:drop/core/media/picked_attachment.dart';
 import 'package:drop/features/task/presentation/widgets/attachment_picker.dart';
 
 /// The ≤30-second case-opening flow: Category → Subject → Description → Urgent? →

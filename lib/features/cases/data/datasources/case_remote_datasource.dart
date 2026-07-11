@@ -3,11 +3,11 @@ import 'dart:developer' as developer;
 import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:drop/core/constants/app_constants.dart';
 import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/core/enums/case_status.dart';
 import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/media/media_upload_service.dart';
 import 'package:drop/features/cases/data/models/case_model.dart';
 import 'package:drop/features/cases/domain/entities/case_identity.dart';
 import 'package:drop/features/cases/domain/entities/case_message.dart';
@@ -52,9 +52,9 @@ abstract class CaseRemoteDataSource {
 
 class CaseRemoteDataSourceImpl implements CaseRemoteDataSource {
   final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
+  final MediaUploadService _media;
 
-  CaseRemoteDataSourceImpl(this._firestore, this._storage);
+  CaseRemoteDataSourceImpl(this._firestore, this._media);
 
   /// The private identity subcollection under a case. Named `reporter` (NOT
   /// `private`) so a collectionGroup('reporter') query never collides with
@@ -245,8 +245,6 @@ class CaseRemoteDataSourceImpl implements CaseRemoteDataSource {
     }
   }
 
-  static const _uploadTimeout = Duration(seconds: 180);
-
   @override
   Future<TaskAttachment> uploadAttachment({
     required String caseId,
@@ -257,95 +255,20 @@ class CaseRemoteDataSourceImpl implements CaseRemoteDataSource {
     int? durationMs,
     void Function(int transferred, int total)? onProgress,
   }) async {
-    final id = _cases.doc().id; // guaranteed-unique 20-char id
-    final ext = _extensionFor(file.path, type);
-    final upload = _storage
-        .ref('${AppConstants.casesCollection}/$caseId/attachments/$id.$ext')
-        .putFile(file, SettableMetadata(contentType: _contentType(ext, type)));
-    final sub = upload.snapshotEvents
-        .listen((s) => onProgress?.call(s.bytesTransferred, s.totalBytes));
-    try {
-      final snapshot = await upload.timeout(
-        _uploadTimeout,
-        onTimeout: () {
-          upload.cancel();
-          throw const ServerException(
-              'Upload timed out. Check your connection and try again.');
-        },
-      );
-      final url = await snapshot.ref
-          .getDownloadURL()
-          .timeout(const Duration(seconds: 30));
-      return TaskAttachment(
-        id: id,
-        url: url,
-        type: type,
-        uploadedAt: DateTime.now(),
-        uploadedBy: uploadedBy,
-        uploadedByName: uploadedByName,
-        durationMs: durationMs,
-      );
-    } on TimeoutException {
-      throw const ServerException(
-          'Upload timed out. Check your connection and try again.');
-    } on FirebaseException catch (e) {
-      throw ServerException(_storageError(e));
-    } finally {
-      await sub.cancel();
-    }
-  }
-
-  static String _extensionFor(String path, AttachmentType type) {
-    final dot = path.lastIndexOf('.');
-    if (dot != -1 && dot < path.length - 1) {
-      final ext = path.substring(dot + 1).toLowerCase();
-      if (ext.isNotEmpty && ext.length <= 5) return ext;
-    }
-    return type.isVideo ? 'mp4' : 'jpg';
-  }
-
-  static String _contentType(String ext, AttachmentType type) {
-    switch (ext) {
-      case 'jpg':
-      case 'jpeg':
-        return 'image/jpeg';
-      case 'png':
-        return 'image/png';
-      case 'webp':
-        return 'image/webp';
-      case 'heic':
-        return 'image/heic';
-      case 'gif':
-        return 'image/gif';
-      case 'mp4':
-        return 'video/mp4';
-      case 'mov':
-        return 'video/quicktime';
-      case 'm4v':
-        return 'video/x-m4v';
-      case 'webm':
-        return 'video/webm';
-      default:
-        return type.isVideo ? 'video/mp4' : 'image/jpeg';
-    }
-  }
-
-  static String _storageError(FirebaseException e) {
-    switch (e.code) {
-      case 'unauthorized':
-      case 'unauthenticated':
-        return 'Upload was blocked by Storage permissions (${e.code}). '
-            'Firebase Storage rules likely need to be deployed.';
-      case 'object-not-found':
-      case 'bucket-not-found':
-      case 'project-not-found':
-        return 'Firebase Storage isn\'t set up for this project (${e.code}). '
-            'Enable Storage in the Firebase console, then retry.';
-      case 'retry-limit-exceeded':
-      case 'canceled':
-        return 'Upload failed — check your connection and try again.';
-      default:
-        return e.message ?? 'Upload failed (${e.code}).';
-    }
+    final media = await _media.upload(
+      basePath: '${AppConstants.casesCollection}/$caseId/attachments',
+      file: file,
+      type: type,
+      onProgress: onProgress,
+    );
+    return TaskAttachment(
+      id: media.id,
+      url: media.url,
+      type: type,
+      uploadedAt: DateTime.now(),
+      uploadedBy: uploadedBy,
+      uploadedByName: uploadedByName,
+      durationMs: durationMs,
+    );
   }
 }
