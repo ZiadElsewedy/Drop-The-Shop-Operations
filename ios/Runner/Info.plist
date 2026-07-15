@@ -16,8 +16,6 @@
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>DROP</string>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>DROP uses your location to verify you're at your branch when you clock in and out.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -41,6 +39,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>D R O P needs access to your camera so you can take a profile picture and capture task proof.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>DROP uses your location to verify you're at your branch when you clock in and out.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>D R O P needs access to your microphone so you can record video proof for tasks.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
