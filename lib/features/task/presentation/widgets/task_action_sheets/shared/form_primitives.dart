@@ -8,19 +8,99 @@ part of '../../task_action_sheets.dart';
 /// The sheet's hero header — title + a one-line intent, so the form opens like
 /// a workflow builder rather than a bare "New Task".
 class _SheetHeader extends StatelessWidget {
-  const _SheetHeader({required this.title, required this.subtitle});
+  const _SheetHeader({
+    required this.title,
+    required this.subtitle,
+    this.eyebrow = 'NEW WORKFLOW',
+  });
   final String title;
   final String subtitle;
+  final String eyebrow;
 
   @override
   Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final duration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 520);
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: AppTypography.h2),
-          const SizedBox(height: 2),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween(begin: reduceMotion ? 1 : 0, end: 1),
+                duration: duration,
+                curve: Curves.easeOutCubic,
+                builder: (context, progress, child) => Opacity(
+                  opacity: progress,
+                  child: Transform.scale(
+                    scale: 0.88 + (0.12 * progress),
+                    child: child,
+                  ),
+                ),
+                child: Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    gradient: AppColors.subtleGradient,
+                    borderRadius: AppRadius.mdAll,
+                    border: Border.all(color: AppColors.darkBorder),
+                  ),
+                  child: const Icon(
+                    Icons.add_task_rounded,
+                    size: 17,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      eyebrow,
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.textTertiary,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(title, style: AppTypography.h2),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          TweenAnimationBuilder<double>(
+            tween: Tween(begin: reduceMotion ? 1 : 0, end: 1),
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            builder: (context, progress, _) => ClipRRect(
+              borderRadius: AppRadius.fullAll,
+              child: Container(
+                height: 2,
+                color: AppColors.darkBorder,
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: progress,
+                  child: const DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: AppColors.primaryGradient,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           Text(subtitle, style: AppTypography.caption),
         ],
       ),
@@ -132,6 +212,8 @@ class _PickerTileState extends State<_PickerTile> {
     final filled = w.value != null;
     final interactive = w.enabled && w.onTap != null;
     final hovered = _hovered && interactive;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    final lifted = hovered && !reduceMotion;
     return Opacity(
       opacity: w.enabled ? 1 : 0.55,
       child: MouseRegion(
@@ -146,20 +228,31 @@ class _PickerTileState extends State<_PickerTile> {
           onTap: w.enabled ? w.onTap : null,
           borderRadius: AppRadius.xlAll,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 160),
             curve: Curves.easeOut,
+            transform: Matrix4.translationValues(0, lifted ? -1 : 0, 0),
+            transformAlignment: Alignment.center,
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.md,
               vertical: AppSpacing.md,
             ),
             decoration: BoxDecoration(
-              color: hovered
-                  ? AppColors.darkSurfaceElevated
-                  : AppColors.darkSurface,
+              gradient: AppColors.subtleGradient,
               borderRadius: AppRadius.xlAll,
               border: Border.all(
                 color: hovered ? AppColors.textTertiary : AppColors.darkBorder,
               ),
+              boxShadow: lifted
+                  ? const [
+                      BoxShadow(
+                        color: Color(0x52000000),
+                        blurRadius: 18,
+                        offset: Offset(0, 8),
+                      ),
+                    ]
+                  : null,
             ),
             child: Row(
               children: [
@@ -424,7 +517,7 @@ class _ScheduleQuickPresets extends StatelessWidget {
         AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.darkSurface,
+        gradient: AppColors.subtleGradient,
         borderRadius: AppRadius.lgAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
@@ -675,7 +768,7 @@ class _ScheduleTimeline extends StatelessWidget {
             vertical: AppSpacing.md,
           ),
           decoration: BoxDecoration(
-            color: AppColors.darkSurfaceElevated,
+            gradient: AppColors.subtleGradient,
             borderRadius: AppRadius.lgAll,
             border: Border.all(
               color: emphasized ? AppColors.accentBorder : AppColors.darkBorder,
@@ -851,7 +944,7 @@ class _ScheduleBanner extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: AppColors.darkSurfaceElevated,
+        gradient: AppColors.subtleGradient,
         borderRadius: AppRadius.mdAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
@@ -1032,12 +1125,13 @@ class _Segmented<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final n = segments.length;
     final index = segments.indexWhere((s) => s.value == value);
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
     // Align.x for equal-width slots: -1 at slot 0 … +1 at slot n-1.
     final thumbX = n <= 1 ? 0.0 : (2 * (index < 0 ? 0 : index) / (n - 1)) - 1;
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: AppColors.darkSurfaceElevated,
+        gradient: AppColors.subtleGradient,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.darkBorder),
       ),
@@ -1046,7 +1140,9 @@ class _Segmented<T> extends StatelessWidget {
           if (index >= 0)
             Positioned.fill(
               child: AnimatedAlign(
-                duration: const Duration(milliseconds: 240),
+                duration: reduceMotion
+                    ? Duration.zero
+                    : const Duration(milliseconds: 240),
                 curve: Curves.easeOutCubic,
                 alignment: Alignment(thumbX, 0),
                 child: FractionallySizedBox(
@@ -1054,8 +1150,15 @@ class _Segmented<T> extends StatelessWidget {
                   heightFactor: 1,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: AppColors.primary,
+                      gradient: AppColors.primaryGradient,
                       borderRadius: BorderRadius.circular(10),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x40000000),
+                          blurRadius: 8,
+                          offset: Offset(0, 3),
+                        ),
+                      ],
                     ),
                   ),
                 ),

@@ -541,11 +541,16 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _SheetHeader(
-            title: isNew ? 'New Task' : 'Edit Task',
-            subtitle: isNew
-                ? 'Compose the work, then choose who runs it.'
-                : 'Update this task.',
+          EntranceFade(
+            offset: 10,
+            duration: const Duration(milliseconds: 420),
+            child: _SheetHeader(
+              eyebrow: isNew ? 'CREATE · WORKFLOW' : 'EDIT · WORKFLOW',
+              title: isNew ? 'New Task' : 'Edit Task',
+              subtitle: isNew
+                  ? 'Compose the work, then choose who runs it.'
+                  : 'Update this task.',
+            ),
           ),
 
           // ── Overview: the defining choice, then the essentials ──────────
@@ -579,6 +584,7 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
                   errors: _workFieldErrors,
                   onChanged: (data) => _workData = data,
                 ),
+                const SizedBox(height: AppSpacing.md),
                 AppTextField(
                   controller: _desc,
                   label: 'Description (optional)',
@@ -799,16 +805,24 @@ class _TaskFormSheetState extends State<_TaskFormSheet> {
           ),
 
           // ── Validation + submit ─────────────────────────────────────────
-          _FormErrorBanner(message: _error),
-          const SizedBox(height: AppSpacing.xl),
-          AppButton(
-            label: isNew ? 'Create Task' : 'Save Changes',
-            icon: const Icon(
-              Icons.check_rounded,
-              size: 20,
-              color: AppColors.onAccent,
+          EntranceFade(
+            delay: staggerDelay(step++),
+            offset: 10,
+            child: Column(
+              children: [
+                _FormErrorBanner(message: _error),
+                const SizedBox(height: AppSpacing.xl),
+                AppButton(
+                  label: isNew ? 'Create Task' : 'Save Changes',
+                  icon: const Icon(
+                    Icons.check_rounded,
+                    size: 20,
+                    color: AppColors.onAccent,
+                  ),
+                  onPressed: _save,
+                ),
+              ],
             ),
-            onPressed: _save,
           ),
         ],
       ),

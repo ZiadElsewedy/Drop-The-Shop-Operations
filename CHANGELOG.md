@@ -18,10 +18,30 @@ released — DROP ships from branches and has no version tags.
 
 ### 2026-07-16
 
+- **Admin dashboard → calm, state-aware command center** (owner-directed
+  refinement of Admin Dashboard V2). The hero eyebrow now carries data freshness
+  ("date · Synced 3m ago") and the subtitle is **one** live state sentence off a
+  single needs-attention total — calm "All caught up" (grey pulse) vs
+  "N tasks need your attention" (amber pulse), so hero and grid never disagree
+  (`dashboard_mood.dart` collapsed from a 3-tone model to two states). **Needs
+  attention** is now **one grouped box** (owner-approved from a live A/B/C
+  preview): a calm "all clear" summary when every queue is empty, otherwise
+  triage **rows** most-urgent-first inside a single living border — a fresh signal
+  slides in as a row (`LiveListItem`) instead of the whole grid re-appearing, and
+  cleared signals collapse to a quiet footer. **Today** counts up its figures
+  (`Stat.count`, ~650ms), Delayed
+  reads warning (was error) and Approval rate reads success. Desktop centres in a
+  ~1260 column with a 360px right rail; **Manage** trims to Tasks / Schedules; the
+  **staffing banner** and **branch pulse** were dropped (owner ruling). Strictly
+  monochrome, dark-only, existing primitives only (ADR-004).
 - **Task create speed-up.** Added and refined Schedule quick deadline presets
   (`Tomorrow`, `2 days`, `Week`) that start at creation time and set the due
   window without opening the date/time pickers; the presets now use a compact
   duration rail with an animated thumb and animated duration line.
+- **Create Task sheet visual polish.** Kept DROP's strict monochrome direction,
+  then added neutral tonal depth, a composed animated header, softer picker hover
+  lift, richer segmented controls, and a staggered final CTA. All new motion
+  collapses under reduced-motion settings; task save/data flow is unchanged.
 
 ### 2026-07-15
 

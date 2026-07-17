@@ -14,12 +14,13 @@ import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/core/widgets/action_card.dart';
 import 'package:drop/core/widgets/admin_section_header.dart';
+import 'package:drop/core/widgets/animated_count.dart';
 import 'package:drop/core/widgets/app_shell.dart';
-import 'package:drop/core/widgets/attention_tile.dart';
 import 'package:drop/core/widgets/command_palette.dart';
 import 'package:drop/core/widgets/responsive_card_grid.dart';
 import 'package:drop/core/widgets/app_motion.dart';
 import 'package:drop/core/widgets/glass_container.dart';
+import 'package:drop/core/widgets/live_list_item.dart';
 import 'package:drop/core/widgets/page_hero.dart';
 import 'package:drop/core/widgets/stat_strip.dart';
 import 'package:drop/features/admin/presentation/dashboard_mood.dart';
@@ -50,17 +51,21 @@ import 'package:drop/features/task/presentation/widgets/task_template_sheets.dar
 /// attention right now*, then today's health, then recent activity — never "here
 /// is every row in the database".
 ///
-/// Hierarchy: **Hero** (greeting · scope · one Create Task CTA) → **Needs
-/// attention** (the dominant layer: pending review · overdue · unassigned ·
-/// rejected · swaps, each a filtered drill) → **Today** (light metrics) →
-/// **Recent activity** (clean vertical feed, no filters) → **Operations**
-/// (requests · cases · schedule digest) → Quick actions / Manage / Branch pulse.
+/// Hierarchy: **Hero** (greeting · one live state sentence · scope · one Create
+/// Task CTA) → **Needs attention** (the dominant layer: ONE grouped box — a calm
+/// "all clear" summary when every queue is empty, otherwise the triage rows
+/// overdue · pending review · sent back · unassigned · swaps, most-urgent-first,
+/// each a filtered drill, wrapped in a single living border) → **Today** (light
+/// count-up metrics) → **Recent activity** (clean vertical feed, no filters) →
+/// right rail: **Operations** (requests · cases · schedule) · Quick actions ·
+/// Manage.
 ///
-/// Every visual is a reusable V2 primitive (`PageHero`, `AttentionTile`,
-/// `StatStrip`, `ActivityCard`) — this screen only arranges them and derives the
-/// data, so the same language carries to every future module. It stays **live**:
-/// each section is a scoped `BlocSelector` over the streams, so counters update
-/// without a manual refresh, and a task emit rebuilds only the section it moves.
+/// Every visual is a reusable V2 primitive (`PageHero`, `GlassContainer`,
+/// `StatStrip`, `ActivityCard`, `LiveStatusBorder`) — this screen only arranges
+/// them and derives the data, so the same language carries to every future
+/// module. It stays **live**: each section is a scoped `BlocSelector` over the
+/// streams, so counters update without a manual refresh, and a task emit rebuilds
+/// only the section it moves.
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -139,14 +144,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   // Stable keys + a fixed per-section stagger so the entrance plays once and
-  // never replays when a conditional section appears. Honours reduced motion.
+  // never replays when a conditional section appears. ~70ms steps (capped) give
+  // the calm, sectioned cascade the command center wants. Honours reduced motion.
   Widget _sec(String id, int index, Widget child) {
     if (MediaQuery.of(context).disableAnimations) {
       return KeyedSubtree(key: ValueKey('admin-sec-$id'), child: child);
     }
     return EntranceFade(
       key: ValueKey('admin-sec-$id'),
-      delay: staggerDelay(index),
+      delay: Duration(milliseconds: (index * 70).clamp(0, 420)),
       child: child,
     );
   }
@@ -177,59 +183,73 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     defaultBranchId: '',
   );
 
+  /// The eyebrow kicker: today's date, and — once we've pulled at least once —
+  /// how fresh the numbers are, per the spec ("date · Synced 3m ago").
+  String _eyebrow() {
+    final date = AppDateFormatter.weekdayDayMonth(DateTime.now());
+    final synced = _syncing
+        ? 'Syncing…'
+        : (_lastSynced == null ? null : syncLabel(_lastSynced));
+    return synced == null ? date : '$date · $synced';
+  }
+
   Widget _hero() {
     final name = context.currentUser?.displayName;
     final first = (name != null && name.trim().isNotEmpty)
         ? name.trim().split(' ').first
         : 'Admin';
-    final date = AppDateFormatter.weekdayDayMonth(DateTime.now());
+    final eyebrow = _eyebrow();
     return BlocBuilder<StatisticsCubit, StatisticsState>(
       builder: (context, statsState) {
         final s = statsState.maybeWhen(loaded: (s) => s, orElse: () => null);
-        // The subtitle is a live, contextual "mood" line — the dashboard reads
-        // its own operational state instead of printing a static scope every
-        // load ("2 tasks need your attention" / "Everything's running smoothly"
-        // / "Quiet morning"), with a breathing pulse dot so it feels alive.
-        return BlocSelector<TaskCubit, TaskState, (int, int, int, int, int)>(
-          selector: (state) {
-            final tasks = state.maybeWhen(
-              loaded: (t, _, _, _, _) => t,
-              orElse: () => const <TaskEntity>[],
-            );
-            final now = DateTime.now();
-            return (
-              runningNowCount(tasks),
-              reviewCount(tasks),
-              overdueCount(tasks, now),
-              unassignedCount(tasks, now),
-              rejectedCount(tasks),
-            );
-          },
-          builder: (context, c) {
-            final (running, reviews, overdue, unassigned, rejected) = c;
-            final mood = dashboardMood(
-              reviews: reviews,
-              overdue: overdue,
-              unassigned: unassigned,
-              rejected: rejected,
-              running: running,
-              completedToday: s?.completedTasksToday ?? 0,
-            );
-            return PageHero(
-              eyebrow: date,
-              title: '$_salutation, $first',
-              subtitleWidget: _HeroMood(
-                mood: mood,
-                scope: _scopeLine(s, running),
-              ),
-              primaryAction: _PrimaryCta(
-                icon: Icons.add_rounded,
-                label: 'Create Task',
-                onTap: _createTask,
-              ),
-              trailing: context.isDesktop
-                  ? [_syncButton(), _CommandHint()]
-                  : [_syncButton(compact: true)],
+        // The subtitle is ONE live state sentence with a breathing pulse dot —
+        // the dashboard reads its own operational state ("all caught up" vs
+        // "3 tasks need your attention") off the same needs-attention total the
+        // section below uses, so the two can never disagree.
+        return BlocSelector<ShiftSwapCubit, ShiftSwapState, int>(
+          selector: (state) => state.maybeWhen(
+            loaded: (swaps, _) =>
+                swaps.where((s) => !s.status.isResolved).length,
+            orElse: () => 0,
+          ),
+          builder: (context, swaps) {
+            return BlocSelector<TaskCubit, TaskState, (int, int, int, int, int)>(
+              selector: (state) {
+                final tasks = state.maybeWhen(
+                  loaded: (t, _, _, _, _) => t,
+                  orElse: () => const <TaskEntity>[],
+                );
+                final now = DateTime.now();
+                return (
+                  runningNowCount(tasks),
+                  reviewCount(tasks),
+                  overdueCount(tasks, now),
+                  unassignedCount(tasks, now),
+                  rejectedCount(tasks),
+                );
+              },
+              builder: (context, c) {
+                final (running, reviews, overdue, unassigned, rejected) = c;
+                final needsAttention =
+                    reviews + overdue + unassigned + rejected + swaps;
+                final mood = dashboardMood(needsAttention: needsAttention);
+                return PageHero(
+                  eyebrow: eyebrow,
+                  title: '$_salutation, $first',
+                  subtitleWidget: _HeroMood(
+                    mood: mood,
+                    scope: _scopeLine(s, running),
+                  ),
+                  primaryAction: _PrimaryCta(
+                    icon: Icons.add_rounded,
+                    label: 'Create Task',
+                    onTap: _createTask,
+                  ),
+                  trailing: context.isDesktop
+                      ? [_syncButton(compact: true), _CommandHint()]
+                      : [_syncButton(compact: true)],
+                );
+              },
             );
           },
         );
@@ -238,56 +258,61 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   // ── Needs attention (the dominant layer) ─────────────────────────
+  /// Driven entirely by live counts, rendered as ONE grouped box that stays in
+  /// place. Every queue empty → a calm "all clear" summary; anything outstanding →
+  /// the box of triage rows (most-urgent-first), a fresh signal sliding in as a
+  /// row rather than the whole surface re-appearing.
   Widget _needsAttention() {
-    return BlocBuilder<StatisticsCubit, StatisticsState>(
-      builder: (context, statsState) {
-        final staffing = statsState.maybeWhen(
-          loaded: (s) => s.branchesWithoutManagers,
-          orElse: () => 0,
-        );
-        return BlocSelector<ShiftSwapCubit, ShiftSwapState, int>(
-          selector: (state) => state.maybeWhen(
-            loaded: (swaps, _) =>
-                swaps.where((s) => !s.status.isResolved).length,
-            orElse: () => 0,
-          ),
-          builder: (context, swaps) {
-            return BlocSelector<TaskCubit, TaskState, (int, int, int, int)>(
-              selector: (state) {
-                final tasks = state.maybeWhen(
-                  loaded: (t, _, _, _, _) => t,
-                  orElse: () => const <TaskEntity>[],
-                );
-                final now = DateTime.now();
-                return (
-                  overdueCount(tasks, now),
-                  reviewCount(tasks),
-                  unassignedCount(tasks, now),
-                  rejectedCount(tasks),
-                );
-              },
-              builder: (context, c) {
-                final (overdue, reviews, unassigned, rejected) = c;
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (staffing > 0) ...[
-                      _StaffingAlert(
-                        branchesWithoutManagers: staffing,
-                        onTap: () => context.push(RouteNames.adminManagers),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                    _attentionGrid(
+    return BlocSelector<ShiftSwapCubit, ShiftSwapState, int>(
+      selector: (state) => state.maybeWhen(
+        loaded: (swaps, _) => swaps.where((s) => !s.status.isResolved).length,
+        orElse: () => 0,
+      ),
+      builder: (context, swaps) {
+        return BlocSelector<TaskCubit, TaskState, (int, int, int, int)>(
+          selector: (state) {
+            final tasks = state.maybeWhen(
+              loaded: (t, _, _, _, _) => t,
+              orElse: () => const <TaskEntity>[],
+            );
+            final now = DateTime.now();
+            return (
+              overdueCount(tasks, now),
+              reviewCount(tasks),
+              unassignedCount(tasks, now),
+              rejectedCount(tasks),
+            );
+          },
+          builder: (context, c) {
+            final (overdue, reviews, unassigned, rejected) = c;
+            final total = overdue + reviews + unassigned + rejected + swaps;
+            final reduceMotion = MediaQuery.of(context).disableAnimations;
+            // ONE grouped box, always in the same place. When every queue is
+            // empty it's a calm "all clear" summary; the moment anything needs a
+            // decision it's the box of triage rows — a fresh signal slides in as
+            // a row (never the whole grid re-appearing). A quiet crossfade carries
+            // the rare clear ⇄ active flip.
+            final Widget child = total == 0
+                ? const KeyedSubtree(
+                    key: ValueKey('attn-clear'),
+                    child: _AllClearPanel(),
+                  )
+                : KeyedSubtree(
+                    key: const ValueKey('attn-active'),
+                    child: _needsAttentionBox(
                       reviews: reviews,
                       overdue: overdue,
                       unassigned: unassigned,
                       rejected: rejected,
                       swaps: swaps,
                     ),
-                  ],
-                );
-              },
+                  );
+            if (reduceMotion) return child;
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: child,
             );
           },
         );
@@ -315,118 +340,271 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     showBranch: true,
   );
 
-  Widget _attentionGrid({
+  /// The grouped Needs-attention box (active state — at least one signal has
+  /// work). One `GlassContainer` of triage rows wrapped in a **single** living
+  /// border; a fresh signal slides in as a row (`LiveListItem` keyed reuse), the
+  /// cleared signals collapse to a quiet footer, and the box's orbit reads the
+  /// most-urgent signal's tone (overdue → orange pulse, else the calm accent).
+  Widget _needsAttentionBox({
     required int reviews,
     required int overdue,
     required int unassigned,
     required int rejected,
     required int swaps,
   }) {
-    // Exactly one tile — the most urgent with work — carries the living border;
-    // the rest stay static so the eye lands on the one that matters (calm).
-    final liveKey = overdue > 0
-        ? 'overdue'
-        : reviews > 0
-        ? 'reviews'
-        : rejected > 0
-        ? 'rejected'
-        : unassigned > 0
-        ? 'unassigned'
-        : swaps > 0
-        ? 'swaps'
-        : '';
     final reduceMotion = MediaQuery.of(context).disableAnimations;
 
-    Widget wrap(String key, Color accent, Widget tile) {
-      if (key != liveKey || reduceMotion) return tile;
-      final overdueTone = accent == AppColors.error;
-      return LiveStatusBorder(
-        color: overdueTone ? const Color(0xFFFB923C) : kLivingBorderAccent,
-        pulse: overdueTone,
-        speed: 1.1,
-        borderRadius: AttentionTile.radius,
-        child: tile,
-      );
-    }
+    // Fixed urgency ranking (lower = more urgent).
+    final all = <_Signal>[
+      _Signal(
+        key: 'overdue',
+        rank: 0,
+        count: overdue,
+        accent: AppColors.error,
+        icon: Icons.event_busy_outlined,
+        label: 'Overdue',
+        sublabel: 'Past the deadline',
+        onTap: () => _openFiltered(
+          'Overdue',
+          const TaskFeedFilter(preset: FeedPreset.overdue),
+          empty: 'No overdue work. Nicely done.',
+        ),
+      ),
+      _Signal(
+        key: 'reviews',
+        rank: 1,
+        count: reviews,
+        accent: AppColors.warning,
+        icon: Icons.rate_review_outlined,
+        label: 'Pending review',
+        sublabel: 'Approve or send back',
+        onTap: () => context.push(RouteNames.adminReview),
+      ),
+      _Signal(
+        key: 'rejected',
+        rank: 2,
+        count: rejected,
+        accent: AppColors.error,
+        icon: Icons.replay_rounded,
+        label: 'Sent back',
+        sublabel: 'Rejected / rework',
+        onTap: () => _openFiltered(
+          'Sent back',
+          const TaskFeedFilter(status: TaskStatus.rejected),
+          empty: 'Nothing has been sent back.',
+        ),
+      ),
+      _Signal(
+        key: 'unassigned',
+        rank: 3,
+        count: unassigned,
+        accent: AppColors.warning,
+        icon: Icons.person_off_outlined,
+        label: 'Unassigned',
+        sublabel: 'Needs an owner',
+        onTap: () => _openFiltered(
+          'Unassigned',
+          const TaskFeedFilter(preset: FeedPreset.unassigned),
+          empty: 'Every task has an owner.',
+        ),
+      ),
+      _Signal(
+        key: 'swaps',
+        rank: 4,
+        count: swaps,
+        accent: AppColors.warning,
+        icon: Icons.swap_horiz_rounded,
+        label: 'Swap requests',
+        sublabel: 'Review shift swaps',
+        onTap: _openSwaps,
+      ),
+    ];
 
-    return ResponsiveCardGrid(
-      maxItemWidth: 250,
+    final active = all.where((s) => s.count > 0).toList()
+      ..sort((a, b) => a.rank.compareTo(b.rank));
+    final cleared = all.where((s) => s.count == 0).toList();
+    // Caller only builds this box when something is active, but guard anyway.
+    if (active.isEmpty) return const _AllClearPanel();
+    final overdueLead = active.first.accent == AppColors.error;
+
+    final rows = <Widget>[
+      for (final (i, s) in active.indexed)
+        if (reduceMotion)
+          KeyedSubtree(
+            key: ValueKey('attn-row-${s.key}'),
+            child: _attnRow(s, first: i == 0),
+          )
+        else
+          LiveListItem(
+            key: ValueKey('attn-row-${s.key}'),
+            entranceDelay: Duration(milliseconds: (i * 45).clamp(0, 180)),
+            highlightRadius: 12,
+            child: _attnRow(s, first: i == 0),
+          ),
+    ];
+
+    final box = GlassContainer(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Only the row set resizes when a signal arrives/clears, so the box
+          // grows/shrinks smoothly instead of snapping.
+          AnimatedSize(
+            duration:
+                reduceMotion ? Duration.zero : const Duration(milliseconds: 260),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: rows,
+            ),
+          ),
+          if (cleared.isNotEmpty) _attnFooter(cleared),
+        ],
+      ),
+    );
+
+    if (reduceMotion) return box;
+    // One unified orbit around the whole box (not five scattered borders),
+    // reading the most-urgent signal's tone.
+    return LiveStatusBorder(
+      color: overdueLead ? const Color(0xFFFB923C) : kLivingBorderAccent,
+      pulse: overdueLead,
+      speed: 1.1,
+      borderRadius: AppRadius.cardAll,
+      child: box,
+    );
+  }
+
+  /// One triage row inside the grouped box: tinted glyph · label + sublabel ·
+  /// count (counts up) · chevron. Tapping drills to that signal's filtered view.
+  Widget _attnRow(_Signal s, {required bool first}) {
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        wrap(
-          'reviews',
-          AppColors.warning,
-          AttentionTile(
-            icon: Icons.rate_review_outlined,
-            label: 'Pending review',
-            sublabel: 'Approve or send back',
-            clearedMessage: 'Everything reviewed',
-            count: reviews,
-            accent: AppColors.warning,
-            onTap: () => context.push(RouteNames.adminReview),
+        if (!first)
+          const Divider(
+            height: 1,
+            thickness: 1,
+            color: AppColors.darkBorder,
+            indent: AppSpacing.md,
+            endIndent: AppSpacing.md,
           ),
-        ),
-        wrap(
-          'overdue',
-          AppColors.error,
-          AttentionTile(
-            icon: Icons.event_busy_outlined,
-            label: 'Overdue',
-            sublabel: 'Past the deadline',
-            clearedMessage: 'No overdue tasks',
-            count: overdue,
-            accent: AppColors.error,
-            onTap: () => _openFiltered(
-              'Overdue',
-              const TaskFeedFilter(preset: FeedPreset.overdue),
-              empty: 'No overdue work. Nicely done.',
+        Semantics(
+          button: true,
+          label: '${s.count} ${s.label}',
+          child: InkWell(
+            onTap: s.onTap,
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: 12,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: s.accent.withAlpha(34),
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(color: s.accent.withAlpha(60)),
+                    ),
+                    child: Icon(s.icon, size: 20, color: s.accent),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Row title reads white (the "what"); its sublabel steps
+                        // down to medium grey.
+                        Text(
+                          s.label,
+                          style: AppTypography.label.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          s.sublabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  AnimatedCount(
+                    value: s.count,
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 650),
+                    style: AppTypography.h2.copyWith(
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    size: 20,
+                    color: AppColors.textTertiary,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-        wrap(
-          'unassigned',
-          AppColors.warning,
-          AttentionTile(
-            icon: Icons.person_off_outlined,
-            label: 'Unassigned',
-            sublabel: 'Needs an owner',
-            clearedMessage: 'Every task has an owner',
-            count: unassigned,
-            accent: AppColors.warning,
-            onTap: () => _openFiltered(
-              'Unassigned',
-              const TaskFeedFilter(preset: FeedPreset.unassigned),
-              empty: 'Every task has an owner.',
-            ),
-          ),
+      ],
+    );
+  }
+
+  /// The quiet footer naming the cleared signals ("sent back · unassigned ·
+  /// swaps — all clear"), so a healthy queue is visible without five empty rows.
+  Widget _attnFooter(List<_Signal> cleared) {
+    final names = cleared.map((s) => s.label.toLowerCase()).join(' · ');
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Divider(
+          height: 1,
+          thickness: 1,
+          color: AppColors.darkBorder,
+          indent: AppSpacing.md,
+          endIndent: AppSpacing.md,
         ),
-        wrap(
-          'rejected',
-          AppColors.error,
-          AttentionTile(
-            icon: Icons.replay_rounded,
-            label: 'Sent back',
-            sublabel: 'Rejected / rework',
-            clearedMessage: 'Nothing sent back',
-            count: rejected,
-            accent: AppColors.error,
-            onTap: () => _openFiltered(
-              'Sent back',
-              const TaskFeedFilter(status: TaskStatus.rejected),
-              empty: 'Nothing has been sent back.',
-            ),
-          ),
-        ),
-        wrap(
-          'swaps',
-          AppColors.warning,
-          AttentionTile(
-            icon: Icons.swap_horiz_rounded,
-            label: 'Swap requests',
-            sublabel: 'Review shift swaps',
-            clearedMessage: 'No pending swaps',
-            count: swaps,
-            accent: AppColors.warning,
-            onTap: _openSwaps,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.md, 10, AppSpacing.md, 8),
+          child: Row(
+            children: [
+              const Icon(
+                Icons.check_rounded,
+                size: 15,
+                color: AppColors.textTertiary,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  '$names — all clear',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -459,19 +637,30 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             );
             return StatStrip(
               stats: [
-                Stat(label: 'Completed today', value: '${s?.completedTasksToday ?? 0}'),
-                Stat(label: 'Running now', value: '$running'),
+                Stat(
+                  label: 'Completed today',
+                  count: s?.completedTasksToday ?? 0,
+                ),
+                Stat(label: 'Running now', count: running),
                 Stat(
                   label: 'Due soon',
-                  value: '$dueSoon',
+                  count: dueSoon,
                   tone: dueSoon > 0 ? AppColors.warning : null,
                 ),
                 Stat(
                   label: 'Delayed',
-                  value: '$overdue',
-                  tone: overdue > 0 ? AppColors.error : null,
+                  count: overdue,
+                  tone: overdue > 0 ? AppColors.warning : null,
                 ),
-                Stat(label: 'Approval rate', value: rate == null ? '—' : '$rate%'),
+                if (rate == null)
+                  const Stat(label: 'Approval rate', value: '—')
+                else
+                  Stat(
+                    label: 'Approval rate',
+                    count: rate,
+                    suffix: '%',
+                    tone: AppColors.success,
+                  ),
               ],
             );
           },
@@ -571,6 +760,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   // ── Manage (module directory) ────────────────────────────────────
+  /// A short, quiet directory to the two full-list surfaces. Everything else
+  /// (Employees, Analytics, Branches, Managers) lives in the persistent sidebar,
+  /// so this stays a two-row shortcut rather than a second nav.
   Widget _manage({bool compact = false}) {
     return _grid(maxItemWidth: compact ? 400 : 300, [
       ActionCard(
@@ -586,20 +778,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         subtitle: 'Any branch',
         secondary: true,
         onTap: () => context.push(RouteNames.adminSchedule),
-      ),
-      ActionCard(
-        icon: Icons.groups_outlined,
-        title: 'Employees',
-        subtitle: 'Manage staff',
-        secondary: true,
-        onTap: () => context.push(RouteNames.adminEmployees),
-      ),
-      ActionCard(
-        icon: Icons.insights_outlined,
-        title: 'Analytics',
-        subtitle: 'Full metrics',
-        secondary: true,
-        onTap: () => context.push(RouteNames.adminAnalytics),
       ),
     ]);
   }
@@ -659,61 +837,82 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   /// Executive desktop arrangement: the operational story (Needs attention →
   /// today → recent activity) reads down the wide main column; the launch
-  /// surfaces (operations digest · quick actions · manage · branch pulse) sit in
-  /// a fixed right rail, always in view.
+  /// surfaces (operations digest · quick actions · manage) sit in a fixed right
+  /// rail, always in view. Centred in a ~1260 max-width column so it reads like a
+  /// desktop document rather than a stretched phone screen.
   Widget _desktop(BuildContext context) {
     var i = 0;
     Widget sec(String id, Widget child) => _sec(id, i++, child);
+    final hPad = context.isUltrawide ? 48.0 : 40.0;
     return ListView(
       key: const PageStorageKey('admin-dashboard-desktop'),
-      padding: const EdgeInsets.fromLTRB(40, AppSpacing.lg, 40, AppSpacing.xxxl),
+      padding: EdgeInsets.fromLTRB(hPad, AppSpacing.lg, hPad, AppSpacing.xxxl),
       children: [
-        sec('hero', _hero()),
-        const SizedBox(height: AppSpacing.xl),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  sec(
-                    'attn-h',
-                    const AdminSectionHeader(
-                      title: 'Needs attention',
-                      subtitle: 'Act on these first',
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1260),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                sec('hero', _hero()),
+                const SizedBox(height: AppSpacing.xl),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Main column — minmax(0, 1fr): flexes and may shrink to 0.
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          sec(
+                            'attn-h',
+                            const AdminSectionHeader(
+                              title: 'Needs attention',
+                              subtitle: 'Act on these first',
+                            ),
+                          ),
+                          sec('attn', _needsAttention()),
+                          const SizedBox(height: AppSpacing.xl),
+                          sec('today-h', const AdminSectionHeader(title: 'Today')),
+                          sec('today', _today()),
+                          const SizedBox(height: AppSpacing.xl),
+                          sec('activity-h', _activityHeader()),
+                          sec('activity', const RecentActivityFeed()),
+                        ],
+                      ),
                     ),
-                  ),
-                  sec('attn', _needsAttention()),
-                  const SizedBox(height: AppSpacing.xl),
-                  sec('today-h', const AdminSectionHeader(title: 'Today')),
-                  sec('today', _today()),
-                  const SizedBox(height: AppSpacing.xl),
-                  sec('activity-h', _activityHeader()),
-                  sec('activity', const RecentActivityFeed()),
-                ],
-              ),
+                    const SizedBox(width: 40),
+                    // Right rail — fixed 360.
+                    SizedBox(
+                      width: 360,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          sec(
+                            'digest-h',
+                            const AdminSectionHeader(title: 'Operations'),
+                          ),
+                          sec('digest', _digest()),
+                          const SizedBox(height: AppSpacing.xl),
+                          sec(
+                            'qa-h',
+                            const AdminSectionHeader(title: 'Quick actions'),
+                          ),
+                          sec('qa', _quickActions(compact: true)),
+                          const SizedBox(height: AppSpacing.xl),
+                          sec(
+                            'manage-h',
+                            const AdminSectionHeader(title: 'Manage'),
+                          ),
+                          sec('manage', _manage(compact: true)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(width: AppSpacing.xl),
-            SizedBox(
-              width: 330,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  sec('digest-h', const AdminSectionHeader(title: 'Operations')),
-                  sec('digest', _digest()),
-                  const SizedBox(height: AppSpacing.xl),
-                  sec('qa-h', const AdminSectionHeader(title: 'Quick actions')),
-                  sec('qa', _quickActions(compact: true)),
-                  const SizedBox(height: AppSpacing.xl),
-                  sec('manage-h', const AdminSectionHeader(title: 'Manage')),
-                  sec('manage', _manage(compact: true)),
-                  const SizedBox(height: AppSpacing.xl),
-                  sec('pulse', const _BranchPulse()),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );
@@ -1232,221 +1431,97 @@ class _SyncButtonState extends State<_SyncButton>
   }
 }
 
-// ─── Branch pulse (desktop rail) ────────────────────────────────────
+// ─── Needs-attention signal ─────────────────────────────────────────
 
-/// Per-branch open / in-review counts from the live task stream — the
-/// executive "where is the load right now" line. Hidden until branch names
-/// resolve; facts only, no targets.
-class _BranchPulse extends StatelessWidget {
-  const _BranchPulse();
+/// One triage signal in the grouped Needs-attention box — its urgency [rank],
+/// live [count], semantic [accent], glyph, copy, and the drill it opens.
+class _Signal {
+  const _Signal({
+    required this.key,
+    required this.rank,
+    required this.count,
+    required this.accent,
+    required this.icon,
+    required this.label,
+    required this.sublabel,
+    required this.onTap,
+  });
+
+  final String key;
+  final int rank;
+  final int count;
+  final Color accent;
+  final IconData icon;
+  final String label;
+  final String sublabel;
+  final VoidCallback onTap;
+}
+
+// ─── All clear (needs-attention cleared) ────────────────────────────
+
+/// The Needs-attention layer when **every** queue is empty — one reassuring
+/// summary instead of a grid of switched-off tiles. A large success check, a
+/// positive sentence, and a muted inline row of the zeroed facts, so a healthy
+/// board reads *under control* rather than merely blank.
+class _AllClearPanel extends StatelessWidget {
+  const _AllClearPanel();
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<TaskCubit, TaskState>(
-      builder: (context, state) {
-        final tasks = state.maybeWhen(
-          loaded: (t, _, _, _, _) => t,
-          orElse: () => const <TaskEntity>[],
-        );
-        final names = context.read<TaskCubit>().branchNames;
-        final byBranch = <String, ({int open, int review})>{};
-        for (final t in tasks) {
-          final branchId = t.branchId;
-          if (branchId == null || branchId.isEmpty) continue;
-          final prev = byBranch[branchId] ?? (open: 0, review: 0);
-          final isOpen =
-              t.status == TaskStatus.pending ||
-              t.status == TaskStatus.started ||
-              t.status == TaskStatus.rejected;
-          final isReview = t.status == TaskStatus.waitingReview;
-          if (!isOpen && !isReview) continue;
-          byBranch[branchId] = (
-            open: prev.open + (isOpen ? 1 : 0),
-            review: prev.review + (isReview ? 1 : 0),
-          );
-        }
-        final rows = byBranch.entries.toList()
-          ..sort(
-            (a, b) => (b.value.open + b.value.review).compareTo(
-              a.value.open + a.value.review,
-            ),
-          );
-        if (rows.isEmpty) return const SizedBox.shrink();
-
-        return Column(
+    return Semantics(
+      label: 'All clear. Nothing needs your attention right now.',
+      child: GlassContainer(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const AdminSectionHeader(title: 'Branch pulse'),
-            GlassContainer(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.sm,
+            // A large, calm success check — the board's own state is "healthy",
+            // the one place a status colour earns its place on this screen.
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppColors.success.withAlpha(28),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(color: AppColors.success.withAlpha(60)),
               ),
+              child: const Icon(
+                Icons.check_rounded,
+                size: 28,
+                color: AppColors.success,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (final (i, row) in rows.take(4).toList().indexed) ...[
-                    if (i > 0)
-                      const Divider(height: 1, color: AppColors.darkBorder),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 9),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              names[row.key] ?? 'Branch',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              // Branch name → light grey (secondary info); the
-                              // load counts sit a step below at medium grey.
-                              style: AppTypography.labelSmall.copyWith(
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            '${row.value.open} open'
-                            '${row.value.review > 0 ? ' · ${row.value.review} review' : ''}',
-                            style: AppTypography.caption.copyWith(
-                              color: AppColors.textTertiary,
-                            ),
-                          ),
-                        ],
-                      ),
+                  Text('All clear', style: AppTypography.h3),
+                  const SizedBox(height: 3),
+                  // Reassuring sentence → light grey, a clear step under the title.
+                  Text(
+                    'Nothing needs you right now — every queue is empty.',
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textSecondary,
                     ),
-                  ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  // The zeroed facts, quiet and inline (medium grey) — proof the
+                  // calm state is real, not a failed load.
+                  Text(
+                    '0 pending review · 0 overdue · 0 unassigned · '
+                    '0 sent back · 0 swaps',
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textTertiary,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
-        );
-      },
-    );
-  }
-}
-
-// ─── Staffing alert ─────────────────────────────────────────────────
-
-/// The highest-priority dashboard signal. A missing manager means a branch has
-/// no clear owner for schedules, reviews, or escalations, so this sits above the
-/// task queue and links directly to the manager-assignment workflow.
-class _StaffingAlert extends StatelessWidget {
-  const _StaffingAlert({
-    required this.branchesWithoutManagers,
-    required this.onTap,
-  });
-
-  final int branchesWithoutManagers;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final count = branchesWithoutManagers;
-    final title = count == 1
-        ? '1 branch needs a manager'
-        : '$count branches need a manager';
-
-    Widget message() => Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppColors.warning.withAlpha(28),
-            borderRadius: BorderRadius.circular(11),
-          ),
-          child: const Icon(
-            Icons.admin_panel_settings_outlined,
-            size: 21,
-            color: AppColors.warning,
-          ),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'STAFFING GAP',
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.warning,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(title, style: AppTypography.h3),
-              const SizedBox(height: 2),
-              // Explanatory helper under the white title → medium grey.
-              Text(
-                'Assign branch ownership so schedules, reviews, and cases have a clear owner.',
-                style: AppTypography.bodySmall.copyWith(
-                  color: AppColors.textTertiary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    final action = _InlineAction(label: 'Assign now', onTap: onTap);
-
-    return Semantics(
-      button: true,
-      label: '$title. Assign now.',
-      child: GlassContainer(
-        onTap: onTap,
-        highlight: true,
-        accent: AppColors.warning,
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth < 560) {
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  message(),
-                  const SizedBox(height: AppSpacing.md),
-                  Align(alignment: Alignment.centerRight, child: action),
-                ],
-              );
-            }
-            return Row(
-              children: [
-                Expanded(child: message()),
-                const SizedBox(width: AppSpacing.lg),
-                action,
-              ],
-            );
-          },
         ),
       ),
-    );
-  }
-}
-
-class _InlineAction extends StatelessWidget {
-  const _InlineAction({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: onTap,
-      style: TextButton.styleFrom(
-        foregroundColor: AppColors.textPrimary,
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        minimumSize: const Size(44, 44),
-      ),
-      label: Text(label, style: AppTypography.labelSmall),
-      iconAlignment: IconAlignment.end,
-      icon: const Icon(Icons.arrow_forward_rounded, size: 17),
     );
   }
 }

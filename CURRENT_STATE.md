@@ -11,7 +11,7 @@
 | --- | --- |
 | **Branch** | `feature/attendance-management` |
 | **Build** | `flutter analyze` clean (1 pre-existing info) |
-| **Tests** | **878 pass · 2 fail** across 134 files (~16s) — see [Known issues](#known-issues) |
+| **Tests** | **875 pass · 2 fail** across 134 files (~18s) — see [Known issues](#known-issues) |
 | **Blocking release** | Firebase deploy (rules · indexes · functions) · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
@@ -47,7 +47,7 @@ pruning. `Community-Hub` is **dead** — the feature was removed 2026-07-15.
 | **Auth** | Admin-provisioned email/password. No registration/Google/OTP/approval. First-login gate: force password change → profile completion → (employees) Welcome → role home |
 | **Roles & routing** | 40 routes, role-guarded. admin ⊇ manager |
 | **Profile** | View/edit, avatar/cover upload, contact + payment (payment in a private subdoc; hidden for admin) |
-| **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets) |
+| **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets). Create Task sheet has a premium monochrome surface/motion pass. |
 | **Schedule** | Weekly roster, shift swaps, leave, day notes, configurable shift hours, shift templates, Final View + PNG export |
 | **Branches** | CRUD, soft delete, swap policy, GPS geofences |
 | **Admin** | User administration, account provisioning, Admin Home V2 command center |
@@ -207,7 +207,7 @@ If you change status, gaps, or priorities, update this file **in the same task**
 
 ```bash
 flutter analyze                          # expect: 1 info
-flutter test                             # expect: 878 pass, 2 fail (splash)
+flutter test                             # expect: 875 pass, 2 fail (splash)
 grep -c "static const String" lib/core/routes/route_names.dart   # expect: 40
 ls lib/features | wc -l                  # expect: 17
 ```

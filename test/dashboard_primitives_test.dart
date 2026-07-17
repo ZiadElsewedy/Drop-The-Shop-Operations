@@ -138,6 +138,25 @@ void main() {
       expect(find.text('96%'), findsOneWidget);
       expect(find.text('Delayed'), findsOneWidget);
     });
+
+    testWidgets('a count stat renders its number (+suffix) via count-up',
+        (tester) async {
+      await tester.pumpWidget(host(
+        const StatStrip(
+          stats: [
+            Stat(label: 'Running now', count: 4),
+            Stat(label: 'Approval rate', count: 96, suffix: '%'),
+          ],
+        ),
+        // Reduced motion → AnimatedCount has zero duration, so the final figure
+        // is on screen on the first frame (no pumpAndSettle needed).
+        reduceMotion: true,
+      ));
+      await tester.pump();
+
+      expect(find.text('4'), findsOneWidget);
+      expect(find.text('96%'), findsOneWidget);
+    });
   });
 
   group('ActivityCard', () {

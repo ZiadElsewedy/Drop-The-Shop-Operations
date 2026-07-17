@@ -2,14 +2,40 @@ import 'package:flutter/material.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/animated_count.dart';
 import 'package:drop/core/widgets/glass_container.dart';
 
 /// One cell in a [StatStrip] — a label + a glanceable value, optionally tinted.
+///
+/// A value can be supplied two ways:
+/// * [count] — an integer that **counts up** (~650ms ease-out) when it changes,
+///   the premium treatment for a live "today" number. Takes precedence.
+/// * [value] — a ready-made string (e.g. "96%", "—") that cross-fades on change,
+///   for values that aren't a plain integer.
 class Stat {
-  const Stat({required this.label, required this.value, this.tone});
+  const Stat({
+    required this.label,
+    this.value,
+    this.count,
+    this.suffix = '',
+    this.tone,
+  }) : assert(
+          value != null || count != null,
+          'A Stat needs either a string value or an int count',
+        );
 
   final String label;
-  final String value;
+
+  /// A ready-made string value (e.g. "96%", "—"). Cross-fades when it changes.
+  /// Ignored when [count] is provided.
+  final String? value;
+
+  /// An integer value that counts up when it changes. Rendered via
+  /// [AnimatedCount] with [suffix] appended (e.g. "%").
+  final int? count;
+
+  /// Suffix appended after a [count] (e.g. "%"). Unused for a string [value].
+  final String suffix;
 
   /// Optional semantic tint for the value (null = monochrome white).
   final Color? tone;
@@ -64,32 +90,44 @@ class StatStrip extends StatelessWidget {
       fontWeight: FontWeight.w700,
       letterSpacing: -0.5,
     );
+    // An integer value counts up to its new figure; a string value cross-fades.
+    // Either way a live "Today" number moves rather than snapping, so it feels
+    // alive and premium.
+    final Widget valueWidget = s.count != null
+        ? AnimatedCount(
+            value: s.count!,
+            suffix: s.suffix,
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 650),
+            style: valueStyle,
+          )
+        : AnimatedSwitcher(
+            duration: reduceMotion
+                ? Duration.zero
+                : const Duration(milliseconds: 320),
+            transitionBuilder: (child, anim) => FadeTransition(
+              opacity: anim,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.35),
+                  end: Offset.zero,
+                ).animate(anim),
+                child: child,
+              ),
+            ),
+            child: Text(
+              s.value!,
+              key: ValueKey('${s.label}:${s.value}'),
+              textAlign: align,
+              style: valueStyle,
+            ),
+          );
     return Column(
       crossAxisAlignment: cross,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // A value that moves cross-fades to its new figure rather than snapping,
-        // so a live "Today" number feels alive without a distracting count-up.
-        AnimatedSwitcher(
-          duration:
-              reduceMotion ? Duration.zero : const Duration(milliseconds: 320),
-          transitionBuilder: (child, anim) => FadeTransition(
-            opacity: anim,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0, 0.35),
-                end: Offset.zero,
-              ).animate(anim),
-              child: child,
-            ),
-          ),
-          child: Text(
-            s.value,
-            key: ValueKey('${s.label}:${s.value}'),
-            textAlign: align,
-            style: valueStyle,
-          ),
-        ),
+        valueWidget,
         const SizedBox(height: 3),
         // Supporting label under the white metric → light grey.
         Text(

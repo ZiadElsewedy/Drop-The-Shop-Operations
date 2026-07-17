@@ -18,8 +18,12 @@ Linear/Jira/Notion clone.
 
 Every module home is arranged as layers, top to bottom:
 
-1. **L1 — Needs attention.** The dominant layer: the few things that require a
-   decision now (pending review · overdue · unassigned · rejected · swaps).
+1. **L1 — Needs attention.** The dominant layer, rendered as **one grouped box**:
+   a calm "all clear" summary when every count is zero, otherwise triage **rows**
+   (overdue · pending review · sent back · unassigned · swaps) most-urgent-first
+   inside a single living border — a fresh signal slides in as a row (`LiveListItem`,
+   never the whole surface re-appearing), and cleared signals collapse to a quiet
+   footer. `AttentionTile` remains the compact single-cell variant of the same idea.
 2. **L2 — Today's health.** Light supporting metrics (completed today · running ·
    delayed · approval rate). No charts.
 3. **L3 — Recent activity.** A clean vertical feed of what's happening.
@@ -93,6 +97,9 @@ collection (safe at 100 branches / 5,000 employees / multi-tenant).
   **not** depend on the task feature).
 - **`StatStrip` / `Stat`** — a quiet single-`GlassContainer` row of `value/label`
   facts (the "Today" layer). Divided row when it fits, 2-up wrap when it doesn't.
+  A `Stat` takes either a `count` (an int that **counts up** ~650ms when it moves)
+  or a formatted string `value` (e.g. `96%`, `—`, which cross-fades) — a live
+  number moves rather than snapping.
 - **`ActivityCard`** — a clean vertical feed row (`leading · title · subtitle ……
   trailing · meta`). The V2 replacement for the horizontal "spreadsheet" feed;
   generic slots, feature code maps its entity onto them.
@@ -136,10 +143,12 @@ control) is a quiet escape hatch — **never** the update mechanism.
 
 Even at zero work the surface should feel alive and under control. Two devices:
 
-- **Contextual mood** (`dashboard_mood.dart`): the hero subtitle reads the live
-  operational state ("2 tasks need your attention" / "Everything's running
-  smoothly" / "Quiet morning"), escalating calm → attention → busy, rather than a
-  static greeting. Derive it from counts you already have; keep it a pure function.
+- **Live state sentence** (`dashboard_mood.dart`): the hero subtitle reads the
+  live operational state as **one of two** lines off a single needs-attention
+  total — calm ("All caught up — nothing needs you right now", grey pulse) vs
+  attention ("3 tasks need your attention", warning pulse) — rather than a static
+  greeting. The **same** total drives the L1 section, so hero and grid never
+  disagree. Derive it from counts you already have; keep it a pure function.
 - **A "live" pulse:** a small breathing dot (a slow expanding ring) says the system
   is awake. Its colour is *meaningful* (calm vs attention), never decoration.
 - **Depth over colour:** build layering with a **two-layer shadow** (tight contact +

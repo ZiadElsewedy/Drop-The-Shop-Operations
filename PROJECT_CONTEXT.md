@@ -321,6 +321,9 @@ colour.
   *enrich*, not *simplify*. Motion is often load-bearing (`LiveStatusBorder`'s orbit
   is a spec, not decoration).
 - **One primary CTA per screen.**
+- Task action sheets may use neutral tonal depth, restrained entrance/stagger motion,
+  and pointer lift feedback; chromatic colour remains semantic-only and reduced
+  motion must collapse these transitions.
 - Every widget: a Semantics label, ≥44px targets, honours reduced motion, renders
   collections lazily/capped.
 
