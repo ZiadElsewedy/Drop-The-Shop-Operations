@@ -35,7 +35,7 @@ class _ChecklistBuilder extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text('Break the work into steps',
+              Text('Break the work into steps', 
                   style: AppTypography.labelSmall
                       .copyWith(color: AppColors.textSecondary)),
               if (!empty) ...[
