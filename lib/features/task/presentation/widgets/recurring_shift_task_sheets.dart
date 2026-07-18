@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/enums/task_priority.dart';
 import 'package:drop/core/enums/template_repeat_mode.dart';
@@ -12,17 +13,19 @@ import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/app_snackbar.dart';
 import 'package:drop/core/widgets/glass_container.dart';
 import 'package:drop/core/widgets/metric_pill.dart';
+import 'package:drop/core/widgets/skeleton.dart';
 import 'package:drop/features/auth/presentation/widgets/app_button.dart';
 import 'package:drop/features/auth/presentation/widgets/app_text_field.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 import 'package:drop/features/task/domain/entities/checklist_item.dart';
 import 'package:drop/features/task/domain/entities/recurring_task_template_entity.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/widgets/task_action_sheets.dart';
 
 /// Branch-scoped Automation Center for recurring shift-task templates.
-/// Supports create, pause/resume, delete, operational metadata, and navigation
-/// to the last generated task while reusing the existing sheet entrypoint and
-/// recurring-task workflow.
+/// Supports create, pause/resume, delete, operational metadata, a per-routine
+/// details sheet, and navigation to the last generated task — all reusing the
+/// existing sheet entrypoint and recurring-task workflow.
 Future<void> showManageRecurringShiftTasksSheet({
   required BuildContext context,
   required TaskCubit cubit,
@@ -31,31 +34,66 @@ Future<void> showManageRecurringShiftTasksSheet({
   // Never stack one modal sheet on top of another. On desktop/macOS the nested
   // modal barriers can leave the manage sheet dimmed and input-blocked after the
   // form pops, which looks like a frozen app. Close Manage first, then present
-  // the form as the only modal route.
-  final action = await showSheet<_RecurringManageAction>(
-    context,
-    _ManageRecurringShiftTasks(cubit: cubit, branchId: branchId),
-  );
-  if (action?.taskId != null && context.mounted) {
-    await context.push<void>(RouteNames.taskDetail(action!.taskId!));
-  } else if (action?.shouldAdd == true && context.mounted) {
-    await showSheet<bool>(
+  // the next surface as the only modal route. Details loops back to Manage so a
+  // routine's card reflects any change made in its details sheet.
+  while (true) {
+    final action = await showSheet<_RecurringManageAction>(
       context,
-      _RecurringShiftTaskForm(cubit: cubit, branchId: branchId),
+      _ManageRecurringShiftTasks(cubit: cubit, branchId: branchId),
     );
+    if (action == null || !context.mounted) return;
+
+    if (action.taskId != null) {
+      await context.push<void>(RouteNames.taskDetail(action.taskId!));
+      return;
+    }
+    if (action.shouldAdd) {
+      await showSheet<bool>(
+        context,
+        _RecurringShiftTaskForm(cubit: cubit, branchId: branchId),
+      );
+      return;
+    }
+    if (action.detailsTemplate != null) {
+      final result = await showSheet<_RecurringDetailsResult>(
+        context,
+        _AutomationDetailsSheet(cubit: cubit, template: action.detailsTemplate!),
+      );
+      if (!context.mounted) return;
+      if (result?.openTaskId != null) {
+        await context.push<void>(RouteNames.taskDetail(result!.openTaskId!));
+        return;
+      }
+      // Fall through: reopen the Automation Center with a fresh list.
+      continue;
+    }
+    return;
   }
 }
 
 class _RecurringManageAction {
-  const _RecurringManageAction._({this.shouldAdd = false, this.taskId});
+  const _RecurringManageAction._({
+    this.shouldAdd = false,
+    this.taskId,
+    this.detailsTemplate,
+  });
 
   static const add = _RecurringManageAction._(shouldAdd: true);
 
   factory _RecurringManageAction.openTask(String taskId) =>
       _RecurringManageAction._(taskId: taskId);
 
+  factory _RecurringManageAction.details(RecurringTaskTemplateEntity t) =>
+      _RecurringManageAction._(detailsTemplate: t);
+
   final bool shouldAdd;
   final String? taskId;
+  final RecurringTaskTemplateEntity? detailsTemplate;
+}
+
+class _RecurringDetailsResult {
+  const _RecurringDetailsResult({this.openTaskId});
+  final String? openTaskId;
 }
 
 class _ManageRecurringShiftTasks extends StatefulWidget {
@@ -98,6 +136,8 @@ class _ManageRecurringShiftTasksState
 
   Future<void> _delete(RecurringTaskTemplateEntity t) async {
     if (_busy) return;
+    final confirmed = await _confirmDeleteAutomation(context, t.title);
+    if (confirmed != true || !mounted) return;
     setState(() => _busy = true);
     try {
       await widget.cubit.deleteRecurringTemplate(t.id);
@@ -112,6 +152,9 @@ class _ManageRecurringShiftTasksState
   }
 
   void _add() => Navigator.of(context).pop(_RecurringManageAction.add);
+
+  void _openDetails(RecurringTaskTemplateEntity t) =>
+      Navigator.of(context).pop(_RecurringManageAction.details(t));
 
   void _openTask(String taskId) =>
       Navigator.of(context).pop(_RecurringManageAction.openTask(taskId));
@@ -128,10 +171,7 @@ class _ManageRecurringShiftTasksState
           future: _future,
           builder: (context, snap) {
             if (snap.connectionState != ConnectionState.done) {
-              return const Padding(
-                padding: EdgeInsets.all(AppSpacing.xl),
-                child: Center(child: CircularProgressIndicator()),
-              );
+              return const _AutomationSkeleton();
             }
             if (snap.hasError) {
               return _AutomationLoadFailure(onRetry: _busy ? null : _reload);
@@ -142,6 +182,7 @@ class _ManageRecurringShiftTasksState
               onAdd: _add,
               onToggle: _toggleActive,
               onDelete: _delete,
+              onOpenDetails: _openDetails,
               onOpenTask: _openTask,
             );
           },
@@ -156,19 +197,93 @@ class _AutomationCenterHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(bottom: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Row(
         children: [
-          Text('Automation Center', style: AppTypography.h3),
-          SizedBox(height: AppSpacing.xs),
-          Text(
-            'Manage recurring shift routines for this branch.',
-            style: AppTypography.bodySmall,
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.darkSurfaceElevated,
+              borderRadius: AppRadius.mdAll,
+              border: Border.all(color: AppColors.darkBorder),
+            ),
+            child: const Icon(
+              Icons.auto_awesome_motion_rounded,
+              size: 22,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Automation Center', style: AppTypography.h3),
+                SizedBox(height: 2),
+                Text(
+                  'Manage recurring shift routines for this branch.',
+                  style: AppTypography.bodySmall,
+                ),
+              ],
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Card-shaped shimmer shown while the template list loads — mirrors the real
+/// card rhythm so the sheet doesn't jump when data arrives (reuses [Skeleton]).
+class _AutomationSkeleton extends StatelessWidget {
+  const _AutomationSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          children: const [
+            Skeleton(width: 96, height: 34, borderRadius: AppRadius.fullAll),
+            SizedBox(width: AppSpacing.sm),
+            Skeleton(width: 96, height: 34, borderRadius: AppRadius.fullAll),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        for (var i = 0; i < 2; i++)
+          Padding(
+            padding: EdgeInsets.only(bottom: i == 0 ? AppSpacing.md : 0),
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                color: AppColors.darkSurface,
+                borderRadius: AppRadius.cardAll,
+                border: Border.all(color: AppColors.darkBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Row(
+                    children: [
+                      Expanded(child: Skeleton(width: 160, height: 14)),
+                      SizedBox(width: AppSpacing.md),
+                      Skeleton(width: 44, height: 24, borderRadius: AppRadius.fullAll),
+                    ],
+                  ),
+                  SizedBox(height: AppSpacing.md),
+                  Skeleton(width: 72, height: 22, borderRadius: AppRadius.fullAll),
+                  SizedBox(height: AppSpacing.md),
+                  Skeleton(width: double.infinity, height: 11),
+                  SizedBox(height: 8),
+                  Skeleton(width: 180, height: 11),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -180,6 +295,7 @@ class _AutomationCenterBody extends StatelessWidget {
     required this.onAdd,
     required this.onToggle,
     required this.onDelete,
+    required this.onOpenDetails,
     required this.onOpenTask,
   });
 
@@ -188,14 +304,15 @@ class _AutomationCenterBody extends StatelessWidget {
   final VoidCallback onAdd;
   final ValueChanged<RecurringTaskTemplateEntity> onToggle;
   final ValueChanged<RecurringTaskTemplateEntity> onDelete;
+  final ValueChanged<RecurringTaskTemplateEntity> onOpenDetails;
   final ValueChanged<String> onOpenTask;
 
   @override
   Widget build(BuildContext context) {
     final isEmpty = templates.isEmpty;
-    final maxListHeight = (MediaQuery.sizeOf(context).height * 0.58).clamp(
-      300.0,
-      560.0,
+    final maxListHeight = (MediaQuery.sizeOf(context).height * 0.52).clamp(
+      280.0,
+      520.0,
     );
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -220,6 +337,7 @@ class _AutomationCenterBody extends StatelessWidget {
                   busy: busy,
                   onToggle: () => onToggle(template),
                   onDelete: () => onDelete(template),
+                  onOpenDetails: () => onOpenDetails(template),
                   onOpenTask: template.lastGeneratedTaskId == null
                       ? null
                       : () => onOpenTask(template.lastGeneratedTaskId!),
@@ -252,6 +370,7 @@ class _AutomationSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = templates.where((template) => template.active).length;
     final paused = templates.length - active;
+    final failing = templates.where(_AutomationOutcome.isFailing).length;
     final nextRuns =
         templates
             .where((template) => template.active && template.nextRunAt != null)
@@ -279,6 +398,13 @@ class _AutomationSummary extends StatelessWidget {
               label: 'Paused',
               icon: Icons.pause_circle_outline_rounded,
             ),
+            if (failing > 0)
+              MetricPill(
+                value: '$failing',
+                label: failing == 1 ? 'Needs attention' : 'Need attention',
+                icon: Icons.error_outline_rounded,
+                tone: AppColors.error,
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -382,29 +508,52 @@ class _AutomationLoadFailure extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GlassContainer(
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.error),
-          const SizedBox(width: AppSpacing.md),
-          const Expanded(
+          Row(
+            children: const [
+              Icon(Icons.error_outline_rounded, color: AppColors.error),
+              SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  'Automation details could not be loaded.',
+                  style: AppTypography.bodySmall,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Padding(
+            padding: EdgeInsets.only(left: 40),
             child: Text(
-              'Automation details could not be loaded.',
-              style: AppTypography.bodySmall,
+              'Check your connection and try again.',
+              style: AppTypography.caption,
             ),
           ),
-          TextButton(onPressed: onRetry, child: const Text('Try again')),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 17),
+              label: const Text('Try again'),
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+/// A compact automation card. Tapping the card (or "Details") opens the
+/// per-routine details sheet; the switch pauses/resumes inline.
 class _AutomationCard extends StatelessWidget {
   const _AutomationCard({
     required this.template,
     required this.busy,
     required this.onToggle,
     required this.onDelete,
+    required this.onOpenDetails,
     this.onOpenTask,
   });
 
@@ -412,16 +561,19 @@ class _AutomationCard extends StatelessWidget {
   final bool busy;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
+  final VoidCallback onOpenDetails;
   final VoidCallback? onOpenTask;
 
   @override
   Widget build(BuildContext context) {
+    final outcome = _AutomationOutcome.of(template);
     final nextCheck = template.active
         ? _nextAutomationLabel(template.nextRunAt)
         : 'Paused • no publish scheduled';
     return GlassContainer(
       key: ValueKey('automation-card-${template.id}'),
       padding: const EdgeInsets.all(AppSpacing.lg),
+      onTap: busy ? null : onOpenDetails,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -439,7 +591,7 @@ class _AutomationCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: AppSpacing.sm),
-                    _AutomationStatusChip(template: template),
+                    _AutomationStatusPill(template: template),
                   ],
                 ),
               ),
@@ -457,47 +609,51 @@ class _AutomationCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
-          _AutomationDetailsGrid(
-            schedule: _repeatLabel(template),
-            shift: '${template.shift.label} shift',
-            nextCheck: nextCheck,
+          const SizedBox(height: AppSpacing.md),
+          _CardMetaLine(
+            icon: Icons.event_repeat_rounded,
+            label: '${_repeatLabel(template)} · ${template.shift.label} shift',
           ),
-          const SizedBox(height: AppSpacing.sm),
-          _AutomationDetail(
-            icon: Icons.access_time_rounded,
-            label: 'Shift window',
-            value: '${template.shift.label} shift hours',
-            detail: 'Exact start and end are not available yet.',
+          const SizedBox(height: AppSpacing.xs),
+          _CardMetaLine(
+            icon: outcome.icon,
+            label: outcome.label,
+            tone: outcome.color,
           ),
-          const SizedBox(height: AppSpacing.sm),
-          const _MissedPolicyNote(),
-          const SizedBox(height: AppSpacing.lg),
-          const Divider(height: 1, color: AppColors.darkBorder),
-          const SizedBox(height: AppSpacing.lg),
-          _LastOutcome(template: template),
-          if (template.lastGeneratedTaskId != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            _LastGeneratedTaskLink(
-              key: ValueKey('automation-last-task-${template.id}'),
-              title: template.title,
-              meta: _lastGeneratedTaskMeta(template),
-              onTap: onOpenTask,
+          if (template.active) ...[
+            const SizedBox(height: AppSpacing.xs),
+            _CardMetaLine(
+              icon: Icons.schedule_send_rounded,
+              label: 'Next check · $nextCheck',
             ),
           ],
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              key: ValueKey('automation-delete-${template.id}'),
-              onPressed: busy ? null : onDelete,
-              icon: const Icon(Icons.delete_outline_rounded, size: 17),
-              label: const Text('Delete'),
-              style: TextButton.styleFrom(
-                foregroundColor: AppColors.textTertiary,
-                textStyle: AppTypography.caption,
+          const SizedBox(height: AppSpacing.md),
+          const Divider(height: 1, color: AppColors.darkBorder),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              TextButton.icon(
+                key: ValueKey('automation-details-${template.id}'),
+                onPressed: busy ? null : onOpenDetails,
+                icon: const Icon(Icons.tune_rounded, size: 17),
+                label: const Text('Details'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary,
+                  textStyle: AppTypography.caption,
+                ),
               ),
-            ),
+              const Spacer(),
+              TextButton.icon(
+                key: ValueKey('automation-delete-${template.id}'),
+                onPressed: busy ? null : onDelete,
+                icon: const Icon(Icons.delete_outline_rounded, size: 17),
+                label: const Text('Delete'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textTertiary,
+                  textStyle: AppTypography.caption,
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -505,16 +661,41 @@ class _AutomationCard extends StatelessWidget {
   }
 }
 
-class _AutomationStatusChip extends StatelessWidget {
-  const _AutomationStatusChip({required this.template});
+class _CardMetaLine extends StatelessWidget {
+  const _CardMetaLine({required this.icon, required this.label, this.tone});
+
+  final IconData icon;
+  final String label;
+  final Color? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = tone ?? AppColors.textSecondary;
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: color),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            label,
+            style: AppTypography.caption.copyWith(color: color),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AutomationStatusPill extends StatelessWidget {
+  const _AutomationStatusPill({required this.template});
 
   final RecurringTaskTemplateEntity template;
 
   @override
   Widget build(BuildContext context) {
-    final failed =
-        template.failureCount > 0 ||
-        template.lastStatus?.toLowerCase() == 'failed';
+    final failed = _AutomationOutcome.isFailing(template);
     final (label, icon, color) = !template.active
         ? ('Paused', Icons.pause_rounded, AppColors.textSecondary)
         : failed
@@ -549,66 +730,231 @@ class _AutomationStatusChip extends StatelessWidget {
   }
 }
 
-class _AutomationDetailsGrid extends StatelessWidget {
-  const _AutomationDetailsGrid({
-    required this.schedule,
-    required this.shift,
-    required this.nextCheck,
-  });
+// ─── Details sheet ──────────────────────────────────────────────────────────
 
-  final String schedule;
-  final String shift;
-  final String nextCheck;
+/// Per-routine details sheet: overview, schedule, next execution, history,
+/// failure information, generated task, and actions. Read-only over the
+/// template's Cloud-Function-owned health fields; the only writes are
+/// pause/resume and delete, reusing [TaskCubit].
+class _AutomationDetailsSheet extends StatefulWidget {
+  const _AutomationDetailsSheet({required this.cubit, required this.template});
+
+  final TaskCubit cubit;
+  final RecurringTaskTemplateEntity template;
+
+  @override
+  State<_AutomationDetailsSheet> createState() =>
+      _AutomationDetailsSheetState();
+}
+
+class _AutomationDetailsSheetState extends State<_AutomationDetailsSheet> {
+  late RecurringTaskTemplateEntity _template = widget.template;
+  bool _busy = false;
+
+  Future<void> _toggle() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.cubit.setRecurringTemplateActive(_template, !_template.active);
+      if (mounted) {
+        setState(() => _template = _template.copyWith(active: !_template.active));
+      }
+    } catch (_) {
+      if (mounted) {
+        AppSnackbar.error(context, 'Could not update the recurring task.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    if (_busy) return;
+    final confirmed = await _confirmDeleteAutomation(context, _template.title);
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await widget.cubit.deleteRecurringTemplate(_template.id);
+      if (mounted) Navigator.of(context).pop(const _RecurringDetailsResult());
+    } catch (_) {
+      if (mounted) {
+        setState(() => _busy = false);
+        AppSnackbar.error(context, 'Could not delete the recurring task.');
+      }
+    }
+  }
+
+  void _openTask() {
+    final id = _template.lastGeneratedTaskId;
+    if (id == null) return;
+    Navigator.of(context).pop(_RecurringDetailsResult(openTaskId: id));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final scheduleCard = _AutomationDetail(
-      icon: Icons.event_repeat_rounded,
-      label: 'Schedule',
-      value: schedule,
-      detail: shift,
-    );
-    final nextCard = _AutomationDetail(
-      icon: Icons.schedule_send_rounded,
-      label: 'Next automation check',
-      value: nextCheck,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        if (constraints.maxWidth < 500) {
-          return Column(
+    final t = _template;
+    final outcome = _AutomationOutcome.of(t);
+    final failing = _AutomationOutcome.isFailing(t);
+    final steps = t.checklistItems.length;
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              scheduleCard,
-              const SizedBox(height: AppSpacing.sm),
-              nextCard,
+              Expanded(
+                child: Text(t.title, style: AppTypography.h3),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              _AutomationStatusPill(template: t),
             ],
-          );
-        }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: scheduleCard),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(child: nextCard),
+          ),
+          if (t.description != null && t.description!.trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(t.description!.trim(), style: AppTypography.bodySmall),
           ],
-        );
-      },
+          if (_busy) ...[
+            const SizedBox(height: AppSpacing.md),
+            const LinearProgressIndicator(minHeight: 2),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+
+          _DetailSection(
+            title: 'Overview',
+            children: [
+              _DetailRow(
+                icon: Icons.flag_outlined,
+                label: 'Priority',
+                value: t.priority.value,
+              ),
+              _DetailRow(
+                icon: Icons.checklist_rounded,
+                label: 'Checklist steps',
+                value: steps == 0
+                    ? 'None'
+                    : '$steps ${steps == 1 ? 'step' : 'steps'}',
+              ),
+              _DetailRow(
+                icon: Icons.storefront_outlined,
+                label: 'Applies to',
+                value: '${t.shift.label} shift roster',
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          _DetailSection(
+            title: 'Schedule',
+            children: [
+              _DetailRow(
+                icon: Icons.event_repeat_rounded,
+                label: 'Repeats',
+                value: _repeatLabel(t),
+              ),
+              _DetailRow(
+                icon: Icons.access_time_rounded,
+                label: 'Shift window',
+                value: _shiftWindowLabel(t),
+                detail: _shiftWindowNote(t),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          _DetailSection(
+            title: 'Next execution',
+            children: [
+              _DetailRow(
+                icon: Icons.schedule_send_rounded,
+                label: 'Next automation check',
+                value: t.active
+                    ? _nextAutomationLabel(t.nextRunAt)
+                    : 'Paused',
+                detail: t.active
+                    ? 'Advisory. The generator runs on its own schedule.'
+                    : 'Resume the routine to schedule generation.',
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+
+          _DetailSection(
+            title: 'History',
+            children: [
+              _DetailRow(
+                icon: outcome.icon,
+                label: 'Last outcome',
+                value: outcome.label,
+                valueColor: outcome.color,
+                detail: outcome.detail,
+              ),
+              _DetailRow(
+                icon: Icons.history_rounded,
+                label: 'Last run',
+                value: _lastRunLabel(t.lastRunAt),
+              ),
+            ],
+          ),
+
+          if (failing) ...[
+            const SizedBox(height: AppSpacing.md),
+            _FailureNote(template: t),
+          ],
+
+          if (t.lastGeneratedTaskId != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            _DetailSection(
+              title: 'Generated task',
+              children: [
+                _LastGeneratedTaskLink(
+                  key: ValueKey('automation-last-task-${t.id}'),
+                  title: t.title,
+                  meta: _lastGeneratedTaskMeta(t),
+                  onTap: _busy ? null : _openTask,
+                ),
+              ],
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.lg),
+          const _MissedPolicyNote(),
+          const SizedBox(height: AppSpacing.lg),
+
+          AppButton(
+            label: t.active ? 'Pause automation' : 'Resume automation',
+            variant: AppButtonVariant.secondary,
+            icon: Icon(
+              t.active ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              size: 20,
+              color: AppColors.textPrimary,
+            ),
+            onPressed: _busy ? null : _toggle,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.center,
+            child: TextButton.icon(
+              key: ValueKey('automation-details-delete-${t.id}'),
+              onPressed: _busy ? null : _delete,
+              icon: const Icon(Icons.delete_outline_rounded, size: 18),
+              label: const Text('Delete automation'),
+              style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _AutomationDetail extends StatelessWidget {
-  const _AutomationDetail({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.detail,
-  });
+class _DetailSection extends StatelessWidget {
+  const _DetailSection({required this.title, required this.children});
 
-  final IconData icon;
-  final String label;
-  final String value;
-  final String? detail;
+  final String title;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
@@ -620,6 +966,44 @@ class _AutomationDetail extends StatelessWidget {
         borderRadius: AppRadius.mdAll,
         border: Border.all(color: AppColors.darkBorder),
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title.toUpperCase(),
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.7,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.detail,
+    this.valueColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final String? detail;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -629,25 +1013,68 @@ class _AutomationDetail extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label.toUpperCase(),
-                  style: AppTypography.caption.copyWith(
-                    color: AppColors.textTertiary,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.7,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
+                Text(label, style: AppTypography.caption),
+                const SizedBox(height: 2),
                 Text(
                   value,
                   style: AppTypography.labelSmall.copyWith(
-                    color: AppColors.textPrimary,
+                    color: valueColor ?? AppColors.textPrimary,
                   ),
                 ),
                 if (detail != null) ...[
                   const SizedBox(height: 2),
                   Text(detail!, style: AppTypography.caption),
                 ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FailureNote extends StatelessWidget {
+  const _FailureNote({required this.template});
+
+  final RecurringTaskTemplateEntity template;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = template.failureCount;
+    final detail = count > 1
+        ? '$count consecutive generation failures. The routine keeps '
+              'retrying on its schedule.'
+        : 'The last generation attempt failed. It will retry on schedule.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: AppColors.error.withAlpha(20),
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: AppColors.error.withAlpha(72)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: AppColors.error,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Needs attention',
+                  style: AppTypography.labelSmall.copyWith(
+                    color: AppColors.error,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(detail, style: AppTypography.caption),
               ],
             ),
           ),
@@ -700,92 +1127,6 @@ class _MissedPolicyNote extends StatelessWidget {
   }
 }
 
-class _LastOutcome extends StatelessWidget {
-  const _LastOutcome({required this.template});
-
-  final RecurringTaskTemplateEntity template;
-
-  @override
-  Widget build(BuildContext context) {
-    final status = template.lastStatus?.toLowerCase();
-    final failed = template.failureCount > 0 || status == 'failed';
-    final String outcome;
-    final String detail;
-    final IconData icon;
-    final Color color;
-
-    if (failed) {
-      outcome = 'Last generation failed';
-      detail = template.failureCount > 1
-          ? '${template.failureCount} consecutive failures'
-          : _lastRunLabel(template.lastRunAt);
-      icon = Icons.error_outline_rounded;
-      color = AppColors.error;
-    } else if (template.lastRunAt == null && status == null) {
-      outcome = 'Never run';
-      detail = 'No generation outcome yet';
-      icon = Icons.hourglass_empty_rounded;
-      color = AppColors.textTertiary;
-    } else if (status == 'skipped') {
-      outcome = 'Already generated';
-      detail =
-          'No duplicate task was created • ${_lastRunLabel(template.lastRunAt)}';
-      icon = Icons.task_alt_rounded;
-      color = AppColors.textSecondary;
-    } else if (status == 'completed') {
-      outcome = template.lastGeneratedTaskId == null
-          ? 'Generation completed'
-          : 'Generated successfully';
-      detail = _lastRunLabel(template.lastRunAt);
-      icon = Icons.check_circle_outline_rounded;
-      color = AppColors.textSecondary;
-    } else {
-      outcome = 'Run recorded';
-      detail = _lastRunLabel(template.lastRunAt);
-      icon = Icons.history_rounded;
-      color = AppColors.textSecondary;
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            color: color.withAlpha(24),
-            borderRadius: AppRadius.smAll,
-          ),
-          child: Icon(icon, size: 17, color: color),
-        ),
-        const SizedBox(width: AppSpacing.md),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'LAST OUTCOME',
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.textTertiary,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.7,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                outcome,
-                style: AppTypography.labelSmall.copyWith(color: color),
-              ),
-              const SizedBox(height: 2),
-              Text(detail, style: AppTypography.caption),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
 class _LastGeneratedTaskLink extends StatelessWidget {
   const _LastGeneratedTaskLink({
     super.key,
@@ -801,7 +1142,7 @@ class _LastGeneratedTaskLink extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: AppColors.darkBg,
+      color: AppColors.darkSurfaceElevated,
       borderRadius: AppRadius.mdAll,
       child: InkWell(
         onTap: onTap,
@@ -859,6 +1200,75 @@ class _LastGeneratedTaskLink extends StatelessWidget {
   }
 }
 
+// ─── Shared derivations ─────────────────────────────────────────────────────
+
+/// The single source of truth for how a routine's last generation outcome is
+/// described — used by the card meta line, the status pill's failure check, and
+/// the details sheet's History/Failure sections, so the three never drift.
+class _AutomationOutcome {
+  const _AutomationOutcome({
+    required this.label,
+    required this.detail,
+    required this.icon,
+    required this.color,
+  });
+
+  final String label;
+  final String detail;
+  final IconData icon;
+  final Color color;
+
+  static bool isFailing(RecurringTaskTemplateEntity t) =>
+      t.failureCount > 0 || t.lastStatus?.toLowerCase() == 'failed';
+
+  factory _AutomationOutcome.of(RecurringTaskTemplateEntity t) {
+    final status = t.lastStatus?.toLowerCase();
+    if (isFailing(t)) {
+      return _AutomationOutcome(
+        label: 'Last generation failed',
+        detail: t.failureCount > 1
+            ? '${t.failureCount} consecutive failures'
+            : _lastRunLabel(t.lastRunAt),
+        icon: Icons.error_outline_rounded,
+        color: AppColors.error,
+      );
+    }
+    if (t.lastRunAt == null && status == null) {
+      return const _AutomationOutcome(
+        label: 'Never run',
+        detail: 'No generation outcome yet',
+        icon: Icons.hourglass_empty_rounded,
+        color: AppColors.textTertiary,
+      );
+    }
+    if (status == 'skipped') {
+      return _AutomationOutcome(
+        label: 'Already generated',
+        detail:
+            'No duplicate task was created • ${_lastRunLabel(t.lastRunAt)}',
+        icon: Icons.task_alt_rounded,
+        color: AppColors.textSecondary,
+      );
+    }
+    if (status == 'completed') {
+      return _AutomationOutcome(
+        label: t.lastGeneratedTaskId == null
+            ? 'Generation completed'
+            : 'Generated successfully',
+        detail: _lastRunLabel(t.lastRunAt),
+        icon: Icons.check_circle_outline_rounded,
+        color: AppColors.textSecondary,
+      );
+    }
+    return _AutomationOutcome(
+      label: 'Run recorded',
+      detail: _lastRunLabel(t.lastRunAt),
+      icon: Icons.history_rounded,
+      color: AppColors.textSecondary,
+    );
+  }
+}
+
 const _weekdayLabels = [
   'Monday',
   'Tuesday',
@@ -876,6 +1286,25 @@ String _repeatLabel(RecurringTaskTemplateEntity template) =>
       TemplateRepeatMode.weekly =>
         'Every ${_weekdayLabels[(template.weekday - 1).clamp(0, 6)]}',
     };
+
+/// The routine's concrete clock window, derived from the standing [ShiftHours]
+/// baseline (no per-week override is known at this level). Weekly routines pin
+/// to their target day; daily routines show the weekday baseline.
+String _shiftWindowLabel(RecurringTaskTemplateEntity t) {
+  final day = t.repeat == TemplateRepeatMode.weekly
+      ? ScheduleDay.values[t.weekday % 7]
+      : ScheduleDay.sunday; // a representative weekday
+  return ShiftHours.standard(day, t.shift).format();
+}
+
+/// A qualifier when the concrete window can vary by day.
+String? _shiftWindowNote(RecurringTaskTemplateEntity t) {
+  if (t.repeat == TemplateRepeatMode.daily &&
+      t.shift == ScheduleShift.night) {
+    return 'Runs later on weekends (Thu–Sat).';
+  }
+  return 'Standard hours. A week can override this per day.';
+}
 
 String _nextAutomationLabel(DateTime? raw, {DateTime? now}) {
   if (raw == null) return 'Not scheduled yet';
@@ -902,6 +1331,35 @@ String _lastGeneratedTaskMeta(RecurringTaskTemplateEntity template) {
   final failed = template.failureCount > 0 || status == 'failed';
   if (failed || status == 'skipped') return 'Previous generated task';
   return _lastTaskDateLabel(template.lastRunAt);
+}
+
+/// Confirms a destructive delete of a routine. Returns `true` only on an
+/// explicit confirm; deleting stops future generation but leaves past instances.
+Future<bool?> _confirmDeleteAutomation(BuildContext context, String title) {
+  return showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      backgroundColor: AppColors.darkSurfaceElevated,
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.cardAll),
+      title: const Text('Delete automation?', style: AppTypography.h3),
+      content: Text(
+        '"$title" will stop creating shift tasks. Tasks it already generated '
+        'are kept.',
+        style: AppTypography.bodySmall,
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(true),
+          style: TextButton.styleFrom(foregroundColor: AppColors.error),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Form to create a new recurring shift-task template. Pops `true` once saved

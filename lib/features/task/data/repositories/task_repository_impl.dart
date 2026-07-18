@@ -10,6 +10,7 @@ import 'package:drop/features/task/data/models/recurring_task_template_model.dar
 import 'package:drop/features/task/data/models/task_model.dart';
 import 'package:drop/features/task/data/models/task_template_model.dart';
 import 'package:drop/features/task/domain/entities/activity_entry.dart';
+import 'package:drop/features/task/domain/entities/automation_run_entity.dart';
 import 'package:drop/features/task/domain/entities/recurring_task_template_entity.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
@@ -297,6 +298,26 @@ class TaskRepositoryImpl implements TaskRepository {
   Future<void> deleteRecurringTemplate(String templateId) async {
     try {
       await _remote.deleteRecurringTemplate(templateId);
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  // ─── Automation execution history (observability, ADR-011) ─────
+  @override
+  Future<List<AutomationRunEntity>> getAutomationRuns(
+    String templateId, {
+    required String branchId,
+    int limit = 20,
+    DateTime? before,
+  }) async {
+    try {
+      return await _remote.getAutomationRuns(
+        templateId,
+        branchId: branchId,
+        limit: limit,
+        before: before,
+      );
     } on ServerException catch (e) {
       throw ServerFailure(e.message);
     }

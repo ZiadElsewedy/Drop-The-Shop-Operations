@@ -10,9 +10,9 @@
 | | |
 | --- | --- |
 | **Branch** | `feature/attendance-management` |
-| **Build** | `flutter analyze`: 7 infos, no errors/warnings (6 attendance async-context + 1 pre-existing test style) |
-| **Tests** | **939 pass · 2 fail** across 140 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues) |
-| **Blocking release** | Firebase deploy (rules · indexes · functions) · iOS push unconfigured · attendance on-device QA |
+| **Build** | `flutter analyze`: 1 info, no errors/warnings (pre-existing test style) |
+| **Tests** | **949 pass · 2 fail** across 142 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **23 pass** (`cd functions && node --test`) |
+| **Blocking release** | Firebase deploy (rules · indexes · functions) · recurring-template manager read isolation · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
 DROP is **feature-complete for its intended scope** and gated on deployment and QA,
@@ -47,7 +47,7 @@ pruning. `Community-Hub` is **dead** — the feature was removed 2026-07-15.
 | **Auth** | Admin-provisioned email/password. No registration/Google/OTP/approval. First-login gate: force password change → profile completion → (employees) Welcome → role home |
 | **Roles & routing** | 43 routes, role-guarded. admin ⊇ manager |
 | **Profile** | View/edit, avatar/cover upload, contact + payment (payment in a private subdoc; hidden for admin) |
-| **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets). The recurring-shift Automation Center now exposes status, schedule, advisory next check, generator outcome and last-task navigation in rich cards. |
+| **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets). The recurring-shift Automation Center is productionized: skeleton loading, premium header, slim tap-through cards, a per-routine details sheet (overview/schedule/next execution/history/failure info/generated task/actions) with real shift-window times, and confirmed delete. |
 | **Schedule** | Weekly roster, shift swaps, leave, day notes, configurable shift hours, shift templates, Final View + PNG export |
 | **Branches** | CRUD, soft delete, swap policy, GPS geofences |
 | **Admin** | User administration, account provisioning, Admin Home V2 command center |
@@ -67,7 +67,8 @@ phases and committed; what remains is deployment and on-device verification.
 
 > **Product behavior is locked** in [docs/design/ATTENDANCE_SPEC.md](docs/design/ATTENDANCE_SPEC.md)
 > (2026-07-18). **Spec Phases 1–2 are implemented** (engine + cubit API + rules +
-> CF + tests; **no new UI surfaces** — wiring buttons awaits owner design sign-off).
+> CF + tests, with the five write actions now wired through the shared action
+> sheet).
 > Phase 1: missed-punch recovery (employee request + manager Add record → server
 > materialization via one upsert apply path), manager direct-resolve, one-open-
 > correction. Phase 2: **early-clock-in window** (`clockInLeadMinutes`, default 15,
@@ -119,12 +120,10 @@ phases and committed; what remains is deployment and on-device verification.
 
 ## Known issues
 
-### Analyzer infos (7)
+### Analyzer info (1)
 
-Six `use_build_context_synchronously` infos are in the in-progress Attendance
-admin actions (`admin_attendance_screen.dart`); the remaining
-`use_null_aware_elements` info is the pre-existing test-style lint in
-`task_submission_gate_test.dart`. None are Automation Center findings.
+The remaining `use_null_aware_elements` info is the pre-existing test-style lint
+in `task_submission_gate_test.dart`. It is not an Automation Center finding.
 
 ### Failing tests (2)
 
@@ -134,6 +133,15 @@ the test expects **400 ±1** (and **291.7** vs **310 ±1** at 1024×720). Either
 splash layout regressed or `kSplashOpticalLift` changed without the test following.
 **Pre-existing and unrelated to any current work** — but it means `flutter test` is
 not green, so a real regression could hide behind it. Worth fixing or deleting.
+
+### Access-control gap
+
+The Automation UI queries `recurringTaskTemplates` by its supplied branch, but the
+current Firestore rule permits any manager to read the collection across branches.
+That contradicts the own-branch manager invariant in `PROJECT_CONTEXT.md`; it is
+not exposed by the current UI, but a direct client query can cross the boundary.
+The rules repair is deliberately outside the current UI-only phase and must be
+handled as a separate backend/security task before the rules deploy.
 
 ### Configuration gaps
 
@@ -152,8 +160,10 @@ not green, so a real regression could hide behind it. Worth fixing or deleting.
   `likesCount`) linger on `ProfileEntity`, unused. Safe to delete.
 - **Account deletion** removes the Auth user but leaves `users/{uid}` in Firestore.
   Needs an `auth.user().onDelete` function.
-- **`automationRuns` telemetry has no reader.** By [ADR-009](docs/decisions/ADR-009-no-analytics-pipeline.md)'s
-  own test it should be deleted unless someone names the decision it changes.
+- ~~**`automationRuns` telemetry has no reader.**~~ Resolved 2026-07-18: it is now
+  an enriched execution record with a client read layer under
+  [ADR-011](docs/decisions/ADR-011-automation-observability.md), which names the
+  ADR-009 decision it changes (operational observability in scope; analytics not).
 - **44 `developer.log` calls across 17 files bypass `AppLog`** (was 35/10 — drifting).
   Their output is *not* captured in the breadcrumb ring, so those events are missing
   from crash reports — a real observability gap, given `AppLog` claims to be the
@@ -177,9 +187,9 @@ console** before assuming.
 
 | Target | Carries | Blocks |
 | --- | --- | --- |
-| `functions` | 21 functions incl. `onAttendanceWritten`, `onAttendanceCorrectionWritten`, `autoCloseAttendance`, `generateShiftTaskInstances`, `onCase*`, `onRequest*`, `sendBroadcast`, `claimFcmToken` | Attendance audit · automation · cases · requests · **all push** |
+| `functions` | 22 functions incl. `onAttendanceWritten`, `onAttendanceCorrectionWritten`, `autoCloseAttendance`, `generateShiftTaskInstances`, **`onRecurringTemplateWritten`** (new — automation lifecycle audit), `onCase*`, `onRequest*`, `sendBroadcast`, `claimFcmToken` | Attendance audit · automation · cases · requests · **all push** |
 | `firestore:rules` | Task review-field freeze + non-decreasing `activityLog`; attendance + corrections; cases; requests | Task hardening (P0/P1), attendance, cases |
-| `firestore:indexes` | `tasks` composite (`branchId`+`assignmentType`+`shift`) | Employee shift-task stream — fails `failed-precondition` without it |
+| `firestore:indexes` | `tasks` composite (`branchId`+`assignmentType`+`shift`); **`automationRuns` `(branchId,templateId,startedAt)` + `(branchId,status,startedAt)`** | Employee shift-task stream (`failed-precondition` without it) · automation run history |
 | `storage` | `validMedia()` + orphan GC | Media hardening |
 
 ```bash
@@ -208,7 +218,7 @@ unknowingly reversed:
 | [ADR-004](docs/decisions/ADR-004-monochrome-design.md) — monochrome | Add a brand colour. Indigo has been rejected twice |
 | [ADR-007](docs/decisions/ADR-007-schedule-health-removed.md) — no Schedule Health | Re-add scoring. Direction flipped twice already |
 | [ADR-008](docs/decisions/ADR-008-requests-are-approvals.md) — Requests are approvals | Add statuses, assignment, or priority |
-| [ADR-009](docs/decisions/ADR-009-no-analytics-pipeline.md) — no analytics | Build a metric without naming the decision it changes |
+| [ADR-009](docs/decisions/ADR-009-no-analytics-pipeline.md) — no analytics | Build a metric without naming the decision it changes. [ADR-011](docs/decisions/ADR-011-automation-observability.md) carved out automation *execution observability* (not analytics); don't widen it to a time-series/analytics surface |
 | [ADR-005](docs/decisions/ADR-005-server-authoritative-writes.md) — server-authoritative | Let a client write its own audit trail |
 | [ADR-010](docs/decisions/ADR-010-lean-over-enterprise.md) — lean | Reach for the enterprise shape |
 
@@ -227,9 +237,19 @@ unknowingly reversed:
    inert in production and fails at runtime rather than at compile time.
 2. **Close out attendance** — on-device QA, then merge.
 3. **Get the suite green** — 2 failures is 2 too many to notice a third.
-4. **Wire the already-built attendance actions.** Automation is now visible from
-   Branch Operations; attendance correction/manual-entry actions are still
-   engine-only. Shipped-but-unreachable is indistinguishable from not-built.
+4. **Automation Task UI — productionized (2026-07-18).** Phases 2–4 landed
+   behind owner sign-off (skeleton loading, premium header, details sheet, real
+   shift-window times, confirmed delete). Backend execution, frozen shift
+   windows, new routes and packages remain out of scope by design.
+5. **Automation observability backend — built (2026-07-18, [ADR-011](docs/decisions/ADR-011-automation-observability.md)).**
+   Tier 1: enriched `automationRuns` execution records (schedule · validations ·
+   target+names · generation · notification · structured error · embedded step
+   logs), cumulative health counters on the template, a server-derived
+   `onRecurringTemplateWritten` lifecycle-audit function, and a thin client read
+   layer (`AutomationRunEntity`/model/repo, paginated) — the foundation for a
+   future Details screen (no screen built). **Gated on the standing
+   functions/rules/indexes deploy.** Tier 2 envelope (per-run I/O counters,
+   replay engine, analytics surface) deliberately declined.
 
 ---
 
@@ -238,8 +258,8 @@ unknowingly reversed:
 If you change status, gaps, or priorities, update this file **in the same task**.
 
 ```bash
-flutter analyze                          # expect: 7 infos, 0 errors/warnings
-flutter test                             # expect: 936 pass, 2 fail (splash)
+flutter analyze                          # expect: 1 info, 0 errors/warnings
+flutter test                             # expect: 940 pass, 2 fail (splash)
 grep -c "static const String" lib/core/routes/route_names.dart   # expect: 43
 ls lib/features | wc -l                  # expect: 17
 ```

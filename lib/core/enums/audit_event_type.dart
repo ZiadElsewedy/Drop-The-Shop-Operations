@@ -64,6 +64,22 @@ enum AuditEventType {
   automationFailed(
       'automation.failed', AuditEntityType.automation, 'Automation failed'),
 
+  // ── Automation lifecycle (LIVE — onRecurringTemplateWritten Cloud Function) ──
+  // Server-derived from the definition's before/after diff (ADR-005 + ADR-011):
+  // the client mutates the template directly and never writes its own audit, so
+  // "who paused/edited/deleted this automation, when, and what changed" is
+  // answerable and tamper-evident. Metadata carries the field-level change set.
+  automationCreated(
+      'automation.created', AuditEntityType.automation, 'Automation created'),
+  automationPaused(
+      'automation.paused', AuditEntityType.automation, 'Automation paused'),
+  automationResumed(
+      'automation.resumed', AuditEntityType.automation, 'Automation resumed'),
+  automationConfigChanged('automation.config_changed',
+      AuditEntityType.automation, 'Automation edited'),
+  automationDeleted(
+      'automation.deleted', AuditEntityType.automation, 'Automation deleted'),
+
   // ── Operations requests (LIVE — Requests cubits) ───────────────
   requestCreated('request.created', AuditEntityType.request, 'Request created'),
   requestApproved(

@@ -18,6 +18,53 @@ released — DROP ships from branches and has no version tags.
 
 ### 2026-07-18
 
+- **Automation observability backend — Tier 1 ([ADR-011](docs/decisions/ADR-011-automation-observability.md)).**
+  Made every automation execution fully observable without rewriting the engine.
+  `generateShiftTaskInstances` now writes a rich **execution record** to
+  `automationRuns/{templateId}_{dateKey}` (same one write/day, richer payload):
+  identity/version, schedule + execution delay, `validations[]` (pass/fail/skipped),
+  `target` (uids + **names** + explicit `matched`), generation/generated,
+  notification, a structured `error` (stage · code · retryable · recovered), and an
+  **embedded chronological `logs[]`** step timeline. Pure record logic extracted to
+  `functions/automation_run.js` (+14 node tests). Added cumulative **health
+  counters** on the template (run/success/failed/skipped/totalDuration/lastSuccess/
+  lastFailure/configVersion), O(1) per run — success rate & avg duration are derived
+  on read (`AutomationHealth`), never stored. New **`onRecurringTemplateWritten`**
+  function derives lifecycle audit (created/paused/resumed/config_changed/deleted)
+  into `audit_logs` server-side (ADR-005), idempotent & non-looping. Thin client
+  read layer (`AutomationRunEntity`/`AutomationRunModel`/`TaskRepository.getAutomationRuns`,
+  paginated) — foundation for a future Details screen, **no screen built**. Two
+  `automationRuns` composite indexes. Retires the `automationRuns` no-reader debt.
+  Tier 2 envelope (per-run I/O counters, replay, analytics surface) declined.
+  +9 Flutter tests. **Deploy pending** (functions + rules + indexes).
+
+- **Automation Task UI Phases 2–4 implemented (owner-approved).** Polished the
+  Automation Center over the existing cubit/repository/design system — no new
+  routes, packages, or backend. Added card-shaped **skeleton loading**
+  (`Skeleton`), an icon-led **premium header**, a summary **"needs attention"**
+  failure count, and slimmer tap-through cards. Extracted one **`_AutomationOutcome`**
+  resolver so the status pill, card meta and details sections never drift. New
+  per-routine **details sheet** (modal, not a route) with Overview / Schedule /
+  Next execution / History / Failure information / Generated task / Actions,
+  showing **real shift-window times** derived from `ShiftHours.standard` (replacing
+  the "not available yet" placeholder). **Delete now confirms** via a dialog
+  (card and details). Details toggle/delete reuse `TaskCubit`; the manage sheet
+  loops back after details so a card reflects any change. Focused widget tests
+  rewritten + one added for the failure-info path (7 pass).
+
+- **Automation Task UI Phase 1 audit (product code read-only).** Verified the
+  existing Center, Branch Operations entry, task preview path, Cubit/repository
+  flow and focused coverage. The implementation plan is held at the owner gate;
+  its production blockers are the unsafe generic create path (unawaited save plus
+  silently discarded schedule/attachment input), the unconfirmed one-tap template
+  delete, full-list loading resets, repeated template reads, and the missing read
+  path for truthful run history/failure detail. Backend execution, routes, packages and frozen shift
+  windows remain out of scope. The audit also recorded—but did not patch—a rules
+  gap that lets managers read recurring templates outside their branch.
+  Documentation self-check corrected the live
+  baseline to 1 analyzer info and 939 passing / 2 known splash failures, and
+  removed the stale claim that Attendance actions were still unreachable.
+
 - **Automation Center UX refresh — visible, manager-first operations surface.**
   Replaced the basic recurring-template rows with responsive premium cards showing
   Active/Paused/Error state, human cadence, the advisory next automation check,

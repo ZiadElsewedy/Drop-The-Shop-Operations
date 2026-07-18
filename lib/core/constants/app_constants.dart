@@ -6,6 +6,12 @@ class AppConstants {
   static const String tasksCollection = 'tasks';
   static const String taskTemplatesCollection = 'task_templates';
   static const String recurringTaskTemplatesCollection = 'recurringTaskTemplates';
+
+  /// Automation execution history (Automated Task Engine observability, ADR-011).
+  /// One document per (template, day) at a deterministic id `{templateId}_{dateKey}`
+  /// → idempotent history. Written ONLY by the `generateShiftTaskInstances` Cloud
+  /// Function (server-authoritative); the client reads it for the run timeline.
+  static const String automationRunsCollection = 'automationRuns';
   static const String branchesCollection = 'branches';
   static const String weeklySchedulesCollection = 'weekly_schedules';
   static const String shiftTemplatesCollection = 'shift_templates';

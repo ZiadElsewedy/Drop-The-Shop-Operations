@@ -1,11 +1,13 @@
 # DROP — Automated Task Engine (Audit + Hardening)
 
-> **Status:** P0 + P1 implemented (`feature/media-upload-v2`, 2026-07-11).
-> Owner-approved scope after a full automation audit. Calibrated to small-team
-> scale per [product philosophy](../../PROJECT_CONTEXT.md) — **no parallel
-> automation backend, no round-robin assignment engine, no standalone analytics
-> dashboard**. This doc is the source of truth for how recurring/scheduled task
-> automation works and why it is now deterministic.
+> **Status:** P0 + P1 implemented (`feature/media-upload-v2`, 2026-07-11);
+> **execution observability (Tier 1) implemented 2026-07-18** under
+> [ADR-011](../decisions/ADR-011-automation-observability.md). Owner-approved
+> scope after a full automation audit. Calibrated to small-team scale per
+> [product philosophy](../../PROJECT_CONTEXT.md) — **no parallel automation
+> backend, no round-robin assignment engine, no standalone analytics dashboard,
+> no replay engine**. This doc is the source of truth for how recurring/scheduled
+> task automation works and why it is now deterministic and observable.
 
 ---
 
@@ -118,29 +120,78 @@ The presentation is deliberately honest about backend gaps:
 
 ---
 
-## 5. Automation History (`automationRuns`)
+## 5. Automation execution records (`automationRuns`) — ADR-011
 
 Operational execution telemetry — **distinct from `audit_logs`** (business facts).
 Written by the Cloud Function per (template, day) at a **deterministic id**
 `{templateId}_{yyyy-MM-dd}`, so the history is itself idempotent (a retry
-overwrites the run row, never appends a duplicate):
+overwrites the run row, never appends a duplicate). As of
+[ADR-011](../decisions/ADR-011-automation-observability.md) the row is a rich
+**execution record** — same one write per template/day, richer payload:
 
 ```
 automationRuns/{templateId}_{dateKey}
-  templateId, branchId, dateKey
-  startedAt, finishedAt, durationMs
-  executionId            // per-invocation correlation id
-  status                 // completed | skipped | failed
-  outcome                // created | alreadyExists | noEligibleEmployees | error
+  # Identity
+  templateId, automationName, version, branchId, dateKey, executionId
+  # Execution
+  startedAt, finishedAt, durationMs, trigger, retryCount, status, outcome
+  # Schedule
+  schedule: { scheduledAt, actualAt, delayMs, shift, day, branchId }
+  # Validation (each pass | fail | skipped)
+  validations: [ { name, result } ]   # templateExists · branchExists · scheduleValid · employeesFound
+  # Target resolution (explicit even when nobody matched)
+  target: { uids[], names[], count, matched, shift, branchId }
+  # Generation
+  generation: { templateVersion, checklistCount, priority, proofRequired }
+  generated:  { taskIds[], titles[], count, skippedCount }
+  # Notification
+  notification: { sent, failed, notificationIds[] }
+  # Error (null unless failed / recovered)
+  error: { stage, code, message, retryable, recovered } | null
+  # Chronological timeline (EMBEDDED, bounded ~7–12 steps)
+  logs: [ { at, stage, severity, message, meta } ]
+  # Back-compat flat fields (pre-ADR-011 readers / retention)
   generatedTaskId, recipientCount, failureReason
 ```
 
-This is the server-side debugging record, but the Flutter app currently has **no
-reader** for it; the Automation Center reads only the template rollups in §4.
+The pure, unit-tested shape logic lives in `functions/automation_run.js`
+(`buildValidations` · `classifyError` · `healthDeltas` · `executionDelayMs`); the
+Cloud Function does the I/O and calls it, so the record is deterministic and
+testable (`functions/test/automation_run.test.js`).
+
+**Client reader (ADR-011).** `AutomationRunEntity` + `AutomationRunModel` +
+`TaskRepository.getAutomationRuns(templateId, branchId, {limit, before})` — a
+paginated, newest-first read (cursor = the last row's `startedAt`). Read-only;
+the collection stays server-authoritative. This is the data foundation for a
+future Details screen (Overview · Runs · Timeline · Logs · Recipients ·
+Notifications) — **no screen is built yet**. `branchId` is filtered (not just
+`templateId`) because the rules gate a manager's read on `branchId ==
+selfBranch`; a list query must constrain branchId.
+
 Runs older than `config/taskRetention.automationRunRetentionDays` (default 90)
 are pruned by the daily `taskHousekeeping` sweep (bounded, idempotent), so the
-collection stays small. Until a concrete operational decision needs the history,
-the missing reader remains accepted debt under ADR-009.
+collection stays small (~1 doc/template/day → ~900 steady-state).
+
+### Health counters (template rollup)
+
+The generator increments cumulative counters on the template (O(1) per run) so
+the whole health panel is **one read**: `runCount`, `successCount`,
+`failedCount`, `skippedCount`, `totalDurationMs`, `lastSuccessAt`,
+`lastFailureAt`, plus the pre-existing consecutive `failureCount`. Success rate
+and average duration are **derived on read** (`AutomationHealth.fromTemplate`) and
+never stored — the line ADR-011 draws vs. an analytics pipeline. All CF-owned and
+read-only to the client (omitted from `toMap`, like the §4 rollups).
+
+### Lifecycle audit (`onRecurringTemplateWritten`)
+
+Definition edits are audited **server-side** (ADR-005): the client mutates the
+template directly and never writes its own audit; this trigger diffs before/after
+and appends `automation.created | paused | resumed | config_changed | deleted` to
+`audit_logs` with the field-level change set. Idempotent (audit id derived from
+the CloudEvent id) and non-looping: the CF-owned rollup/health/`configVersion`
+fields are excluded from the diff, so a generation run's rollup write produces no
+audit and no version bump. `configVersion` (bumped here on config changes) is
+captured onto each run's `version`, so history is attributable to a definition.
 
 ## 6. Audit events (reuses Event Tracking — no parallel system)
 
@@ -175,27 +226,44 @@ included) and an empty roster failed silently. Now the roster is filtered and th
 
 ## 8. Firestore
 
-- `recurringTaskTemplates`: +6 additive fields (§4). Existing rules unchanged.
+- `recurringTaskTemplates`: §4 rollups + §5 health counters (`runCount`,
+  `successCount`, `failedCount`, `skippedCount`, `totalDurationMs`,
+  `lastSuccessAt`, `lastFailureAt`, `configVersion`). All additive, CF-owned,
+  omitted from client `toMap`. Existing rules unchanged.
 - `tasks`: +`recurrenceRootId` / `occurrenceKey` (additive, nullable).
-- `automationRuns/{id}`: **new** — read: admin, or manager of the run's branch;
-  **write: server-only** (`allow write: if false`; the Admin SDK bypasses rules).
-- No composite indexes required (single-field reads only).
+- `automationRuns/{id}`: enriched execution record (§5) — read: admin, or manager
+  of the run's branch; **write: server-only** (`allow write: if false`; the Admin
+  SDK bypasses rules).
+- **Composite indexes (ADR-011):** `(branchId, templateId, startedAt desc)` for
+  the paginated per-template history; `(branchId, status, startedAt desc)` for a
+  future branch-failure view.
 
-## 9. Cloud Function summary (`generateShiftTaskInstances`)
+## 9. Cloud Function summary
 
-Atomic `create` (dedup) · notify-on-create-only with deterministic notif ids ·
-roster filtering (active + not-on-leave) · `automationRuns` history ·
-`recurringTaskTemplates` rollups · `audit_logs` events · `maxInstances:1` +
-`retryCount:0` + `timeoutSeconds`. **UTC date key** is kept deliberately (a
-Cloud Function has no per-branch local time; determinism is the priority — a
-branch-local "today" is a noted P2).
+**`generateShiftTaskInstances`** — atomic `create` (dedup) · notify-on-create-only
+with deterministic notif ids · roster filtering (active + not-on-leave) · enriched
+`automationRuns` execution record + embedded step logs (§5) · `recurringTaskTemplates`
+rollups + health counters · `audit_logs` events · `maxInstances:1` + `retryCount:0`
++ `timeoutSeconds`. **UTC date key** is kept deliberately (a Cloud Function has no
+per-branch local time; determinism is the priority — a branch-local "today" is a
+noted P2). Pure record-shape logic is extracted to `functions/automation_run.js`.
+
+**`onRecurringTemplateWritten`** (ADR-011) — server-derived lifecycle audit
+(created / paused / resumed / config_changed / deleted) from the definition's
+before/after diff; idempotent (audit id from the CloudEvent id) and non-looping
+(rollup/health/`configVersion` fields excluded from the diff).
 
 ---
 
-## 10. Deferred (P2 — not built)
+## 10. Deferred (not built)
 
-- Automation **Dashboard** as a separate analytics surface → folded into the
-  Center for this team size.
+- **Tier 2 enterprise envelope** (ADR-011, declined): per-run Firestore read/write
+  counters, CF version/region/cold-start metadata, stored stack traces, and a
+  **replay engine** (re-execution risks double-creation).
+- Automation **Dashboard** / analytics-time-series surface → out of scope
+  (ADR-009); observability lives on the run records + health counters.
+- A **Details screen** over the ADR-011 read layer — data foundation is built;
+  the screen is a future UI phase.
 - `assignmentStrategy` scaffolding for future non-broadcast strategies.
 - Branch-local timezone "today".
 - Monthly recurrence for **shift** templates (per-task recurrence already has it).
@@ -204,6 +272,8 @@ branch-local "today" is a noted P2).
 
 ## 11. Deploy checklist (owner's machine)
 
-1. `firebase deploy --only functions:generateShiftTaskInstances,functions:runTaskReminders,functions:taskHousekeeping`
-2. `firebase deploy --only firestore:rules` (the new `automationRuns` block)
-3. No data migration — every new field is additive and defaults cleanly.
+1. `firebase deploy --only functions:generateShiftTaskInstances,functions:onRecurringTemplateWritten,functions:runTaskReminders,functions:taskHousekeeping`
+2. `firebase deploy --only firestore:rules` (the `automationRuns` block)
+3. `firebase deploy --only firestore:indexes` (the two `automationRuns` composites)
+4. No data migration — every new field is additive and defaults cleanly (counters
+   start at 0/1 via `?? ` fallbacks; historical runs simply lack the new blocks).

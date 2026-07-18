@@ -8,7 +8,6 @@ import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/enums/task_priority.dart';
 import 'package:drop/core/enums/template_repeat_mode.dart';
 import 'package:drop/core/theme/app_theme.dart';
-import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/features/auth/domain/repositories/auth_repository.dart';
 import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:drop/features/branch/domain/repositories/branch_repository.dart';
@@ -101,7 +100,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('rich automation card exposes truthful operational details', (
+  testWidgets('card summarizes a routine and details sheet shows the rest', (
     tester,
   ) async {
     await _usePhoneViewport(tester);
@@ -127,26 +126,27 @@ void main() {
 
     await _openAutomationCenter(tester, cubit);
 
+    // Card surfaces the glanceable essentials.
     expect(find.text('Active'), findsWidgets);
-    expect(find.text('Daily'), findsOneWidget);
-    expect(find.text('Morning shift'), findsOneWidget);
+    expect(find.text('Daily · Morning shift'), findsOneWidget);
+    expect(find.text('Generated successfully'), findsOneWidget);
     expect(find.text('Next automation check'), findsOneWidget);
-    expect(find.text('NEXT AUTOMATION CHECK'), findsOneWidget);
-    expect(
-      find.textContaining(AppDateFormatter.time(nextRun.toLocal())),
-      findsWidgets,
-    );
 
-    await tester.ensureVisible(find.text('Generated successfully'));
+    // Details button opens the per-routine details sheet.
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('automation-details-open-shift')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('automation-details-open-shift')),
+    );
     await tester.pumpAndSettle();
 
-    expect(find.text('SHIFT WINDOW'), findsOneWidget);
-    expect(
-      find.text('Exact start and end are not available yet.'),
-      findsOneWidget,
-    );
+    expect(find.text('OVERVIEW'), findsOneWidget);
+    expect(find.text('SCHEDULE'), findsOneWidget);
+    expect(find.text('Shift window'), findsOneWidget);
+    expect(find.text('08:30 – 16:30'), findsOneWidget);
     expect(find.text('Missed policy · Not enabled'), findsOneWidget);
-    expect(find.text('Generated successfully'), findsOneWidget);
     expect(find.text('Last task'), findsOneWidget);
     expect(find.text('Tap to open'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -186,9 +186,7 @@ void main() {
       await _openAutomationCenter(tester, cubit);
 
       expect(find.text('Paused'), findsWidgets);
-      expect(find.text('Every Friday'), findsOneWidget);
-      await tester.ensureVisible(find.text('Last generation failed').first);
-      await tester.pumpAndSettle();
+      expect(find.textContaining('Every Friday'), findsOneWidget);
       expect(find.text('Last generation failed'), findsWidgets);
 
       await tester.fling(find.byType(ListView), const Offset(0, -1200), 1000);
@@ -198,7 +196,45 @@ void main() {
     },
   );
 
-  testWidgets('toggle delete and last-task link reuse the existing behavior', (
+  testWidgets('details sheet surfaces failure information for a failing routine', (
+    tester,
+  ) async {
+    await _usePhoneViewport(tester);
+    final repository = _TaskRepository(
+      templates: [
+        const RecurringTaskTemplateEntity(
+          id: 'failing',
+          title: 'Nightly Close',
+          branchId: 'branch-1',
+          shift: ScheduleShift.night,
+          repeat: TemplateRepeatMode.daily,
+          lastStatus: 'failed',
+          failureCount: 3,
+        ),
+      ],
+    );
+    final cubit = _createCubit(repository);
+    addTearDown(cubit.close);
+
+    await _openAutomationCenter(tester, cubit);
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('automation-details-failing')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('automation-details-failing')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Needs attention'), findsOneWidget);
+    expect(
+      find.textContaining('3 consecutive generation failures'),
+      findsOneWidget,
+    );
+    // The night-daily window carries its weekend qualifier.
+    expect(find.textContaining('later on weekends'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('toggle, delete confirmation, and last-task link work', (
     tester,
   ) async {
     await _usePhoneViewport(tester);
@@ -238,10 +274,16 @@ void main() {
     await tester.tap(find.text('Open automation'));
     await tester.pumpAndSettle();
 
+    // Inline switch pauses the routine.
     await tester.tap(find.byKey(const ValueKey('automation-toggle-routine-1')));
     await tester.pumpAndSettle();
     expect(repository.lastUpdated?.active, isFalse);
 
+    // Last generated task opens from the details sheet.
+    await tester.tap(
+      find.byKey(const ValueKey('automation-details-routine-1')),
+    );
+    await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.byKey(const ValueKey('automation-last-task-routine-1')),
     );
@@ -250,20 +292,30 @@ void main() {
       find.byKey(const ValueKey('automation-last-task-routine-1')),
     );
     await tester.pumpAndSettle();
-
     expect(find.text('Opened generated-7'), findsOneWidget);
 
     router.pop();
     await tester.pumpAndSettle();
     await tester.tap(find.text('Open automation'));
     await tester.pumpAndSettle();
+
+    // Delete now asks for confirmation before removing the routine.
     await tester.ensureVisible(
       find.byKey(const ValueKey('automation-delete-routine-1')),
     );
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('automation-delete-routine-1')));
     await tester.pumpAndSettle();
+    expect(find.text('Delete automation?'), findsOneWidget);
+    expect(repository.lastDeletedId, isNull);
 
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.widgetWithText(TextButton, 'Delete'),
+      ),
+    );
+    await tester.pumpAndSettle();
     expect(repository.lastDeletedId, 'routine-1');
     expect(tester.takeException(), isNull);
   });

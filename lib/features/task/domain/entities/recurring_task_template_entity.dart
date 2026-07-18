@@ -60,6 +60,28 @@ class RecurringTaskTemplateEntity with _$RecurringTaskTemplateEntity {
     String? lastGeneratedTaskId,
     /// Consecutive generation failures; reset to 0 on a successful run.
     @Default(0) int failureCount,
+    // ─── Cumulative health counters (Automation observability, ADR-011) ──
+    // Monotonic totals the Cloud Function increments per run (O(1) writes) so the
+    // whole health panel is ONE read; derived rate/avg live in [AutomationHealth]
+    // and are never stored. All CF-owned and **read-only** to the client (never
+    // in `toMap`, like the rollups above).
+    /// A monotonic version of the definition, bumped by the lifecycle CF on any
+    /// config change; captured onto each run so history is attributable.
+    @Default(1) int configVersion,
+    /// Total generation runs recorded (completed + skipped + failed).
+    @Default(0) int runCount,
+    /// Runs that completed (a task was generated).
+    @Default(0) int successCount,
+    /// Runs that failed.
+    @Default(0) int failedCount,
+    /// Runs that were skipped (the day's task already existed).
+    @Default(0) int skippedCount,
+    /// Sum of run durations in ms; averaged on read (never stored averaged).
+    @Default(0) int totalDurationMs,
+    /// Last successful generation.
+    DateTime? lastSuccessAt,
+    /// Last failed generation.
+    DateTime? lastFailureAt,
   }) = _RecurringTaskTemplateEntity;
 
   /// Builds the instance-level checklist (all items uncompleted) for a newly

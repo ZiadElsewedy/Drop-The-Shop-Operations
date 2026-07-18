@@ -31,6 +31,14 @@ class RecurringTaskTemplateModel {
   final String? lastStatus;
   final String? lastGeneratedTaskId;
   final int failureCount;
+  final int configVersion;
+  final int runCount;
+  final int successCount;
+  final int failedCount;
+  final int skippedCount;
+  final int totalDurationMs;
+  final DateTime? lastSuccessAt;
+  final DateTime? lastFailureAt;
 
   const RecurringTaskTemplateModel({
     required this.id,
@@ -52,6 +60,14 @@ class RecurringTaskTemplateModel {
     this.lastStatus,
     this.lastGeneratedTaskId,
     this.failureCount = 0,
+    this.configVersion = 1,
+    this.runCount = 0,
+    this.successCount = 0,
+    this.failedCount = 0,
+    this.skippedCount = 0,
+    this.totalDurationMs = 0,
+    this.lastSuccessAt,
+    this.lastFailureAt,
   });
 
   factory RecurringTaskTemplateModel.fromMap(Map<String, dynamic> map,
@@ -76,6 +92,14 @@ class RecurringTaskTemplateModel {
         lastStatus: map['lastStatus'] as String?,
         lastGeneratedTaskId: map['lastGeneratedTaskId'] as String?,
         failureCount: (map['failureCount'] as num?)?.toInt() ?? 0,
+        configVersion: (map['configVersion'] as num?)?.toInt() ?? 1,
+        runCount: (map['runCount'] as num?)?.toInt() ?? 0,
+        successCount: (map['successCount'] as num?)?.toInt() ?? 0,
+        failedCount: (map['failedCount'] as num?)?.toInt() ?? 0,
+        skippedCount: (map['skippedCount'] as num?)?.toInt() ?? 0,
+        totalDurationMs: (map['totalDurationMs'] as num?)?.toInt() ?? 0,
+        lastSuccessAt: map.date('lastSuccessAt'),
+        lastFailureAt: map.date('lastFailureAt'),
       );
 
   factory RecurringTaskTemplateModel.fromEntity(
@@ -100,6 +124,14 @@ class RecurringTaskTemplateModel {
         lastStatus: e.lastStatus,
         lastGeneratedTaskId: e.lastGeneratedTaskId,
         failureCount: e.failureCount,
+        configVersion: e.configVersion,
+        runCount: e.runCount,
+        successCount: e.successCount,
+        failedCount: e.failedCount,
+        skippedCount: e.skippedCount,
+        totalDurationMs: e.totalDurationMs,
+        lastSuccessAt: e.lastSuccessAt,
+        lastFailureAt: e.lastFailureAt,
       );
 
   /// Persisted fields. `createdAt`/`updatedAt` are written by the datasource as
@@ -144,6 +176,14 @@ class RecurringTaskTemplateModel {
         lastStatus: lastStatus,
         lastGeneratedTaskId: lastGeneratedTaskId,
         failureCount: failureCount,
+        configVersion: configVersion,
+        runCount: runCount,
+        successCount: successCount,
+        failedCount: failedCount,
+        skippedCount: skippedCount,
+        totalDurationMs: totalDurationMs,
+        lastSuccessAt: lastSuccessAt,
+        lastFailureAt: lastFailureAt,
       );
 
   RecurringTaskTemplateEntity toEntity() => RecurringTaskTemplateEntity(
@@ -166,5 +206,13 @@ class RecurringTaskTemplateModel {
         lastStatus: lastStatus,
         lastGeneratedTaskId: lastGeneratedTaskId,
         failureCount: failureCount,
+        configVersion: configVersion,
+        runCount: runCount,
+        successCount: successCount,
+        failedCount: failedCount,
+        skippedCount: skippedCount,
+        totalDurationMs: totalDurationMs,
+        lastSuccessAt: lastSuccessAt,
+        lastFailureAt: lastFailureAt,
       );
 }

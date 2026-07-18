@@ -61,7 +61,36 @@ mixin _$RecurringTaskTemplateEntity {
   String? get lastGeneratedTaskId => throw _privateConstructorUsedError;
 
   /// Consecutive generation failures; reset to 0 on a successful run.
-  int get failureCount => throw _privateConstructorUsedError;
+  int get failureCount =>
+      throw _privateConstructorUsedError; // ─── Cumulative health counters (Automation observability, ADR-011) ──
+  // Monotonic totals the Cloud Function increments per run (O(1) writes) so the
+  // whole health panel is ONE read; derived rate/avg live in [AutomationHealth]
+  // and are never stored. All CF-owned and **read-only** to the client (never
+  // in `toMap`, like the rollups above).
+  /// A monotonic version of the definition, bumped by the lifecycle CF on any
+  /// config change; captured onto each run so history is attributable.
+  int get configVersion => throw _privateConstructorUsedError;
+
+  /// Total generation runs recorded (completed + skipped + failed).
+  int get runCount => throw _privateConstructorUsedError;
+
+  /// Runs that completed (a task was generated).
+  int get successCount => throw _privateConstructorUsedError;
+
+  /// Runs that failed.
+  int get failedCount => throw _privateConstructorUsedError;
+
+  /// Runs that were skipped (the day's task already existed).
+  int get skippedCount => throw _privateConstructorUsedError;
+
+  /// Sum of run durations in ms; averaged on read (never stored averaged).
+  int get totalDurationMs => throw _privateConstructorUsedError;
+
+  /// Last successful generation.
+  DateTime? get lastSuccessAt => throw _privateConstructorUsedError;
+
+  /// Last failed generation.
+  DateTime? get lastFailureAt => throw _privateConstructorUsedError;
 
   /// Create a copy of RecurringTaskTemplateEntity
   /// with the given fields replaced by the non-null parameter values.
@@ -101,6 +130,14 @@ abstract class $RecurringTaskTemplateEntityCopyWith<$Res> {
     String? lastStatus,
     String? lastGeneratedTaskId,
     int failureCount,
+    int configVersion,
+    int runCount,
+    int successCount,
+    int failedCount,
+    int skippedCount,
+    int totalDurationMs,
+    DateTime? lastSuccessAt,
+    DateTime? lastFailureAt,
   });
 }
 
@@ -141,6 +178,14 @@ class _$RecurringTaskTemplateEntityCopyWithImpl<
     Object? lastStatus = freezed,
     Object? lastGeneratedTaskId = freezed,
     Object? failureCount = null,
+    Object? configVersion = null,
+    Object? runCount = null,
+    Object? successCount = null,
+    Object? failedCount = null,
+    Object? skippedCount = null,
+    Object? totalDurationMs = null,
+    Object? lastSuccessAt = freezed,
+    Object? lastFailureAt = freezed,
   }) {
     return _then(
       _value.copyWith(
@@ -220,6 +265,38 @@ class _$RecurringTaskTemplateEntityCopyWithImpl<
                 ? _value.failureCount
                 : failureCount // ignore: cast_nullable_to_non_nullable
                       as int,
+            configVersion: null == configVersion
+                ? _value.configVersion
+                : configVersion // ignore: cast_nullable_to_non_nullable
+                      as int,
+            runCount: null == runCount
+                ? _value.runCount
+                : runCount // ignore: cast_nullable_to_non_nullable
+                      as int,
+            successCount: null == successCount
+                ? _value.successCount
+                : successCount // ignore: cast_nullable_to_non_nullable
+                      as int,
+            failedCount: null == failedCount
+                ? _value.failedCount
+                : failedCount // ignore: cast_nullable_to_non_nullable
+                      as int,
+            skippedCount: null == skippedCount
+                ? _value.skippedCount
+                : skippedCount // ignore: cast_nullable_to_non_nullable
+                      as int,
+            totalDurationMs: null == totalDurationMs
+                ? _value.totalDurationMs
+                : totalDurationMs // ignore: cast_nullable_to_non_nullable
+                      as int,
+            lastSuccessAt: freezed == lastSuccessAt
+                ? _value.lastSuccessAt
+                : lastSuccessAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            lastFailureAt: freezed == lastFailureAt
+                ? _value.lastFailureAt
+                : lastFailureAt // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
           )
           as $Val,
     );
@@ -255,6 +332,14 @@ abstract class _$$RecurringTaskTemplateEntityImplCopyWith<$Res>
     String? lastStatus,
     String? lastGeneratedTaskId,
     int failureCount,
+    int configVersion,
+    int runCount,
+    int successCount,
+    int failedCount,
+    int skippedCount,
+    int totalDurationMs,
+    DateTime? lastSuccessAt,
+    DateTime? lastFailureAt,
   });
 }
 
@@ -295,6 +380,14 @@ class __$$RecurringTaskTemplateEntityImplCopyWithImpl<$Res>
     Object? lastStatus = freezed,
     Object? lastGeneratedTaskId = freezed,
     Object? failureCount = null,
+    Object? configVersion = null,
+    Object? runCount = null,
+    Object? successCount = null,
+    Object? failedCount = null,
+    Object? skippedCount = null,
+    Object? totalDurationMs = null,
+    Object? lastSuccessAt = freezed,
+    Object? lastFailureAt = freezed,
   }) {
     return _then(
       _$RecurringTaskTemplateEntityImpl(
@@ -374,6 +467,38 @@ class __$$RecurringTaskTemplateEntityImplCopyWithImpl<$Res>
             ? _value.failureCount
             : failureCount // ignore: cast_nullable_to_non_nullable
                   as int,
+        configVersion: null == configVersion
+            ? _value.configVersion
+            : configVersion // ignore: cast_nullable_to_non_nullable
+                  as int,
+        runCount: null == runCount
+            ? _value.runCount
+            : runCount // ignore: cast_nullable_to_non_nullable
+                  as int,
+        successCount: null == successCount
+            ? _value.successCount
+            : successCount // ignore: cast_nullable_to_non_nullable
+                  as int,
+        failedCount: null == failedCount
+            ? _value.failedCount
+            : failedCount // ignore: cast_nullable_to_non_nullable
+                  as int,
+        skippedCount: null == skippedCount
+            ? _value.skippedCount
+            : skippedCount // ignore: cast_nullable_to_non_nullable
+                  as int,
+        totalDurationMs: null == totalDurationMs
+            ? _value.totalDurationMs
+            : totalDurationMs // ignore: cast_nullable_to_non_nullable
+                  as int,
+        lastSuccessAt: freezed == lastSuccessAt
+            ? _value.lastSuccessAt
+            : lastSuccessAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
+        lastFailureAt: freezed == lastFailureAt
+            ? _value.lastFailureAt
+            : lastFailureAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
       ),
     );
   }
@@ -403,6 +528,14 @@ class _$RecurringTaskTemplateEntityImpl extends _RecurringTaskTemplateEntity {
     this.lastStatus,
     this.lastGeneratedTaskId,
     this.failureCount = 0,
+    this.configVersion = 1,
+    this.runCount = 0,
+    this.successCount = 0,
+    this.failedCount = 0,
+    this.skippedCount = 0,
+    this.totalDurationMs = 0,
+    this.lastSuccessAt,
+    this.lastFailureAt,
   }) : _checklistItems = checklistItems,
        super._();
 
@@ -481,10 +614,53 @@ class _$RecurringTaskTemplateEntityImpl extends _RecurringTaskTemplateEntity {
   @override
   @JsonKey()
   final int failureCount;
+  // ─── Cumulative health counters (Automation observability, ADR-011) ──
+  // Monotonic totals the Cloud Function increments per run (O(1) writes) so the
+  // whole health panel is ONE read; derived rate/avg live in [AutomationHealth]
+  // and are never stored. All CF-owned and **read-only** to the client (never
+  // in `toMap`, like the rollups above).
+  /// A monotonic version of the definition, bumped by the lifecycle CF on any
+  /// config change; captured onto each run so history is attributable.
+  @override
+  @JsonKey()
+  final int configVersion;
+
+  /// Total generation runs recorded (completed + skipped + failed).
+  @override
+  @JsonKey()
+  final int runCount;
+
+  /// Runs that completed (a task was generated).
+  @override
+  @JsonKey()
+  final int successCount;
+
+  /// Runs that failed.
+  @override
+  @JsonKey()
+  final int failedCount;
+
+  /// Runs that were skipped (the day's task already existed).
+  @override
+  @JsonKey()
+  final int skippedCount;
+
+  /// Sum of run durations in ms; averaged on read (never stored averaged).
+  @override
+  @JsonKey()
+  final int totalDurationMs;
+
+  /// Last successful generation.
+  @override
+  final DateTime? lastSuccessAt;
+
+  /// Last failed generation.
+  @override
+  final DateTime? lastFailureAt;
 
   @override
   String toString() {
-    return 'RecurringTaskTemplateEntity(id: $id, title: $title, description: $description, priority: $priority, checklistItems: $checklistItems, branchId: $branchId, shift: $shift, repeat: $repeat, weekday: $weekday, active: $active, createdBy: $createdBy, updatedBy: $updatedBy, createdAt: $createdAt, updatedAt: $updatedAt, lastRunAt: $lastRunAt, nextRunAt: $nextRunAt, lastStatus: $lastStatus, lastGeneratedTaskId: $lastGeneratedTaskId, failureCount: $failureCount)';
+    return 'RecurringTaskTemplateEntity(id: $id, title: $title, description: $description, priority: $priority, checklistItems: $checklistItems, branchId: $branchId, shift: $shift, repeat: $repeat, weekday: $weekday, active: $active, createdBy: $createdBy, updatedBy: $updatedBy, createdAt: $createdAt, updatedAt: $updatedAt, lastRunAt: $lastRunAt, nextRunAt: $nextRunAt, lastStatus: $lastStatus, lastGeneratedTaskId: $lastGeneratedTaskId, failureCount: $failureCount, configVersion: $configVersion, runCount: $runCount, successCount: $successCount, failedCount: $failedCount, skippedCount: $skippedCount, totalDurationMs: $totalDurationMs, lastSuccessAt: $lastSuccessAt, lastFailureAt: $lastFailureAt)';
   }
 
   @override
@@ -525,7 +701,23 @@ class _$RecurringTaskTemplateEntityImpl extends _RecurringTaskTemplateEntity {
             (identical(other.lastGeneratedTaskId, lastGeneratedTaskId) ||
                 other.lastGeneratedTaskId == lastGeneratedTaskId) &&
             (identical(other.failureCount, failureCount) ||
-                other.failureCount == failureCount));
+                other.failureCount == failureCount) &&
+            (identical(other.configVersion, configVersion) ||
+                other.configVersion == configVersion) &&
+            (identical(other.runCount, runCount) ||
+                other.runCount == runCount) &&
+            (identical(other.successCount, successCount) ||
+                other.successCount == successCount) &&
+            (identical(other.failedCount, failedCount) ||
+                other.failedCount == failedCount) &&
+            (identical(other.skippedCount, skippedCount) ||
+                other.skippedCount == skippedCount) &&
+            (identical(other.totalDurationMs, totalDurationMs) ||
+                other.totalDurationMs == totalDurationMs) &&
+            (identical(other.lastSuccessAt, lastSuccessAt) ||
+                other.lastSuccessAt == lastSuccessAt) &&
+            (identical(other.lastFailureAt, lastFailureAt) ||
+                other.lastFailureAt == lastFailureAt));
   }
 
   @override
@@ -550,6 +742,14 @@ class _$RecurringTaskTemplateEntityImpl extends _RecurringTaskTemplateEntity {
     lastStatus,
     lastGeneratedTaskId,
     failureCount,
+    configVersion,
+    runCount,
+    successCount,
+    failedCount,
+    skippedCount,
+    totalDurationMs,
+    lastSuccessAt,
+    lastFailureAt,
   ]);
 
   /// Create a copy of RecurringTaskTemplateEntity
@@ -586,6 +786,14 @@ abstract class _RecurringTaskTemplateEntity
     final String? lastStatus,
     final String? lastGeneratedTaskId,
     final int failureCount,
+    final int configVersion,
+    final int runCount,
+    final int successCount,
+    final int failedCount,
+    final int skippedCount,
+    final int totalDurationMs,
+    final DateTime? lastSuccessAt,
+    final DateTime? lastFailureAt,
   }) = _$RecurringTaskTemplateEntityImpl;
   const _RecurringTaskTemplateEntity._() : super._();
 
@@ -650,7 +858,43 @@ abstract class _RecurringTaskTemplateEntity
 
   /// Consecutive generation failures; reset to 0 on a successful run.
   @override
-  int get failureCount;
+  int get failureCount; // ─── Cumulative health counters (Automation observability, ADR-011) ──
+  // Monotonic totals the Cloud Function increments per run (O(1) writes) so the
+  // whole health panel is ONE read; derived rate/avg live in [AutomationHealth]
+  // and are never stored. All CF-owned and **read-only** to the client (never
+  // in `toMap`, like the rollups above).
+  /// A monotonic version of the definition, bumped by the lifecycle CF on any
+  /// config change; captured onto each run so history is attributable.
+  @override
+  int get configVersion;
+
+  /// Total generation runs recorded (completed + skipped + failed).
+  @override
+  int get runCount;
+
+  /// Runs that completed (a task was generated).
+  @override
+  int get successCount;
+
+  /// Runs that failed.
+  @override
+  int get failedCount;
+
+  /// Runs that were skipped (the day's task already existed).
+  @override
+  int get skippedCount;
+
+  /// Sum of run durations in ms; averaged on read (never stored averaged).
+  @override
+  int get totalDurationMs;
+
+  /// Last successful generation.
+  @override
+  DateTime? get lastSuccessAt;
+
+  /// Last failed generation.
+  @override
+  DateTime? get lastFailureAt;
 
   /// Create a copy of RecurringTaskTemplateEntity
   /// with the given fields replaced by the non-null parameter values.

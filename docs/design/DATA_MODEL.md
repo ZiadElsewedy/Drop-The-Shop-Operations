@@ -49,7 +49,7 @@ broadcastSchedules/{id}                  scheduled / recurring broadcast
 notifications/{id}                       one in-app notification per recipient
 
 audit_logs/{id}                          EventTrackingService entries
-automationRuns/{id}                      automation telemetry — ⚠️ NO READER (see CURRENT_STATE)
+automationRuns/{templateId}_{dateKey}    automation execution record (ADR-011): schedule·validations·target·generation·notification·error·logs[]; client read-only
 reminderConfig/{id}                      org-wide reminder rules ("global")
 usageStats/{doc}                         FieldValue.increment counters
 config/{doc}                             function-only config ("taskRetention") — no client path

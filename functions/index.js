@@ -71,6 +71,16 @@ const ATTENDANCE_MAX_SESSION_MINUTES = 16 * 60;
 
 // The pure auto-close decision (unit-tested in test/auto_close.test.js).
 const { isAutoCloseDue } = require("./attendance_auto_close");
+const {
+  SEVERITY,
+  logStep,
+  buildValidations,
+  classifyError,
+  healthDeltas,
+  executionDelayMs,
+  correlationId,
+  buildExecutionSnapshot,
+} = require("./automation_run");
 
 // `branchId` marker for a direct message — never a real branch id and never ''
 // (mirrors BroadcastModel.directBranchMarker), so a DM never appears in a
@@ -1493,8 +1503,10 @@ function isAlreadyExists(err) {
 
 // Resolves the employees who should be NOTIFIED of a generated shift task:
 // rostered on (dayName, shift) MINUS anyone on leave that day MINUS deactivated
-// accounts. An empty result is valid (nobody eligible) — the task is still
-// created; it just notifies no one and the run records `noEligibleEmployees`.
+// accounts. Returns `{ uid, name }` for each eligible recipient (name for the
+// run record's target block). An empty result is valid (nobody eligible) — the
+// task is still created; it just notifies no one and the run records
+// `noEligibleEmployees`.
 async function eligibleRecipients(scheduleData, dayName, shift) {
   const rostered = swapAssignedUids(scheduleData.assignments || {}, dayName, shift);
   if (!rostered.length) return [];
@@ -1506,7 +1518,14 @@ async function eligibleRecipients(scheduleData, dayName, shift) {
   );
   return snaps
     .filter((s) => s.exists && (s.data() || {}).isActive !== false)
-    .map((s) => s.id);
+    .map((s) => {
+      const d = s.data() || {};
+      return {
+        uid: s.id,
+        name: String(d.fullName || d.displayName || d.email || s.id),
+        role: d.role != null ? String(d.role) : null,
+      };
+    });
 }
 
 // Advisory next-run timestamp for a template's rollup (the Automation Center
@@ -1565,12 +1584,17 @@ async function writeAutomationAudit(eventType, entityType, entityId, branchId, m
  */
 exports.generateShiftTaskInstances = onSchedule(
   { schedule: "every 24 hours", maxInstances: 1, retryCount: 0, timeoutSeconds: 300 },
-  async () => {
+  async (event) => {
     const now = new Date();
     const todayKey = isoDate(now);
     const todayDow = isoWeekday(now);
     const dayName = scheduleDayName(now);
     const executionId = require("crypto").randomUUID();
+    // The tick this invocation was scheduled for (for the run's schedule block +
+    // execution-delay metric); falls back to `now` if the platform omits it.
+    const scheduledAt =
+      event && event.scheduleTime ? new Date(event.scheduleTime) : now;
+    const scheduledAtMs = scheduledAt.getTime();
 
     const snap = await db
       .collection(RECURRING_TASK_TEMPLATES)
@@ -1591,8 +1615,14 @@ exports.generateShiftTaskInstances = onSchedule(
       const shift = t.shift === "night" ? "night" : "morning";
       const instanceId = `rt_${doc.id}_${todayKey}`;
       const runId = `${doc.id}_${todayKey}`;
+      // Deterministic correlation id for this execution (§Correlation ID) —
+      // stamped on the run, the generated task, its notifications and its audit
+      // events so any one traces back to the whole run. Derived from (templateId,
+      // dateKey), so a retry re-computes the identical id (idempotent).
+      const runCorrelationId = correlationId(doc.id, todayKey);
       const ref = db.collection(TASKS).doc(instanceId);
       const startedMs = Date.now();
+      const version = Number(t.configVersion) || 1;
 
       // Per-template outcome — always recorded to `automationRuns` and rolled up
       // onto the template, whatever happens.
@@ -1601,6 +1631,29 @@ exports.generateShiftTaskInstances = onSchedule(
       let generatedTaskId = null;
       let recipientCount = 0;
       let failureReason = null;
+
+      // ── Observability accumulators (ADR-011). None of this changes what tasks
+      // or notifications are created — it only records what happened, why, and
+      // when, so an admin can answer every question about a run without logs. ──
+      const logs = []; // chronological execution timeline
+      const step = (severity, message, meta) =>
+        logs.push(logStep(Date.now(), _stageForNow(), severity, message, meta));
+      let currentStage = "start";
+      function _stageForNow() { return currentStage; }
+      const stage = (s) => { currentStage = s; };
+
+      let snapshot = null; // immutable execution snapshot (written on `created`)
+      let scheduleExists = null; // null = not reached
+      let employeesFound = null;
+      const recipients = []; // { uid, name }
+      const notificationIds = [];
+      let notifySent = 0;
+      let notifyFailed = 0;
+      let errorBlock = null;
+      let checklistCount = 0;
+
+      stage("start");
+      step(SEVERITY.info, "Execution started", { executionId });
 
       try {
         const checklist = Array.isArray(t.checklistItems)
@@ -1612,7 +1665,16 @@ exports.generateShiftTaskInstances = onSchedule(
               completedAt: null,
             }))
           : [];
+        checklistCount = checklist.length;
 
+        stage("validate");
+        step(SEVERITY.info, `Schedule window resolved for ${dayName} ${shift}`, {
+          day: dayName,
+          shift,
+          branchId,
+        });
+
+        stage("generate");
         // Atomic create — the ENTIRE duplicate guarantee. `create()` rejects with
         // ALREADY_EXISTS if the deterministic id is already present (an overlapping
         // run / retry / the client materializer beat us), so we never double-create
@@ -1638,6 +1700,7 @@ exports.generateShiftTaskInstances = onSchedule(
               new Date(`${todayKey}T00:00:00.000Z`),
             ),
             sourceTemplateId: doc.id,
+            correlationId: runCorrelationId,
             deadline: null,
             notes: null,
             proofImageUrl: null,
@@ -1667,10 +1730,14 @@ exports.generateShiftTaskInstances = onSchedule(
           });
           generatedTaskId = instanceId;
           created++;
+          step(SEVERITY.info, "Task generated", { taskId: instanceId });
         } catch (createErr) {
           if (isAlreadyExists(createErr)) {
             status = "skipped";
             outcome = "alreadyExists";
+            step(SEVERITY.info, "Skipped — task already generated for today", {
+              taskId: instanceId,
+            });
           } else {
             throw createErr;
           }
@@ -1679,38 +1746,93 @@ exports.generateShiftTaskInstances = onSchedule(
         // Notify eligible rostered employees — ONLY when we actually created the
         // instance this run (so a skipped duplicate never re-notifies).
         if (outcome === "created") {
+          stage("notify");
           try {
             const scheduleId = `${branchId}_${weekStartKey(now)}`;
             const schedSnap = await db.collection(WEEKLY_SCHEDULES).doc(scheduleId).get();
-            const recipients = schedSnap.exists
+            scheduleExists = schedSnap.exists;
+            const resolved = schedSnap.exists
               ? await eligibleRecipients(schedSnap.data(), dayName, shift)
               : [];
+            recipients.push(...resolved);
             recipientCount = recipients.length;
+            employeesFound = recipientCount > 0;
+            step(SEVERITY.info, `Resolved ${recipientCount} eligible employee(s)`, {
+              count: recipientCount,
+            });
+
+            // Capture the immutable execution snapshot (§Execution Snapshot):
+            // exactly what existed now, so this run renders correctly forever
+            // even after the definition/branch/employees/schedule change. One
+            // branch read (for the name); everything else is already in hand.
+            let branchName = null;
+            try {
+              const bSnap = await db.collection(BRANCHES).doc(branchId).get();
+              branchName = bSnap.exists
+                ? String((bSnap.data() || {}).name || "")
+                : null;
+            } catch (_) {
+              // A missing branch name never fails the run — snapshot keeps null.
+            }
+            snapshot = buildExecutionSnapshot({
+              templateId: doc.id,
+              name: t.title || "",
+              version,
+              checklistCount,
+              priority: t.priority || "normal",
+              proofRequired: false,
+              scheduleType: repeat,
+              days: repeat === "weekly" ? [dayName] : [],
+              shift,
+              branchId,
+              branchName,
+              timezone: "UTC",
+              recipients,
+            });
+
             if (recipients.length) {
               const batch = db.batch();
-              for (const uid of recipients) {
+              for (const r of recipients) {
                 // Deterministic id → even a re-entry can't create a second notice.
                 const nref = db
                   .collection(NOTIFICATIONS)
-                  .doc(`autoassign_${instanceId}_${uid}`);
+                  .doc(`autoassign_${instanceId}_${r.uid}`);
+                notificationIds.push(nref.id);
                 batch.set(nref, {
                   id: nref.id,
-                  recipientUid: uid,
+                  recipientUid: r.uid,
                   senderUid: "system",
                   type: "taskAssigned",
                   title: "New Task Assigned",
                   body: t.title || "A new shift task was assigned",
                   readAt: null,
-                  payload: { taskId: instanceId, route: "task_details" },
+                  correlationId: runCorrelationId,
+                  payload: {
+                    taskId: instanceId,
+                    route: "task_details",
+                    correlationId: runCorrelationId,
+                  },
                   createdAt: admin.firestore.FieldValue.serverTimestamp(),
                 });
               }
               await batch.commit();
+              notifySent = recipients.length;
+              step(SEVERITY.info, `Sent ${notifySent} notification(s)`, {
+                count: notifySent,
+              });
             } else {
               outcome = "noEligibleEmployees";
+              step(SEVERITY.warning, "No eligible employees to notify", {
+                scheduleExists,
+              });
             }
           } catch (notifyErr) {
             // A notify failure does NOT fail the run — the task exists regardless.
+            notifyFailed = recipients.length;
+            errorBlock = classifyError(notifyErr, "notify", { recovered: true });
+            step(SEVERITY.warning, "Notification delivery failed (task kept)", {
+              error: String(notifyErr),
+            });
             logger.warn("shift task notify failed", {
               taskId: instanceId,
               error: String(notifyErr),
@@ -1721,26 +1843,99 @@ exports.generateShiftTaskInstances = onSchedule(
         status = "failed";
         outcome = "error";
         failureReason = String((err && err.message) || err);
+        errorBlock = classifyError(err, currentStage);
+        step(SEVERITY.error, `Execution failed at ${currentStage}`, {
+          error: failureReason,
+        });
         logger.warn("shift task instance generation failed", {
           templateId: doc.id,
           error: failureReason,
         });
       }
 
+      stage("complete");
+      step(
+        status === "failed" ? SEVERITY.error : SEVERITY.info,
+        status === "failed" ? "Execution failed" : "Execution completed",
+        { status, outcome },
+      );
+
       // ── Run telemetry (deterministic id → idempotent history) ──
       const finishedMs = Date.now();
       try {
         await db.collection(AUTOMATION_RUNS).doc(runId).set(
           {
+            // ── Identity ──
             templateId: doc.id,
+            automationName: t.title || "",
+            version,
             branchId,
             dateKey: todayKey,
             executionId,
+            correlationId: runCorrelationId,
+            // ── Execution ──
             startedAt: admin.firestore.Timestamp.fromDate(new Date(startedMs)),
             finishedAt: admin.firestore.Timestamp.fromDate(new Date(finishedMs)),
             durationMs: finishedMs - startedMs,
+            trigger: "schedule",
+            retryCount: 0,
             status,
             outcome,
+            // ── Schedule ──
+            schedule: {
+              scheduledAt: admin.firestore.Timestamp.fromDate(scheduledAt),
+              actualAt: admin.firestore.Timestamp.fromDate(new Date(startedMs)),
+              delayMs: executionDelayMs(scheduledAtMs, startedMs),
+              shift,
+              day: dayName,
+              branchId,
+            },
+            // ── Validation ──
+            validations: buildValidations({
+              templatePresent: true,
+              branchPresent: !!branchId,
+              scheduleExists,
+              employeesFound,
+            }),
+            // ── Target resolution (explicit even when nobody matched) ──
+            target: {
+              uids: recipients.map((r) => r.uid),
+              names: recipients.map((r) => r.name),
+              count: recipientCount,
+              matched: recipientCount > 0,
+              shift,
+              branchId,
+            },
+            // ── Generation ──
+            generation: {
+              templateVersion: version,
+              checklistCount,
+              priority: t.priority || "normal",
+              proofRequired: false,
+            },
+            generated: {
+              taskIds: generatedTaskId ? [generatedTaskId] : [],
+              titles: generatedTaskId ? [t.title || ""] : [],
+              count: generatedTaskId ? 1 : 0,
+              skippedCount: outcome === "alreadyExists" ? 1 : 0,
+            },
+            // ── Notification ──
+            notification: {
+              sent: notifySent,
+              failed: notifyFailed,
+              notificationIds,
+            },
+            // ── Error (null unless the run failed or a step recovered) ──
+            error: errorBlock,
+            // ── Chronological logs (embedded, bounded) ──
+            logs: logs.map((l) => ({
+              at: admin.firestore.Timestamp.fromMillis(l.at),
+              stage: l.stage,
+              severity: l.severity,
+              message: l.message,
+              meta: l.meta,
+            })),
+            // ── Back-compat flat fields (pre-ADR-011 readers / retention) ──
             generatedTaskId,
             recipientCount,
             failureReason,
@@ -1751,18 +1946,35 @@ exports.generateShiftTaskInstances = onSchedule(
         logger.warn("automation run write failed", { runId, error: String(runErr) });
       }
 
-      // ── Template rollup (Automation Center health) ──
+      // ── Template rollup + cumulative health counters (Automation Center) ──
       try {
+        const h = healthDeltas(status, finishedMs - startedMs);
         const rollup = {
           lastRunAt: admin.firestore.FieldValue.serverTimestamp(),
           nextRunAt: computeNextRun(repeat, t.weekday, now),
           lastStatus: status,
+          // Cumulative counters — O(1) increments so the health panel is one
+          // read; success rate / avg duration are DERIVED on the client (nothing
+          // derived is stored — the ADR-011 line vs. an analytics pipeline).
+          runCount: admin.firestore.FieldValue.increment(h.runCountDelta),
+          successCount: admin.firestore.FieldValue.increment(h.successCountDelta),
+          failedCount: admin.firestore.FieldValue.increment(h.failedCountDelta),
+          skippedCount: admin.firestore.FieldValue.increment(h.skippedCountDelta),
+          totalDurationMs: admin.firestore.FieldValue.increment(
+            h.totalDurationMsDelta,
+          ),
         };
-        if (status === "failed") {
-          rollup.failureCount = admin.firestore.FieldValue.increment(1);
-        } else {
-          rollup.failureCount = 0;
-          if (generatedTaskId) rollup.lastGeneratedTaskId = generatedTaskId;
+        rollup.failureCount = h.resetConsecutiveFailures
+          ? 0
+          : admin.firestore.FieldValue.increment(1);
+        if (h.markLastSuccess) {
+          rollup.lastSuccessAt = admin.firestore.FieldValue.serverTimestamp();
+        }
+        if (h.markLastFailure) {
+          rollup.lastFailureAt = admin.firestore.FieldValue.serverTimestamp();
+        }
+        if (status !== "failed" && generatedTaskId) {
+          rollup.lastGeneratedTaskId = generatedTaskId;
         }
         await doc.ref.set(rollup, { merge: true });
       } catch (rollupErr) {
@@ -1797,6 +2009,149 @@ exports.generateShiftTaskInstances = onSchedule(
       created,
       executionId,
     });
+  },
+);
+
+// The definition fields whose change is a lifecycle event worth auditing (vs. the
+// CF-owned rollup/health fields, whose churn on every generation run must NOT
+// produce audit noise or bump the config version).
+const TEMPLATE_CONFIG_FIELDS = [
+  "title",
+  "description",
+  "priority",
+  "shift",
+  "repeat",
+  "weekday",
+  "active",
+  "checklistItems",
+];
+
+// A stable, comparable snapshot of only the audited config fields.
+function templateConfigSnapshot(data) {
+  const d = data || {};
+  return {
+    title: d.title ?? null,
+    description: d.description ?? null,
+    priority: d.priority ?? null,
+    shift: d.shift ?? null,
+    repeat: d.repeat ?? null,
+    weekday: d.weekday ?? null,
+    active: d.active ?? null,
+    checklistItems: Array.isArray(d.checklistItems)
+      ? d.checklistItems.map((c) => ({
+          id: (c && c.id) || "",
+          title: (c && c.title) || "",
+          isRequired: !c || c.isRequired !== false,
+        }))
+      : [],
+  };
+}
+
+// Field-by-field diff of two config snapshots → [{ field, old, new }].
+function diffTemplateConfig(before, after) {
+  const changes = [];
+  for (const f of TEMPLATE_CONFIG_FIELDS) {
+    const a = before ? before[f] : undefined;
+    const b = after ? after[f] : undefined;
+    if (JSON.stringify(a) !== JSON.stringify(b)) {
+      changes.push({ field: f, old: a ?? null, new: b ?? null });
+    }
+  }
+  return changes;
+}
+
+/**
+ * Server-authoritative lifecycle audit for automation DEFINITIONS (ADR-005 +
+ * ADR-011). Clients mutate `recurringTaskTemplates/{id}` directly (create /
+ * pause-resume / edit / delete via `TaskCubit`) and never write their own audit
+ * trail; this trigger derives the audit event from the before/after diff and
+ * appends it to `audit_logs` as the acting user — so "who paused this, when, and
+ * what changed" is answerable and tamper-evident.
+ *
+ * Idempotent: the audit doc id is derived from the CloudEvent id, so an
+ * at-least-once redelivery overwrites rather than duplicates. The CF-owned
+ * rollup/health fields are excluded from the diff, so a generation run's rollup
+ * write produces NO audit and NO version bump (the loop terminates: this trigger
+ * only writes `configVersion`, which is itself excluded from the diff).
+ */
+exports.onRecurringTemplateWritten = onDocumentWritten(
+  `${RECURRING_TASK_TEMPLATES}/{templateId}`,
+  async (event) => {
+    const templateId = event.params.templateId;
+    const beforeExists = event.data && event.data.before && event.data.before.exists;
+    const afterExists = event.data && event.data.after && event.data.after.exists;
+    const beforeData = beforeExists ? event.data.before.data() : null;
+    const afterData = afterExists ? event.data.after.data() : null;
+
+    // Resolve the actor: the app writes `updatedBy` (edits/pause) / `createdBy`
+    // (create) on the definition; deletes carry the last known editor.
+    const actorSource = afterData || beforeData || {};
+    const actorId = String(
+      actorSource.updatedBy || actorSource.createdBy || "system",
+    );
+    const branchId = String((afterData || beforeData || {}).branchId || "") || null;
+
+    let eventType;
+    let metadata = {};
+
+    if (!beforeExists && afterExists) {
+      eventType = "automation.created";
+      metadata = {
+        title: afterData.title || "",
+        shift: afterData.shift || null,
+        repeat: afterData.repeat || null,
+      };
+    } else if (beforeExists && !afterExists) {
+      eventType = "automation.deleted";
+      metadata = { title: (beforeData || {}).title || "" };
+    } else {
+      const changes = diffTemplateConfig(
+        templateConfigSnapshot(beforeData),
+        templateConfigSnapshot(afterData),
+      );
+      if (!changes.length) return; // rollup-only / version-only write → no audit
+      const activeChange = changes.find((c) => c.field === "active");
+      if (activeChange && changes.length === 1) {
+        eventType = activeChange.new ? "automation.resumed" : "automation.paused";
+      } else {
+        eventType = "automation.config_changed";
+      }
+      metadata = { changes };
+
+      // Bump the definition's config version (idempotent per event: computed
+      // from the frozen `after` snapshot, written with `set`, and excluded from
+      // the diff above so it can't re-trigger an audit).
+      try {
+        await event.data.after.ref.set(
+          { configVersion: (Number(afterData.configVersion) || 0) + 1 },
+          { merge: true },
+        );
+      } catch (e) {
+        logger.warn("configVersion bump failed", { templateId, error: String(e) });
+      }
+    }
+
+    try {
+      await db.collection(AUDIT_LOGS).doc(`autotpl_${event.id}`).set({
+        eventType,
+        entityType: "automation",
+        entityId: templateId,
+        actorId,
+        actorName: actorId === "system" ? "Automation" : null,
+        actorRole: null,
+        branchId,
+        metadata,
+        schemaVersion: 1,
+        isDeleted: false,
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      logger.warn("automation lifecycle audit write failed", {
+        templateId,
+        eventType,
+        error: String(e),
+      });
+    }
   },
 );
 

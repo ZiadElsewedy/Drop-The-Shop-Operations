@@ -7,10 +7,12 @@ import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/errors/exceptions.dart';
 import 'package:drop/core/media/media_upload_service.dart';
+import 'package:drop/features/task/data/models/automation_run_model.dart';
 import 'package:drop/features/task/data/models/recurring_task_template_model.dart';
 import 'package:drop/features/task/data/models/task_model.dart';
 import 'package:drop/features/task/data/models/task_template_model.dart';
 import 'package:drop/features/task/domain/entities/activity_entry.dart';
+import 'package:drop/features/task/domain/entities/automation_run_entity.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 
 abstract class TaskRemoteDataSource {
@@ -87,6 +89,16 @@ abstract class TaskRemoteDataSource {
       RecurringTaskTemplateModel template);
   Future<void> updateRecurringTemplate(RecurringTaskTemplateModel template);
   Future<void> deleteRecurringTemplate(String templateId);
+
+  /// One page of a template's execution history, newest-first. [before] is the
+  /// `startedAt` of the last row of the previous page (the pagination cursor);
+  /// null loads the first page. Needs the `(templateId, startedAt desc)` index.
+  Future<List<AutomationRunEntity>> getAutomationRuns(
+    String templateId, {
+    required String branchId,
+    int limit,
+    DateTime? before,
+  });
 }
 
 class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
@@ -103,6 +115,9 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
 
   CollectionReference<Map<String, dynamic>> get _recurringTemplates =>
       _firestore.collection(AppConstants.recurringTaskTemplatesCollection);
+
+  CollectionReference<Map<String, dynamic>> get _automationRuns =>
+      _firestore.collection(AppConstants.automationRunsCollection);
 
   // Newest-first ordering: the admin query orders on a single field
   // (auto-indexed by Firestore, no setup). The branch / employee queries
@@ -425,6 +440,34 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     } on FirebaseException catch (e) {
       throw ServerException(
           e.message ?? 'Failed to load recurring shift-task templates.');
+    }
+  }
+
+  @override
+  Future<List<AutomationRunEntity>> getAutomationRuns(
+    String templateId, {
+    required String branchId,
+    int limit = 20,
+    DateTime? before,
+  }) async {
+    try {
+      // `branchId` is filtered (not just `templateId`) because the rules gate a
+      // manager's read on `branchId == selfBranch`; a list query must constrain
+      // branchId or Firestore rejects it. Needs the
+      // (branchId, templateId, startedAt desc) composite index.
+      Query<Map<String, dynamic>> query = _automationRuns
+          .where('branchId', isEqualTo: branchId)
+          .where('templateId', isEqualTo: templateId)
+          .orderBy('startedAt', descending: true);
+      if (before != null) {
+        query = query.startAfter([Timestamp.fromDate(before)]);
+      }
+      final snap = await query.limit(limit).get();
+      return snap.docs
+          .map((d) => AutomationRunModel.fromMap(d.data(), id: d.id))
+          .toList();
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to load automation history.');
     }
   }
 

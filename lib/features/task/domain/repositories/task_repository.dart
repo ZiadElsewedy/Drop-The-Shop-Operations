@@ -3,6 +3,7 @@ import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/media/media_upload_service.dart';
 import 'package:drop/features/task/domain/entities/activity_entry.dart';
+import 'package:drop/features/task/domain/entities/automation_run_entity.dart';
 import 'package:drop/features/task/domain/entities/recurring_task_template_entity.dart';
 import 'package:drop/features/task/domain/entities/task_attachment.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
@@ -128,4 +129,16 @@ abstract class TaskRepository {
 
   /// Deletes a template. Already-generated instances are untouched.
   Future<void> deleteRecurringTemplate(String templateId);
+
+  // ─── Automation execution history (observability, ADR-011) ─────
+  /// One page of a template's execution runs, newest-first (admin, or the
+  /// template's branch manager — enforced by rules). [before] is the cursor:
+  /// the `startedAt` of the last row of the previous page (null = first page).
+  /// Read-only; the collection is server-authoritative.
+  Future<List<AutomationRunEntity>> getAutomationRuns(
+    String templateId, {
+    required String branchId,
+    int limit,
+    DateTime? before,
+  });
 }
