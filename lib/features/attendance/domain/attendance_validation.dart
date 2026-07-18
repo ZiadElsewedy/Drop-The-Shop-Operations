@@ -28,7 +28,9 @@ enum AttendanceBlock {
   emptyReason,
   invalidTimes,
   sessionOpen,
-  recordMissing;
+  recordMissing,
+  duplicateOpen,
+  missingStartTime;
 
   bool get isBlocked => this != AttendanceBlock.none;
 }
@@ -160,27 +162,48 @@ class AttendanceValidation {
     return AttendanceCheck.ok;
   }
 
-  /// Can a correction be filed against [existing]? A correction fixes a **settled**
-  /// record, so the rules are: the record exists (and isn't soft-deleted), it
-  /// isn't a still-running session (clock out first), there's a non-empty reason,
-  /// there's actually something to change ([proposedClockIn]/[proposedClockOut]/
-  /// [proposedStatus]), and any proposed clock-out is after the (proposed or
-  /// recorded) clock-in. Pure — the cubit/UI both consult it before a write.
+  /// Can a correction be filed against [existing]? Two shapes share this gate:
+  ///
+  ///  * **A settled record** ([existing] non-null) — fixing a wrong time or a
+  ///    missing clock-out. Rules: not soft-deleted, not a still-running session
+  ///    (clock out first), a non-empty reason, an actual change proposed, and any
+  ///    proposed clock-out after the (proposed or recorded) clock-in.
+  ///  * **A missed punch** ([existing] null — the shift has no record because the
+  ///    employee never clocked in). Rules: a real [proposedClockIn] must be
+  ///    supplied (you're asserting when you started), a reason, and a valid
+  ///    clock-out. This is the ONLY case a null record is allowed — it
+  ///    materializes a record on approval (spec workflow 4). A soft-deleted record
+  ///    is still [recordMissing].
+  ///
+  /// [hasOpenCorrection] enforces **one open correction per record** (spec R15):
+  /// while a pending correction already exists for this record, a new one is
+  /// blocked. Pure — the cubit/UI both consult it before a write.
   static AttendanceCheck checkCorrection({
     required AttendanceEntity? existing,
     required String reason,
     DateTime? proposedClockIn,
     DateTime? proposedClockOut,
     AttendanceStatus? proposedStatus,
+    bool hasOpenCorrection = false,
   }) {
-    if (existing == null || existing.isDeleted) {
+    if (existing != null && existing.isDeleted) {
       return const AttendanceCheck(
           AttendanceBlock.recordMissing, 'There\'s no record to correct yet.');
     }
-    // A genuinely-running session is fixed by clocking out, not a correction — but
-    // a `pendingReview` record (auto-closed, missing its clock-out) is exactly
-    // what corrections are for, so gate on the live status, not `isOpen`.
-    if (existing.status.isInProgress) {
+    if (hasOpenCorrection) {
+      return const AttendanceCheck(AttendanceBlock.duplicateOpen,
+          'You already have a correction pending for this shift.');
+    }
+    if (existing == null) {
+      // Missed punch — no record exists. The employee must assert a start time.
+      if (proposedClockIn == null) {
+        return const AttendanceCheck(AttendanceBlock.missingStartTime,
+            'Add the time you actually started.');
+      }
+    } else if (existing.status.isInProgress) {
+      // A genuinely-running session is fixed by clocking out, not a correction —
+      // but a `pendingReview` record (auto-closed, missing its clock-out) is
+      // exactly what corrections are for, so gate on the live status, not `isOpen`.
       return const AttendanceCheck(AttendanceBlock.sessionOpen,
           'Clock out first — this shift is still running.');
     }
@@ -195,10 +218,51 @@ class AttendanceValidation {
       return const AttendanceCheck(AttendanceBlock.invalidTimes,
           'Propose a corrected time or outcome.');
     }
-    final start = proposedClockIn ?? existing.clockIn;
+    final start = proposedClockIn ?? existing?.clockIn;
     if (proposedClockOut != null &&
         start != null &&
         !proposedClockOut.isAfter(start)) {
+      return const AttendanceCheck(AttendanceBlock.invalidTimes,
+          'The clock-out must be after the clock-in.');
+    }
+    return AttendanceCheck.ok;
+  }
+
+  /// The gate for a **manager's direct action** — *Add record* (materialize a
+  /// missing/absent shift) or *Resolve* a `pendingReview` record — applied
+  /// immediately with audit, no approval loop (spec workflows 12/13, rule R11).
+  /// The reviewer's authority is checked server-side (rules); this is the pure
+  /// shape check: a mandatory [reason], a real [proposedClockIn] (the manager is
+  /// asserting the worked window), a valid clock-out, and no competing open
+  /// correction ([hasOpenCorrection] — resolve that one instead of racing it).
+  static AttendanceCheck checkManagerEntry({
+    required AttendanceEntity? existing,
+    required String reason,
+    DateTime? proposedClockIn,
+    DateTime? proposedClockOut,
+    bool hasOpenCorrection = false,
+  }) {
+    if (existing != null && existing.isDeleted) {
+      return const AttendanceCheck(
+          AttendanceBlock.recordMissing, 'This record was deleted.');
+    }
+    if (existing != null && existing.status.isInProgress) {
+      return const AttendanceCheck(AttendanceBlock.sessionOpen,
+          'This shift is still running — it can\'t be resolved yet.');
+    }
+    if (hasOpenCorrection) {
+      return const AttendanceCheck(AttendanceBlock.duplicateOpen,
+          'Decide the pending correction for this shift instead.');
+    }
+    if (reason.trim().isEmpty) {
+      return const AttendanceCheck(
+          AttendanceBlock.emptyReason, 'Add a reason for this change.');
+    }
+    if (proposedClockIn == null) {
+      return const AttendanceCheck(AttendanceBlock.missingStartTime,
+          'Set the time the employee started.');
+    }
+    if (proposedClockOut != null && !proposedClockOut.isAfter(proposedClockIn)) {
       return const AttendanceCheck(AttendanceBlock.invalidTimes,
           'The clock-out must be after the clock-in.');
     }

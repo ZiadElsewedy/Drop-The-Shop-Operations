@@ -16,6 +16,67 @@ released — DROP ships from branches and has no version tags.
 
 ## Unreleased
 
+### 2026-07-18
+
+- **Attendance spec Phase 1 implemented** (critical items — engine + cubit API +
+  rules + CF + tests; **no new UI**, wiring awaits design sign-off). (1) **Missed-
+  punch recovery**: `checkCorrection` now allows a null record (asserting a start
+  time) instead of `recordMissing`; employees file via new
+  `AttendanceCubit.requestMissedPunch`; the correction carries a `scheduledStart`/
+  `scheduledEnd` window. (2) **Manager direct action**: `AttendanceAdminCubit.addRecord`
+  / `resolveDirectly` write an already-`approved` correction (new
+  `AttendanceRepository.createResolvedCorrection` + model `toResolvedCreateMap`);
+  the resolution is computed through the new single-source `AttendanceResolution.fromRecord`.
+  (3) **One server apply path**: `onAttendanceCorrectionWritten` now **upserts** —
+  a missing record is materialized (dayKey lifted from the deterministic id) and a
+  create-with-`approved` correction applies immediately (skips reviewer notify);
+  guarded against concurrent soft-delete. (4) **Validation**: one open correction
+  per record (`duplicateOpen`) + a manager `checkManagerEntry` gate (mandatory
+  reason, start time, no self-approval). `firestore.rules` gains a reviewer
+  approved-create branch. +17 tests (validation, resolution, decide, employee +
+  admin cubits); 914 pass / 2 pre-existing splash. **Needs the standing functions +
+  rules deploy** to activate server-side.
+
+- **Attendance product spec locked** — [docs/design/ATTENDANCE_SPEC.md](docs/design/ATTENDANCE_SPEC.md).
+  Following a full workflow audit, the Attendance module's product behavior was
+  frozen: final state machine (adds **Excused**; Absent stays virtual, materialized
+  lazily), 20 business rules (early-clock-in window + clamp, missed-punch recovery,
+  managers act directly while employees request, one open correction per record,
+  auto-close every open session, exception-driven notifications), edge-case rulings,
+  and a decision log. Product decisions / technical constraints / future
+  enhancements are kept separate. Docs-only; no code changed. The shipped engine
+  does not yet implement every locked rule — `clockInLeadMinutes` enforcement,
+  missed-punch/manual creation, direct manager resolve, and the Excused outcome are
+  the known deltas. [ATTENDANCE.md](docs/design/ATTENDANCE.md) now points to the spec
+  as the behavior source of truth.
+
+### 2026-07-17
+
+- **Attendance History ledger + record Details.** The longitudinal history the
+  clock screen only hinted at (a 30-row bottom sheet). A summary strip
+  (present/late/absent/rate/avg-arrival/worked), a composable filter bar (date
+  range · status · shift · reviewer employee search) and a lazy list of per-day
+  record cards → an audit-log Details screen (scheduled window · clock in/out +
+  GPS · durations · **Timeline** from the server `events` with a record-derived
+  fallback · corrections · an expandable **Metadata** block of recorded fields
+  only). Two entries share one screen: `/attendance/history` (self, any role) and
+  `/attendance/review` (branch ledger, **admin‖manager** via a new
+  `_isAttendanceReviewArea` guard — managers' first attendance-oversight surface);
+  a record opens `/attendance/record/:id`. **Presentation-only** — reuses the
+  existing repository reads (`watchUserHistory`/`watchBranchRange`/`watchEvents`/
+  `watchRecordCorrections`) + the pure `AttendanceStats` and a new pure
+  `AttendanceHistoryQuery`; no parallel data stack. Summary reflects the date
+  window, facets narrow only the list. Entry points: the employee "View history"
+  button (→ self); the admin board's new "History" action + "View full record"
+  sheet button; and — since managers had no attendance surface at all — a new
+  manager sidebar entry (+⌘K) and home-screen tile (→ branch review). **Held
+  ADR-009 + ADR-010**: performance score, analytics/heatmaps,
+  CSV/PDF export and payroll were declined (the ledger is shaped to feed them
+  later), and Metadata shows only recorded fields — no invented
+  timezone/appVersion/syncStatus. +22 tests (query · status filter · cubit ·
+  widget render). The list uses a plain `ListView` (the pattern every other DROP
+  list screen uses).
+
 ### 2026-07-16
 
 - **Admin dashboard → calm, state-aware command center** (owner-directed

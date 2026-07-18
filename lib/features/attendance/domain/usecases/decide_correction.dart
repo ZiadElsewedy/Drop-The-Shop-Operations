@@ -1,6 +1,5 @@
 import 'package:drop/core/enums/attendance_status.dart';
 import 'package:drop/core/enums/request_status.dart';
-import 'package:drop/features/attendance/domain/attendance_calculator.dart';
 import 'package:drop/features/attendance/domain/attendance_config.dart';
 import 'package:drop/features/attendance/domain/attendance_resolution.dart';
 import 'package:drop/features/attendance/domain/entities/attendance_correction.dart';
@@ -44,23 +43,17 @@ class DecideCorrection {
       return null;
     }
 
-    final settledClockIn = correction.proposedClockIn ?? record.clockIn;
-    final settledClockOut = correction.proposedClockOut ?? record.clockOut;
-    final status = correction.proposedStatus ?? AttendanceStatus.completed;
-    final totals = AttendanceCalculator.compute(
-      scheduledStart: record.scheduledStart,
-      scheduledEnd: record.scheduledEnd,
-      clockIn: settledClockIn,
-      clockOut: settledClockOut,
+    // The scheduled window comes from the record when it exists, else from the
+    // correction (a missed-punch materializes a record that never existed).
+    final resolution = AttendanceResolution.fromRecord(
+      scheduledStart: record.scheduledStart ?? correction.scheduledStart,
+      scheduledEnd: record.scheduledEnd ?? correction.scheduledEnd,
+      clockIn: correction.proposedClockIn ?? record.clockIn,
+      clockOut: correction.proposedClockOut ?? record.clockOut,
+      status: correction.proposedStatus ?? AttendanceStatus.completed,
       breaks: record.breaks,
-      now: settledClockOut ?? now,
+      now: now,
       config: config,
-    );
-    final resolution = AttendanceResolution.fromTotals(
-      clockIn: settledClockIn,
-      clockOut: settledClockOut,
-      status: status,
-      totals: totals,
     );
     await _repository.decideCorrection(
       correction.id,

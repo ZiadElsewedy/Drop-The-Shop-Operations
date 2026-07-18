@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
+import 'package:drop/core/routes/route_names.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
@@ -47,6 +49,14 @@ class _AdminAttendanceScreenState extends State<AdminAttendanceScreen> {
     return AdaptiveScaffold(
       title: 'Attendance',
       subtitle: 'Branch oversight',
+      actions: [
+        IconButton(
+          tooltip: 'Attendance history',
+          onPressed: () => context.push(RouteNames.attendanceReview),
+          icon: const Icon(Icons.history_rounded,
+              color: AppColors.textSecondary),
+        ),
+      ],
       body: BlocConsumer<AttendanceAdminCubit, AttendanceAdminState>(
         listenWhen: (_, s) => s.maybeMap(error: (_) => true, orElse: () => false),
         listener: (context, state) => state.mapOrNull(
@@ -554,7 +564,7 @@ void _showDetails(BuildContext context, AttendanceBoardRow row) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
     ),
-    builder: (_) => SafeArea(
+    builder: (sheetContext) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(AppSpacing.pagePadding, 0,
             AppSpacing.pagePadding, AppSpacing.lg),
@@ -586,6 +596,22 @@ void _showDetails(BuildContext context, AttendanceBoardRow row) {
               _DetailStat(label: 'Late by', value: _hm(r.lateMinutes)),
             if (r.overtimeMinutes > 0)
               _DetailStat(label: 'Overtime', value: _hm(r.overtimeMinutes)),
+            const SizedBox(height: AppSpacing.lg),
+            SizedBox(
+              width: double.infinity,
+              child: TextButton.icon(
+                onPressed: () {
+                  Navigator.of(sheetContext).pop();
+                  context.push(RouteNames.attendanceRecord(r.id), extra: r);
+                },
+                icon: const Icon(Icons.open_in_full_rounded, size: 16),
+                label: const Text('View full record'),
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.textSecondary,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
           ],
         ),
       ),

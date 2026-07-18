@@ -153,6 +153,17 @@ class AttendanceRepositoryImpl implements AttendanceRepository {
   }
 
   @override
+  Future<void> createResolvedCorrection(
+      AttendanceCorrectionEntity correction) async {
+    try {
+      await _remote.createResolvedCorrection(
+          AttendanceCorrectionModel.fromEntity(correction));
+    } on ServerException catch (e) {
+      throw ServerFailure(e.message);
+    }
+  }
+
+  @override
   Future<void> decideCorrection(
     String id, {
     required RequestStatus status,

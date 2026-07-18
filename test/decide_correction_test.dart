@@ -102,6 +102,48 @@ void main() {
     expect(repo.decision!.resolution, isNull);
   });
 
+  test('missed-punch: prices from the correction\'s own scheduled window',
+      () async {
+    // The record never existed (the employee forgot to clock in). The admin cubit
+    // passes a synthetic record shell whose scheduled window comes from the
+    // correction — lateness must still be measured against it.
+    final repo = _CaptureRepo();
+    final missedPunch = AttendanceCorrectionEntity(
+      id: 'c2',
+      attendanceId: 'u1_20260713_morning',
+      userId: 'u1',
+      branchId: 'b1',
+      requestedBy: 'u1',
+      kind: AttendanceCorrectionKind.absenceDispute,
+      reason: 'Forgot to clock in',
+      scheduledStart: DateTime(2026, 7, 13, 8, 30),
+      scheduledEnd: DateTime(2026, 7, 13, 16, 30),
+      proposedClockIn: DateTime(2026, 7, 13, 8, 50), // 20 min late
+      proposedClockOut: DateTime(2026, 7, 13, 16, 30),
+    );
+    // The synthetic shell the admin cubit builds: identity + window, no clock.
+    final synthetic = AttendanceEntity(
+      id: missedPunch.attendanceId,
+      userId: 'u1',
+      shift: ScheduleShift.morning,
+      date: DateTime(2026, 7, 13),
+      scheduledStart: missedPunch.scheduledStart,
+      scheduledEnd: missedPunch.scheduledEnd,
+      status: AttendanceStatus.pendingReview,
+    );
+    await DecideCorrection(repo).call(
+      missedPunch,
+      record: synthetic,
+      approve: true,
+      decidedBy: 'm1',
+      now: DateTime(2026, 7, 13, 18),
+    );
+    final res = repo.decision!.resolution!;
+    expect(res.clockIn, DateTime(2026, 7, 13, 8, 50));
+    expect(res.workedMinutes, 460); // 08:50 → 16:30
+    expect(res.lateMinutes, 20); // measured against the correction's window
+  });
+
   test('proposedStatus overrides the resolved lifecycle (absence dispute)',
       () async {
     final repo = _CaptureRepo();

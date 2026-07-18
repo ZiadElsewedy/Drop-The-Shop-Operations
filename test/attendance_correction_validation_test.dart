@@ -41,13 +41,35 @@ void main() {
     expect(check().allowed, isTrue);
   });
 
-  test('no record → recordMissing', () {
+  test('no record + no start time → missingStartTime (missed punch)', () {
+    // A missed-punch materializes a record, so a null record is NOT recordMissing
+    // (spec workflow 4) — but the employee must assert when they started.
     final c = AttendanceValidation.checkCorrection(
       existing: null,
-      reason: 'x',
+      reason: 'Forgot to clock in',
       proposedClockOut: DateTime(2026, 7, 13, 16, 30),
     );
-    expect(c.reason, AttendanceBlock.recordMissing);
+    expect(c.reason, AttendanceBlock.missingStartTime);
+  });
+
+  test('no record + a full missed punch is allowed', () {
+    final c = AttendanceValidation.checkCorrection(
+      existing: null,
+      reason: 'Forgot to clock in — worked the full shift',
+      proposedClockIn: DateTime(2026, 7, 13, 8, 30),
+      proposedClockOut: DateTime(2026, 7, 13, 16, 30),
+    );
+    expect(c.allowed, isTrue);
+  });
+
+  test('an existing open correction → duplicateOpen', () {
+    final c = AttendanceValidation.checkCorrection(
+      existing: record(),
+      reason: 'Fix the time',
+      proposedClockOut: DateTime(2026, 7, 13, 16, 30),
+      hasOpenCorrection: true,
+    );
+    expect(c.reason, AttendanceBlock.duplicateOpen);
   });
 
   test('soft-deleted record → recordMissing', () {
@@ -91,5 +113,76 @@ void main() {
       proposedStatus: AttendanceStatus.completed,
     );
     expect(c.allowed, isTrue);
+  });
+
+  group('checkManagerEntry (direct action)', () {
+    final start = DateTime(2026, 7, 13, 8, 30);
+    final end = DateTime(2026, 7, 13, 16, 30);
+
+    test('add record for a missing shift is allowed', () {
+      final c = AttendanceValidation.checkManagerEntry(
+        existing: null,
+        reason: 'Employee worked, forgot to clock in',
+        proposedClockIn: start,
+        proposedClockOut: end,
+      );
+      expect(c.allowed, isTrue);
+    });
+
+    test('resolve a pendingReview record is allowed', () {
+      final c = AttendanceValidation.checkManagerEntry(
+        existing: record(status: AttendanceStatus.pendingReview),
+        reason: 'Left at 16:30',
+        proposedClockIn: start,
+        proposedClockOut: end,
+      );
+      expect(c.allowed, isTrue);
+    });
+
+    test('empty reason → emptyReason (reason is mandatory)', () {
+      final c = AttendanceValidation.checkManagerEntry(
+        existing: null,
+        reason: '  ',
+        proposedClockIn: start,
+      );
+      expect(c.reason, AttendanceBlock.emptyReason);
+    });
+
+    test('no start time → missingStartTime', () {
+      final c = AttendanceValidation.checkManagerEntry(
+        existing: null,
+        reason: 'x',
+      );
+      expect(c.reason, AttendanceBlock.missingStartTime);
+    });
+
+    test('a still-running session cannot be resolved', () {
+      final c = AttendanceValidation.checkManagerEntry(
+        existing: record(status: AttendanceStatus.inProgress),
+        reason: 'x',
+        proposedClockIn: start,
+      );
+      expect(c.reason, AttendanceBlock.sessionOpen);
+    });
+
+    test('an open correction blocks a direct action → duplicateOpen', () {
+      final c = AttendanceValidation.checkManagerEntry(
+        existing: record(),
+        reason: 'x',
+        proposedClockIn: start,
+        hasOpenCorrection: true,
+      );
+      expect(c.reason, AttendanceBlock.duplicateOpen);
+    });
+
+    test('clock-out before clock-in → invalidTimes', () {
+      final c = AttendanceValidation.checkManagerEntry(
+        existing: null,
+        reason: 'x',
+        proposedClockIn: end,
+        proposedClockOut: start,
+      );
+      expect(c.reason, AttendanceBlock.invalidTimes);
+    });
   });
 }

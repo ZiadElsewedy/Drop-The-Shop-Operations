@@ -2802,6 +2802,55 @@ exports.onAttendanceWritten = onDocumentWritten(`${ATTENDANCE}/{recordId}`, asyn
   }
 });
 
+// Apply an approved correction's resolution onto its parent attendance record —
+// the ONE server-authoritative apply path, shared by a reviewer's approval and a
+// manager's direct action (Add record / Resolve). Upserts: an existing record is
+// updated; a MISSING record is materialized (a missed-punch / manager-added shift
+// that never had a document). A concurrently soft-deleted record is left alone.
+// The dayKey is lifted from the deterministic id (`{uid}_{yyyyMMdd}_{shift}`) so it
+// matches the client's calendar day without a timezone round-trip.
+async function applyCorrectionResolution(recordId, after) {
+  if (!recordId) return;
+  const res = (after.resolution && typeof after.resolution === "object") ? after.resolution : {};
+  const fields = {
+    clockIn: res.clockIn || null,
+    clockOut: res.clockOut || null,
+    status: String(res.status || "completed"),
+    workedMinutes: Number(res.workedMinutes || 0),
+    lateMinutes: Number(res.lateMinutes || 0),
+    earlyLeaveMinutes: Number(res.earlyLeaveMinutes || 0),
+    overtimeMinutes: Number(res.overtimeMinutes || 0),
+    breakMinutes: Number(res.breakMinutes || 0),
+    source: "correction",
+    resolvedBy: String(after.decidedBy || ""),
+    resolvedByName: after.decidedByName != null ? String(after.decidedByName) : null,
+    resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  const ref = db.collection(ATTENDANCE).doc(recordId);
+  const snap = await ref.get();
+  if (snap.exists) {
+    // Guard a concurrent soft-delete — never resurrect a deleted record.
+    if ((snap.data() || {}).deletedAt) return;
+    await ref.update(fields);
+    return;
+  }
+  // Materialize a missing record from the correction's identity + schedule.
+  const dayKey = String(recordId).split("_").find((p) => /^\d{8}$/.test(p)) || "";
+  await ref.set({
+    ...fields,
+    userId: String(after.userId || ""),
+    userName: after.userName != null ? String(after.userName) : null,
+    branchId: after.branchId != null ? String(after.branchId) : null,
+    shift: String(after.shift || ""),
+    date: after.date || null,
+    dayKey,
+    scheduledStart: after.scheduledStart || null,
+    scheduledEnd: after.scheduledEnd || null,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
 // Any write to a correction → own its lifecycle events + notifications, and (on
 // approval) apply the resolution onto the parent record. Clients never touch the
 // record's corrected fields or the audit trail directly.
@@ -2819,8 +2868,39 @@ exports.onAttendanceCorrectionWritten = onDocumentWritten(
     const employeeUid = String(after.userId || "");
     const data = { correctionKind: String(after.kind || "other") };
 
-    // 1) Newly filed → the opening audit event + notify the reviewers.
+    // 1) Newly created correction.
     if (!before) {
+      const createStatus = String(after.status || "pending");
+
+      // 1a) A manager's DIRECT action — born `approved` (Add record / Resolve).
+      // Apply immediately (materializing a missing record), audit, and notify the
+      // employee. No reviewer step, so no reviewer notification.
+      if (createStatus === "approved") {
+        await applyCorrectionResolution(recordId, after);
+        await appendAttendanceEvent(recordId, {
+          kind: "correctionApproved",
+          actorId: String(after.decidedBy || ""),
+          actorName: after.decidedByName != null ? String(after.decidedByName) : null,
+          note: after.decisionNote != null ? String(after.decisionNote) : (after.reason != null ? String(after.reason) : null),
+          data,
+        });
+        if (employeeUid) {
+          const deciderName = String(after.decidedByName || "").trim();
+          await writeAttendanceNotifications([employeeUid], {
+            type: "attendanceCorrectionApproved",
+            title: "Attendance updated",
+            body: deciderName
+              ? `${deciderName} updated your attendance for this shift`
+              : "Your attendance for this shift was updated",
+            recordId,
+            correctionId,
+            senderUid: String(after.decidedBy || ""),
+          });
+        }
+        return;
+      }
+
+      // 1b) An employee FILING (pending) → opening audit event + notify reviewers.
       await appendAttendanceEvent(recordId, {
         kind: "correctionRequested",
         actorId: String(after.requestedBy || ""),
@@ -2851,25 +2931,11 @@ exports.onAttendanceCorrectionWritten = onDocumentWritten(
 
     if (afterStatus === "approved") {
       // Apply the client-computed resolution (single source of the minute math:
-      // AttendanceCalculator) onto the parent record — server-authoritative.
-      const res = (after.resolution && typeof after.resolution === "object") ? after.resolution : {};
+      // AttendanceCalculator) onto the parent record — server-authoritative,
+      // upserting a missing record (a missed-punch materializes on approval).
       if (recordId) {
         try {
-          await db.collection(ATTENDANCE).doc(recordId).update({
-            clockIn: res.clockIn || null,
-            clockOut: res.clockOut || null,
-            status: String(res.status || "completed"),
-            workedMinutes: Number(res.workedMinutes || 0),
-            lateMinutes: Number(res.lateMinutes || 0),
-            earlyLeaveMinutes: Number(res.earlyLeaveMinutes || 0),
-            overtimeMinutes: Number(res.overtimeMinutes || 0),
-            breakMinutes: Number(res.breakMinutes || 0),
-            source: "correction",
-            resolvedBy: decidedBy,
-            resolvedByName: after.decidedByName != null ? String(after.decidedByName) : null,
-            resolvedAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+          await applyCorrectionResolution(recordId, after);
         } catch (e) {
           logger.warn("failed to apply approved correction", { recordId, error: String(e) });
         }

@@ -3,7 +3,7 @@
 > **Today's snapshot. Nothing historical.** The moment something here becomes
 > history, it moves to [CHANGELOG.md](CHANGELOG.md) and leaves this file.
 >
-> **Last verified against the code:** 2026-07-16.
+> **Last verified against the code:** 2026-07-17.
 
 ## At a glance
 
@@ -11,7 +11,7 @@
 | --- | --- |
 | **Branch** | `feature/attendance-management` |
 | **Build** | `flutter analyze` clean (1 pre-existing info) |
-| **Tests** | **875 pass · 2 fail** across 134 files (~18s) — see [Known issues](#known-issues) |
+| **Tests** | **914 pass · 2 fail** across 139 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues) |
 | **Blocking release** | Firebase deploy (rules · indexes · functions) · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
@@ -45,7 +45,7 @@ pruning. `Community-Hub` is **dead** — the feature was removed 2026-07-15.
 | Feature | Notes |
 | --- | --- |
 | **Auth** | Admin-provisioned email/password. No registration/Google/OTP/approval. First-login gate: force password change → profile completion → (employees) Welcome → role home |
-| **Roles & routing** | 40 routes, role-guarded. admin ⊇ manager |
+| **Roles & routing** | 43 routes, role-guarded. admin ⊇ manager |
 | **Profile** | View/edit, avatar/cover upload, contact + payment (payment in a private subdoc; hidden for admin) |
 | **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets). Create Task sheet has a premium monochrome surface/motion pass. |
 | **Schedule** | Weekly roster, shift swaps, leave, day notes, configurable shift hours, shift templates, Final View + PNG export |
@@ -65,12 +65,22 @@ pruning. `Community-Hub` is **dead** — the feature was removed 2026-07-15.
 **Attendance** — the only feature not closed out. Code is complete across all three
 phases and committed; what remains is deployment and on-device verification.
 
+> **Product behavior is locked** in [docs/design/ATTENDANCE_SPEC.md](docs/design/ATTENDANCE_SPEC.md)
+> (2026-07-18). **Spec Phase 1 is now implemented** (engine + cubit API + rules +
+> CF + tests; **no new UI surfaces** — wiring buttons awaits owner design sign-off):
+> missed-punch recovery (employee request + manager Add record → server
+> materialization via one upsert apply path), manager direct-resolve of
+> pendingReview, and one-open-correction-per-record. **Still open** (spec deltas,
+> future phases): early-clock-in window + clamp, lazy-Absent/Excused outcome, 16h
+> max-session auto-close, and the UI entry points for the above.
+
 | Phase | State |
 | --- | --- |
 | P1 — data foundation | Done. Deterministic `attendance/{uid}_{yyyyMMdd}_{shift}` id, `AttendanceCalculator` |
 | P2 — corrections + audit | Done. Server-authoritative audit + `attendance_corrections/` approval object |
 | P3 — GPS engine | Done. `geolocator`, Haversine verification, separate clock-in/out verifications |
 | P3 — UI | Done. Employee clock screen · admin board · geofence editor |
+| History | Done. Ledger (`/attendance/history` self · `/attendance/review` branch, admin‖manager) + audit-log record details (`/attendance/record/:id`). Reuses the existing reads + `AttendanceStats`; holds ADR-009/010 (no score/analytics/export) |
 | **Deploy** | ❌ **Not done** — functions + rules + indexes |
 | **On-device QA** | ❌ **Not done** — GPS needs real hardware; simulators cannot validate this |
 
@@ -207,8 +217,8 @@ If you change status, gaps, or priorities, update this file **in the same task**
 
 ```bash
 flutter analyze                          # expect: 1 info
-flutter test                             # expect: 875 pass, 2 fail (splash)
-grep -c "static const String" lib/core/routes/route_names.dart   # expect: 40
+flutter test                             # expect: 897 pass, 2 fail (splash)
+grep -c "static const String" lib/core/routes/route_names.dart   # expect: 43
 ls lib/features | wc -l                  # expect: 17
 ```
 

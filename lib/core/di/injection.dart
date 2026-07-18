@@ -104,8 +104,12 @@ import 'package:drop/features/attendance/domain/usecases/clock_in.dart';
 import 'package:drop/features/attendance/domain/usecases/clock_out.dart';
 import 'package:drop/features/attendance/domain/usecases/decide_correction.dart';
 import 'package:drop/features/attendance/domain/usecases/request_correction.dart';
+import 'package:drop/features/attendance/domain/attendance_history_query.dart';
+import 'package:drop/features/attendance/domain/entities/attendance_entity.dart';
 import 'package:drop/features/attendance/presentation/cubit/attendance_admin_cubit.dart';
 import 'package:drop/features/attendance/presentation/cubit/attendance_cubit.dart';
+import 'package:drop/features/attendance/presentation/details/attendance_details_cubit.dart';
+import 'package:drop/features/attendance/presentation/history/attendance_history_cubit.dart';
 import 'package:drop/features/audit/data/datasources/audit_remote_datasource.dart';
 import 'package:drop/features/audit/data/repositories/audit_repository_impl.dart';
 import 'package:drop/features/audit/domain/repositories/audit_repository.dart';
@@ -211,6 +215,41 @@ class AppDependencies {
   /// Admin attendance dashboard — the branch-scoped roster × attendance board +
   /// correction queue (singleton, app-wide; a future manager view reuses it).
   static late final AttendanceAdminCubit attendanceAdminCubit;
+
+  // Attendance repository — kept so fresh, per-view History / Details cubits can
+  // be built on demand (one per opened ledger / record), the same pattern as the
+  // requests detail cubit. The employee/admin cubits above hold it internally.
+  static late final AttendanceRepository _attendanceRepository;
+
+  /// Builds a fresh Attendance History ledger cubit — the employee's own history
+  /// ([AttendanceHistoryMode.self]) or a manager/admin branch review
+  /// ([AttendanceHistoryMode.review]). Owned + disposed by its `BlocProvider`.
+  static AttendanceHistoryCubit createAttendanceHistoryCubit({
+    required AttendanceHistoryMode mode,
+    String? userId,
+    String? branchId,
+    String? initialSearch,
+  }) =>
+      AttendanceHistoryCubit(
+        repository: _attendanceRepository,
+        mode: mode,
+        userId: userId,
+        branchId: branchId,
+        query: AttendanceHistoryQuery(text: initialSearch ?? ''),
+      );
+
+  /// Builds a fresh Attendance record Details cubit (record + server-derived
+  /// audit trail + corrections), seeded from the tapped record for an instant
+  /// first paint. Owned + disposed by its `BlocProvider`.
+  static AttendanceDetailsCubit createAttendanceDetailsCubit(
+    String recordId, {
+    AttendanceEntity? seed,
+  }) =>
+      AttendanceDetailsCubit(
+        repository: _attendanceRepository,
+        recordId: recordId,
+        seed: seed,
+      );
 
   /// Phase 3 task foundation, activated by the Phase 4 [taskCubit] + use cases.
   static late final TaskRepository taskRepository;
@@ -392,6 +431,8 @@ class AppDependencies {
         FirebaseStorage.instance,
       ),
     );
+    // Shared with the on-demand History / Details cubit factories.
+    _attendanceRepository = attendanceRepository;
     attendanceCubit = AttendanceCubit(
       repository: attendanceRepository,
       scheduleRepository: scheduleRepository,

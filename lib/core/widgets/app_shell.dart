@@ -160,6 +160,12 @@ class AppShell extends StatefulWidget {
               label: 'Schedule',
               route: RouteNames.managerSchedule,
             ),
+            SidebarItem(
+              icon: Icons.fingerprint_rounded,
+              activeIcon: Icons.fingerprint_rounded,
+              label: 'Attendance',
+              route: RouteNames.attendanceReview,
+            ),
             communications,
             cases,
             requests,

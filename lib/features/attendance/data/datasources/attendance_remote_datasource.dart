@@ -96,6 +96,12 @@ abstract class AttendanceRemoteDataSource {
   /// File a correction (auto id, status `pending`, server timestamps).
   Future<void> requestCorrection(AttendanceCorrectionModel correction);
 
+  /// Create a correction **already `approved`** (a manager's direct *Add record*
+  /// / *Resolve*) — auto id, carries the resolution + decision stamps + server
+  /// timestamps. The Cloud Function's create branch applies it to the record
+  /// immediately (materializing it if absent), with no reviewer step.
+  Future<void> createResolvedCorrection(AttendanceCorrectionModel correction);
+
   /// Persist a reviewer's decision (status + stamps + the applied [resolution]).
   Future<void> decideCorrection(String id, CorrectionDecisionWrite write);
 
@@ -298,6 +304,28 @@ class AttendanceRemoteDataSourceImpl implements AttendanceRemoteDataSource {
       });
     } on FirebaseException catch (e) {
       throw ServerException(e.message ?? 'Failed to file the correction.');
+    }
+  }
+
+  @override
+  Future<void> createResolvedCorrection(
+      AttendanceCorrectionModel correction) async {
+    try {
+      final ref = correction.id.isEmpty
+          ? _corrections.doc()
+          : _corrections.doc(correction.id);
+      final payload = AttendanceCorrectionModel.fromEntity(
+        correction.toEntity(),
+      ).toResolvedCreateMap();
+      await ref.set({
+        ...payload,
+        'id': ref.id,
+        'decidedAt': FieldValue.serverTimestamp(),
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw ServerException(e.message ?? 'Failed to save the record.');
     }
   }
 

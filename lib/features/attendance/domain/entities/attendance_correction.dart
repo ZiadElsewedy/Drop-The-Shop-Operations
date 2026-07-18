@@ -51,6 +51,14 @@ class AttendanceCorrectionEntity with _$AttendanceCorrectionEntity {
     /// Why the record is wrong (the employee's explanation) — always required.
     required String reason,
 
+    /// The scheduled window this correction is measured against. On a correction
+    /// to an **existing** record these are redundant (the record already has
+    /// them). On a **missed-punch** materialization (no record yet) they carry the
+    /// rostered window so the applied record has a scheduled reference for
+    /// lateness and the board — null for a genuinely unscheduled shift.
+    DateTime? scheduledStart,
+    DateTime? scheduledEnd,
+
     // ── The proposed fix (what the employee is asking for) ──
     DateTime? proposedClockIn,
     DateTime? proposedClockOut,

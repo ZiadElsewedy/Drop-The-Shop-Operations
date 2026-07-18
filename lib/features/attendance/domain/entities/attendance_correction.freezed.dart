@@ -37,7 +37,15 @@ mixin _$AttendanceCorrectionEntity {
   RequestStatus get status => throw _privateConstructorUsedError;
 
   /// Why the record is wrong (the employee's explanation) — always required.
-  String get reason =>
+  String get reason => throw _privateConstructorUsedError;
+
+  /// The scheduled window this correction is measured against. On a correction
+  /// to an **existing** record these are redundant (the record already has
+  /// them). On a **missed-punch** materialization (no record yet) they carry the
+  /// rostered window so the applied record has a scheduled reference for
+  /// lateness and the board — null for a genuinely unscheduled shift.
+  DateTime? get scheduledStart => throw _privateConstructorUsedError;
+  DateTime? get scheduledEnd =>
       throw _privateConstructorUsedError; // ── The proposed fix (what the employee is asking for) ──
   DateTime? get proposedClockIn => throw _privateConstructorUsedError;
   DateTime? get proposedClockOut => throw _privateConstructorUsedError;
@@ -90,6 +98,8 @@ abstract class $AttendanceCorrectionEntityCopyWith<$Res> {
     AttendanceCorrectionKind kind,
     RequestStatus status,
     String reason,
+    DateTime? scheduledStart,
+    DateTime? scheduledEnd,
     DateTime? proposedClockIn,
     DateTime? proposedClockOut,
     AttendanceStatus? proposedStatus,
@@ -134,6 +144,8 @@ class _$AttendanceCorrectionEntityCopyWithImpl<
     Object? kind = null,
     Object? status = null,
     Object? reason = null,
+    Object? scheduledStart = freezed,
+    Object? scheduledEnd = freezed,
     Object? proposedClockIn = freezed,
     Object? proposedClockOut = freezed,
     Object? proposedStatus = freezed,
@@ -196,6 +208,14 @@ class _$AttendanceCorrectionEntityCopyWithImpl<
                 ? _value.reason
                 : reason // ignore: cast_nullable_to_non_nullable
                       as String,
+            scheduledStart: freezed == scheduledStart
+                ? _value.scheduledStart
+                : scheduledStart // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            scheduledEnd: freezed == scheduledEnd
+                ? _value.scheduledEnd
+                : scheduledEnd // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
             proposedClockIn: freezed == proposedClockIn
                 ? _value.proposedClockIn
                 : proposedClockIn // ignore: cast_nullable_to_non_nullable
@@ -268,6 +288,8 @@ abstract class _$$AttendanceCorrectionEntityImplCopyWith<$Res>
     AttendanceCorrectionKind kind,
     RequestStatus status,
     String reason,
+    DateTime? scheduledStart,
+    DateTime? scheduledEnd,
     DateTime? proposedClockIn,
     DateTime? proposedClockOut,
     AttendanceStatus? proposedStatus,
@@ -312,6 +334,8 @@ class __$$AttendanceCorrectionEntityImplCopyWithImpl<$Res>
     Object? kind = null,
     Object? status = null,
     Object? reason = null,
+    Object? scheduledStart = freezed,
+    Object? scheduledEnd = freezed,
     Object? proposedClockIn = freezed,
     Object? proposedClockOut = freezed,
     Object? proposedStatus = freezed,
@@ -374,6 +398,14 @@ class __$$AttendanceCorrectionEntityImplCopyWithImpl<$Res>
             ? _value.reason
             : reason // ignore: cast_nullable_to_non_nullable
                   as String,
+        scheduledStart: freezed == scheduledStart
+            ? _value.scheduledStart
+            : scheduledStart // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
+        scheduledEnd: freezed == scheduledEnd
+            ? _value.scheduledEnd
+            : scheduledEnd // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
         proposedClockIn: freezed == proposedClockIn
             ? _value.proposedClockIn
             : proposedClockIn // ignore: cast_nullable_to_non_nullable
@@ -439,6 +471,8 @@ class _$AttendanceCorrectionEntityImpl extends _AttendanceCorrectionEntity {
     required this.kind,
     this.status = RequestStatus.pending,
     required this.reason,
+    this.scheduledStart,
+    this.scheduledEnd,
     this.proposedClockIn,
     this.proposedClockOut,
     this.proposedStatus,
@@ -486,6 +520,16 @@ class _$AttendanceCorrectionEntityImpl extends _AttendanceCorrectionEntity {
   /// Why the record is wrong (the employee's explanation) — always required.
   @override
   final String reason;
+
+  /// The scheduled window this correction is measured against. On a correction
+  /// to an **existing** record these are redundant (the record already has
+  /// them). On a **missed-punch** materialization (no record yet) they carry the
+  /// rostered window so the applied record has a scheduled reference for
+  /// lateness and the board — null for a genuinely unscheduled shift.
+  @override
+  final DateTime? scheduledStart;
+  @override
+  final DateTime? scheduledEnd;
   // ── The proposed fix (what the employee is asking for) ──
   @override
   final DateTime? proposedClockIn;
@@ -520,7 +564,7 @@ class _$AttendanceCorrectionEntityImpl extends _AttendanceCorrectionEntity {
 
   @override
   String toString() {
-    return 'AttendanceCorrectionEntity(id: $id, attendanceId: $attendanceId, userId: $userId, userName: $userName, branchId: $branchId, shift: $shift, date: $date, requestedBy: $requestedBy, requestedByName: $requestedByName, kind: $kind, status: $status, reason: $reason, proposedClockIn: $proposedClockIn, proposedClockOut: $proposedClockOut, proposedStatus: $proposedStatus, resolution: $resolution, decidedBy: $decidedBy, decidedByName: $decidedByName, decidedAt: $decidedAt, decisionNote: $decisionNote, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt)';
+    return 'AttendanceCorrectionEntity(id: $id, attendanceId: $attendanceId, userId: $userId, userName: $userName, branchId: $branchId, shift: $shift, date: $date, requestedBy: $requestedBy, requestedByName: $requestedByName, kind: $kind, status: $status, reason: $reason, scheduledStart: $scheduledStart, scheduledEnd: $scheduledEnd, proposedClockIn: $proposedClockIn, proposedClockOut: $proposedClockOut, proposedStatus: $proposedStatus, resolution: $resolution, decidedBy: $decidedBy, decidedByName: $decidedByName, decidedAt: $decidedAt, decisionNote: $decisionNote, createdAt: $createdAt, updatedAt: $updatedAt, deletedAt: $deletedAt)';
   }
 
   @override
@@ -545,6 +589,10 @@ class _$AttendanceCorrectionEntityImpl extends _AttendanceCorrectionEntity {
             (identical(other.kind, kind) || other.kind == kind) &&
             (identical(other.status, status) || other.status == status) &&
             (identical(other.reason, reason) || other.reason == reason) &&
+            (identical(other.scheduledStart, scheduledStart) ||
+                other.scheduledStart == scheduledStart) &&
+            (identical(other.scheduledEnd, scheduledEnd) ||
+                other.scheduledEnd == scheduledEnd) &&
             (identical(other.proposedClockIn, proposedClockIn) ||
                 other.proposedClockIn == proposedClockIn) &&
             (identical(other.proposedClockOut, proposedClockOut) ||
@@ -584,6 +632,8 @@ class _$AttendanceCorrectionEntityImpl extends _AttendanceCorrectionEntity {
     kind,
     status,
     reason,
+    scheduledStart,
+    scheduledEnd,
     proposedClockIn,
     proposedClockOut,
     proposedStatus,
@@ -623,6 +673,8 @@ abstract class _AttendanceCorrectionEntity extends AttendanceCorrectionEntity {
     required final AttendanceCorrectionKind kind,
     final RequestStatus status,
     required final String reason,
+    final DateTime? scheduledStart,
+    final DateTime? scheduledEnd,
     final DateTime? proposedClockIn,
     final DateTime? proposedClockOut,
     final AttendanceStatus? proposedStatus,
@@ -669,7 +721,17 @@ abstract class _AttendanceCorrectionEntity extends AttendanceCorrectionEntity {
 
   /// Why the record is wrong (the employee's explanation) — always required.
   @override
-  String get reason; // ── The proposed fix (what the employee is asking for) ──
+  String get reason;
+
+  /// The scheduled window this correction is measured against. On a correction
+  /// to an **existing** record these are redundant (the record already has
+  /// them). On a **missed-punch** materialization (no record yet) they carry the
+  /// rostered window so the applied record has a scheduled reference for
+  /// lateness and the board — null for a genuinely unscheduled shift.
+  @override
+  DateTime? get scheduledStart;
+  @override
+  DateTime? get scheduledEnd; // ── The proposed fix (what the employee is asking for) ──
   @override
   DateTime? get proposedClockIn;
   @override

@@ -711,8 +711,12 @@ service cloud.firestore {
     // (`onAttendanceCorrectionWritten`), NEVER a client — so a corrected record
     // and its trail can't be forged.
     //   read   — admin (all) · own-branch manager · the correction's own employee.
-    //   create — the employee files for THEIR OWN record (userId == requestedBy ==
-    //            uid), in their own branch, status `pending`.
+    //   create — either (a) the employee FILES for THEIR OWN record (userId ==
+    //            requestedBy == uid), in their own branch, status `pending`; or
+    //            (b) a reviewer's DIRECT action (admin | own-branch manager) —
+    //            an already-`approved` correction they authored (decidedBy == uid)
+    //            for SOMEONE ELSE (never their own attendance). The Cloud Function
+    //            applies (b) immediately; no self-approval is possible either way.
     //   update — a reviewer decides (admin | own-branch manager) — but NEVER on
     //            their OWN attendance (no self-approval); userId / attendanceId /
     //            requestedBy are immutable. (Admin soft-delete stamps `deletedAt`
@@ -724,11 +728,25 @@ service cloud.firestore {
         || isOwner(resource.data.get('userId', ''));
 
       allow create: if isSignedIn()
-        && request.resource.data.get('userId', '') == request.auth.uid
-        && request.resource.data.get('requestedBy', '') == request.auth.uid
-        && request.resource.data.get('status', 'pending') == 'pending'
-        && (isAdmin()
-            || request.resource.data.get('branchId', '') == selfBranch());
+        && (
+          // (a) employee self-files a pending correction for their own record
+          (
+            request.resource.data.get('userId', '') == request.auth.uid
+            && request.resource.data.get('requestedBy', '') == request.auth.uid
+            && request.resource.data.get('status', 'pending') == 'pending'
+            && (isAdmin()
+                || request.resource.data.get('branchId', '') == selfBranch())
+          )
+          // (b) reviewer direct action — approved correction for another user
+          || (
+            (isAdmin()
+             || (isManager()
+                 && request.resource.data.get('branchId', '') == selfBranch()))
+            && request.resource.data.get('status', '') == 'approved'
+            && request.resource.data.get('decidedBy', '') == request.auth.uid
+            && request.auth.uid != request.resource.data.get('userId', '')
+          )
+        );
 
       allow update: if
         (isAdmin()

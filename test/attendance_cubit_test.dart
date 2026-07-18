@@ -78,6 +78,18 @@ class _FakeAttendanceRepository implements AttendanceRepository {
   Future<void> requestCorrection(AttendanceCorrectionEntity correction) async =>
       corrections.add(correction);
 
+  final List<AttendanceCorrectionEntity> resolved = [];
+  final _userCorrections =
+      StreamController<List<AttendanceCorrectionEntity>>.broadcast();
+
+  void pushCorrections(List<AttendanceCorrectionEntity> c) =>
+      _userCorrections.add(c);
+
+  @override
+  Future<void> createResolvedCorrection(
+          AttendanceCorrectionEntity correction) async =>
+      resolved.add(correction);
+
   // Unused by these tests.
   @override
   Future<AttendanceEntity?> getRecord(String id) async => null;
@@ -105,7 +117,7 @@ class _FakeAttendanceRepository implements AttendanceRepository {
   @override
   Stream<List<AttendanceCorrectionEntity>> watchUserCorrections(String uid,
           {int limit = 30}) =>
-      const Stream.empty();
+      _userCorrections.stream;
   @override
   Stream<List<AttendanceCorrectionEntity>> watchBranchPendingCorrections(
           String branchId) =>
@@ -431,6 +443,77 @@ void main() {
       proposedClockOut: DateTime(2026, 7, 13, 16, 30),
     );
     expect(repo.corrections, isEmpty); // sessionOpen block → no write
+    await cubit.close();
+  });
+
+  test('requestMissedPunch files an absence-dispute for a shift with no record',
+      () async {
+    final cubit = build(at: DateTime(2026, 7, 13, 18)); // after the shift
+    await cubit.load(user);
+    repo.pushHistory([]); // Absent — never clocked in, no record exists
+    await pump();
+
+    await cubit.requestMissedPunch(
+      proposedClockIn: DateTime(2026, 7, 13, 8, 30),
+      proposedClockOut: DateTime(2026, 7, 13, 16, 30),
+      reason: 'Forgot to clock in — worked the full shift',
+    );
+
+    expect(repo.corrections, hasLength(1));
+    final c = repo.corrections.single;
+    expect(c.attendanceId, 'u1_20260713_morning');
+    expect(c.kind, AttendanceCorrectionKind.absenceDispute);
+    expect(c.status, RequestStatus.pending);
+    expect(c.proposedClockIn, DateTime(2026, 7, 13, 8, 30));
+    // Carries the rostered window so the materialized record is measurable.
+    expect(c.scheduledStart, DateTime(2026, 7, 13, 8, 30));
+    expect(c.scheduledEnd, DateTime(2026, 7, 13, 16, 30));
+    await cubit.close();
+  });
+
+  test('requestMissedPunch is a no-op when nothing is rostered today', () async {
+    final cubit = build(at: DateTime(2026, 7, 13, 18), noSchedule: true);
+    await cubit.load(user);
+    repo.pushHistory([]);
+    await pump();
+
+    await cubit.requestMissedPunch(
+      proposedClockIn: DateTime(2026, 7, 13, 8, 30),
+      reason: 'Forgot to clock in',
+    );
+    expect(repo.corrections, isEmpty); // no shift context → nothing to add
+    await cubit.close();
+  });
+
+  test('a second correction is blocked while one is already pending (R15)',
+      () async {
+    final cubit = build(at: DateTime(2026, 7, 13, 18));
+    await cubit.load(user);
+    final pendingReview = openRecord().copyWith(
+      status: AttendanceStatus.pendingReview,
+    );
+    repo.pushHistory([pendingReview]);
+    // An open correction already exists for this record.
+    repo.pushCorrections([
+      AttendanceCorrectionEntity(
+        id: 'c1',
+        attendanceId: 'u1_20260713_morning',
+        userId: 'u1',
+        requestedBy: 'u1',
+        kind: AttendanceCorrectionKind.missingClockOut,
+        reason: 'earlier',
+        status: RequestStatus.pending,
+      ),
+    ]);
+    await pump();
+
+    await cubit.requestCorrection(
+      record: pendingReview,
+      kind: AttendanceCorrectionKind.wrongTime,
+      reason: 'a second one',
+      proposedClockOut: DateTime(2026, 7, 13, 16, 30),
+    );
+    expect(repo.corrections, isEmpty); // duplicateOpen → no write
     await cubit.close();
   });
 

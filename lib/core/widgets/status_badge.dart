@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:drop/core/enums/attendance_status.dart';
 import 'package:drop/core/enums/swap_status.dart';
 import 'package:drop/core/enums/task_status.dart';
 import 'package:drop/core/theme/app_colors.dart';
@@ -28,6 +29,11 @@ class StatusBadge extends StatelessWidget {
         color: isActive ? AppColors.success : AppColors.error,
       );
 
+  factory StatusBadge.attendance(AttendanceStatus status) => StatusBadge(
+        label: status.label,
+        color: attendanceStatusColor(status),
+      );
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -46,6 +52,27 @@ class StatusBadge extends StatelessWidget {
 /// [StatusBadge.task] and the premium card glow ([AppGlassCard]) so the mapping
 /// lives in exactly one place.
 Color taskStatusColor(TaskStatus s) => _taskColor(s);
+
+/// The single source for an attendance record's status colour — reused by
+/// [StatusBadge.attendance] and the History ledger. Calm by default: only the
+/// states that call for action carry a semantic tint (working = success, pending
+/// review = warning, absent = error); planned/neutral states stay grey.
+Color attendanceStatusColor(AttendanceStatus s) {
+  switch (s) {
+    case AttendanceStatus.scheduled:
+      return AppColors.textTertiary;
+    case AttendanceStatus.inProgress:
+      return AppColors.success;
+    case AttendanceStatus.completed:
+      return AppColors.textSecondary;
+    case AttendanceStatus.pendingReview:
+      return AppColors.warning;
+    case AttendanceStatus.absent:
+      return AppColors.error;
+    case AttendanceStatus.onLeave:
+      return AppColors.textSecondary;
+  }
+}
 
 Color _taskColor(TaskStatus s) {
   switch (s) {

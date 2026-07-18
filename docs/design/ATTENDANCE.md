@@ -1,5 +1,12 @@
 # Attendance — GPS clock in/out · corrections · admin board
 
+> **This file describes the shipped *engine*.** For locked **product behavior**
+> (state machine, business rules, edge-case rulings, decision log) the source of
+> truth is **[ATTENDANCE_SPEC.md](ATTENDANCE_SPEC.md)** (locked 2026-07-18). Where
+> the two disagree on behavior, the spec wins. Notably: the early-clock-in window
+> (`clockInLeadMinutes`) is **not yet enforced in code** — the spec locks it as
+> required (R1/R2); this doc's engine description predates that ruling.
+>
 > **Status:** code complete (P1–P3), **not deployed, not QA'd on device**. See
 > [CURRENT_STATE](../../CURRENT_STATE.md).
 >
@@ -117,6 +124,33 @@ filterable KPIs · details sheet · corrections approve/reject · GPS-area short
 > The admin cubit and screen are **branch-scoped**, so a future manager view is the
 > same code pinned to one branch. Descoped for V1 — don't rebuild it.
 
+**History** — the longitudinal ledger (`presentation/history/` +
+`presentation/details/`), built **entirely on the existing reads**
+(`watchUserHistory` · `watchBranchRange` · `watchEvents` ·
+`watchRecordCorrections`) plus the pure `AttendanceStats` and the new pure
+`AttendanceHistoryQuery` (date-range preset + status/shift/name facets → resolve +
+`apply`) — no new data path, no parallel repository. One `AttendanceHistoryScreen`
+serves two entries: `.self()` (`/attendance/history`, any authenticated role — the
+caller's own history) and `.review()` (`/attendance/review`, **admin‖manager** via
+the `_isAttendanceReviewArea` guard — the branch ledger, with an admin branch
+picker + employee-name search). A record card opens the audit-log Details screen
+(`/attendance/record/:id`, seeded via go_router `extra` for an instant paint):
+scheduled window · clock in/out + GPS · worked/late/early/overtime · **Timeline**
+(the server `events` through the shared `TimelineTile`, with a record-derived
+fallback until `onAttendanceWritten` is deployed) · corrections · an expandable
+**Metadata** block that shows **only recorded fields** (no invented
+timezone/appVersion/syncStatus). The summary strip reflects the date *window*;
+status/shift facets narrow only the list. Cubits are built on demand
+(`AppDependencies.createAttendanceHistoryCubit` / `createAttendanceDetailsCubit`,
+the requests-detail pattern). **Entry points:** the employee clock screen's *View
+history* → the self ledger; the admin board gains a *History* action + a *View full
+record* sheet button; a **manager** reaches the branch ledger from the desktop
+sidebar (+⌘K) and a home-screen tile — their first attendance-oversight surface.
+Deferred, holding
+[ADR-009](../decisions/ADR-009-no-analytics-pipeline.md) +
+[ADR-010](../decisions/ADR-010-lean-over-enterprise.md): performance score,
+analytics/heatmaps, CSV/PDF export, payroll — the ledger data already supports them.
+
 ## Removed — dormant extension points
 
 **Breaks** were cut for the MVP. `AttendanceBreak`, the `breaks` field, and the
@@ -125,11 +159,12 @@ covers them. Re-enabling is additive; do not delete these to "clean up".
 
 ## Tests
 
-13 files: `attendance_calculator` · `attendance_gps` · `attendance_board` ·
+17 files: `attendance_calculator` · `attendance_gps` · `attendance_board` ·
 `attendance_validation` · `attendance_id` · `attendance_entity` · `attendance_model` ·
 `attendance_correction_model` · `attendance_correction_validation` ·
 `attendance_status` · `attendance_analytics` · `attendance_break` ·
-`attendance_cubit`.
+`attendance_cubit` · `attendance_history_query` · `attendance_status_filter` ·
+`attendance_history_cubit` · `attendance_history_widgets`.
 
 ## Before shipping
 

@@ -63,6 +63,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
   _TodayContext? _ctx;
   AttendanceConfig _config = const AttendanceConfig(enabled: true);
   List<AttendanceEntity> _history = const [];
+  List<AttendanceCorrectionEntity> _myCorrections = const [];
   bool _offline = false;
   bool _syncing = false;
   bool _verifying = false;
@@ -70,6 +71,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
   AttendanceVerification? _previewVerification;
   LocationError? _previewError;
   StreamSubscription<AttendanceFeed>? _sub;
+  StreamSubscription<List<AttendanceCorrectionEntity>>? _correctionsSub;
   Timer? _timer;
   bool _busy = false;
   late DateTime _tick = _now();
@@ -175,7 +177,26 @@ class AttendanceCubit extends Cubit<AttendanceState> {
         emit(const AttendanceState.error('Failed to load attendance.'));
       },
     );
+
+    // The employee's own corrections — drives the one-open-per-record guard
+    // (spec R15) so a second correction can't be filed while one is pending.
+    await _correctionsSub?.cancel();
+    _correctionsSub = _repository.watchUserCorrections(user.uid).listen(
+      (corrections) {
+        _myCorrections = corrections;
+      },
+      onError: (Object e, StackTrace st) => developer.log(
+          '[ATTENDANCE] corrections stream error: $e',
+          name: 'ATTENDANCE',
+          error: e,
+          stackTrace: st),
+    );
   }
+
+  /// True when the employee already has a pending correction for [recordId]
+  /// (enforces one open correction per record — spec R15).
+  bool _hasOpenCorrectionFor(String recordId) => _myCorrections.any(
+      (c) => c.attendanceId == recordId && c.isPending && !c.isDeleted);
 
   Future<void> refresh() async {
     final user = _user;
@@ -459,6 +480,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
       proposedClockIn: proposedClockIn,
       proposedClockOut: proposedClockOut,
       proposedStatus: proposedStatus,
+      hasOpenCorrection: _hasOpenCorrectionFor(record.id),
     );
     if (check.blocked) {
       _surface(check.message);
@@ -474,6 +496,8 @@ class AttendanceCubit extends Cubit<AttendanceState> {
         branchId: user.branchId,
         shift: record.shift,
         date: record.date,
+        scheduledStart: record.scheduledStart,
+        scheduledEnd: record.scheduledEnd,
         requestedBy: user.uid,
         requestedByName: user.displayName,
         kind: kind,
@@ -487,6 +511,65 @@ class AttendanceCubit extends Cubit<AttendanceState> {
       _surface(e.message);
     } catch (_) {
       _surface('Something went wrong filing the correction.');
+    } finally {
+      _setBusy(false);
+    }
+  }
+
+  /// File a **missed-punch** request — the employee worked a rostered shift but
+  /// never clocked in, so there is **no record** to correct (the board shows them
+  /// Absent). They assert the real clock-in/out + a reason; a reviewer's approval
+  /// materializes the record (spec workflow 4). Gated by the same
+  /// [AttendanceValidation.checkCorrection] with a null record, plus the
+  /// one-open-per-record guard. Requires a resolved rostered shift today.
+  Future<void> requestMissedPunch({
+    required DateTime proposedClockIn,
+    DateTime? proposedClockOut,
+    required String reason,
+  }) async {
+    final user = _user, ctx = _ctx;
+    if (user == null || _busy) return;
+    final id = ctx?.targetRecordId;
+    final shift = ctx?.shift;
+    if (id == null || shift == null) {
+      _surface('There\'s no shift scheduled today to add a record for.');
+      return;
+    }
+    final check = AttendanceValidation.checkCorrection(
+      existing: null,
+      reason: reason,
+      proposedClockIn: proposedClockIn,
+      proposedClockOut: proposedClockOut,
+      hasOpenCorrection: _hasOpenCorrectionFor(id),
+    );
+    if (check.blocked) {
+      _surface(check.message);
+      return;
+    }
+    _setBusy(true);
+    try {
+      final correction = AttendanceCorrectionEntity(
+        id: '',
+        attendanceId: id,
+        userId: user.uid,
+        userName: user.displayName,
+        branchId: user.branchId,
+        shift: shift,
+        date: ctx!.todayDate,
+        scheduledStart: ctx.scheduledStart,
+        scheduledEnd: ctx.scheduledEnd,
+        requestedBy: user.uid,
+        requestedByName: user.displayName,
+        kind: AttendanceCorrectionKind.absenceDispute,
+        reason: reason.trim(),
+        proposedClockIn: proposedClockIn,
+        proposedClockOut: proposedClockOut,
+      );
+      await _requestCorrection(correction);
+    } on Failure catch (e) {
+      _surface(e.message);
+    } catch (_) {
+      _surface('Something went wrong filing the request.');
     } finally {
       _setBusy(false);
     }
@@ -523,6 +606,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
   Future<void> close() {
     _timer?.cancel();
     _sub?.cancel();
+    _correctionsSub?.cancel();
     return super.close();
   }
 }

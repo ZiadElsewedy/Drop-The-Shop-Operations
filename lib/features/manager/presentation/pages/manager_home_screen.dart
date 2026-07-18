@@ -114,9 +114,15 @@ class _ManagerHomeScreenState extends State<ManagerHomeScreen> {
           ]),
         ),
         const SizedBox(height: AppSpacing.xl),
-        const SectionHeader('Tasks'),
+        const SectionHeader('Attendance'),
         EntranceFade(
           delay: staggerDelay(2),
+          child: const _AttendanceTile(),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        const SectionHeader('Tasks'),
+        EntranceFade(
+          delay: staggerDelay(3),
           child: StatGrid(items: [
             StatItem('Completed today', '${s.completedTasksToday}',
                 Icons.task_alt_outlined),
@@ -145,6 +151,54 @@ class _LoadingSkeleton extends StatelessWidget {
         SectionHeader('Team & shifts today'),
         StatGridSkeleton(count: 4),
       ],
+    );
+  }
+}
+
+/// A manager door to the branch Attendance ledger (`/attendance/review`) — the
+/// manager's first attendance-oversight surface. Present on the home so mobile
+/// managers (no desktop sidebar) can reach it too.
+class _AttendanceTile extends StatelessWidget {
+  const _AttendanceTile();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.darkSurface,
+      borderRadius: AppRadius.cardAll,
+      child: InkWell(
+        onTap: () => context.push(RouteNames.attendanceReview),
+        borderRadius: AppRadius.cardAll,
+        child: Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            borderRadius: AppRadius.cardAll,
+            border: Border.all(color: AppColors.darkBorder),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.fingerprint_rounded,
+                  size: 20, color: AppColors.textSecondary),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Branch attendance',
+                        style: AppTypography.label
+                            .copyWith(color: AppColors.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text('Review your team\'s clock-in history',
+                        style: AppTypography.caption),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded,
+                  color: AppColors.textTertiary),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

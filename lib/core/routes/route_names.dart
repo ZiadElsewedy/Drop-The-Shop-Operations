@@ -58,6 +58,21 @@ class RouteNames {
   /// the correction queue (a future manager view reuses the same screen).
   static const String adminAttendance = '/admin/attendance';
 
+  /// Attendance History ledger — the employee's own history. Reachable by any
+  /// authenticated role (a manager/admin who also clocks has their own here).
+  static const String attendanceHistory = '/attendance/history';
+
+  /// Manager/admin branch attendance review (the longitudinal ledger). Guarded to
+  /// admin‖manager by `_isAttendanceReviewArea` (mirrors the Communications area).
+  static const String attendanceReview = '/attendance/review';
+
+  /// The single attendance-record detail pattern (`/attendance/record/:id`) —
+  /// deep-linkable; access is enforced by `firestore.rules`, not the route.
+  static const String attendanceRecordPattern = '/attendance/record/:id';
+
+  /// The concrete attendance-record detail path for [id].
+  static String attendanceRecord(String id) => '/attendance/record/$id';
+
   /// The single-request deep-link pattern (`/request/:requestId`) — a request
   /// notification opens the exact request here, for every role.
   static const String requestDetailPattern = '/request/:requestId';

@@ -27,6 +27,8 @@ class AttendanceCorrectionModel {
   final AttendanceCorrectionKind kind;
   final RequestStatus status;
   final String reason;
+  final DateTime? scheduledStart;
+  final DateTime? scheduledEnd;
   final DateTime? proposedClockIn;
   final DateTime? proposedClockOut;
   final AttendanceStatus? proposedStatus;
@@ -52,6 +54,8 @@ class AttendanceCorrectionModel {
     required this.kind,
     this.status = RequestStatus.pending,
     required this.reason,
+    this.scheduledStart,
+    this.scheduledEnd,
     this.proposedClockIn,
     this.proposedClockOut,
     this.proposedStatus,
@@ -82,6 +86,8 @@ class AttendanceCorrectionModel {
         kind: AttendanceCorrectionKind.fromString(map['kind'] as String?),
         status: RequestStatus.fromString(map['status'] as String?),
         reason: map['reason'] as String? ?? '',
+        scheduledStart: map.date('scheduledStart'),
+        scheduledEnd: map.date('scheduledEnd'),
         proposedClockIn: map.date('proposedClockIn'),
         proposedClockOut: map.date('proposedClockOut'),
         proposedStatus: map['proposedStatus'] == null
@@ -112,6 +118,8 @@ class AttendanceCorrectionModel {
         kind: e.kind,
         status: e.status,
         reason: e.reason,
+        scheduledStart: e.scheduledStart,
+        scheduledEnd: e.scheduledEnd,
         proposedClockIn: e.proposedClockIn,
         proposedClockOut: e.proposedClockOut,
         proposedStatus: e.proposedStatus,
@@ -138,6 +146,8 @@ class AttendanceCorrectionModel {
         kind: kind,
         status: status,
         reason: reason,
+        scheduledStart: scheduledStart,
+        scheduledEnd: scheduledEnd,
         proposedClockIn: proposedClockIn,
         proposedClockOut: proposedClockOut,
         proposedStatus: proposedStatus,
@@ -167,9 +177,40 @@ class AttendanceCorrectionModel {
         'kind': kind.value,
         'status': RequestStatus.pending.value,
         'reason': reason,
+        'scheduledStart': _ts(scheduledStart),
+        'scheduledEnd': _ts(scheduledEnd),
         'proposedClockIn': _ts(proposedClockIn),
         'proposedClockOut': _ts(proposedClockOut),
         'proposedStatus': proposedStatus?.value,
+      };
+
+  /// The **manager direct-action payload** — a correction born already
+  /// `approved`, carrying the [resolution] + decision stamps, for *Add record* /
+  /// *Resolve* (spec R11). The Cloud Function's create branch applies it to the
+  /// record immediately (no reviewer step). `decidedAt`/`createdAt`/`updatedAt`
+  /// are stamped as server timestamps by the datasource.
+  Map<String, dynamic> toResolvedCreateMap() => {
+        'id': id,
+        'attendanceId': attendanceId,
+        'userId': userId,
+        'userName': userName,
+        'branchId': branchId,
+        'shift': shift?.value,
+        'date': _ts(date),
+        'requestedBy': requestedBy,
+        'requestedByName': requestedByName,
+        'kind': kind.value,
+        'status': RequestStatus.approved.value,
+        'reason': reason,
+        'scheduledStart': _ts(scheduledStart),
+        'scheduledEnd': _ts(scheduledEnd),
+        'proposedClockIn': _ts(proposedClockIn),
+        'proposedClockOut': _ts(proposedClockOut),
+        'proposedStatus': proposedStatus?.value,
+        'resolution': resolutionToMap(resolution),
+        'decidedBy': decidedBy,
+        'decidedByName': decidedByName,
+        'decisionNote': decisionNote,
       };
 
   // ─── Embedded resolution (the applied snapshot) ───────────────────────

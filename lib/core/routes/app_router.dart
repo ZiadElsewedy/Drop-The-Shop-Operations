@@ -40,8 +40,11 @@ import 'package:drop/features/notifications/presentation/pages/notifications_scr
 import 'package:drop/features/cases/presentation/pages/cases_screen.dart';
 import 'package:drop/features/cases/presentation/pages/create_case_screen.dart';
 import 'package:drop/features/cases/presentation/pages/case_conversation_screen.dart';
+import 'package:drop/features/attendance/domain/entities/attendance_entity.dart';
 import 'package:drop/features/attendance/presentation/pages/attendance_screen.dart';
 import 'package:drop/features/attendance/presentation/pages/admin_attendance_screen.dart';
+import 'package:drop/features/attendance/presentation/history/attendance_history_screen.dart';
+import 'package:drop/features/attendance/presentation/details/attendance_details_screen.dart';
 import 'package:drop/features/requests/presentation/pages/requests_screen.dart';
 import 'package:drop/features/requests/presentation/pages/create_request_screen.dart';
 import 'package:drop/features/requests/presentation/pages/request_detail_screen.dart';
@@ -308,6 +311,37 @@ GoRouter createRouter(
             pageBuilder: (context, state) =>
                 _slideTransition(state, const AttendanceScreen()),
           ),
+          // Attendance History — the employee's own ledger (role-shared).
+          GoRoute(
+            path: RouteNames.attendanceHistory,
+            pageBuilder: (context, state) =>
+                _slideTransition(state, const AttendanceHistoryScreen.self()),
+          ),
+          // Manager/admin branch review (guarded by `_isAttendanceReviewArea`).
+          // An employee name may arrive as `extra` to pre-filter the ledger.
+          GoRoute(
+            path: RouteNames.attendanceReview,
+            pageBuilder: (context, state) => _slideTransition(
+              state,
+              AttendanceHistoryScreen.review(
+                initialSearch: state.extra is String ? state.extra as String : null,
+              ),
+            ),
+          ),
+          // One record's audit detail, deep-linkable. The tapped record rides in
+          // `extra` for an instant first paint; rules gate the read.
+          GoRoute(
+            path: RouteNames.attendanceRecordPattern,
+            pageBuilder: (context, state) => _slideTransition(
+              state,
+              AttendanceDetailsScreen(
+                recordId: state.pathParameters['id'] ?? '',
+                seed: state.extra is AttendanceEntity
+                    ? state.extra as AttendanceEntity
+                    : null,
+              ),
+            ),
+          ),
           GoRoute(
             path: RouteNames.profile,
             pageBuilder: (context, state) =>
@@ -369,6 +403,11 @@ String? _redirect(AuthCubit authCubit, GoRouterState state) {
     }
     // Communications Center is admin + manager only; employees are bounced.
     if (_isCommunicationsArea(loc) && user.role.isEmployee) {
+      return roleHome;
+    }
+    // Attendance branch review is admin + manager only; employees are bounced
+    // (they still reach their OWN history at /attendance/history).
+    if (_isAttendanceReviewArea(loc) && user.role.isEmployee) {
       return roleHome;
     }
     if (loc == RouteNames.home && !user.role.isEmployee) {
@@ -489,6 +528,15 @@ bool _isManagerArea(String loc) =>
 bool _isCommunicationsArea(String loc) =>
     loc == RouteNames.communications ||
     loc.startsWith('${RouteNames.communications}/');
+
+/// True when [loc] is the manager/admin attendance **review** ledger
+/// (`/attendance/review` or a sub-path) — admin + manager only. The employee's
+/// own history (`/attendance/history`) and a record detail
+/// (`/attendance/record/:id`) are deliberately NOT here: they're role-shared and
+/// gated by `firestore.rules`.
+bool _isAttendanceReviewArea(String loc) =>
+    loc == RouteNames.attendanceReview ||
+    loc.startsWith('${RouteNames.attendanceReview}/');
 
 class _AuthStateNotifier extends ChangeNotifier {
   _AuthStateNotifier(AuthCubit cubit) {

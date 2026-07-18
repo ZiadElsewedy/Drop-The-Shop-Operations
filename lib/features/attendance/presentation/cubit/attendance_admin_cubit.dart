@@ -2,12 +2,18 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:drop/core/enums/attendance_correction_kind.dart';
+import 'package:drop/core/enums/attendance_status.dart';
+import 'package:drop/core/enums/request_status.dart';
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/core/errors/failures.dart';
 import 'package:drop/features/attendance/domain/attendance_board.dart';
 import 'package:drop/features/attendance/domain/attendance_config.dart';
 import 'package:drop/features/attendance/domain/attendance_id.dart';
+import 'package:drop/features/attendance/domain/attendance_resolution.dart';
 import 'package:drop/features/attendance/domain/attendance_service.dart';
+import 'package:drop/features/attendance/domain/attendance_validation.dart';
 import 'package:drop/features/attendance/domain/entities/attendance_correction.dart';
 import 'package:drop/features/attendance/domain/entities/attendance_entity.dart';
 import 'package:drop/features/attendance/domain/repositories/attendance_repository.dart';
@@ -180,22 +186,22 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
     _deciding = true;
     _emit();
     try {
-      final record = await _repository.getRecord(correction.attendanceId);
-      if (record == null) {
-        emit(const AttendanceAdminState.error(
-            'The attendance record for this correction is missing.'));
-      } else {
-        await _decideCorrection(
-          correction,
-          record: record,
-          approve: approve,
-          decidedBy: admin.uid,
-          decidedByName: admin.displayName,
-          decisionNote: note,
-          now: _now(),
-          config: _config,
-        );
-      }
+      // A missed-punch correction targets a record that doesn't exist yet — the
+      // approval MATERIALIZES it. Synthesize the record shape from the correction
+      // so `DecideCorrection` can compute the resolution; the Cloud Function
+      // upserts the real document.
+      final record = await _repository.getRecord(correction.attendanceId) ??
+          _syntheticRecordFor(correction);
+      await _decideCorrection(
+        correction,
+        record: record,
+        approve: approve,
+        decidedBy: admin.uid,
+        decidedByName: admin.displayName,
+        decisionNote: note,
+        now: _now(),
+        config: _config,
+      );
     } catch (e, st) {
       developer.log('[ATTENDANCE-ADMIN] decide failed: $e',
           name: 'ATTENDANCE', error: e, stackTrace: st);
@@ -205,6 +211,163 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
       _emit();
     }
   }
+
+  /// A record shell carrying only what `DecideCorrection` reads (the scheduled
+  /// window + identity) — used to price a missed-punch correction whose real
+  /// record doesn't exist yet.
+  AttendanceEntity _syntheticRecordFor(AttendanceCorrectionEntity c) =>
+      AttendanceEntity(
+        id: c.attendanceId,
+        userId: c.userId,
+        userName: c.userName,
+        branchId: c.branchId,
+        shift: c.shift ?? ScheduleShift.morning,
+        date: c.date ?? _today(),
+        scheduledStart: c.scheduledStart,
+        scheduledEnd: c.scheduledEnd,
+        status: AttendanceStatus.pendingReview,
+      );
+
+  /// **Add record** — a manager materializes an absent/missing shift directly
+  /// (spec workflow 13, R11). Builds an already-`approved` correction carrying the
+  /// computed resolution; the Cloud Function upserts the record + audits it. No
+  /// approval loop. [clockIn] is required (the worked window's start); [clockOut]
+  /// null leaves a `pendingReview` shell the manager can finish later.
+  Future<void> addRecord(
+    AttendanceBoardRow row, {
+    required DateTime clockIn,
+    DateTime? clockOut,
+    required String reason,
+  }) {
+    final entry = row.entry;
+    final date = _today();
+    return _writeResolved(
+      attendanceId:
+          attendanceDocId(uid: entry.uid, date: date, shift: entry.shift),
+      userId: entry.uid,
+      userName: entry.name,
+      shift: entry.shift,
+      date: date,
+      scheduledStart: entry.scheduledStart,
+      scheduledEnd: entry.scheduledEnd,
+      existing: row.record,
+      clockIn: clockIn,
+      clockOut: clockOut,
+      reason: reason,
+      kind: AttendanceCorrectionKind.absenceDispute,
+    );
+  }
+
+  /// **Resolve directly** — a manager settles a `pendingReview` [record] (e.g. a
+  /// never-clocked-out shift) with corrected times + a mandatory reason, applied
+  /// immediately with audit (spec workflow 12, R11).
+  Future<void> resolveDirectly(
+    AttendanceEntity record, {
+    required DateTime clockIn,
+    DateTime? clockOut,
+    required String reason,
+  }) {
+    return _writeResolved(
+      attendanceId: record.id,
+      userId: record.userId,
+      userName: record.userName,
+      shift: record.shift,
+      date: record.date,
+      scheduledStart: record.scheduledStart,
+      scheduledEnd: record.scheduledEnd,
+      existing: record,
+      clockIn: clockIn,
+      clockOut: clockOut,
+      reason: reason,
+      kind: AttendanceCorrectionKind.missingClockOut,
+    );
+  }
+
+  /// Shared writer for the two direct-action paths: validate the manager entry,
+  /// guard one-open-correction, compute the resolution through the single
+  /// minute-math source, and write the approved correction.
+  Future<void> _writeResolved({
+    required String attendanceId,
+    required String userId,
+    String? userName,
+    required ScheduleShift shift,
+    required DateTime date,
+    DateTime? scheduledStart,
+    DateTime? scheduledEnd,
+    required AttendanceEntity? existing,
+    required DateTime clockIn,
+    DateTime? clockOut,
+    required String reason,
+    required AttendanceCorrectionKind kind,
+  }) async {
+    final admin = _admin;
+    if (admin == null || _deciding) return;
+    final check = AttendanceValidation.checkManagerEntry(
+      existing: existing,
+      reason: reason,
+      proposedClockIn: clockIn,
+      proposedClockOut: clockOut,
+      hasOpenCorrection: _hasOpenCorrectionFor(attendanceId),
+    );
+    if (check.blocked) {
+      emit(AttendanceAdminState.error(check.message));
+      _emit();
+      return;
+    }
+    _deciding = true;
+    _emit();
+    try {
+      final resolution = AttendanceResolution.fromRecord(
+        scheduledStart: scheduledStart,
+        scheduledEnd: scheduledEnd,
+        clockIn: clockIn,
+        clockOut: clockOut,
+        status: clockOut == null
+            ? AttendanceStatus.pendingReview
+            : AttendanceStatus.completed,
+        now: _now(),
+        config: _config,
+      );
+      final correction = AttendanceCorrectionEntity(
+        id: '',
+        attendanceId: attendanceId,
+        userId: userId,
+        userName: userName,
+        branchId: _branchId,
+        shift: shift,
+        date: date,
+        requestedBy: admin.uid,
+        requestedByName: admin.displayName,
+        kind: kind,
+        status: RequestStatus.approved,
+        reason: reason.trim(),
+        scheduledStart: scheduledStart,
+        scheduledEnd: scheduledEnd,
+        proposedClockIn: clockIn,
+        proposedClockOut: clockOut,
+        proposedStatus: resolution.status,
+        resolution: resolution,
+        decidedBy: admin.uid,
+        decidedByName: admin.displayName,
+        decisionNote: reason.trim(),
+      );
+      await _repository.createResolvedCorrection(correction);
+    } on Failure catch (e) {
+      emit(AttendanceAdminState.error(e.message));
+    } catch (e, st) {
+      developer.log('[ATTENDANCE-ADMIN] resolve failed: $e',
+          name: 'ATTENDANCE', error: e, stackTrace: st);
+      emit(const AttendanceAdminState.error('Failed to save the record.'));
+    } finally {
+      _deciding = false;
+      _emit();
+    }
+  }
+
+  /// True when a pending correction already exists for [attendanceId] in the
+  /// branch queue — enforces one open correction per record (spec R15).
+  bool _hasOpenCorrectionFor(String attendanceId) => _corrections.any(
+      (c) => c.attendanceId == attendanceId && c.isPending && !c.isDeleted);
 
   DateTime _today() {
     final n = _now();

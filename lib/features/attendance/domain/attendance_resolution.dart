@@ -1,4 +1,6 @@
 import 'package:drop/core/enums/attendance_status.dart';
+import 'package:drop/features/attendance/domain/attendance_break.dart';
+import 'package:drop/features/attendance/domain/attendance_config.dart';
 import 'package:drop/features/attendance/domain/attendance_calculator.dart';
 
 /// The concrete result an **approved** correction applies to its parent record:
@@ -49,6 +51,38 @@ class AttendanceResolution {
         earlyLeaveMinutes: totals.earlyLeaveMinutes,
         overtimeMinutes: totals.overtimeMinutes,
         breakMinutes: totals.breakMinutes,
+      );
+
+  /// Builds a resolution by running the settled clock times through
+  /// [AttendanceCalculator] — **the single source of the minute math**. Both the
+  /// reviewer's approve path (`DecideCorrection`) and a manager's direct action
+  /// (add-record / resolve) go through here, so a corrected record's totals can
+  /// never drift from the clock-out path. [now] only matters when [clockOut] is
+  /// null (an open settlement) — a missed-punch supplies a real clock-out, so it
+  /// yields a final snapshot.
+  factory AttendanceResolution.fromRecord({
+    DateTime? scheduledStart,
+    DateTime? scheduledEnd,
+    DateTime? clockIn,
+    DateTime? clockOut,
+    AttendanceStatus status = AttendanceStatus.completed,
+    List<AttendanceBreak> breaks = const [],
+    required DateTime now,
+    AttendanceConfig config = AttendanceConfig.defaults,
+  }) =>
+      AttendanceResolution.fromTotals(
+        clockIn: clockIn,
+        clockOut: clockOut,
+        status: status,
+        totals: AttendanceCalculator.compute(
+          scheduledStart: scheduledStart,
+          scheduledEnd: scheduledEnd,
+          clockIn: clockIn,
+          clockOut: clockOut,
+          breaks: breaks,
+          now: clockOut ?? now,
+          config: config,
+        ),
       );
 
   AttendanceTotals get totals => AttendanceTotals(

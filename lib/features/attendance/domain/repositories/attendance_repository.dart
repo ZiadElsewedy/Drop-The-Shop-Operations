@@ -77,6 +77,13 @@ abstract class AttendanceRepository {
   /// File a correction (the employee, for their own record — status `pending`).
   Future<void> requestCorrection(AttendanceCorrectionEntity correction);
 
+  /// A manager's **direct action** — *Add record* (materialize a missing/absent
+  /// shift) or *Resolve* a `pendingReview` record — as a correction born
+  /// `approved` with its [AttendanceCorrectionEntity.resolution] already computed
+  /// (through `AttendanceResolution.fromRecord`, the single minute-math source).
+  /// The Cloud Function applies it to the record immediately; no reviewer step.
+  Future<void> createResolvedCorrection(AttendanceCorrectionEntity correction);
+
   /// Record a reviewer's decision. On approve, [resolution] carries the settled
   /// clock times + minute snapshot (computed by `DecideCorrection` through
   /// `AttendanceCalculator`); the Cloud Function copies it onto the record.

@@ -182,7 +182,7 @@ features' cubits.
 | `media/` | `MediaUploadService` — the **single** Storage seam for all attachments |
 | `observability/` | `CrashReporter` (4 funnels → persisted report) + `CrashContext` |
 | `responsive/` | `breakpoints.dart` |
-| `routes/` | `app_router.dart` (role dispatch + guards) · `route_names.dart` (40 routes) |
+| `routes/` | `app_router.dart` (role dispatch + guards) · `route_names.dart` (43 routes) |
 | `services/` | `notification_service.dart` (FCM) · `case_seen_store.dart` |
 | `theme/` | `app_colors` · `app_typography` · `app_spacing` · `app_radius` · `app_theme` |
 | `utils/` | `validators` · `platform_capabilities` · `app_logger` · `app_date_formatter` · `concurrent` |

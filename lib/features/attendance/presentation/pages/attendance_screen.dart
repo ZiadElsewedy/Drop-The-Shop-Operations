@@ -2,13 +2,14 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
-import 'package:drop/core/utils/app_date_formatter.dart';
+import 'package:drop/core/routes/route_names.dart';
 import 'package:drop/core/widgets/adaptive_scaffold.dart';
 import 'package:drop/core/widgets/app_snackbar.dart';
 import 'package:drop/core/widgets/glass_container.dart';
@@ -564,122 +565,9 @@ class _SummaryView extends StatelessWidget {
         _SecondaryButton(
           label: 'View history',
           icon: Icons.history_rounded,
-          onPressed: () => _showHistory(context, vm.history),
+          onPressed: () => context.push(RouteNames.attendanceHistory),
         ),
       ],
-    );
-  }
-}
-
-void _showHistory(BuildContext context, List<AttendanceEntity> history) {
-  final records = history.where((r) => r.hasClockedIn).take(30).toList();
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: AppColors.darkSurface,
-    showDragHandle: true,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xl)),
-    ),
-    builder: (_) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.pagePadding, 0, AppSpacing.pagePadding, AppSpacing.lg),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Padding(
-              padding: EdgeInsets.only(bottom: AppSpacing.md),
-              child: Text(
-                'Recent attendance',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            if (records.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: AppSpacing.xl),
-                child: Text('No attendance yet.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.textTertiary)),
-              )
-            else
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: records.length,
-                  separatorBuilder: (_, _) => const Divider(
-                      color: AppColors.darkBorder, height: 1),
-                  itemBuilder: (_, i) => _HistoryRow(record: records[i]),
-                ),
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({required this.record});
-  final AttendanceEntity record;
-
-  @override
-  Widget build(BuildContext context) {
-    final verified = record.isClockInVerified;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-      child: Row(
-        children: [
-          Icon(
-            verified ? Icons.gps_fixed_rounded : Icons.gps_off_rounded,
-            size: 16,
-            color: verified ? AppColors.success : AppColors.textTertiary,
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppDateFormatter.dayMonth(record.date),
-                  style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  record.shift.label,
-                  style: const TextStyle(
-                      color: AppColors.textTertiary, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            record.clockIn == null
-                ? '—'
-                : '${_hhmm(record.clockIn!)} → '
-                    '${record.clockOut == null ? '…' : _hhmm(record.clockOut!)}',
-            style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
-                fontFeatures: [FontFeature.tabularFigures()]),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Text(
-            _hmPadded(record.workedMinutes),
-            style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                fontFeatures: [FontFeature.tabularFigures()]),
-          ),
-        ],
-      ),
     );
   }
 }
