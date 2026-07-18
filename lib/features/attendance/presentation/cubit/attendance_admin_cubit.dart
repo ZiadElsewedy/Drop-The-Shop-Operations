@@ -233,7 +233,7 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
   /// computed resolution; the Cloud Function upserts the record + audits it. No
   /// approval loop. [clockIn] is required (the worked window's start); [clockOut]
   /// null leaves a `pendingReview` shell the manager can finish later.
-  Future<void> addRecord(
+  Future<bool> addRecord(
     AttendanceBoardRow row, {
     required DateTime clockIn,
     DateTime? clockOut,
@@ -261,7 +261,7 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
   /// **Resolve directly** — a manager settles a `pendingReview` [record] (e.g. a
   /// never-clocked-out shift) with corrected times + a mandatory reason, applied
   /// immediately with audit (spec workflow 12, R11).
-  Future<void> resolveDirectly(
+  Future<bool> resolveDirectly(
     AttendanceEntity record, {
     required DateTime clockIn,
     DateTime? clockOut,
@@ -287,12 +287,12 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
   /// Materializes an `excused` record with **zero worked minutes** and no clock
   /// times, carrying a mandatory reason. Reuses the same approved-correction apply
   /// path as the other direct actions; no approval loop.
-  Future<void> excuseAbsence(
+  Future<bool> excuseAbsence(
     AttendanceBoardRow row, {
     required String reason,
   }) async {
     final admin = _admin;
-    if (admin == null || _deciding) return;
+    if (admin == null || _deciding) return false;
     final entry = row.entry;
     final date = _today();
     final id = attendanceDocId(uid: entry.uid, date: date, shift: entry.shift);
@@ -304,7 +304,7 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
     if (check.blocked) {
       emit(AttendanceAdminState.error(check.message));
       _emit();
-      return;
+      return false;
     }
     _deciding = true;
     _emit();
@@ -341,12 +341,15 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
         decisionNote: reason.trim(),
       );
       await _repository.createResolvedCorrection(correction);
+      return true;
     } on Failure catch (e) {
       emit(AttendanceAdminState.error(e.message));
+      return false;
     } catch (e, st) {
       developer.log('[ATTENDANCE-ADMIN] excuse failed: $e',
           name: 'ATTENDANCE', error: e, stackTrace: st);
       emit(const AttendanceAdminState.error('Failed to excuse the shift.'));
+      return false;
     } finally {
       _deciding = false;
       _emit();
@@ -356,7 +359,7 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
   /// Shared writer for the two direct-action paths: validate the manager entry,
   /// guard one-open-correction, compute the resolution through the single
   /// minute-math source, and write the approved correction.
-  Future<void> _writeResolved({
+  Future<bool> _writeResolved({
     required String attendanceId,
     required String userId,
     String? userName,
@@ -371,7 +374,7 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
     required AttendanceCorrectionKind kind,
   }) async {
     final admin = _admin;
-    if (admin == null || _deciding) return;
+    if (admin == null || _deciding) return false;
     final check = AttendanceValidation.checkManagerEntry(
       existing: existing,
       reason: reason,
@@ -382,7 +385,7 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
     if (check.blocked) {
       emit(AttendanceAdminState.error(check.message));
       _emit();
-      return;
+      return false;
     }
     _deciding = true;
     _emit();
@@ -422,12 +425,15 @@ class AttendanceAdminCubit extends Cubit<AttendanceAdminState> {
         decisionNote: reason.trim(),
       );
       await _repository.createResolvedCorrection(correction);
+      return true;
     } on Failure catch (e) {
       emit(AttendanceAdminState.error(e.message));
+      return false;
     } catch (e, st) {
       developer.log('[ATTENDANCE-ADMIN] resolve failed: $e',
           name: 'ATTENDANCE', error: e, stackTrace: st);
       emit(const AttendanceAdminState.error('Failed to save the record.'));
+      return false;
     } finally {
       _deciding = false;
       _emit();

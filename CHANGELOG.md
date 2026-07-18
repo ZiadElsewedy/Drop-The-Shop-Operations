@@ -18,6 +18,81 @@ released — DROP ships from branches and has no version tags.
 
 ### 2026-07-18
 
+- **Automation Center UX refresh — visible, manager-first operations surface.**
+  Replaced the basic recurring-template rows with responsive premium cards showing
+  Active/Paused/Error state, human cadence, the advisory next automation check,
+  shift-window availability, the truthful current Missed policy, generator outcome,
+  failures and a tappable last generated task. Added active/paused/next summary
+  metadata, a polished empty state and manager language (`Create Automation` /
+  `New Automation`). Branch Operations now has a dedicated Automation summary card
+  that opens the existing sheet and refreshes after changes; the old unlabeled
+  repeat icon was removed. **No backend, route, DI, package or feature-module
+  change.** Automatic Missed closure and frozen shift windows remain explicitly
+  unavailable rather than being implied. Added phone-width interaction/overflow
+  coverage and deterministic Today/Tomorrow formatting tests. Template read
+  failures now surface as retryable errors instead of appearing as an empty
+  branch. **Verified:** 936 pass / 2 pre-existing splash-centering failures;
+  the Automation-focused analyzer is clean.
+
+- **Attendance final UI wiring** — the five write actions that had a complete
+  engine but no UI entry point are now reachable, completing the "every workflow
+  from the UI" criterion. One reusable `AttendanceActionSheet`
+  (`presentation/widgets/`) collects proposed times + a reason with loading and
+  success/error feedback, delegating all validation to the existing cubits (which
+  now return `Future<bool>` so the UI can confirm vs. stay open — a presentation
+  signal, no business-logic change). **Employee** (clock screen): *Request a
+  correction* on the shift summary, *Worked but forgot to clock in?* once the shift
+  has ended → `requestCorrection` / `requestMissedPunch`. **Manager** (board-row
+  detail sheet, now tappable for record-less rows): *Resolve shift* on a
+  needs-review record, *Add record* + *Excuse absence* on an absent/late row →
+  `resolveDirectly` / `addRecord` / `excuseAbsence`. Monochrome DROP design
+  (`PremiumButton`, existing sheet shape); overnight clock-outs handled. +3 widget
+  tests; 939 pass / 2 pre-existing splash; analyze clean. Only deploy + on-device
+  GPS QA remain before the module closes.
+
+- **Attendance R7 max-session auto-close + deployment/E2E verification** (final
+  attendance phase). `autoCloseAttendance` now closes a session that lacks a
+  scheduled end (an unscheduled clock-in) or runs past a **16h cap from clock-in**,
+  not just scheduled-end + grace. The decision was extracted into the pure,
+  firebase-free `functions/attendance_auto_close.js` (`isAutoCloseDue`) — the single
+  source of the rule — and covered by 9 `node --test` cases (`functions/test/`; added
+  a `test` script; no new dependency — Node 22's built-in runner). Idempotent (query
+  is `status == inProgress`; a close flips it) and never overwrites a manual close or
+  a soft-delete. Added `AttendanceConfig.maxSessionMinutes` (default 960) mirroring
+  the server constant, per the existing `autoCloseGraceMinutes` pattern. **Verified:**
+  all attendance Firestore indexes + rules + the three attendance Cloud Functions are
+  present and correct for deploy. **Found (reported, not fixed — needs owner design
+  sign-off):** the Phase 1–2 write actions (employee file-correction / missed-punch;
+  manager Add-record / Resolve / Excuse) have complete engine + cubit + rules + CF +
+  tests but **no UI entry point** — only clock-in/out, too-early, and approve/reject
+  are reachable from a screen. Dart 929 pass / 2 pre-existing splash; CF 9/9; analyze
+  clean.
+
+- **Documentation self-check + automation-doc drift corrected.** Re-verified the
+  live branch: 43 routes, 17 feature modules, 21 exported Cloud Functions,
+  analyzer at the documented one pre-existing info, and 927 passing / 2
+  pre-existing splash failures. Updated the stale `CURRENT_STATE.md` verification
+  expectation from 897 to 927 passes, and corrected the Automation Engine doc:
+  the current Center does not yet surface `lastStatus` / `lastGeneratedTaskId` or
+  read `automationRuns`. No product code changed.
+
+- **Attendance spec Phase 3 — compatible slice** (owner-chosen after a scope
+  conflict was surfaced). The Phase 3 brief (History screen · Details · Timeline ·
+  Summary · Filters · Metadata) was found to be **already built** (2026-07-17), and
+  parts of it (extra metadata fields — timezone/appVersion/platform/syncStatus —,
+  historical-snapshot blobs, and analytics/reports/payroll/CSV-PDF/score
+  "foundation") **contradict** [ADR-009](docs/decisions/ADR-009-no-analytics-pipeline.md) +
+  [ADR-010](docs/decisions/ADR-010-lean-over-enterprise.md) and the standing
+  "metadata shows only recorded fields" ruling. Those were **declined** (no engine
+  or data-model change — the record already snapshots the scheduled instants, so
+  history is already independent of today's schedule). The genuine gap — the new
+  **Excused** outcome not yet reflected in History — was wired in: an `excused`
+  facet on `AttendanceStatusFilter` (+ matcher), an `excusedCount` on
+  `AttendanceStats` (excluded from the attendance-rate denominator, like leave), an
+  Excused summary stat (shown only when non-zero), and a record-card refinement
+  (suppress the "Corrected" chip on an excused record since the badge already says
+  it). +3 tests; 929 pass / 2 pre-existing splash; analyze clean.
+
 - **Attendance spec Phase 2 implemented** (engine-level; **no new UI**, wiring
   awaits sign-off). (1) **Early clock-in window** — `AttendanceValidation.checkClockIn`
   now enforces `clockInLeadMinutes` (default aligned to the locked spec's **15 min**,
@@ -161,7 +236,8 @@ released — DROP ships from branches and has no version tags.
   reopen → re-approve via deterministic `rec_{sourceTaskId}` ids
   (`createTaskWithId`). `generateShiftTaskInstances` made atomic, notifying, and
   roster-filtered. ⚠️ The Automation Center it exposes sits behind one unlabeled
-  icon and has never been seen by the owner.
+  icon and has never been seen by the owner. **Resolved by the 2026-07-18 UX
+  refresh.**
 
 ### 2026-07-11
 

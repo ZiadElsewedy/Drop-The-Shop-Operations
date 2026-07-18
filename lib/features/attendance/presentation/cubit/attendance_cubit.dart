@@ -466,7 +466,10 @@ class AttendanceCubit extends Cubit<AttendanceState> {
   /// the pure [AttendanceValidation.checkCorrection]; a blocked check surfaces as
   /// a transient error. The `correctionRequested` audit event + reviewer
   /// notifications are derived server-side by `onAttendanceCorrectionWritten`.
-  Future<void> requestCorrection({
+  ///
+  /// Returns **true** when the correction was filed, **false** when it was blocked
+  /// or failed — so the UI can show success vs. leave its sheet open.
+  Future<bool> requestCorrection({
     required AttendanceEntity record,
     required AttendanceCorrectionKind kind,
     required String reason,
@@ -475,7 +478,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
     AttendanceStatus? proposedStatus,
   }) async {
     final user = _user;
-    if (user == null || _busy) return;
+    if (user == null || _busy) return false;
     final check = AttendanceValidation.checkCorrection(
       existing: record,
       reason: reason,
@@ -486,7 +489,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
     );
     if (check.blocked) {
       _surface(check.message);
-      return;
+      return false;
     }
     _setBusy(true);
     try {
@@ -509,10 +512,13 @@ class AttendanceCubit extends Cubit<AttendanceState> {
         proposedStatus: proposedStatus,
       );
       await _requestCorrection(correction);
+      return true;
     } on Failure catch (e) {
       _surface(e.message);
+      return false;
     } catch (_) {
       _surface('Something went wrong filing the correction.');
+      return false;
     } finally {
       _setBusy(false);
     }
@@ -524,18 +530,20 @@ class AttendanceCubit extends Cubit<AttendanceState> {
   /// materializes the record (spec workflow 4). Gated by the same
   /// [AttendanceValidation.checkCorrection] with a null record, plus the
   /// one-open-per-record guard. Requires a resolved rostered shift today.
-  Future<void> requestMissedPunch({
+  ///
+  /// Returns **true** when the request was filed, **false** when blocked/failed.
+  Future<bool> requestMissedPunch({
     required DateTime proposedClockIn,
     DateTime? proposedClockOut,
     required String reason,
   }) async {
     final user = _user, ctx = _ctx;
-    if (user == null || _busy) return;
+    if (user == null || _busy) return false;
     final id = ctx?.targetRecordId;
     final shift = ctx?.shift;
     if (id == null || shift == null) {
       _surface('There\'s no shift scheduled today to add a record for.');
-      return;
+      return false;
     }
     final check = AttendanceValidation.checkCorrection(
       existing: null,
@@ -546,7 +554,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
     );
     if (check.blocked) {
       _surface(check.message);
-      return;
+      return false;
     }
     _setBusy(true);
     try {
@@ -568,10 +576,13 @@ class AttendanceCubit extends Cubit<AttendanceState> {
         proposedClockOut: proposedClockOut,
       );
       await _requestCorrection(correction);
+      return true;
     } on Failure catch (e) {
       _surface(e.message);
+      return false;
     } catch (_) {
       _surface('Something went wrong filing the request.');
+      return false;
     } finally {
       _setBusy(false);
     }

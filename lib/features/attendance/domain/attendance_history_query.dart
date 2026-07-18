@@ -162,6 +162,8 @@ bool matchesAttendanceStatusFilter(
       return r.isLate;
     case AttendanceStatusFilter.absent:
       return r.status.isAbsence;
+    case AttendanceStatusFilter.excused:
+      return r.isExcused;
     case AttendanceStatusFilter.leave:
       return r.status == AttendanceStatus.onLeave;
     case AttendanceStatusFilter.earlyLeave:

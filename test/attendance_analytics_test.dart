@@ -142,6 +142,24 @@ void main() {
       expect(stats.avgArrivalMinuteOfDay, 520);
     });
 
+    test('excused is counted separately and excluded from the rate', () {
+      final withExcused = AttendanceStats.from([
+        rec(
+          date: DateTime(2026, 7, 10),
+          clockIn: DateTime(2026, 7, 10, 8, 30),
+          clockOut: DateTime(2026, 7, 10, 16, 30),
+          worked: 480,
+        ), // present
+        rec(date: DateTime(2026, 7, 11), status: AttendanceStatus.absent),
+        rec(date: DateTime(2026, 7, 12), status: AttendanceStatus.excused),
+      ]);
+      expect(withExcused.excusedCount, 1);
+      expect(withExcused.presentCount, 1); // excused is not present
+      expect(withExcused.absentCount, 1); // nor absent
+      // Rate = present / (present + absent) = 1/2; the excused day doesn't drag it.
+      expect(withExcused.attendancePercent, closeTo(50, 0.01));
+    });
+
     test('empty input is safe (no divide-by-zero)', () {
       const s = AttendanceStats.empty;
       expect(s.attendancePercent, 0);

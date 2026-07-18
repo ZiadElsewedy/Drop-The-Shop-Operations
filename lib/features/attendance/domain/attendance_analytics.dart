@@ -14,6 +14,11 @@ class AttendanceStats {
 
   /// Rostered but didn't show.
   final int absentCount;
+
+  /// Rostered no-shows a manager forgave (a materialized `excused` record) —
+  /// distinct from [absentCount] and excluded from the attendance-rate
+  /// denominator (a forgiven absence isn't held against the rate).
+  final int excusedCount;
   final int lateCount;
   final int earlyLeaveCount;
 
@@ -35,6 +40,7 @@ class AttendanceStats {
     this.totalRecords = 0,
     this.presentCount = 0,
     this.absentCount = 0,
+    this.excusedCount = 0,
     this.lateCount = 0,
     this.earlyLeaveCount = 0,
     this.completedCount = 0,
@@ -69,6 +75,7 @@ class AttendanceStats {
   }) {
     var present = 0,
         absent = 0,
+        excused = 0,
         late = 0,
         early = 0,
         completed = 0,
@@ -80,6 +87,7 @@ class AttendanceStats {
     for (final r in records) {
       if (r.isDeleted) continue;
       if (r.status.isAbsence) absent++;
+      if (r.isExcused) excused++;
       if (r.isPresent) {
         present++;
         presentDates.add(r.date);
@@ -108,6 +116,7 @@ class AttendanceStats {
       totalRecords: records.where((r) => !r.isDeleted).length,
       presentCount: present,
       absentCount: absent,
+      excusedCount: excused,
       lateCount: late,
       earlyLeaveCount: early,
       completedCount: completed,

@@ -83,6 +83,20 @@ void main() {
       );
     });
 
+    test('excused maps to the excused lifecycle status only', () {
+      expect(
+        matchesAttendanceStatusFilter(AttendanceStatusFilter.excused,
+            _rec(status: AttendanceStatus.excused)),
+        isTrue,
+      );
+      // An absent (unforgiven) record does not match the excused facet.
+      expect(
+        matchesAttendanceStatusFilter(
+            AttendanceStatusFilter.excused, _rec(status: AttendanceStatus.absent)),
+        isFalse,
+      );
+    });
+
     test('earlyLeave / overtime read the derived minute fields', () {
       expect(
         matchesAttendanceStatusFilter(

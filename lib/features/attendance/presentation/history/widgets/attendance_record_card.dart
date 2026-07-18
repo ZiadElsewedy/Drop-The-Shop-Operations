@@ -151,7 +151,10 @@ class AttendanceRecordCard extends StatelessWidget {
         if (r.hasOvertime)
           _Indicator(
               label: 'OT ${_hm(r.overtimeMinutes)}', tint: AppColors.success),
-        if (r.source == AttendanceSource.correction)
+        // An excused record is materialized via a correction, but the "Excused"
+        // status badge already tells that story — a "Corrected" chip would just
+        // read as noise next to it.
+        if (r.source == AttendanceSource.correction && !r.isExcused)
           _Indicator(label: 'Corrected', tint: AppColors.textSecondary),
         if (r.isUnscheduled)
           _Indicator(label: 'Unscheduled', tint: AppColors.textTertiary),

@@ -1246,13 +1246,8 @@ class TaskCubit extends Cubit<TaskState> {
 
   // ─── Recurring shift-task templates ────────────────────────────
   Future<List<RecurringTaskTemplateEntity>> recurringTemplates(
-      String branchId) async {
-    try {
-      return await _repository.getRecurringTemplates(branchId);
-    } catch (_) {
-      return const [];
-    }
-  }
+      String branchId) =>
+      _repository.getRecurringTemplates(branchId);
 
   /// Creates a daily/weekly recurring shift-task template, then starts a
   /// best-effort materialization of *today's* instance (if due today) without

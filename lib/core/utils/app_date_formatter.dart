@@ -54,6 +54,25 @@ class AppDateFormatter {
   static String weekdayDayMonth(DateTime dt) =>
       '${_weekdaysLong[dt.weekday - 1]}, ${dayMonth(dt)}';
 
+  /// A local execution time with a manager-friendly relative day prefix:
+  /// `Today • 8:30 AM`, `Tomorrow • 4:30 PM`, then an absolute weekday/date.
+  /// [now] is injectable so automation summaries and their tests stay
+  /// deterministic while every caller shares the same wording.
+  static String relativeDayTime(DateTime dt, {DateTime? now}) {
+    final value = dt.toLocal();
+    final current = (now ?? DateTime.now()).toLocal();
+    final today = DateTime(current.year, current.month, current.day);
+    final day = DateTime(value.year, value.month, value.day);
+    final dateLabel = day == today
+        ? 'Today'
+        : day == today.add(const Duration(days: 1))
+        ? 'Tomorrow'
+        : value.year == current.year
+        ? weekdayDayMonth(value)
+        : dayMonthYear(value);
+    return '$dateLabel • ${time(value)}';
+  }
+
   /// Numeric day/month/year with no zero-padding — e.g. `8/7/2026`.
   static String numeric(DateTime dt) => '${dt.day}/${dt.month}/${dt.year}';
 

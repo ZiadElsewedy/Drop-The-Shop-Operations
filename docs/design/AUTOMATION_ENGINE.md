@@ -92,11 +92,29 @@ No new backend. `recurringTaskTemplates/{id}` gains **operational metadata**
 | `lastGeneratedTaskId` | Cloud Function | the last instance produced |
 | `failureCount` | Cloud Function | consecutive failures (reset on success) |
 
-The **Manage Recurring Shift Tasks** sheet became the Automation Center: each
-routine shows its live health (last run · next run · status · failures · last
-generated task). Client `toMap` writes only `updatedBy` — the rollups are
+The existing **Manage Recurring Shift Tasks** sheet is the Automation Center; no
+new route or feature module exists. Branch Operations exposes it through a visible
+branch-scoped Automation summary (active/paused counts + earliest check), and the
+sheet renders one rich card per routine: active/paused/error state, human schedule,
+next check, generation outcome, failure count and a link to
+`lastGeneratedTaskId`. Create, pause/resume and delete still use the existing
+`TaskCubit` paths. Client `toMap` writes only `updatedBy` — the rollups are
 Cloud-Function-owned (like `version`/`createdAt`), so a client edit can't regress
-them.
+them. Template read failures render an error/retry state; they are not treated as
+an empty branch.
+
+The presentation is deliberately honest about backend gaps:
+
+- `nextRunAt` is labelled **Next automation check**, not guaranteed publish time;
+  the current 24-hour scheduler makes it advisory.
+- Templates do not carry a frozen start/end window, so the Shift window row says
+  that exact hours are unavailable instead of inferring configurable roster hours.
+- Automatic `Missed` does not exist yet (`TaskStatus` has no such state and
+  generated tasks have no deadline), so the neutral policy row says **Not enabled**
+  and explains that tasks currently remain open.
+- `lastStatus` describes the **generator** (`completed` / `skipped` / `failed`),
+  not employee task completion; the UI therefore says Generated successfully,
+  Already generated or Last generation failed.
 
 ---
 
@@ -117,10 +135,12 @@ automationRuns/{templateId}_{dateKey}
   generatedTaskId, recipientCount, failureReason
 ```
 
-This is the primary debugging tool and the Automation Center's data source. Runs
-older than `config/taskRetention.automationRunRetentionDays` (default 90) are
-pruned by the daily `taskHousekeeping` sweep (bounded, idempotent), so the
-collection stays small.
+This is the server-side debugging record, but the Flutter app currently has **no
+reader** for it; the Automation Center reads only the template rollups in §4.
+Runs older than `config/taskRetention.automationRunRetentionDays` (default 90)
+are pruned by the daily `taskHousekeeping` sweep (bounded, idempotent), so the
+collection stays small. Until a concrete operational decision needs the history,
+the missing reader remains accepted debt under ADR-009.
 
 ## 6. Audit events (reuses Event Tracking — no parallel system)
 

@@ -6,6 +6,7 @@ import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/utils/app_date_formatter.dart';
 import 'package:drop/core/widgets/adaptive_scaffold.dart';
 import 'package:drop/core/widgets/app_motion.dart';
 import 'package:drop/core/widgets/responsive_card_grid.dart';
@@ -25,6 +26,7 @@ import 'package:drop/features/operations/presentation/cubit/branch_operations_st
 import 'package:drop/features/operations/presentation/pages/employee_detail_screen.dart';
 import 'package:drop/features/operations/presentation/pages/operations_metric_screen.dart';
 import 'package:drop/features/operations/presentation/widgets/workload_card.dart';
+import 'package:drop/features/task/domain/entities/recurring_task_template_entity.dart';
 import 'package:drop/features/task/presentation/cubit/task_cubit.dart';
 import 'package:drop/features/task/presentation/pages/branch_task_list_screen.dart';
 import 'package:drop/features/task/presentation/widgets/recurring_shift_task_sheets.dart';
@@ -56,6 +58,8 @@ class BranchOperationsScreen extends StatefulWidget {
 }
 
 class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
+  Future<List<RecurringTaskTemplateEntity>>? _automationsFuture;
+
   @override
   void initState() {
     super.initState();
@@ -72,6 +76,21 @@ class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
     // Details actions and the "All tasks" list are live + writable here.
     final user = context.currentUser;
     if (user != null) context.read<TaskCubit>().load(user);
+    _refreshAutomationSummary();
+  }
+
+  void _refreshAutomationSummary() {
+    if (!mounted) return;
+    setState(() {
+      _automationsFuture = context.read<TaskCubit>().recurringTemplates(
+        widget.branchId,
+      );
+    });
+  }
+
+  Future<void> _refreshAll() {
+    _refreshAutomationSummary();
+    return context.read<BranchOperationsCubit>().refresh();
   }
 
   String get _branchLabel => widget.branchName ?? 'Branch operations';
@@ -93,11 +112,14 @@ class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
         ),
       ));
 
-  void _manageRecurringShiftTasks() => showManageRecurringShiftTasksSheet(
-        context: context,
-        cubit: context.read<TaskCubit>(),
-        branchId: widget.branchId,
-      );
+  Future<void> _manageRecurringShiftTasks() async {
+    await showManageRecurringShiftTasksSheet(
+      context: context,
+      cubit: context.read<TaskCubit>(),
+      branchId: widget.branchId,
+    );
+    _refreshAutomationSummary();
+  }
 
   void _openEmployee(UserEntity employee) =>
       Navigator.of(context).push(MaterialPageRoute(
@@ -153,16 +175,10 @@ class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
           onPressed: _openAllTasks,
         ),
         IconButton(
-          icon: const Icon(Icons.event_repeat_rounded,
-              color: AppColors.textSecondary),
-          tooltip: 'Recurring Shift Tasks',
-          onPressed: _manageRecurringShiftTasks,
-        ),
-        IconButton(
           icon: const Icon(Icons.refresh_rounded,
               color: AppColors.textSecondary),
           tooltip: 'Refresh',
-          onPressed: () => context.read<BranchOperationsCubit>().refresh(),
+          onPressed: _refreshAll,
         ),
       ],
       floatingActionButton: FloatingActionButton.extended(
@@ -180,10 +196,7 @@ class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
           loading: () => const ListSkeleton(),
           loaded: (branchId, workload, filter, branchName, directory) =>
               _cockpit(workload, filter),
-          error: (m) => _ErrorState(
-            message: m,
-            onRetry: () => context.read<BranchOperationsCubit>().refresh(),
-          ),
+          error: (m) => _ErrorState(message: m, onRetry: _refreshAll),
           orElse: () => const SizedBox.shrink(),
         ),
       ),
@@ -193,7 +206,7 @@ class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
   Widget _cockpit(BranchWorkload workload, ShiftFilter filter) {
     final employees = workload.employees;
     return RefreshIndicator(
-      onRefresh: () => context.read<BranchOperationsCubit>().refresh(),
+      onRefresh: _refreshAll,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(
@@ -213,6 +226,11 @@ class _BranchOperationsScreenState extends State<BranchOperationsScreen> {
           OperationsSummaryHeader(
             summary: workload.summary,
             onSelect: _openMetric,
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          _AutomationOverview(
+            future: _automationsFuture,
+            onTap: _manageRecurringShiftTasks,
           ),
           const SizedBox(height: AppSpacing.xl),
           _ShiftToggle(
@@ -538,6 +556,223 @@ class _StatTile extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Automation entrypoint (summary, never a second screen) ─────────────────
+
+class _AutomationOverview extends StatelessWidget {
+  const _AutomationOverview({required this.future, required this.onTap});
+
+  final Future<List<RecurringTaskTemplateEntity>>? future;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<RecurringTaskTemplateEntity>>(
+      future: future,
+      builder: (context, snapshot) {
+        final loading =
+            future == null || snapshot.connectionState != ConnectionState.done;
+        final unavailable = snapshot.hasError;
+        final templates = snapshot.data ?? const [];
+        final active = templates.where((template) => template.active).length;
+        final paused = templates.length - active;
+        final nextChecks =
+            templates
+                .where((template) => template.active)
+                .map((template) => template.nextRunAt)
+                .whereType<DateTime>()
+                .toList()
+              ..sort();
+        final nextCheck = nextChecks.firstOrNull;
+        final nextLabel = loading
+            ? 'Loading…'
+            : unavailable
+            ? 'Summary unavailable'
+            : nextCheck == null
+            ? 'Not scheduled yet'
+            : AppDateFormatter.relativeDayTime(nextCheck);
+        final semanticsLabel = loading
+            ? 'Open Automation Center. Automation summary loading.'
+            : 'Open Automation Center. $active active, $paused paused. '
+                  'Next automation check: $nextLabel.';
+
+        return Semantics(
+          button: true,
+          label: semanticsLabel,
+          child: GlassContainer(
+            onTap: onTap,
+            padding: EdgeInsets.all(
+              context.isDesktop ? AppSpacing.xl : AppSpacing.lg,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: AppColors.darkSurfaceElevated,
+                        borderRadius: AppRadius.mdAll,
+                        border: Border.all(color: AppColors.darkBorder),
+                      ),
+                      child: const Icon(
+                        Icons.event_repeat_rounded,
+                        size: 20,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Automation', style: AppTypography.h3),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Manage recurring shift routines',
+                            style: AppTypography.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    const Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 18,
+                      color: AppColors.textTertiary,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.md,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.darkSurfaceElevated,
+                    borderRadius: AppRadius.mdAll,
+                    border: Border.all(color: AppColors.darkBorder),
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final counts = Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.sm,
+                        children: [
+                          _AutomationCountChip(
+                            count: loading || unavailable ? null : active,
+                            label: 'Active',
+                          ),
+                          _AutomationCountChip(
+                            count: loading || unavailable ? null : paused,
+                            label: 'Paused',
+                          ),
+                        ],
+                      );
+                      final next = _AutomationNextCheck(label: nextLabel);
+
+                      if (constraints.maxWidth >= 560) {
+                        return Row(
+                          children: [
+                            Expanded(child: counts),
+                            const SizedBox(width: AppSpacing.xl),
+                            next,
+                          ],
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          counts,
+                          const SizedBox(height: AppSpacing.md),
+                          next,
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _AutomationCountChip extends StatelessWidget {
+  const _AutomationCountChip({required this.count, required this.label});
+
+  final int? count;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.darkSurface,
+        borderRadius: AppRadius.fullAll,
+        border: Border.all(color: AppColors.darkBorder),
+      ),
+      child: Text(
+        '${count ?? '—'} $label',
+        style: AppTypography.labelSmall.copyWith(
+          color: AppColors.textSecondary,
+        ),
+      ),
+    );
+  }
+}
+
+class _AutomationNextCheck extends StatelessWidget {
+  const _AutomationNextCheck({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 300),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'NEXT AUTOMATION CHECK',
+            style: AppTypography.caption.copyWith(letterSpacing: 0.6),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              const Icon(
+                Icons.schedule_rounded,
+                size: 15,
+                color: AppColors.textSecondary,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Flexible(
+                child: Text(
+                  label,
+                  style: AppTypography.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

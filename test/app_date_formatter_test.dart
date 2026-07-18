@@ -58,4 +58,39 @@ void main() {
           AppDateFormatter.relative(DateTime(2026, 6, 19), now: now), '19 Jun');
     });
   });
+
+  group('AppDateFormatter.relativeDayTime', () {
+    final now = DateTime(2026, 7, 18, 10, 0);
+
+    test('uses Today and Tomorrow for the next two local dates', () {
+      expect(
+        AppDateFormatter.relativeDayTime(
+          DateTime(2026, 7, 18, 8, 30),
+          now: now,
+        ),
+        'Today • 8:30 AM',
+      );
+      expect(
+        AppDateFormatter.relativeDayTime(
+          DateTime(2026, 7, 19, 16, 30),
+          now: now,
+        ),
+        'Tomorrow • 4:30 PM',
+      );
+    });
+
+    test('falls back to weekday/date, then includes the year', () {
+      expect(
+        AppDateFormatter.relativeDayTime(
+          DateTime(2026, 7, 20, 16, 30),
+          now: now,
+        ),
+        'Monday, 20 Jul • 4:30 PM',
+      );
+      expect(
+        AppDateFormatter.relativeDayTime(DateTime(2027, 1, 2, 8, 30), now: now),
+        '2 Jan 2027 • 8:30 AM',
+      );
+    });
+  });
 }

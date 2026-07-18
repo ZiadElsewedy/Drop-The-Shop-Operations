@@ -3,15 +3,15 @@
 > **Today's snapshot. Nothing historical.** The moment something here becomes
 > history, it moves to [CHANGELOG.md](CHANGELOG.md) and leaves this file.
 >
-> **Last verified against the code:** 2026-07-17.
+> **Last verified against the code:** 2026-07-18.
 
 ## At a glance
 
 | | |
 | --- | --- |
 | **Branch** | `feature/attendance-management` |
-| **Build** | `flutter analyze` clean (1 pre-existing info) |
-| **Tests** | **927 pass · 2 fail** across 139 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues) |
+| **Build** | `flutter analyze`: 7 infos, no errors/warnings (6 attendance async-context + 1 pre-existing test style) |
+| **Tests** | **939 pass · 2 fail** across 140 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues) |
 | **Blocking release** | Firebase deploy (rules · indexes · functions) · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
@@ -47,11 +47,11 @@ pruning. `Community-Hub` is **dead** — the feature was removed 2026-07-15.
 | **Auth** | Admin-provisioned email/password. No registration/Google/OTP/approval. First-login gate: force password change → profile completion → (employees) Welcome → role home |
 | **Roles & routing** | 43 routes, role-guarded. admin ⊇ manager |
 | **Profile** | View/edit, avatar/cover upload, contact + payment (payment in a private subdoc; hidden for admin) |
-| **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets). Create Task sheet has a premium monochrome surface/motion pass. |
+| **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets). The recurring-shift Automation Center now exposes status, schedule, advisory next check, generator outcome and last-task navigation in rich cards. |
 | **Schedule** | Weekly roster, shift swaps, leave, day notes, configurable shift hours, shift templates, Final View + PNG export |
 | **Branches** | CRUD, soft delete, swap policy, GPS geofences |
 | **Admin** | User administration, account provisioning, Admin Home V2 command center |
-| **Operations** | Branch Operations cockpit, workload derivation, KPI drills |
+| **Operations** | Branch Operations cockpit, workload derivation, KPI drills, and a visible branch-scoped Automation summary opening the existing Center sheet |
 | **Communications** | Broadcasts, templates, custom audiences, scheduler, reminders |
 | **Notifications** | In-app inbox + deep-link resolver. **Android push only** |
 | **Cases** | Private employee ↔ manager/admin conversations, confidential reporter split |
@@ -74,8 +74,23 @@ phases and committed; what remains is deployment and on-device verification.
 > enforced in `checkClockIn`), **worked-minute clamp** (`max(clockIn,
 > scheduledStart)` in the one calculator), **lazy Absent** (virtual, no document),
 > **Excused** terminal outcome (`AttendanceStatus.excused`, zero minutes, mandatory
-> reason, via `AttendanceAdminCubit.excuseAbsence`). **Still open** (later phases):
-> 16h max-session auto-close, and the **UI entry points** for all of the above.
+> reason, via `AttendanceAdminCubit.excuseAbsence`). Phase 3 (owner-scoped to the
+> *compatible slice*, 2026-07-18): the History/Details/Timeline/Metadata system
+> **already existed** (2026-07-17) so it was **not rebuilt** — Excused was wired
+> into it (filter facet · summary count · card refinement). The request's extra
+> metadata fields / historical-snapshot blobs / analytics-payroll foundation were
+> **declined** as contradicting ADR-009/010 and the recorded-fields-only ruling (no
+> engine/data-model change). Final phase (2026-07-18): **16h max-session auto-close
+> (R7) is DONE** — `autoCloseAttendance` now closes an unscheduled/over-long open
+> session via a `maxSessionMinutes` cap through the pure, unit-tested
+> `functions/attendance_auto_close.js`. **UI wiring DONE** (owner-authorized
+> 2026-07-18): the five previously-headless write actions now have entry points —
+> employee *Request correction* (summary) + *Missed punch* (post-shift) and manager
+> *Add record* / *Resolve* / *Excuse* (board-row detail sheet), via one reusable
+> `AttendanceActionSheet` over the existing cubits (loading + success/error + the
+> pure validation, no new logic). **Only remaining blockers to closing the module:
+> the standing functions/rules/indexes deploy, and on-device GPS QA** (real
+> hardware) — no code work left.
 
 | Phase | State |
 | --- | --- |
@@ -103,6 +118,13 @@ phases and committed; what remains is deployment and on-device verification.
 ---
 
 ## Known issues
+
+### Analyzer infos (7)
+
+Six `use_build_context_synchronously` infos are in the in-progress Attendance
+admin actions (`admin_attendance_screen.dart`); the remaining
+`use_null_aware_elements` info is the pre-existing test-style lint in
+`task_submission_gate_test.dart`. None are Automation Center findings.
 
 ### Failing tests (2)
 
@@ -172,10 +194,7 @@ Requires the **Blaze** plan.
 2. **Fix or delete `splash_centering_test.dart`** so the suite is green.
 3. **Configure iOS push** — APNs key + Push/Background-Modes capability.
 4. **Merge `feature/attendance-management`** once deployed and QA'd.
-5. **Show the Automation Center to the owner.** It has never been seen: it is a
-   bottom sheet behind **one unlabeled icon** on `BranchOperationsScreen`. Built,
-   committed, effectively invisible.
-6. **Prune ~15 stale branches.**
+5. **Prune ~15 stale branches.**
 
 ---
 
@@ -208,9 +227,9 @@ unknowingly reversed:
    inert in production and fails at runtime rather than at compile time.
 2. **Close out attendance** — on-device QA, then merge.
 3. **Get the suite green** — 2 failures is 2 too many to notice a third.
-4. **Surface what's already built.** The Automation Center is invisible; the
-   attendance UI is unseen. Shipped-but-unreachable is indistinguishable from
-   not-built.
+4. **Wire the already-built attendance actions.** Automation is now visible from
+   Branch Operations; attendance correction/manual-entry actions are still
+   engine-only. Shipped-but-unreachable is indistinguishable from not-built.
 
 ---
 
@@ -219,8 +238,8 @@ unknowingly reversed:
 If you change status, gaps, or priorities, update this file **in the same task**.
 
 ```bash
-flutter analyze                          # expect: 1 info
-flutter test                             # expect: 897 pass, 2 fail (splash)
+flutter analyze                          # expect: 7 infos, 0 errors/warnings
+flutter test                             # expect: 936 pass, 2 fail (splash)
 grep -c "static const String" lib/core/routes/route_names.dart   # expect: 43
 ls lib/features | wc -l                  # expect: 17
 ```

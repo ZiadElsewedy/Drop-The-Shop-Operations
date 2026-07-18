@@ -12,6 +12,7 @@ enum AttendanceStatusFilter {
   onTime,
   late,
   absent,
+  excused,
   leave,
   earlyLeave,
   overtime;
@@ -22,6 +23,7 @@ enum AttendanceStatusFilter {
         AttendanceStatusFilter.onTime => 'On time',
         AttendanceStatusFilter.late => 'Late',
         AttendanceStatusFilter.absent => 'Absent',
+        AttendanceStatusFilter.excused => 'Excused',
         AttendanceStatusFilter.leave => 'Leave',
         AttendanceStatusFilter.earlyLeave => 'Early leave',
         AttendanceStatusFilter.overtime => 'Overtime',

@@ -66,6 +66,12 @@ const ATTENDANCE_CORRECTIONS = "attendance_corrections";
 // the client (the single knob until per-branch attendance config lands).
 const ATTENDANCE_AUTO_CLOSE_GRACE_MINUTES = 120;
 
+// Max session cap (R7 safety net) — mirrors AttendanceConfig.defaults.maxSessionMinutes.
+const ATTENDANCE_MAX_SESSION_MINUTES = 16 * 60;
+
+// The pure auto-close decision (unit-tested in test/auto_close.test.js).
+const { isAutoCloseDue } = require("./attendance_auto_close");
+
 // `branchId` marker for a direct message — never a real branch id and never ''
 // (mirrors BroadcastModel.directBranchMarker), so a DM never appears in a
 // branch / all feed query.
@@ -2985,13 +2991,24 @@ exports.onAttendanceCorrectionWritten = onDocumentWritten(
   },
 );
 
+// Millis of a Firestore Timestamp, or null when absent/unresolved.
+function tsMillis(v) {
+  return v && typeof v.toMillis === "function" ? v.toMillis() : null;
+}
+
 // Auto-close sessions the employee never clocked out of. A still-open session
-// (status inProgress, no clockOut) whose scheduled end + grace has passed is
-// flipped to `pendingReview` with source `autoClose` — which onAttendanceWritten
-// audits as `autoClosed`. The employee is nudged to file a correction.
+// (status inProgress, no clockOut) is flipped to `pendingReview` with source
+// `autoClose` — which onAttendanceWritten audits as `autoClosed` — when it is due
+// per `isAutoCloseDue`: scheduled end + grace has passed, OR (the R7 safety net)
+// it has been open past the max-session cap from clock-in, which catches an
+// UNSCHEDULED session that has no scheduled end. The employee is nudged to file a
+// correction. Idempotent: the query is `status == inProgress` and a close flips
+// that status, so a session is never closed twice and a manual close (which is not
+// inProgress) is never overwritten.
 exports.autoCloseAttendance = onSchedule("every 30 minutes", async () => {
   const nowMs = Date.now();
   const graceMs = ATTENDANCE_AUTO_CLOSE_GRACE_MINUTES * 60 * 1000;
+  const maxSessionMs = ATTENDANCE_MAX_SESSION_MINUTES * 60 * 1000;
   let snap;
   try {
     // Open sessions are naturally bounded (only people currently clocked in);
@@ -3004,11 +3021,16 @@ exports.autoCloseAttendance = onSchedule("every 30 minutes", async () => {
   let closed = 0;
   for (const doc of snap.docs) {
     const d = doc.data() || {};
-    if (d.clockOut || d.deletedAt) continue;
-    const sched = d.scheduledEnd;
-    // No scheduled end → nothing to measure against; leave it for a manual fix.
-    if (!sched || typeof sched.toMillis !== "function") continue;
-    if (sched.toMillis() + graceMs > nowMs) continue;
+    const due = isAutoCloseDue({
+      clockOutMs: tsMillis(d.clockOut),
+      deleted: !!d.deletedAt,
+      scheduledEndMs: tsMillis(d.scheduledEnd),
+      clockInMs: tsMillis(d.clockIn),
+      nowMs,
+      graceMs,
+      maxSessionMs,
+    });
+    if (!due) continue;
     try {
       await doc.ref.update({
         status: "pendingReview",

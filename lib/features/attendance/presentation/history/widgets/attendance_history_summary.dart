@@ -30,6 +30,10 @@ class AttendanceHistorySummary extends StatelessWidget {
           count: stats.absentCount,
           tone: stats.absentCount > 0 ? AppColors.error : null,
         ),
+        // Only shown once there's something to report — a forgiven absence is
+        // benign, so it stays out of the strip on a clean period.
+        if (stats.excusedCount > 0)
+          Stat(label: 'Excused', count: stats.excusedCount),
         Stat(
           label: 'Rate',
           value: expected == 0 ? '—' : '${stats.attendancePercent.round()}%',

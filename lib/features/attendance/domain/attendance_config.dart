@@ -41,6 +41,12 @@ class AttendanceConfig {
   /// `autoCloseAttendance` function closes it to `pendingReview`.
   final int autoCloseGraceMinutes;
 
+  /// The absolute maximum a session may stay open, measured from clock-in — the
+  /// **safety net** (spec R7) that closes a session which has no scheduled end (an
+  /// unscheduled clock-in) or one running pathologically long. Default 16h. Read
+  /// by the `autoCloseAttendance` sweep (mirrored server-side); no magic numbers.
+  final int maxSessionMinutes;
+
   /// The geofence policy (default [AttendanceLocationPolicy.none] — no GPS).
   final AttendanceLocationPolicy locationPolicy;
 
@@ -58,6 +64,7 @@ class AttendanceConfig {
     this.clockInLeadMinutes = 15,
     this.overtimeGraceMinutes = 15,
     this.autoCloseGraceMinutes = 120,
+    this.maxSessionMinutes = 16 * 60,
     this.locationPolicy = AttendanceLocationPolicy.none,
     this.requirePhoto = false,
     this.allowUnscheduledClockIn = false,
@@ -74,6 +81,7 @@ class AttendanceConfig {
     int? clockInLeadMinutes,
     int? overtimeGraceMinutes,
     int? autoCloseGraceMinutes,
+    int? maxSessionMinutes,
     AttendanceLocationPolicy? locationPolicy,
     bool? requirePhoto,
     bool? allowUnscheduledClockIn,
@@ -87,6 +95,7 @@ class AttendanceConfig {
         overtimeGraceMinutes: overtimeGraceMinutes ?? this.overtimeGraceMinutes,
         autoCloseGraceMinutes:
             autoCloseGraceMinutes ?? this.autoCloseGraceMinutes,
+        maxSessionMinutes: maxSessionMinutes ?? this.maxSessionMinutes,
         locationPolicy: locationPolicy ?? this.locationPolicy,
         requirePhoto: requirePhoto ?? this.requirePhoto,
         allowUnscheduledClockIn:

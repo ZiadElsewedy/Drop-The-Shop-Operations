@@ -116,6 +116,7 @@ class AttendanceEntity with _$AttendanceEntity {
 
   bool get isPresent => status.isPresent;
   bool get needsReview => status.needsReview;
+  bool get isExcused => status == AttendanceStatus.excused;
 
   /// True when this record was created without a rostered shift (the scheduled
   /// window is unknown) — surfaces an "unscheduled" hint.

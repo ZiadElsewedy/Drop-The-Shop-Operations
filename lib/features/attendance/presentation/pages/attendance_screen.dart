@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:drop/core/enums/attendance_correction_kind.dart';
 import 'package:drop/core/enums/leave_type.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
@@ -19,6 +20,7 @@ import 'package:drop/features/attendance/domain/attendance_location_service.dart
 import 'package:drop/features/attendance/domain/entities/attendance_entity.dart';
 import 'package:drop/features/attendance/presentation/cubit/attendance_cubit.dart';
 import 'package:drop/features/attendance/presentation/cubit/attendance_state.dart';
+import 'package:drop/features/attendance/presentation/widgets/attendance_action_sheet.dart';
 
 /// The employee **Attendance** screen — the whole GPS clock-in/out workflow on
 /// one adaptive surface, phase-driven off the app-wide [AttendanceCubit]:
@@ -247,8 +249,23 @@ class _ReadyView extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           _InlineHint(message: cubit.clockInCheck.message),
         ],
+        // Missed-punch recovery — offered once the shift has ended and there's
+        // still no record (they worked but forgot to clock in).
+        if (_shiftEnded(vm)) ...[
+          const SizedBox(height: AppSpacing.md),
+          _SecondaryButton(
+            label: 'Worked but forgot to clock in?',
+            icon: Icons.more_time_rounded,
+            onPressed: () => _openMissedPunchSheet(context, vm),
+          ),
+        ],
       ],
     );
+  }
+
+  static bool _shiftEnded(_VM vm) {
+    final end = vm.scheduledEnd;
+    return end != null && DateTime.now().isAfter(end);
   }
 }
 
@@ -563,12 +580,74 @@ class _SummaryView extends StatelessWidget {
         ],
         const SizedBox(height: AppSpacing.lg),
         _SecondaryButton(
+          label: 'Request a correction',
+          icon: Icons.edit_calendar_outlined,
+          onPressed: () => _openCorrectionSheet(context, record),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _SecondaryButton(
           label: 'View history',
           icon: Icons.history_rounded,
           onPressed: () => context.push(RouteNames.attendanceHistory),
         ),
       ],
     );
+  }
+}
+
+// ─── Employee write-action sheets (reuse the existing cubit + validation) ──
+Future<void> _openCorrectionSheet(
+    BuildContext context, AttendanceEntity record) async {
+  final cubit = context.read<AttendanceCubit>();
+  // A pending-review record is missing its clock-out; anything else is a time fix.
+  final kind = record.needsReview
+      ? AttendanceCorrectionKind.missingClockOut
+      : AttendanceCorrectionKind.wrongTime;
+  final ok = await showAttendanceActionSheet(
+    context,
+    title: 'Request a correction',
+    subtitle: 'Propose the right times — a manager reviews it.',
+    submitLabel: 'Send request',
+    askTimes: true,
+    day: record.date,
+    seedClockIn: record.clockIn ?? record.scheduledStart,
+    seedClockOut: record.clockOut ?? record.scheduledEnd,
+    onSubmit: (r) => cubit.requestCorrection(
+      record: record,
+      kind: kind,
+      reason: r.reason,
+      proposedClockIn: r.clockIn,
+      proposedClockOut: r.clockOut,
+    ),
+  );
+  if (ok == true && context.mounted) {
+    AppSnackbar.success(context, 'Correction sent for review.');
+  }
+}
+
+Future<void> _openMissedPunchSheet(BuildContext context, _VM vm) async {
+  final cubit = context.read<AttendanceCubit>();
+  final ok = await showAttendanceActionSheet(
+    context,
+    title: 'Add a missed shift',
+    subtitle: 'You worked but didn\'t clock in — a manager reviews it.',
+    submitLabel: 'Send request',
+    askTimes: true,
+    day: DateTime.now(),
+    seedClockIn: vm.scheduledStart,
+    seedClockOut: vm.scheduledEnd,
+    onSubmit: (r) {
+      final start = r.clockIn;
+      if (start == null) return Future.value(false);
+      return cubit.requestMissedPunch(
+        proposedClockIn: start,
+        proposedClockOut: r.clockOut,
+        reason: r.reason,
+      );
+    },
+  );
+  if (ok == true && context.mounted) {
+    AppSnackbar.success(context, 'Request sent for review.');
   }
 }
 
