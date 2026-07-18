@@ -39,11 +39,11 @@ void main() {
   });
 
   group('ShiftPlan', () {
-    test('standard() matches the historical hardcoded hours', () {
+    test('standard() matches the standing default hours', () {
       final p = ShiftPlan.standard();
       expect(p.morning, const ShiftHours(510, 990)); // 08:30–16:30
-      expect(p.weekdayNight, const ShiftHours(990, 1380)); // 16:30–23:00
-      expect(p.weekendNight, const ShiftHours(990, 1470)); // 16:30–00:30 (overnight)
+      expect(p.weekdayNight, const ShiftHours(900, 1380)); // 15:00–23:00
+      expect(p.weekendNight, const ShiftHours(960, 1440)); // 16:00–00:00 (midnight)
     });
 
     test('forSlot splits weekday vs weekend night', () {
@@ -90,14 +90,14 @@ void main() {
   });
 
   group('WeeklyScheduleEntity.hoursFor (resolution)', () {
-    test('legacy week (no plan, no override) → standard — UNCHANGED', () {
+    test('legacy week (no plan, no override) → standard', () {
       final s = schedule();
       expect(s.hoursFor(ScheduleDay.sunday, ScheduleShift.morning),
           const ShiftHours(510, 990));
       expect(s.hoursFor(ScheduleDay.sunday, ScheduleShift.night),
-          const ShiftHours(990, 1380));
+          const ShiftHours(900, 1380)); // weekday night 15:00–23:00
       expect(s.hoursFor(ScheduleDay.thursday, ScheduleShift.night),
-          const ShiftHours(990, 1470)); // weekend overnight, as before
+          const ShiftHours(960, 1440)); // weekend night 16:00–00:00
     });
 
     test('the frozen snapshot resolves when present', () {

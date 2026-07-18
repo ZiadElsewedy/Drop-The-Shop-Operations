@@ -38,7 +38,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// Who worked the **previous week's** Saturday night — refreshed with every
   /// load and consumed by the insight/health computations so the Saturday
   /// night → Sunday morning turnaround (the tightest one: weekend nights end
-  /// 00:30) is caught across the week boundary. Kept beside [branchId]/
+  /// at/after midnight) is caught across the week boundary. Kept beside [branchId]/
   /// [weekStart] as cubit context rather than in the freezed state.
   Set<String> get previousSaturdayNight => _previousSaturdayNight;
 

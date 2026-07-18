@@ -201,7 +201,7 @@ void main() {
       tester,
       schedule: _week(
         assignments: {
-          // Weekend night — must display the 00:30 close, not 23:00.
+          // Weekend night — must display the 00:00 close, not 23:00.
           ScheduleDay.thursday: {
             ScheduleShift.night: ['u1'],
           },
@@ -222,7 +222,7 @@ void main() {
     expect(find.text('Note'), findsAtLeastNWidgets(1));
     expect(find.text('Inventory'), findsNothing,
         reason: 'the note text is not printed on the card, only an indicator');
-    expect(find.text('16:30 → 00:30'), findsAtLeastNWidgets(1));
+    expect(find.text('16:00 → 00:00'), findsAtLeastNWidgets(1));
     expect(find.textContaining('23:00'), findsNothing);
 
     await _unmount(tester);

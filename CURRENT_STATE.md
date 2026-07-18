@@ -11,7 +11,7 @@
 | --- | --- |
 | **Branch** | `feature/attendance-management` |
 | **Build** | `flutter analyze`: 1 info, no errors/warnings (pre-existing test style) |
-| **Tests** | **954 pass · 2 fail** across 142 files (~17s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **28 pass** (`cd functions && node --test`) |
+| **Tests** | **956 pass · 2 fail** across 142 files (~17s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **28 pass** (`cd functions && node --test`) |
 | **Blocking release** | Firebase deploy (rules · indexes · functions; live `shift_templates` rule missing) · recurring-template manager read isolation · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
@@ -273,7 +273,7 @@ If you change status, gaps, or priorities, update this file **in the same task**
 
 ```bash
 flutter analyze                          # expect: 1 info, 0 errors/warnings
-flutter test                             # expect: 954 pass, 2 fail (splash)
+flutter test                             # expect: 956 pass, 2 fail (splash)
 (cd functions && node --test)            # expect: 28 pass
 grep -c "static const String" lib/core/routes/route_names.dart   # expect: 43
 ls lib/features | wc -l                  # expect: 17

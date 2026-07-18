@@ -23,7 +23,7 @@ enum ScheduleDay {
   String get shortLabel => label.substring(0, 3);
 
   /// The operations weekend — **Thursday · Friday · Saturday** — when the shop
-  /// stays open later (night shift runs to 00:30 instead of 23:00).
+  /// stays open later (night shift runs 16:00–00:00 instead of 15:00–23:00).
   bool get isWeekend =>
       this == ScheduleDay.thursday ||
       this == ScheduleDay.friday ||

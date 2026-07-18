@@ -18,6 +18,28 @@ released — DROP ships from branches and has no version tags.
 
 ### 2026-07-18
 
+- **Schedule default hours updated + "Today" highlight bug fixed + overnight
+  weekend hardened.** `ShiftHours.standard` (the single source every surface and
+  attendance derive from via `WeeklyScheduleEntity.hoursFor` + `ShiftWindow`) now
+  reads: morning 08:30–16:30 all days; weekday night **15:00–23:00** (was
+  16:30–23:00); operational-weekend (Thu/Fri/Sat) night **16:00–00:00** (was
+  16:30–00:30), ending exactly at midnight (`endMinutes` 1440). `ShiftPlan.standard`
+  and the shift-template seed already derive from this, so templates track the new
+  defaults with no extra change; attendance (worked/late/early/overtime/missed +
+  the early-clock-in window) picks them up automatically — no attendance code
+  touched. **"Today" highlight bug:** the grid and My Week compared *weekday only*
+  (`day == ScheduleDay.today()`), so every displayed week lit the matching weekday
+  — a wrong day whenever you browsed another week. Both now use the new pure
+  `ScheduleWeek.isToday(weekStart, day, {now})` (exact year/month/day match against
+  the displayed week; no highlight on any other week). Styling unchanged. The grid's
+  weekend "till HH:MM" header tag is now data-driven from the resolved night hours
+  (shows for any night that crosses midnight) instead of a hardcoded "till 00:30".
+  `ScheduleShift` display strings (`timeRange`/`timeRangeOn`/`startMinutes`/
+  `endMinutesOn`) realigned to the new defaults. Tests updated; suite 956 pass / 2
+  known splash fails. **Deliberately left (flagged):** the swap-eligibility /
+  `firestore.rules` / `approveSwap` night-start contract still hardcodes 16:30 — a
+  three-way synced backstop that must change together and is on the pending deploy.
+
 - **Schedule creation `permission-denied` diagnosed — deployment drift, not an
   admin-role bug.** Read-only verification of the active production Firestore
   ruleset found `weekly_schedules` deployed but no `shift_templates` match. Create

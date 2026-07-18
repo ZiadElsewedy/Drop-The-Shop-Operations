@@ -18,30 +18,31 @@ enum ScheduleShift {
   ScheduleShift get opposite =>
       this == ScheduleShift.morning ? ScheduleShift.night : ScheduleShift.morning;
 
-  /// Human-readable default hours (mirrors the Phase 2 shift times). Display
-  /// only — the schedule itself stores who works, not the clock times.
+  /// Human-readable default hours (mirrors `ShiftHours.standard`, the single
+  /// source of truth). Display only — the schedule itself stores who works, not
+  /// the clock times; the generic night label reflects the weekday default.
   String get timeRange =>
-      this == ScheduleShift.morning ? '08:30 – 16:30' : '16:30 – 23:00';
+      this == ScheduleShift.morning ? '08:30 – 16:30' : '15:00 – 23:00';
 
   /// Per-day hours: weekend nights (Thu/Fri/Sat — [ScheduleDay.isWeekend]) run
-  /// to **00:30**; every other slot keeps [timeRange]. Display only.
+  /// **16:00–00:00** (till midnight); every other slot keeps [timeRange].
+  /// Display only — mirrors `ShiftHours.standard`.
   String timeRangeOn(ScheduleDay day) =>
       this == ScheduleShift.night && day.isWeekend
-          ? '16:30 – 00:30'
+          ? '16:00 – 00:00'
           : timeRange;
 
-  /// Shift start as minutes past midnight (08:30 → 510 · 16:30 → 990) — the
-  /// structured counterpart of [timeRange]. Keep in sync with the display
-  /// strings above.
-  int get startMinutes => this == ScheduleShift.morning ? 510 : 990;
+  /// Shift start as minutes past midnight (08:30 → 510 · 15:00 → 900) — the
+  /// structured counterpart of [timeRange]. Keep in sync with `ShiftHours.standard`.
+  int get startMinutes => this == ScheduleShift.morning ? 510 : 900;
 
   /// Shift end as minutes past the **slot day's** midnight. Weekend nights end
-  /// 00:30 the next calendar day, so their value is past 24h (1470) — callers
-  /// adding it as a [Duration] roll into the next day automatically. Keep in
-  /// sync with [timeRangeOn].
+  /// 00:00 the next calendar day, so their value is 24h (1440) — callers adding
+  /// it as a [Duration] roll into the next day automatically. Keep in sync with
+  /// [timeRangeOn] and `ShiftHours.standard`.
   int endMinutesOn(ScheduleDay day) => this == ScheduleShift.morning
       ? 990
-      : (day.isWeekend ? 1470 : 1380);
+      : (day.isWeekend ? 1440 : 1380);
 
   /// Parses the stored string; unknown/missing → [morning].
   static ScheduleShift fromString(String? raw) =>

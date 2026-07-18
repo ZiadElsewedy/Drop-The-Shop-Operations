@@ -41,8 +41,8 @@ void main() {
       expect(stats.offDays, contains(ScheduleDay.friday));
     });
 
-    test('a weekday night is 6.5h and shows minutes in the label', () {
-      // Monday is a weekday → night 16:30–23:00 = 6h30m.
+    test('a weekday night is 8h and shows a whole-hour label', () {
+      // Monday is a weekday → night 15:00–23:00 = 8h.
       final stats = computeEmployeeWeekStats(
         _sched({
           ScheduleDay.monday: {ScheduleShift.night: ['u1']},
@@ -52,8 +52,8 @@ void main() {
 
       expect(stats.workedDays, 1);
       expect(stats.weekendCount, 0);
-      expect(stats.totalMinutes, 6 * 60 + 30);
-      expect(stats.hoursLabel, '6h 30m');
+      expect(stats.totalMinutes, 8 * 60);
+      expect(stats.hoursLabel, '8h');
     });
 
     test('an unscheduled person is empty, all seven days off', () {

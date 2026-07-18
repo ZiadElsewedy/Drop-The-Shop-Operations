@@ -17,6 +17,7 @@ import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/responsive/breakpoints.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/schedule/domain/schedule_week.dart';
 import 'package:drop/features/schedule/domain/shift_hours.dart';
 import 'package:drop/features/schedule/domain/swap_eligibility.dart';
 import 'package:drop/features/schedule/presentation/cubit/schedule_cubit.dart';
@@ -463,8 +464,8 @@ IconData _leaveIcon(LeaveType type) => switch (type) {
   LeaveType.pending => Icons.hourglass_empty_rounded,
 };
 
-/// Employee-facing time range with an **arrow** separator (e.g. `16:30 →
-/// 00:30`). Owner-preferred form for the employee surfaces; hours come from the
+/// Employee-facing time range with an **arrow** separator (e.g. `16:00 →
+/// 00:00`). Owner-preferred form for the employee surfaces; hours come from the
 /// loaded schedule so configured overrides display consistently.
 String _arrowRange(ShiftHours hours) => hours.format(separator: '→');
 
@@ -940,10 +941,10 @@ class _ShiftIconBox extends StatelessWidget {
 // ─── Countdown Row (time + live shift-status pill) ────────────────────────────
 
 /// Time range + a live status pill: `In 4h 30m` before the shift, `On now ·
-/// till 00:30` while it runs (weekend nights correctly stay "on" past midnight
-/// until 00:30 — the phase comes from [ShiftWindow], never from same-day clock
-/// math), and a quiet `Ended` after. Re-renders on a minute-aligned tick so
-/// the countdown is never stale.
+/// till 00:00` while it runs (a night that closes at/after midnight correctly
+/// stays "on" up to its end — the phase comes from [ShiftWindow], never from
+/// same-day clock math), and a quiet `Ended` after. Re-renders on a
+/// minute-aligned tick so the countdown is never stale.
 class _CountdownRow extends StatefulWidget {
   const _CountdownRow({
     required this.shift,
@@ -1445,7 +1446,9 @@ class _WeekDayRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final uid = user?.uid ?? '';
     final shifts = schedule.shiftsFor(uid, day);
-    final isToday = day == ScheduleDay.today();
+    // Exact calendar-date match against the displayed week — never weekday-only,
+    // so viewing another week highlights no "Today" (bug fix).
+    final isToday = ScheduleWeek.isToday(weekStart, day);
     // weekStart is Sunday = index 0; day.index maps directly.
     final dayDate = weekStart.add(Duration(days: day.index));
     // The employee's own leave + the manager's day note (Schedule 5.0) — the

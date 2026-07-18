@@ -49,8 +49,8 @@ class ScheduleInsights {
   final Set<SlotKey> shortRestSlots;
 
   /// Per day: people on this day's **morning** who worked the previous
-  /// night — a night ends 23:00 (00:30 on weekends) and the next morning
-  /// starts 08:30, so the turnaround is only ~8–9.5h (Schedule 5.0).
+  /// night — a night ends 23:00 (00:00 on weekends) and the next morning
+  /// starts 08:30, so the turnaround is short (Schedule 5.0).
   final Map<ScheduleDay, Set<String>> shortRestByDay;
 
   /// Slots where someone is assigned on a day they're marked on leave.
@@ -107,7 +107,7 @@ class ScheduleInsights {
 ///
 /// [previousSaturdayNight] — who worked the **previous week's** Saturday
 /// night (from that week's doc, loaded by the cubit) — catches the most
-/// common turnaround of all: Saturday night (ends 00:30!) → Sunday morning.
+/// common turnaround of all: Saturday night (ends at/after midnight) → Sunday morning.
 ScheduleInsights computeScheduleInsights(
   WeeklyScheduleEntity schedule,
   List<UserEntity> members, {

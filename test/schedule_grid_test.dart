@@ -118,8 +118,8 @@ void main() {
       onCellTap: (_, _) {},
     )));
 
-    // Thursday · Friday · Saturday nights run till 00:30.
-    expect(find.text('till 00:30'), findsNWidgets(3));
+    // Thursday · Friday · Saturday nights run till 00:00 (midnight).
+    expect(find.text('till 00:00'), findsNWidgets(3));
   });
 
   testWidgets('leave entries and day notes are visible without opening '

@@ -6,6 +6,7 @@ import 'package:drop/core/theme/app_colors.dart';
 import 'package:drop/core/theme/app_typography.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/schedule/domain/schedule_week.dart';
 import 'package:drop/features/schedule/presentation/schedule_insights.dart';
 import 'package:drop/features/schedule/presentation/widgets/assignment_chip.dart';
 import 'package:drop/features/schedule/presentation/widgets/schedule_helpers.dart';
@@ -23,8 +24,9 @@ import 'package:drop/features/schedule/presentation/widgets/shift_cell.dart';
 /// excluded and flagged instead, so cells reflect real, current people.
 ///
 /// Schedule 5.0 adds a **day-info footer row** (leave entries + the manager's
-/// day note — tap it or a day header to edit), weekend "till 00:30" header
-/// tags (Thu/Fri/Sat nights run late) and a [presentation] mode that renders
+/// day note — tap it or a day header to edit), a "till HH:MM" header tag on any
+/// night that closes after midnight (read from the resolved hours, not a
+/// hardcoded weekend rule) and a [presentation] mode that renders
 /// the print-clean roster used by the Final View.
 class ScheduleGrid extends StatelessWidget {
   const ScheduleGrid({
@@ -116,6 +118,11 @@ class ScheduleGrid extends StatelessWidget {
   final double headerHeight;
   final double dayInfoHeight;
 
+  /// Whether [day]'s night shift, at its resolved hours, closes after midnight —
+  /// drives the "till HH:MM" header tag (data, not a hardcoded weekend rule).
+  bool _nightCrossesMidnight(ScheduleDay day) =>
+      schedule.hoursFor(day, ScheduleShift.night).crossesMidnight;
+
   /// Whether the week carries any resolvable leave entry or day note.
   bool get _hasDayInfo {
     for (final day in ScheduleDay.values) {
@@ -141,7 +148,9 @@ class ScheduleGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final today = ScheduleDay.today();
+    // "Today" is an exact calendar-date match against the displayed week — never
+    // a weekday-only one, so another week highlights nothing (bug fix).
+    bool isToday(ScheduleDay d) => ScheduleWeek.isToday(schedule.weekStart, d);
     final shifts = filter == null ? ScheduleShift.values : [filter!];
     final withDayInfo = showsDayInfo;
     return SizedBox(
@@ -164,21 +173,21 @@ class ScheduleGrid extends StatelessWidget {
               Row(
                 children: [
                   for (final d in ScheduleDay.values)
-                    _dayHeader(d, d == today, cellW),
+                    _dayHeader(d, isToday(d), cellW),
                 ],
               ),
               for (final s in shifts)
                 Row(
                   children: [
                     for (final d in ScheduleDay.values)
-                      _cell(d, s, d == today, cellW),
+                      _cell(d, s, isToday(d), cellW),
                   ],
                 ),
               if (withDayInfo)
                 Row(
                   children: [
                     for (final d in ScheduleDay.values)
-                      _dayInfoCell(d, d == today, cellW),
+                      _dayInfoCell(d, isToday(d), cellW),
                   ],
                 ),
             ],
@@ -318,14 +327,15 @@ class ScheduleGrid extends StatelessWidget {
               ),
             ),
           ),
-          // Weekend nights run late — say so where the day is named
-          // (items: weekend closing time + weekend badge). Non-weekend days
-          // keep an empty spacer so the date circles stay on one line.
+          // Nights that run past midnight — say so where the day is named,
+          // reading the resolved hours so it tracks the schedule (and any
+          // override), never a hardcoded weekend close. Days whose night ends
+          // by 23:59 keep an empty spacer so the date circles stay on one line.
           SizedBox(
             height: 13,
-            child: day.isWeekend
+            child: _nightCrossesMidnight(day)
                 ? Text(
-                    'till 00:30',
+                    'till ${schedule.hoursFor(day, ScheduleShift.night).endLabel}',
                     style: AppTypography.caption.copyWith(
                       color: AppColors.textTertiary,
                       fontSize: 9.5,

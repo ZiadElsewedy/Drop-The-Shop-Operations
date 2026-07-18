@@ -841,7 +841,7 @@ class _PreviewSlot extends StatelessWidget {
         const SizedBox(height: 4),
         _ShiftPill(shift: shift),
         const SizedBox(height: 4),
-        // Weekend nights (Thu/Fri/Sat) run till 00:30.
+        // Weekend nights (Thu/Fri/Sat) run 16:00–00:00, weekdays 15:00–23:00.
         Text(shift.timeRangeOn(day), style: AppTypography.caption),
       ],
     );

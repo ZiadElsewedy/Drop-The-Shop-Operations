@@ -50,17 +50,20 @@ void main() {
       }
     });
 
-    test('weekday night ends 23:00', () {
+    test('weekday night is 15:00–23:00', () {
       expect(ShiftHours.standard(ScheduleDay.monday, ScheduleShift.night),
-          const ShiftHours(990, 1380));
+          const ShiftHours(900, 1380));
     });
 
-    test('operational-weekend nights cross midnight by default', () {
+    test('operational-weekend nights are 16:00–00:00 (close at midnight)', () {
       for (final day in [
         ScheduleDay.thursday,
         ScheduleDay.friday,
         ScheduleDay.saturday
       ]) {
+        expect(ShiftHours.standard(day, ScheduleShift.night),
+            const ShiftHours(960, 1440));
+        // Ending at 24:00 still counts as crossing midnight (endMinutes ≥ 1440).
         expect(
             ShiftHours.standard(day, ScheduleShift.night).crossesMidnight, isTrue);
       }
@@ -81,7 +84,7 @@ void main() {
     test('no override falls back to the standing default', () {
       final w = week();
       expect(w.hoursFor(ScheduleDay.monday, ScheduleShift.night),
-          const ShiftHours(990, 1380));
+          const ShiftHours(900, 1380));
       expect(w.hasHoursOverride(ScheduleDay.monday, ScheduleShift.night), isFalse);
     });
 
@@ -126,7 +129,7 @@ void main() {
           const ShiftHours(990, 1500));
       // A day with no override still resolves to the standard default.
       expect(restored.hoursFor(ScheduleDay.monday, ScheduleShift.night),
-          const ShiftHours(990, 1380));
+          const ShiftHours(900, 1380));
     });
   });
 }

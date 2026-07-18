@@ -41,16 +41,20 @@ class ShiftHours {
 
   /// The standing baseline for a (day, shift) when a week sets no override —
   /// the current business hours. **Editable per day** via the schedule's day
-  /// sheet; this is only the fallback, never a hard rule.
+  /// sheet; this is only the fallback, never a hard rule. This is the single
+  /// source of truth for the default schedule configuration: attendance derives
+  /// every scheduled instant from here (through `WeeklyScheduleEntity.hoursFor`
+  /// + `ShiftWindow`), so changing a value here changes attendance too.
   ///
-  /// Morning 08:30–16:30 every day; night 16:30–23:00, except the operational
-  /// weekend (Thu/Fri/Sat, [ScheduleDay.isWeekend]) whose nights run to 00:30.
-  /// A manager can, e.g., set Saturday's close to 01:00 without a code change.
+  /// Morning 08:30–16:30 every day; weekday night 15:00–23:00; the operational
+  /// weekend (Thu/Fri/Sat, [ScheduleDay.isWeekend]) night 16:00–00:00 (ends at
+  /// midnight — [endMinutes] `1440`). A manager can, e.g., set Saturday's close
+  /// to 01:00 without a code change.
   static ShiftHours standard(ScheduleDay day, ScheduleShift shift) {
     if (shift == ScheduleShift.morning) return const ShiftHours(510, 990);
     return day.isWeekend
-        ? const ShiftHours(990, 1470) // 16:30 → 00:30
-        : const ShiftHours(990, 1380); // 16:30 → 23:00
+        ? const ShiftHours(960, 1440) // 16:00 → 00:00 (midnight, next day)
+        : const ShiftHours(900, 1380); // 15:00 → 23:00
   }
 
   ShiftHours copyWith({int? startMinutes, int? endMinutes}) =>

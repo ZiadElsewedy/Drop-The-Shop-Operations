@@ -580,7 +580,7 @@ class _ManagerScheduleViewState extends State<ManagerScheduleView> {
     // Both derivations are single passes over members × 7 days — computed
     // once per build alongside each other, never inside the grid's cells.
     // The cubit's previous-week Saturday-night crew closes the week boundary
-    // (Saturday night ends 00:30 → Sunday morning).
+    // (Saturday night ends at/after midnight → Sunday morning turnaround).
     final prevNight = context.read<ScheduleCubit>().previousSaturdayNight;
     final insights = computeScheduleInsights(
       schedule,
