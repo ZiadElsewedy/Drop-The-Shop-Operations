@@ -101,7 +101,8 @@ class _TaskDetailsScreenState extends State<TaskDetailsScreen> {
               if (live.submitting)
                 Positioned.fill(
                   child: SubmissionLoadingOverlay(
-                    progress: live.progress ??
+                    progress:
+                        live.progress ??
                         const SubmissionProgress(SubmissionStage.preparing),
                     onCancel: () =>
                         context.read<TaskCubit>().cancelSubmission(),
@@ -145,8 +146,10 @@ class _DetailsView extends StatelessWidget {
     final isEmployee = role?.isEmployee ?? true;
     final isManagerOrAdmin = !(role?.isEmployee ?? true);
     final isAdmin = role?.isAdmin ?? false;
-    // An approved task is a locked, reviewed record — no Assign / Edit.
-    final isLocked = task.status == TaskStatus.approved;
+    // Terminal records are read-only. Only an approved task has an admin
+    // Reopen transition; a missed task stays closed.
+    final isLocked = task.status.isTerminal;
+    final canReopen = isAdmin && task.status == TaskStatus.approved;
     // Branch identity from the app-wide directory (§8b) — drives the cover
     // banner + logo. Watched so it fills in once the directory preloads.
     final branch = context.watch<BranchCubit>().branchById(task.branchId);
@@ -157,15 +160,19 @@ class _DetailsView extends StatelessWidget {
       actions: [
         if (isManagerOrAdmin && !isLocked) ...[
           IconButton(
-            icon: const Icon(Icons.person_add_alt_1_outlined,
-                color: AppColors.textSecondary),
+            icon: const Icon(
+              Icons.person_add_alt_1_outlined,
+              color: AppColors.textSecondary,
+            ),
             tooltip: 'Assign',
             onPressed: () =>
                 showAssignSheet(context: context, cubit: cubit, task: task),
           ),
           IconButton(
-            icon: const Icon(Icons.edit_outlined,
-                color: AppColors.textSecondary),
+            icon: const Icon(
+              Icons.edit_outlined,
+              color: AppColors.textSecondary,
+            ),
             tooltip: 'Edit',
             onPressed: () {
               final user = context.currentUser;
@@ -179,217 +186,238 @@ class _DetailsView extends StatelessWidget {
             },
           ),
         ],
-        // Approved & locked: an admin keeps a Reopen escape hatch; a manager
-        // sees only a non-interactive lock glyph.
+        // A terminal record is locked. An admin can reopen only an approved
+        // task; a missed task deliberately has no escape hatch.
         if (isManagerOrAdmin && isLocked)
-          if (isAdmin)
+          if (canReopen)
             IconButton(
-              icon: const Icon(Icons.lock_open_rounded,
-                  color: AppColors.textSecondary),
+              icon: const Icon(
+                Icons.lock_open_rounded,
+                color: AppColors.textSecondary,
+              ),
               tooltip: 'Reopen',
               onPressed: () => _confirmReopen(context),
             )
           else
             const Padding(
               padding: EdgeInsets.only(right: AppSpacing.md),
-              child: Icon(Icons.lock_outline_rounded,
-                  size: 20, color: AppColors.textTertiary),
+              child: Icon(
+                Icons.lock_outline_rounded,
+                size: 20,
+                color: AppColors.textTertiary,
+              ),
             ),
       ],
       body: context.isDesktop
           ? _desktopBody(
-              context, isEmployee, isManagerOrAdmin, isAdmin, isLocked)
+              context,
+              isEmployee,
+              isManagerOrAdmin,
+              canReopen,
+              isLocked,
+            )
           : ListView(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.pagePadding,
-          AppSpacing.sm,
-          AppSpacing.pagePadding,
-          AppSpacing.xxxl,
-        ),
-        children: [
-          // ── Branch cover banner (identity) ──────────────────────
-          // When the task's branch has an uploaded cover photo, lead with it so
-          // the task visibly belongs to its branch (reuses the §8 branch media +
-          // the §8b app-wide BranchCubit directory). Hidden when there's no cover.
-          if (branch?.coverUrl != null && branch!.coverUrl!.isNotEmpty) ...[
-            _BranchBanner(branch: branch),
-            const SizedBox(height: AppSpacing.lg),
-          ],
-
-          // ── Status + meta header ────────────────────────────────
-          _StatusHeader(
-            task: task,
-            branchName: cubit.branchNames[task.branchId ?? ''],
-          ),
-          const SizedBox(height: AppSpacing.xl),
-
-          // ── Locked notice (approved) ───────────────────────────
-          if (isLocked) ...[
-            _LockedBanner(canReopen: isAdmin),
-            const SizedBox(height: AppSpacing.xl),
-          ],
-
-          // ── Work type (adaptive) — the metrics sit right under the
-          // status so the whole job reads in seconds (Summary → Status →
-          // Metrics → Details).
-          if (WorkTypePanel.hasContentFor(task)) ...[
-            _Section(
-              icon: WorkTypePresenter.iconFor(task.workType),
-              title: task.workDefinition.label,
-              child: WorkTypePanel(
-                task: task,
-                cubit: cubit,
-                interactive: isEmployee && task.status == TaskStatus.started,
-                showReviewHint: isManagerOrAdmin,
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.pagePadding,
+                AppSpacing.sm,
+                AppSpacing.pagePadding,
+                AppSpacing.xxxl,
               ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
-
-          // ── Assignment ─────────────────────────────────────────
-          _Section(
-            icon: Icons.people_alt_outlined,
-            title: 'Assigned to',
-            child: _AssigneeBlock(task: task, directory: directory),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-
-          // ── Description ─────────────────────────────────────────
-          if ((task.description ?? '').isNotEmpty) ...[
-            _Section(
-              icon: Icons.notes_rounded,
-              title: 'Description',
-              child: Text(
-                task.description!,
-                style: AppTypography.body
-                    .copyWith(color: AppColors.textSecondary, height: 1.6),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
-
-          // ── Reference images (manager-attached) ────────────────
-          if (task.hasReferences) ...[
-            _Section(
-              icon: Icons.image_outlined,
-              title: 'Reference',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'What good looks like — attached by the manager.',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textTertiary),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  AttachmentGallery(
-                    attachments: task.referenceAttachments,
-                    columns: 2,
-                    showDuration: true,
-                    showCaption: false,
-                  ),
+              children: [
+                // ── Branch cover banner (identity) ──────────────────────
+                // When the task's branch has an uploaded cover photo, lead with it so
+                // the task visibly belongs to its branch (reuses the §8 branch media +
+                // the §8b app-wide BranchCubit directory). Hidden when there's no cover.
+                if (branch?.coverUrl != null &&
+                    branch!.coverUrl!.isNotEmpty) ...[
+                  _BranchBanner(branch: branch),
+                  const SizedBox(height: AppSpacing.lg),
                 ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
 
-          // ── Checklist ──────────────────────────────────────────
-          if (task.hasChecklist && !task.workDefinition.usesChecklistAsPoints) ...[
-            _Section(
-              icon: Icons.checklist_rounded,
-              title: 'Checklist',
-              trailing: _ChecklistBadge(task: task),
-              child: _ChecklistBlock(
-                task: task,
-                interactive: isEmployee && task.status == TaskStatus.started,
-                onToggle: (item) => cubit.toggleChecklistItem(task, item.id),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
+                // ── Status + meta header ────────────────────────────────
+                _StatusHeader(
+                  task: task,
+                  branchName: cubit.branchNames[task.branchId ?? ''],
+                ),
+                const SizedBox(height: AppSpacing.xl),
 
-          // ── Notes & media ─────────────────────────────────────
-          if ((task.notes ?? '').isNotEmpty ||
-              latestAttachments(task).isNotEmpty) ...[
-            _Section(
-              icon: Icons.rate_review_outlined,
-              title: 'Submitted work',
-              child: _SubmittedBlock(task: task),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
+                // ── Locked notice (approved or missed) ──────────────────
+                if (isLocked) ...[
+                  _LockedBanner(status: task.status, canReopen: canReopen),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
 
-          // ── Review notes ───────────────────────────────────────
-          if ((task.reviewNotes ?? '').isNotEmpty) ...[
-            _Section(
-              icon: Icons.feedback_outlined,
-              title: 'Review note',
-              child: Container(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: task.status == TaskStatus.rejected
-                      ? AppColors.errorSurface
-                      : AppColors.darkSurfaceElevated,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: task.status == TaskStatus.rejected
-                        ? AppColors.error.withAlpha(60)
-                        : AppColors.darkBorder,
+                // ── Work type (adaptive) — the metrics sit right under the
+                // status so the whole job reads in seconds (Summary → Status →
+                // Metrics → Details).
+                if (WorkTypePanel.hasContentFor(task)) ...[
+                  _Section(
+                    icon: WorkTypePresenter.iconFor(task.workType),
+                    title: task.workDefinition.label,
+                    child: WorkTypePanel(
+                      task: task,
+                      cubit: cubit,
+                      interactive:
+                          isEmployee && task.status == TaskStatus.started,
+                      showReviewHint: isManagerOrAdmin,
+                    ),
                   ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // ── Assignment ─────────────────────────────────────────
+                _Section(
+                  icon: Icons.people_alt_outlined,
+                  title: 'Assigned to',
+                  child: _AssigneeBlock(task: task, directory: directory),
                 ),
-                child: Text(
-                  task.reviewNotes!,
-                  style: AppTypography.body
-                      .copyWith(color: AppColors.textSecondary, height: 1.5),
-                ),
-              ),
+                const SizedBox(height: AppSpacing.xl),
+
+                // ── Description ─────────────────────────────────────────
+                if ((task.description ?? '').isNotEmpty) ...[
+                  _Section(
+                    icon: Icons.notes_rounded,
+                    title: 'Description',
+                    child: Text(
+                      task.description!,
+                      style: AppTypography.body.copyWith(
+                        color: AppColors.textSecondary,
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // ── Reference images (manager-attached) ────────────────
+                if (task.hasReferences) ...[
+                  _Section(
+                    icon: Icons.image_outlined,
+                    title: 'Reference',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'What good looks like — attached by the manager.',
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textTertiary,
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        AttachmentGallery(
+                          attachments: task.referenceAttachments,
+                          columns: 2,
+                          showDuration: true,
+                          showCaption: false,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // ── Checklist ──────────────────────────────────────────
+                if (task.hasChecklist &&
+                    !task.workDefinition.usesChecklistAsPoints) ...[
+                  _Section(
+                    icon: Icons.checklist_rounded,
+                    title: 'Checklist',
+                    trailing: _ChecklistBadge(task: task),
+                    child: _ChecklistBlock(
+                      task: task,
+                      interactive:
+                          isEmployee && task.status == TaskStatus.started,
+                      onToggle: (item) =>
+                          cubit.toggleChecklistItem(task, item.id),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // ── Notes & media ─────────────────────────────────────
+                if ((task.notes ?? '').isNotEmpty ||
+                    latestAttachments(task).isNotEmpty) ...[
+                  _Section(
+                    icon: Icons.rate_review_outlined,
+                    title: 'Submitted work',
+                    child: _SubmittedBlock(task: task),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // ── Review notes ───────────────────────────────────────
+                if ((task.reviewNotes ?? '').isNotEmpty) ...[
+                  _Section(
+                    icon: Icons.feedback_outlined,
+                    title: 'Review note',
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: task.status == TaskStatus.rejected
+                            ? AppColors.errorSurface
+                            : AppColors.darkSurfaceElevated,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: task.status == TaskStatus.rejected
+                              ? AppColors.error.withAlpha(60)
+                              : AppColors.darkBorder,
+                        ),
+                      ),
+                      child: Text(
+                        task.reviewNotes!,
+                        style: AppTypography.body.copyWith(
+                          color: AppColors.textSecondary,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // ── Activity timeline ──────────────────────────────────
+                if (task.activityLog.isNotEmpty) ...[
+                  _Section(
+                    icon: Icons.timeline_rounded,
+                    title: 'Activity',
+                    child: ActivityTimeline(
+                      task: task,
+                      directory: directory,
+                      cubit: cubit,
+                      canReview: isManagerOrAdmin,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // ── Recurrence info ───────────────────────────────────
+                if (task.recurrence != null &&
+                    task.recurrence!.frequency.value != 'none') ...[
+                  _Section(
+                    icon: Icons.repeat_rounded,
+                    title: 'Recurrence',
+                    child: Text(
+                      task.recurrence!.frequency.label,
+                      style: AppTypography.body.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+
+                // ── Employee action area ───────────────────────────────
+                if (isEmployee && !isLocked) ...[
+                  _EmployeeActions(task: task, cubit: cubit),
+                ],
+
+                // ── Manager / admin action area ────────────────────────
+                if (isManagerOrAdmin &&
+                    task.status == TaskStatus.waitingReview) ...[
+                  _ReviewBlock(task: task, cubit: cubit),
+                ],
+              ],
             ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
-
-          // ── Activity timeline ──────────────────────────────────
-          if (task.activityLog.isNotEmpty) ...[
-            _Section(
-              icon: Icons.timeline_rounded,
-              title: 'Activity',
-              child: ActivityTimeline(
-                task: task,
-                directory: directory,
-                cubit: cubit,
-                canReview: isManagerOrAdmin,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
-
-          // ── Recurrence info ───────────────────────────────────
-          if (task.recurrence != null &&
-              task.recurrence!.frequency.value != 'none') ...[
-            _Section(
-              icon: Icons.repeat_rounded,
-              title: 'Recurrence',
-              child: Text(
-                task.recurrence!.frequency.label,
-                style: AppTypography.body
-                    .copyWith(color: AppColors.textSecondary),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xl),
-          ],
-
-          // ── Employee action area ───────────────────────────────
-          if (isEmployee) ...[
-            _EmployeeActions(task: task, cubit: cubit),
-          ],
-
-          // ── Manager / admin action area ────────────────────────
-          if (isManagerOrAdmin &&
-              task.status == TaskStatus.waitingReview) ...[
-            _ReviewBlock(task: task, cubit: cubit),
-          ],
-        ],
-      ),
     );
   }
 
@@ -400,7 +428,7 @@ class _DetailsView extends StatelessWidget {
     BuildContext context,
     bool isEmployee,
     bool isManagerOrAdmin,
-    bool isAdmin,
+    bool canReopen,
     bool isLocked,
   ) {
     final branch = context.watch<BranchCubit>().branchById(task.branchId);
@@ -443,7 +471,9 @@ class _DetailsView extends StatelessWidget {
                   child: Text(
                     task.description!,
                     style: AppTypography.body.copyWith(
-                        color: AppColors.textSecondary, height: 1.6),
+                      color: AppColors.textSecondary,
+                      height: 1.6,
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
@@ -461,7 +491,8 @@ class _DetailsView extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              if (task.hasChecklist && !task.workDefinition.usesChecklistAsPoints) ...[
+              if (task.hasChecklist &&
+                  !task.workDefinition.usesChecklistAsPoints) ...[
                 _Section(
                   icon: Icons.checklist_rounded,
                   title: 'Checklist',
@@ -505,7 +536,9 @@ class _DetailsView extends StatelessWidget {
                     child: Text(
                       task.reviewNotes!,
                       style: AppTypography.body.copyWith(
-                          color: AppColors.textSecondary, height: 1.5),
+                        color: AppColors.textSecondary,
+                        height: 1.5,
+                      ),
                     ),
                   ),
                 ),
@@ -533,7 +566,7 @@ class _DetailsView extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(24, 24, 40, 48),
             children: [
               if (isLocked) ...[
-                _LockedBanner(canReopen: isAdmin),
+                _LockedBanner(status: task.status, canReopen: canReopen),
                 const SizedBox(height: AppSpacing.xl),
               ],
               _Section(
@@ -549,8 +582,9 @@ class _DetailsView extends StatelessWidget {
                   title: 'Recurrence',
                   child: Text(
                     task.recurrence!.frequency.label,
-                    style: AppTypography.body
-                        .copyWith(color: AppColors.textSecondary),
+                    style: AppTypography.body.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                 ),
               ],
@@ -624,10 +658,11 @@ class _BranchBanner extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   BranchAvatar(
-                      logoUrl: branch.logoUrl,
-                      name: branch.name,
-                      size: 34,
-                      radius: 9),
+                    logoUrl: branch.logoUrl,
+                    name: branch.name,
+                    size: 34,
+                    radius: 9,
+                  ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Column(
@@ -646,8 +681,9 @@ class _BranchBanner extends StatelessWidget {
                         if ((branch.location ?? '').isNotEmpty)
                           Text(
                             branch.location!,
-                            style: AppTypography.caption
-                                .copyWith(color: AppColors.textSecondary),
+                            style: AppTypography.caption.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -719,7 +755,8 @@ class _StatusHeader extends StatelessWidget {
                 _MetaPill(
                   icon: Icons.timelapse_outlined,
                   label: schedulePhase(task, DateTime.now()).label,
-                  highlight: schedulePhase(task, DateTime.now()) ==
+                  highlight:
+                      schedulePhase(task, DateTime.now()) ==
                       TaskSchedulePhase.overdue,
                 ),
               if (scheduledDuration(task) != null &&
@@ -733,6 +770,12 @@ class _StatusHeader extends StatelessWidget {
                 _MetaPill(
                   icon: Icons.check_circle_outline_rounded,
                   label: 'Completed ${_dateLabel(task.approvedAt!)}',
+                ),
+              if (task.missedAt != null)
+                _MetaPill(
+                  icon: Icons.event_busy_rounded,
+                  label: 'Missed ${_dateLabel(task.missedAt!)}',
+                  highlight: true,
                 ),
               if (task.recurrence != null &&
                   task.recurrence!.frequency.value != 'none')
@@ -776,7 +819,9 @@ class _StatusPill extends StatelessWidget {
     return Container(
       key: ValueKey(status),
       padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md, vertical: AppSpacing.xs + 2),
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.xs + 2,
+      ),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(20),
@@ -787,57 +832,71 @@ class _StatusPill extends StatelessWidget {
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 6),
-          Text(label,
-              style: AppTypography.caption.copyWith(
-                  color: color, fontWeight: FontWeight.w700, letterSpacing: 0.3)),
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.3,
+            ),
+          ),
         ],
       ),
     );
   }
 
   (Color, Color, String, IconData) _info(TaskStatus s) => switch (s) {
-        TaskStatus.pending => (
-            AppColors.textTertiary,
-            AppColors.darkSurfaceElevated,
-            'PENDING',
-            Icons.circle_outlined,
-          ),
-        TaskStatus.started => (
-            AppColors.textPrimary,
-            AppColors.primarySurface,
-            'IN PROGRESS',
-            Icons.timelapse_rounded,
-          ),
-        TaskStatus.completed => (
-            AppColors.textSecondary,
-            AppColors.darkSurfaceElevated,
-            'COMPLETED',
-            Icons.check_circle_outline_rounded,
-          ),
-        TaskStatus.waitingReview => (
-            AppColors.warning,
-            AppColors.darkSurfaceElevated,
-            'IN REVIEW',
-            Icons.hourglass_empty_rounded,
-          ),
-        TaskStatus.approved => (
-            AppColors.success,
-            AppColors.successSurface,
-            'APPROVED',
-            Icons.check_circle_rounded,
-          ),
-        TaskStatus.rejected => (
-            AppColors.error,
-            AppColors.errorSurface,
-            'NEEDS REWORK',
-            Icons.replay_rounded,
-          ),
-      };
+    TaskStatus.pending => (
+      AppColors.textTertiary,
+      AppColors.darkSurfaceElevated,
+      'PENDING',
+      Icons.circle_outlined,
+    ),
+    TaskStatus.started => (
+      AppColors.textPrimary,
+      AppColors.primarySurface,
+      'IN PROGRESS',
+      Icons.timelapse_rounded,
+    ),
+    TaskStatus.completed => (
+      AppColors.textSecondary,
+      AppColors.darkSurfaceElevated,
+      'COMPLETED',
+      Icons.check_circle_outline_rounded,
+    ),
+    TaskStatus.waitingReview => (
+      AppColors.warning,
+      AppColors.darkSurfaceElevated,
+      'IN REVIEW',
+      Icons.hourglass_empty_rounded,
+    ),
+    TaskStatus.approved => (
+      AppColors.success,
+      AppColors.successSurface,
+      'APPROVED',
+      Icons.check_circle_rounded,
+    ),
+    TaskStatus.rejected => (
+      AppColors.error,
+      AppColors.errorSurface,
+      'NEEDS REWORK',
+      Icons.replay_rounded,
+    ),
+    TaskStatus.missed => (
+      AppColors.error,
+      AppColors.errorSurface,
+      'MISSED',
+      Icons.event_busy_rounded,
+    ),
+  };
 }
 
 class _MetaPill extends StatelessWidget {
-  const _MetaPill(
-      {required this.icon, required this.label, this.highlight = false});
+  const _MetaPill({
+    required this.icon,
+    required this.label,
+    this.highlight = false,
+  });
   final IconData icon;
   final String label;
   final bool highlight;
@@ -850,9 +909,13 @@ class _MetaPill extends StatelessWidget {
       children: [
         Icon(icon, size: 13, color: color),
         const SizedBox(width: 5),
-        Text(label,
-            style: AppTypography.caption
-                .copyWith(color: color, fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: AppTypography.caption.copyWith(
+            color: color,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
@@ -882,16 +945,15 @@ class _Section extends StatelessWidget {
           children: [
             Icon(icon, size: 14, color: AppColors.textTertiary),
             const SizedBox(width: AppSpacing.sm),
-            Text(title.toUpperCase(),
-                style: AppTypography.caption.copyWith(
-                  color: AppColors.textTertiary,
-                  letterSpacing: 0.8,
-                  fontWeight: FontWeight.w600,
-                )),
-            if (trailing != null) ...[
-              const Spacer(),
-              trailing!,
-            ],
+            Text(
+              title.toUpperCase(),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textTertiary,
+                letterSpacing: 0.8,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (trailing != null) ...[const Spacer(), trailing!],
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -916,8 +978,11 @@ class _AssigneeBlock extends StatelessWidget {
       // not a named assignee — assigneeIds is always empty here.
       return Row(
         children: [
-          const Icon(Icons.schedule_rounded,
-              size: 16, color: AppColors.textTertiary),
+          const Icon(
+            Icons.schedule_rounded,
+            size: 16,
+            color: AppColors.textTertiary,
+          ),
           const SizedBox(width: AppSpacing.sm),
           Text(
             task.shift == null ? 'Shift task' : '${task.shift!.label} Shift',
@@ -927,8 +992,10 @@ class _AssigneeBlock extends StatelessWidget {
       );
     }
     if (task.assigneeIds.isEmpty) {
-      return Text('Unassigned',
-          style: AppTypography.body.copyWith(color: AppColors.textTertiary));
+      return Text(
+        'Unassigned',
+        style: AppTypography.body.copyWith(color: AppColors.textTertiary),
+      );
     }
     return Column(
       children: [
@@ -943,14 +1010,8 @@ class _AssigneeBlock extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        _name(u),
-                        style: AppTypography.label,
-                      ),
-                      Text(
-                        _roleLabel(u.role),
-                        style: AppTypography.caption,
-                      ),
+                      Text(_name(u), style: AppTypography.label),
+                      Text(_roleLabel(u.role), style: AppTypography.caption),
                     ],
                   ),
                 ),
@@ -963,15 +1024,18 @@ class _AssigneeBlock extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Row(
             children: [
-              const Icon(Icons.person_outlined,
-                  size: 14, color: AppColors.textTertiary),
+              const Icon(
+                Icons.person_outlined,
+                size: 14,
+                color: AppColors.textTertiary,
+              ),
               const SizedBox(width: AppSpacing.sm),
-              const Text('Assigned by  ',
-                  style: AppTypography.caption),
+              const Text('Assigned by  ', style: AppTypography.caption),
               Text(
                 _assignedByName(directory, task.createdBy!),
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textPrimary),
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textPrimary,
+                ),
               ),
             ],
           ),
@@ -982,14 +1046,14 @@ class _AssigneeBlock extends StatelessWidget {
 
   String _name(UserEntity u) =>
       (u.displayName != null && u.displayName!.isNotEmpty)
-          ? u.displayName!
-          : u.email;
+      ? u.displayName!
+      : u.email;
 
   String _roleLabel(UserRole r) => switch (r) {
-        UserRole.admin => 'Admin',
-        UserRole.manager => 'Manager',
-        UserRole.employee => 'Employee',
-      };
+    UserRole.admin => 'Admin',
+    UserRole.manager => 'Manager',
+    UserRole.employee => 'Employee',
+  };
 
   String _assignedByName(Map<String, UserEntity> dir, String uid) {
     final u = dir[uid];
@@ -1083,7 +1147,9 @@ class _ChecklistRow extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(
-            vertical: AppSpacing.md, horizontal: AppSpacing.sm),
+          vertical: AppSpacing.md,
+          horizontal: AppSpacing.sm,
+        ),
         decoration: BoxDecoration(
           color: item.completed
               ? AppColors.primarySurface
@@ -1101,14 +1167,18 @@ class _ChecklistRow extends StatelessWidget {
                 color: item.completed ? AppColors.white : AppColors.transparent,
                 borderRadius: BorderRadius.circular(7),
                 border: Border.all(
-                  color:
-                      item.completed ? AppColors.white : AppColors.textTertiary,
+                  color: item.completed
+                      ? AppColors.white
+                      : AppColors.textTertiary,
                   width: 1.5,
                 ),
               ),
               child: item.completed
-                  ? const Icon(Icons.check_rounded,
-                      size: 14, color: AppColors.black)
+                  ? const Icon(
+                      Icons.check_rounded,
+                      size: 14,
+                      color: AppColors.black,
+                    )
                   : null,
             ),
             const SizedBox(width: AppSpacing.md),
@@ -1119,23 +1189,29 @@ class _ChecklistRow extends StatelessWidget {
                   color: item.completed
                       ? AppColors.textTertiary
                       : AppColors.textPrimary,
-                  decoration:
-                      item.completed ? TextDecoration.lineThrough : null,
+                  decoration: item.completed
+                      ? TextDecoration.lineThrough
+                      : null,
                 ),
               ),
             ),
             if (!item.isRequired)
               Container(
                 padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm, vertical: 2),
+                  horizontal: AppSpacing.sm,
+                  vertical: 2,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.darkBg,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: AppColors.darkBorder),
                 ),
-                child: Text('optional',
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textTertiary)),
+                child: Text(
+                  'optional',
+                  style: AppTypography.caption.copyWith(
+                    color: AppColors.textTertiary,
+                  ),
+                ),
               ),
           ],
         ),
@@ -1162,9 +1238,13 @@ class _SubmittedBlock extends StatelessWidget {
           if (notes.isNotEmpty) ...[
             const WorkEyebrow('Notes', icon: Icons.notes_rounded),
             const SizedBox(height: AppSpacing.sm),
-            Text(notes,
-                style: AppTypography.body
-                    .copyWith(color: AppColors.textSecondary, height: 1.5)),
+            Text(
+              notes,
+              style: AppTypography.body.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.5,
+              ),
+            ),
           ],
           if (media.isNotEmpty) ...[
             if (notes.isNotEmpty) const SizedBox(height: AppSpacing.lg),
@@ -1180,11 +1260,11 @@ class _SubmittedBlock extends StatelessWidget {
 
 // ─── Employee action area ───────────────────────────────────────────
 
-/// Shown at the top of an approved task's details — a calm, monochrome notice
-/// that the task is a locked, reviewed record (the status glow on the header
-/// above carries the colour; this banner stays neutral).
+/// Shown at the top of a terminal task's details. Approved records can be
+/// reopened by an admin; missed records are closed after their deadline.
 class _LockedBanner extends StatelessWidget {
-  const _LockedBanner({required this.canReopen});
+  const _LockedBanner({required this.status, required this.canReopen});
+  final TaskStatus status;
   final bool canReopen;
 
   @override
@@ -1199,16 +1279,27 @@ class _LockedBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.lock_outline_rounded,
-              size: 18, color: AppColors.textSecondary),
+          Icon(
+            status == TaskStatus.missed
+                ? Icons.event_busy_rounded
+                : Icons.lock_outline_rounded,
+            size: 18,
+            color: status == TaskStatus.missed
+                ? AppColors.error
+                : AppColors.textSecondary,
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(
-              canReopen
+              status == TaskStatus.missed
+                  ? 'Missed and closed. This task can no longer be changed.'
+                  : canReopen
                   ? 'Approved and locked. Reopen the task to make changes.'
                   : 'Approved and locked. This task can no longer be changed.',
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textSecondary, height: 1.4),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
             ),
           ),
         ],
@@ -1226,27 +1317,37 @@ class _EmployeeActions extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (task.status) {
       TaskStatus.pending => AppButton(
-          label: 'Start Task',
-          icon: const Icon(Icons.play_arrow_rounded,
-              size: 20, color: AppColors.textDark),
-          onPressed: () => cubit.startTask(task),
+        label: 'Start Task',
+        icon: const Icon(
+          Icons.play_arrow_rounded,
+          size: 20,
+          color: AppColors.textDark,
         ),
+        onPressed: () => cubit.startTask(task),
+      ),
       TaskStatus.started => _CompleteButton(task: task, cubit: cubit),
       TaskStatus.completed => AppButton(
-          label: 'Submit for Review',
-          icon: const Icon(Icons.send_rounded,
-              size: 18, color: AppColors.textDark),
-          onPressed: () {
-            cubit.submitForReview(task);
-            Navigator.of(context).pop();
-          },
+        label: 'Submit for Review',
+        icon: const Icon(
+          Icons.send_rounded,
+          size: 18,
+          color: AppColors.textDark,
         ),
+        onPressed: () {
+          cubit.submitForReview(task);
+          Navigator.of(context).pop();
+        },
+      ),
       TaskStatus.rejected => AppButton(
-          label: 'Start Rework',
-          icon: const Icon(Icons.replay_rounded,
-              size: 18, color: AppColors.textDark),
-          onPressed: () => cubit.startTask(task),
+        label: 'Start Rework',
+        icon: const Icon(
+          Icons.replay_rounded,
+          size: 18,
+          color: AppColors.textDark,
         ),
+        onPressed: () => cubit.startTask(task),
+      ),
+      TaskStatus.missed => const SizedBox.shrink(),
       _ => const SizedBox.shrink(),
     };
   }
@@ -1294,8 +1395,11 @@ class _CompleteButtonState extends State<_CompleteButton> {
         if (!_expanded)
           AppButton(
             label: 'Mark Complete',
-            icon: const Icon(Icons.check_rounded,
-                size: 20, color: AppColors.textDark),
+            icon: const Icon(
+              Icons.check_rounded,
+              size: 20,
+              color: AppColors.textDark,
+            ),
             onPressed: () {
               if (!widget.task.requiredChecklistComplete) {
                 AppSnackbar.error(
@@ -1321,8 +1425,11 @@ class _CompleteButtonState extends State<_CompleteButton> {
           const SizedBox(height: AppSpacing.md),
           AppButton(
             label: 'Complete & Submit',
-            icon: const Icon(Icons.send_rounded,
-                size: 20, color: AppColors.textDark),
+            icon: const Icon(
+              Icons.send_rounded,
+              size: 20,
+              color: AppColors.textDark,
+            ),
             onPressed: _submit,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -1356,8 +1463,7 @@ class _ReviewBlockState extends State<_ReviewBlock> {
     super.dispose();
   }
 
-  String? get _note =>
-      _notes.text.trim().isEmpty ? null : _notes.text.trim();
+  String? get _note => _notes.text.trim().isEmpty ? null : _notes.text.trim();
 
   @override
   Widget build(BuildContext context) {
@@ -1376,8 +1482,11 @@ class _ReviewBlockState extends State<_ReviewBlock> {
         const SizedBox(height: AppSpacing.md),
         AppButton(
           label: 'Approve',
-          icon: const Icon(Icons.check_circle_outline_rounded,
-              size: 20, color: AppColors.textDark),
+          icon: const Icon(
+            Icons.check_circle_outline_rounded,
+            size: 20,
+            color: AppColors.textDark,
+          ),
           onPressed: () {
             widget.cubit.approveTask(widget.task, reviewNotes: _note);
             Navigator.of(context).pop();
@@ -1420,8 +1529,10 @@ class _ReviewBlockState extends State<_ReviewBlock> {
               Navigator.of(context).pop();
             }
           },
-          child: Text('Reject',
-              style: AppTypography.label.copyWith(color: AppColors.error)),
+          child: Text(
+            'Reject',
+            style: AppTypography.label.copyWith(color: AppColors.error),
+          ),
         ),
       ],
     );
@@ -1433,7 +1544,8 @@ class _ReviewBlockState extends State<_ReviewBlock> {
 bool _isOverdue(TaskEntity task) {
   final d = task.deadline;
   if (d == null) return false;
-  final done = task.status == TaskStatus.approved ||
+  final done =
+      task.status.isTerminal ||
       task.status == TaskStatus.completed ||
       task.status == TaskStatus.waitingReview;
   return !done && d.isBefore(DateTime.now());
@@ -1442,7 +1554,7 @@ bool _isOverdue(TaskEntity task) {
 String _dateLabel(DateTime d) => AppDateFormatter.dayMonthYear(d);
 
 String _priorityLabel(TaskPriority p) => switch (p) {
-      TaskPriority.high => 'High priority',
-      TaskPriority.normal => 'Medium priority',
-      TaskPriority.low => 'Low priority',
-    };
+  TaskPriority.high => 'High priority',
+  TaskPriority.normal => 'Medium priority',
+  TaskPriority.low => 'Low priority',
+};

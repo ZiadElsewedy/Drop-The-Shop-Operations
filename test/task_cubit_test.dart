@@ -65,51 +65,60 @@ void main() {
     ScheduleShift? shift,
     List<String> assigneeIds = const ['emp1'],
     int revisionNumber = 0,
-  }) =>
-      TaskEntity(
-        id: 't1',
-        title: 'Clean the walk-in',
-        status: status,
-        branchId: 'branch1',
-        assignmentType: assignmentType,
-        shift: shift,
-        assigneeIds: assigneeIds,
-        revisionNumber: revisionNumber,
-        createdBy: 'mgr1',
-        activityLog: [
-          ActivityEntry(status: 'pending', actorId: 'mgr1', at: DateTime(2026, 1, 1)),
-        ],
-      );
+  }) => TaskEntity(
+    id: 't1',
+    title: 'Clean the walk-in',
+    status: status,
+    branchId: 'branch1',
+    assignmentType: assignmentType,
+    shift: shift,
+    assigneeIds: assigneeIds,
+    revisionNumber: revisionNumber,
+    createdBy: 'mgr1',
+    activityLog: [
+      ActivityEntry(
+        status: 'pending',
+        actorId: 'mgr1',
+        at: DateTime(2026, 1, 1),
+      ),
+    ],
+  );
 
   group('lifecycle transitions are transactional', () {
-    test('approve runs from waitingReview with the right patch + one log entry',
-        () async {
-      final h = _build();
-      await h.cubit.load(manager);
-      await pumpEventQueue();
+    test(
+      'approve runs from waitingReview with the right patch + one log entry',
+      () async {
+        final h = _build();
+        await h.cubit.load(manager);
+        await pumpEventQueue();
 
-      await h.cubit.approveTask(task(status: TaskStatus.waitingReview),
-          reviewNotes: 'looks good');
+        await h.cubit.approveTask(
+          task(status: TaskStatus.waitingReview),
+          reviewNotes: 'looks good',
+        );
 
-      expect(h.repo.transitions, hasLength(1));
-      final t = h.repo.transitions.single;
-      expect(t.taskId, 't1');
-      expect(t.expectedFrom, {'waitingReview'});
-      expect(t.patch['status'], 'approved');
-      expect(t.patch['approvedBy'], 'mgr1');
-      expect(t.patch['requiresRework'], false);
-      expect(t.appendLog, hasLength(1));
-      expect(t.appendLog.single.status, 'approved');
-      expect(t.appendLog.single.note, 'looks good');
-    });
+        expect(h.repo.transitions, hasLength(1));
+        final t = h.repo.transitions.single;
+        expect(t.taskId, 't1');
+        expect(t.expectedFrom, {'waitingReview'});
+        expect(t.patch['status'], 'approved');
+        expect(t.patch['approvedBy'], 'mgr1');
+        expect(t.patch['requiresRework'], false);
+        expect(t.appendLog, hasLength(1));
+        expect(t.appendLog.single.status, 'approved');
+        expect(t.appendLog.single.note, 'looks good');
+      },
+    );
 
     test('reject runs from waitingReview, no rework flag', () async {
       final h = _build();
       await h.cubit.load(manager);
       await pumpEventQueue();
 
-      await h.cubit.rejectTask(task(status: TaskStatus.waitingReview),
-          reviewNotes: 'no');
+      await h.cubit.rejectTask(
+        task(status: TaskStatus.waitingReview),
+        reviewNotes: 'no',
+      );
 
       final t = h.repo.transitions.single;
       expect(t.expectedFrom, {'waitingReview'});
@@ -122,8 +131,9 @@ void main() {
       await h.cubit.load(manager);
       await pumpEventQueue();
 
-      await h.cubit
-          .reworkTask(task(status: TaskStatus.waitingReview, revisionNumber: 2));
+      await h.cubit.reworkTask(
+        task(status: TaskStatus.waitingReview, revisionNumber: 2),
+      );
 
       final t = h.repo.transitions.single;
       expect(t.patch['status'], 'rejected');
@@ -163,8 +173,9 @@ void main() {
     final h = _build();
     await h.cubit.load(manager);
     await pumpEventQueue();
-    h.repo.failTransitionWith =
-        const ConflictFailure('This task was just updated by someone else.');
+    h.repo.failTransitionWith = const ConflictFailure(
+      'This task was just updated by someone else.',
+    );
     final states = <TaskState>[];
     final sub = h.cubit.stream.listen(states.add);
 
@@ -175,31 +186,39 @@ void main() {
     // It attempted the transaction, reported the conflict message, and recovered
     // to a loaded list (no stuck error state, no throw).
     expect(h.repo.transitions, hasLength(1));
-    expect(_errorMessages(states),
-        contains('This task was just updated by someone else.'));
     expect(
-        states.last
-            .maybeWhen(loaded: (_, _, _, _, _) => true, orElse: () => false),
-        isTrue);
+      _errorMessages(states),
+      contains('This task was just updated by someone else.'),
+    );
+    expect(
+      states.last.maybeWhen(
+        loaded: (_, _, _, _, _) => true,
+        orElse: () => false,
+      ),
+      isTrue,
+    );
   });
 
-  test('reopen transitions out of approved and audits the reopen (P1-4)', () async {
-    final audit = _RecordingAudit();
-    final h = _build(audit: EventTrackingService(audit));
-    await h.cubit.load(admin);
-    await pumpEventQueue();
+  test(
+    'reopen transitions out of approved and audits the reopen (P1-4)',
+    () async {
+      final audit = _RecordingAudit();
+      final h = _build(audit: EventTrackingService(audit));
+      await h.cubit.load(admin);
+      await pumpEventQueue();
 
-    await h.cubit.reopenTask(task(status: TaskStatus.approved));
-    await pumpEventQueue();
+      await h.cubit.reopenTask(task(status: TaskStatus.approved));
+      await pumpEventQueue();
 
-    final t = h.repo.transitions.single;
-    expect(t.expectedFrom, {'approved'});
-    expect(t.patch['status'], 'started');
-    // approvedBy is explicitly cleared to null (present-but-null, not absent).
-    expect(t.patch.containsKey('approvedBy'), isTrue);
-    expect(t.patch['approvedBy'], isNull);
-    expect(audit.events, contains(AuditEventType.taskReopened));
-  });
+      final t = h.repo.transitions.single;
+      expect(t.expectedFrom, {'approved'});
+      expect(t.patch['status'], 'started');
+      // approvedBy is explicitly cleared to null (present-but-null, not absent).
+      expect(t.patch.containsKey('approvedBy'), isTrue);
+      expect(t.patch['approvedBy'], isNull);
+      expect(audit.events, contains(AuditEventType.taskReopened));
+    },
+  );
 
   group('deletion', () {
     test('deletes and audits a non-approved task (P1-4)', () async {
@@ -228,99 +247,135 @@ void main() {
 
       expect(h.repo.deleted, isEmpty);
     });
+
+    test('blocks deleting a missed task', () async {
+      final h = _build();
+      await h.cubit.load(manager);
+      await pumpEventQueue();
+      h.seed([task(status: TaskStatus.missed)]);
+      await pumpEventQueue();
+
+      await h.cubit.deleteTask('t1');
+
+      expect(h.repo.deleted, isEmpty);
+    });
   });
 
-  test('approving a shift task notifies the rostered employees (P1-3)', () async {
-    final h = _build();
-    h.schedule.schedule = _rosterEveryShift(const ['shiftEmp']);
-    await h.cubit.load(manager);
-    await pumpEventQueue();
+  test(
+    'approving a shift task notifies the rostered employees (P1-3)',
+    () async {
+      final h = _build();
+      h.schedule.schedule = _rosterEveryShift(const ['shiftEmp']);
+      await h.cubit.load(manager);
+      await pumpEventQueue();
 
-    // A shift task has NO named assignees — the old code notified assigneeIds
-    // (empty), so the person who did the work heard nothing.
-    await h.cubit.approveTask(task(
-      status: TaskStatus.waitingReview,
-      assignmentType: TaskAssignmentType.shift,
-      shift: ScheduleShift.morning,
-      assigneeIds: const [],
-    ));
-    await pumpEventQueue();
+      // A shift task has NO named assignees — the old code notified assigneeIds
+      // (empty), so the person who did the work heard nothing.
+      await h.cubit.approveTask(
+        task(
+          status: TaskStatus.waitingReview,
+          assignmentType: TaskAssignmentType.shift,
+          shift: ScheduleShift.morning,
+          assigneeIds: const [],
+        ),
+      );
+      await pumpEventQueue();
 
-    final approved = h.notify.calls
-        .firstWhere((c) => c.type == NotificationType.taskApproved);
-    expect(approved.recipients, ['shiftEmp']);
-  });
+      final approved = h.notify.calls.firstWhere(
+        (c) => c.type == NotificationType.taskApproved,
+      );
+      expect(approved.recipients, ['shiftEmp']);
+    },
+  );
 
   // ── Recurrence spawn is deterministic + idempotent (P0 duplicate fix) ──
   group('recurring approval spawns a deterministic, idempotent successor', () {
     TaskEntity recurring({required String id, String? rootId}) => TaskEntity(
-          id: id,
-          title: 'Restock cooler',
-          status: TaskStatus.waitingReview,
-          branchId: 'branch1',
-          assigneeIds: const ['emp1'],
-          deadline: DateTime(2026, 1, 10),
-          recurrence:
-              const RecurrenceConfig(frequency: RecurrenceFrequency.daily),
-          recurrenceRootId: rootId,
-          createdBy: 'mgr1',
-          checklist: const [
-            ChecklistItem(id: 'c1', title: 'Count stock', completed: true),
-          ],
-          activityLog: [
-            ActivityEntry(
-                status: 'pending', actorId: 'mgr1', at: DateTime(2026, 1, 1)),
-          ],
-        );
+      id: id,
+      title: 'Restock cooler',
+      status: TaskStatus.waitingReview,
+      branchId: 'branch1',
+      assigneeIds: const ['emp1'],
+      deadline: DateTime(2026, 1, 10),
+      recurrence: const RecurrenceConfig(frequency: RecurrenceFrequency.daily),
+      recurrenceRootId: rootId,
+      createdBy: 'mgr1',
+      checklist: const [
+        ChecklistItem(id: 'c1', title: 'Count stock', completed: true),
+      ],
+      activityLog: [
+        ActivityEntry(
+          status: 'pending',
+          actorId: 'mgr1',
+          at: DateTime(2026, 1, 1),
+        ),
+      ],
+    );
 
-    test('successor id is rec_{sourceId}, root = source, checklist reset',
-        () async {
-      final h = _build();
-      await h.cubit.load(manager);
-      await pumpEventQueue();
+    test(
+      'successor id is rec_{sourceId}, root = source, checklist reset',
+      () async {
+        final h = _build();
+        await h.cubit.load(manager);
+        await pumpEventQueue();
 
-      await h.cubit.approveTask(recurring(id: 't1'));
-      await pumpEventQueue();
+        await h.cubit.approveTask(recurring(id: 't1'));
+        await pumpEventQueue();
 
-      expect(h.repo.createdWithId, hasLength(1));
-      final spawned = h.repo.createdWithId.single;
-      expect(spawned.id, 'rec_t1');
-      expect(spawned.recurrenceRootId, 't1'); // root defaults to the source id
-      expect(spawned.status, TaskStatus.pending);
-      expect(spawned.checklist.single.completed, isFalse); // reset for the redo
-    });
+        expect(h.repo.createdWithId, hasLength(1));
+        final spawned = h.repo.createdWithId.single;
+        expect(spawned.id, 'rec_t1');
+        expect(
+          spawned.recurrenceRootId,
+          't1',
+        ); // root defaults to the source id
+        expect(spawned.status, TaskStatus.pending);
+        expect(
+          spawned.checklist.single.completed,
+          isFalse,
+        ); // reset for the redo
+      },
+    );
 
-    test('reopen→re-approve targets the SAME id (no random double-spawn)',
-        () async {
-      final h = _build();
-      await h.cubit.load(manager);
-      await pumpEventQueue();
+    test(
+      'reopen→re-approve targets the SAME id (no random double-spawn)',
+      () async {
+        final h = _build();
+        await h.cubit.load(manager);
+        await pumpEventQueue();
 
-      // First approve creates rec_t1. On the reopen→re-approve replay the id now
-      // exists, so the atomic createTaskWithId returns null — one task, not two.
-      await h.cubit.approveTask(recurring(id: 't1'));
-      await pumpEventQueue();
-      h.repo.createWithIdExists = true;
-      await h.cubit.approveTask(recurring(id: 't1'));
-      await pumpEventQueue();
+        // First approve creates rec_t1. On the reopen→re-approve replay the id now
+        // exists, so the atomic createTaskWithId returns null — one task, not two.
+        await h.cubit.approveTask(recurring(id: 't1'));
+        await pumpEventQueue();
+        h.repo.createWithIdExists = true;
+        await h.cubit.approveTask(recurring(id: 't1'));
+        await pumpEventQueue();
 
-      // Both attempts used the identical deterministic id (the old bug used a
-      // fresh random id each time → two successors).
-      expect(h.repo.createdWithId.map((t) => t.id), ['rec_t1', 'rec_t1']);
-    });
+        // Both attempts used the identical deterministic id (the old bug used a
+        // fresh random id each time → two successors).
+        expect(h.repo.createdWithId.map((t) => t.id), ['rec_t1', 'rec_t1']);
+      },
+    );
 
-    test('a child keeps the lineage root while keying off its own id', () async {
-      final h = _build();
-      await h.cubit.load(manager);
-      await pumpEventQueue();
+    test(
+      'a child keeps the lineage root while keying off its own id',
+      () async {
+        final h = _build();
+        await h.cubit.load(manager);
+        await pumpEventQueue();
 
-      await h.cubit.approveTask(recurring(id: 'rec_t1', rootId: 't1'));
-      await pumpEventQueue();
+        await h.cubit.approveTask(recurring(id: 'rec_t1', rootId: 't1'));
+        await pumpEventQueue();
 
-      final spawned = h.repo.createdWithId.single;
-      expect(spawned.id, 'rec_rec_t1'); // keyed on the current task id
-      expect(spawned.recurrenceRootId, 't1'); // lineage preserved down the chain
-    });
+        final spawned = h.repo.createdWithId.single;
+        expect(spawned.id, 'rec_rec_t1'); // keyed on the current task id
+        expect(
+          spawned.recurrenceRootId,
+          't1',
+        ); // lineage preserved down the chain
+      },
+    );
   });
 }
 
@@ -330,7 +385,8 @@ Iterable<String> _errorMessages(List<TaskState> states) => states
     .map((s) => s.maybeWhen(error: (m) => m, orElse: () => null))
     .whereType<String>();
 
-WeeklyScheduleEntity _rosterEveryShift(List<String> uids) => WeeklyScheduleEntity(
+WeeklyScheduleEntity _rosterEveryShift(List<String> uids) =>
+    WeeklyScheduleEntity(
       id: 'sched1',
       branchId: 'branch1',
       weekStart: DateTime(2026, 1, 4),
@@ -400,15 +456,16 @@ class _RecordingTaskRepository implements TaskRepository {
   @override
   Stream<List<TaskEntity>> watchAllTasks() => controller.stream;
   @override
-  Stream<List<TaskEntity>> watchTasksByBranch(String branchId) => controller.stream;
+  Stream<List<TaskEntity>> watchTasksByBranch(String branchId) =>
+      controller.stream;
   @override
-  Stream<List<TaskEntity>> watchEmployeeTasks(String employeeId) => controller.stream;
+  Stream<List<TaskEntity>> watchEmployeeTasks(String employeeId) =>
+      controller.stream;
   @override
   Stream<List<TaskEntity>> watchShiftTasks({
     required String branchId,
     required ScheduleShift shift,
-  }) =>
-      controller.stream;
+  }) => controller.stream;
 
   @override
   Future<void> transitionTask({
@@ -435,8 +492,7 @@ class _FakeBranchRepository implements BranchRepository {
   Future<List<BranchEntity>> getBranches({
     bool includeDeleted = false,
     bool forceRefresh = false,
-  }) async =>
-      const [];
+  }) async => const [];
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }
@@ -444,8 +500,10 @@ class _FakeBranchRepository implements BranchRepository {
 class _FakeSchedule implements ScheduleRepository {
   WeeklyScheduleEntity? schedule;
   @override
-  Future<WeeklyScheduleEntity?> getSchedule(String branchId, DateTime weekStart) async =>
-      schedule;
+  Future<WeeklyScheduleEntity?> getSchedule(
+    String branchId,
+    DateTime weekStart,
+  ) async => schedule;
   @override
   dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError();
 }

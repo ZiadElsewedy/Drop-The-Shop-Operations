@@ -2,11 +2,11 @@
 /// (no Flutter/Firestore): computed from `startsAt` / `dueAt` + the lifecycle
 /// status, so it's unit-testable and can't drift from the data.
 ///
-/// It is **not** a persisted status and **not** a new `TaskStatus` — the
-/// pending→started→review workflow, the enum, and `firestore.rules` are
-/// untouched. The phase is orthogonal to the lifecycle: a `pending` task whose
-/// window is *now* reads [TaskSchedulePhase.active] (it should be running but
-/// nobody started it), which is exactly the operational signal a manager wants.
+/// It is **not** a persisted status and does not replace `TaskStatus`. The
+/// phase remains orthogonal to lifecycle: a `pending` task whose window is
+/// *now* reads [TaskSchedulePhase.active] (it should be running but nobody
+/// started it), while a terminal `missed` task reads [TaskSchedulePhase.done].
+/// That is exactly the operational distinction a manager needs.
 library;
 
 import 'package:drop/core/enums/schedule_day.dart';
@@ -21,12 +21,12 @@ enum TaskSchedulePhase { scheduled, active, dueSoon, overdue, done }
 
 extension TaskSchedulePhaseX on TaskSchedulePhase {
   String get label => switch (this) {
-        TaskSchedulePhase.scheduled => 'Scheduled',
-        TaskSchedulePhase.active => 'Active',
-        TaskSchedulePhase.dueSoon => 'Due soon',
-        TaskSchedulePhase.overdue => 'Overdue',
-        TaskSchedulePhase.done => 'Done',
-      };
+    TaskSchedulePhase.scheduled => 'Scheduled',
+    TaskSchedulePhase.active => 'Active',
+    TaskSchedulePhase.dueSoon => 'Due soon',
+    TaskSchedulePhase.overdue => 'Overdue',
+    TaskSchedulePhase.done => 'Done',
+  };
 
   /// A time-phase chip only makes sense for **in-flight** work; a finished task
   /// tells its story through the lifecycle status pill instead.
@@ -37,7 +37,7 @@ extension TaskSchedulePhaseX on TaskSchedulePhase {
 const Duration kDueSoonWindow = Duration(minutes: 30);
 
 /// The derived phase of [t] at [now]. Ordering:
-/// terminal (approved/completed/submitted) → [done]; else overdue
+/// terminal (approved/completed/submitted/missed) → [done]; else overdue
 /// ([isTaskOverdue]) → [overdue]; else due within [dueSoonWindow] → [dueSoon];
 /// else `now < startsAt` → [scheduled]; else [active]. Missing timestamps degrade
 /// gracefully (no due → never overdue/due-soon; no start → never scheduled).
@@ -48,7 +48,7 @@ TaskSchedulePhase schedulePhase(
 }) {
   // The doer is finished — the lifecycle badge carries it from here.
   final s = t.status;
-  if (s == TaskStatus.approved ||
+  if (s.isTerminal ||
       s == TaskStatus.completed ||
       s == TaskStatus.waitingReview) {
     return TaskSchedulePhase.done;
@@ -88,12 +88,13 @@ int dueSoonCount(
   List<TaskEntity> tasks,
   DateTime now, {
   Duration window = kDueSoonWindow,
-}) =>
-    tasks
-        .where((t) =>
-            schedulePhase(t, now, dueSoonWindow: window) ==
-            TaskSchedulePhase.dueSoon)
-        .length;
+}) => tasks
+    .where(
+      (t) =>
+          schedulePhase(t, now, dueSoonWindow: window) ==
+          TaskSchedulePhase.dueSoon,
+    )
+    .length;
 
 /// How well a set of assignees' rostered shifts agree — drives the create form's
 /// smart default beyond explicit shift assignment (Scheduling V2 refinement).

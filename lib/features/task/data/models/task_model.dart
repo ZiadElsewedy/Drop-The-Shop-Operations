@@ -45,6 +45,7 @@ class TaskModel {
   final String? correlationId;
   final DateTime? startsAt;
   final DateTime? deadline;
+  final DateTime? missedAt;
   final String? notes;
   final String? proofImageUrl;
   final DateTime? startedAt;
@@ -88,6 +89,7 @@ class TaskModel {
     this.correlationId,
     this.startsAt,
     this.deadline,
+    this.missedAt,
     this.notes,
     this.proofImageUrl,
     this.startedAt,
@@ -132,6 +134,7 @@ class TaskModel {
         correlationId: map['correlationId'] as String?,
         startsAt: map.date('startsAt'),
         deadline: map.date('deadline'),
+        missedAt: map.date('missedAt'),
         notes: map['notes'] as String?,
         proofImageUrl: map['proofImageUrl'] as String?,
         startedAt: map.date('startedAt'),
@@ -176,6 +179,7 @@ class TaskModel {
         correlationId: e.correlationId,
         startsAt: e.startsAt,
         deadline: e.deadline,
+        missedAt: e.missedAt,
         notes: e.notes,
         proofImageUrl: e.proofImageUrl,
         startedAt: e.startedAt,
@@ -227,6 +231,10 @@ class TaskModel {
         'correlationId': correlationId,
         'startsAt': startsAt == null ? null : Timestamp.fromDate(startsAt!),
         'deadline': deadline == null ? null : Timestamp.fromDate(deadline!),
+        // Server-owned terminal timestamp. Included as null for a newly-created
+        // task, but stripped from ordinary client content edits so a stale task
+        // snapshot can never clear an automation-recorded missed outcome.
+        'missedAt': missedAt == null ? null : Timestamp.fromDate(missedAt!),
         'notes': notes,
         'proofImageUrl': proofImageUrl,
         'startedAt': startedAt == null ? null : Timestamp.fromDate(startedAt!),
@@ -274,6 +282,7 @@ class TaskModel {
         correlationId: correlationId,
         startsAt: startsAt,
         deadline: deadline,
+        missedAt: missedAt,
         notes: notes,
         proofImageUrl: proofImageUrl,
         startedAt: startedAt,
@@ -318,6 +327,7 @@ class TaskModel {
         correlationId: correlationId,
         startsAt: startsAt,
         deadline: deadline,
+        missedAt: missedAt,
         notes: notes,
         proofImageUrl: proofImageUrl,
         startedAt: startedAt,

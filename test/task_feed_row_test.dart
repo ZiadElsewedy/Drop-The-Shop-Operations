@@ -8,21 +8,27 @@ import 'package:drop/features/task/presentation/widgets/task_feed_row.dart';
 
 void main() {
   Widget host(Widget child) => MaterialApp(
-        home: Scaffold(
-          body: SizedBox(width: 1000, child: child),
-        ),
-      );
+    home: Scaffold(body: SizedBox(width: 1000, child: child)),
+  );
 
   testWidgets('renders status label, title, branch and due', (tester) async {
-    await tester.pumpWidget(host(TaskFeedRow(
-      task: TaskEntity(
-        id: '1',
-        title: 'Open the shop',
-        status: TaskStatus.started,
-        deadline: DateTime(2099, 6, 28), // future → not overdue, plain label
+    await tester.pumpWidget(
+      host(
+        TaskFeedRow(
+          task: TaskEntity(
+            id: '1',
+            title: 'Open the shop',
+            status: TaskStatus.started,
+            deadline: DateTime(
+              2099,
+              6,
+              28,
+            ), // future → not overdue, plain label
+          ),
+          branchName: 'Arkan',
+        ),
       ),
-      branchName: 'Arkan',
-    )));
+    );
 
     expect(find.text('Open the shop'), findsOneWidget);
     expect(find.text('In progress'), findsOneWidget);
@@ -31,49 +37,91 @@ void main() {
   });
 
   testWidgets('an overdue task marks the due label late', (tester) async {
-    await tester.pumpWidget(host(TaskFeedRow(
-      task: TaskEntity(
-        id: '1',
-        title: 'Late task',
-        status: TaskStatus.started,
-        deadline: DateTime(2020, 1, 1), // safely in the past
+    await tester.pumpWidget(
+      host(
+        TaskFeedRow(
+          task: TaskEntity(
+            id: '1',
+            title: 'Late task',
+            status: TaskStatus.started,
+            deadline: DateTime(2020, 1, 1), // safely in the past
+          ),
+        ),
       ),
-    )));
+    );
     expect(find.text('1 Jan · late'), findsOneWidget);
   });
 
+  testWidgets('a missed task has a semantic status and is not labelled late', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        TaskFeedRow(
+          task: TaskEntity(
+            id: '1',
+            title: 'Unfinished opening',
+            status: TaskStatus.missed,
+            deadline: DateTime(2020, 1, 1),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('Missed'), findsOneWidget);
+    expect(find.text('1 Jan · late'), findsNothing);
+  });
+
   testWidgets('shows the single assignee name', (tester) async {
-    await tester.pumpWidget(host(TaskFeedRow(
-      task: const TaskEntity(id: '1', title: 't', assigneeIds: ['u1']),
-      directory: const {
-        'u1': UserEntity(
-            uid: 'u1', email: 'z@x.co', authProvider: 'password', displayName: 'Ziad'),
-      },
-    )));
+    await tester.pumpWidget(
+      host(
+        TaskFeedRow(
+          task: const TaskEntity(id: '1', title: 't', assigneeIds: ['u1']),
+          directory: const {
+            'u1': UserEntity(
+              uid: 'u1',
+              email: 'z@x.co',
+              authProvider: 'password',
+              displayName: 'Ziad',
+            ),
+          },
+        ),
+      ),
+    );
     expect(find.text('Ziad'), findsOneWidget);
   });
 
   testWidgets('tapping fires onTap', (tester) async {
     var tapped = false;
-    await tester.pumpWidget(host(TaskFeedRow(
-      task: const TaskEntity(id: '1', title: 't'),
-      onTap: () => tapped = true,
-    )));
+    await tester.pumpWidget(
+      host(
+        TaskFeedRow(
+          task: const TaskEntity(id: '1', title: 't'),
+          onTap: () => tapped = true,
+        ),
+      ),
+    );
     await tester.tap(find.byType(TaskFeedRow));
     expect(tapped, isTrue);
   });
 
-  testWidgets('renders a checklist progress track when present', (tester) async {
-    await tester.pumpWidget(host(TaskFeedRow(
-      task: const TaskEntity(
-        id: '1',
-        title: 't',
-        checklist: [
-          ChecklistItem(id: 'a', title: 'one', completed: true),
-          ChecklistItem(id: 'b', title: 'two'),
-        ],
+  testWidgets('renders a checklist progress track when present', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(
+        TaskFeedRow(
+          task: const TaskEntity(
+            id: '1',
+            title: 't',
+            checklist: [
+              ChecklistItem(id: 'a', title: 'one', completed: true),
+              ChecklistItem(id: 'b', title: 'two'),
+            ],
+          ),
+        ),
       ),
-    )));
+    );
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
   });
 }

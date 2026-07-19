@@ -22,36 +22,55 @@ void main() {
       status: TaskStatus.waitingReview,
       deadline: now.subtract(const Duration(hours: 2)),
     );
+    final missed = TaskEntity(
+      id: 'missed',
+      title: 'Missed window',
+      status: TaskStatus.missed,
+      deadline: now.subtract(const Duration(hours: 2)),
+    );
 
     expect(isOperationalActiveTask(overdue), isTrue);
     expect(isOperationalOverdueTask(overdue, now), isTrue);
     expect(isOperationalPendingReviewTask(overdue), isFalse);
 
     expect(isOperationalActiveTask(review), isFalse);
-    expect(isOperationalOverdueTask(review, now), isFalse,
-        reason: 'a submitted task is no longer operationally overdue');
+    expect(
+      isOperationalOverdueTask(review, now),
+      isFalse,
+      reason: 'a submitted task is no longer operationally overdue',
+    );
     expect(isOperationalPendingReviewTask(review), isTrue);
+
+    expect(isOperationalActiveTask(missed), isFalse);
+    expect(
+      isOperationalOverdueTask(missed, now),
+      isFalse,
+      reason: 'a missed task is closed, not overdue work',
+    );
   });
 
-  testWidgets('all four KPI tiles are tappable metric entry points',
-      (tester) async {
+  testWidgets('all four KPI tiles are tappable metric entry points', (
+    tester,
+  ) async {
     final opened = <OperationsMetric>[];
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: OperationsSummaryHeader(
-          summary: const BranchSummary(
-            activeTasks: 8,
-            overdueTasks: 3,
-            pendingReviews: 2,
-            staffActive: 6,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: OperationsSummaryHeader(
+            summary: const BranchSummary(
+              activeTasks: 8,
+              overdueTasks: 3,
+              pendingReviews: 2,
+              staffActive: 6,
+            ),
+            onSelect: opened.add,
           ),
-          onSelect: opened.add,
         ),
       ),
-    ));
+    );
 
     for (final entry in const <(String, OperationsMetric)>[
       ('Active tasks', OperationsMetric.activeTasks),

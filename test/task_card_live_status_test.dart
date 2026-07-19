@@ -51,9 +51,13 @@ void main() {
       );
     });
 
-    test('approved / completed → no orbit (null)', () {
+    test('approved / completed / missed → no orbit (null)', () {
       expect(liveActivityColor(_task(TaskStatus.approved)), isNull);
       expect(liveActivityColor(_task(TaskStatus.completed)), isNull);
+      expect(
+        liveActivityColor(_task(TaskStatus.missed, deadline: past)),
+        isNull,
+      );
     });
   });
 
@@ -69,6 +73,7 @@ void main() {
     test('pulse only for overdue', () {
       expect(taskOverdue(_task(TaskStatus.started)), isFalse);
       expect(taskOverdue(_task(TaskStatus.started, deadline: past)), isTrue);
+      expect(taskOverdue(_task(TaskStatus.missed, deadline: past)), isFalse);
     });
   });
 

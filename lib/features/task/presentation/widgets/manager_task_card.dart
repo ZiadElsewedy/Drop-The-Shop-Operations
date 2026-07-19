@@ -59,80 +59,100 @@ class ManagerTaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cubit = context.read<TaskCubit>();
     return GestureDetector(
-      onTap: () => Navigator.of(context).push(PageRouteBuilder(
-        pageBuilder: (ctx, anim, secAnim) =>
-            TaskDetailsScreen(task: task, directory: directory),
-        transitionsBuilder: (ctx, anim, secAnim, child) => SlideTransition(
-          position:
-              Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(
-            CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+      onTap: () => Navigator.of(context).push(
+        PageRouteBuilder(
+          pageBuilder: (ctx, anim, secAnim) =>
+              TaskDetailsScreen(task: task, directory: directory),
+          transitionsBuilder: (ctx, anim, secAnim, child) => SlideTransition(
+            position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                .animate(
+                  CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+                ),
+            child: FadeTransition(
+              opacity: CurvedAnimation(
+                parent: anim,
+                curve: const Interval(0, 0.6),
+              ),
+              child: child,
+            ),
           ),
-          child: FadeTransition(
-            opacity:
-                CurvedAnimation(parent: anim, curve: const Interval(0, 0.6)),
-            child: child,
-          ),
+          transitionDuration: const Duration(milliseconds: 320),
         ),
-        transitionDuration: const Duration(milliseconds: 320),
-      )),
-      child: Builder(builder: (context) {
-        // An approved task is a locked, reviewed record: no Assign / Edit /
-        // Delete. An admin keeps a single Reopen escape hatch.
-        final locked = task.status == TaskStatus.approved;
-        return TaskCard(
-          task: task,
-          directory: directory,
-          branchName: cubit.branchNames[task.branchId ?? ''],
-          // Branch identity (logo) from the app-wide branch directory (§8b) so
-          // the card chip shows the real branch logo when one is uploaded.
-          branchLogoUrl:
-              context.watch<BranchCubit>().branchById(task.branchId)?.logoUrl,
-          onAssigneesTap: locked
-              ? null
-              : () => showAssignSheet(context: context, cubit: cubit, task: task),
-          actions: [
-            if (task.status == TaskStatus.waitingReview)
-              TaskActionButton(
-                label: 'Review',
-                icon: Icons.rate_review_outlined,
-                onPressed: () =>
-                    showReviewSheet(context: context, cubit: cubit, task: task),
-              ),
-            if (locked) ...[
-              if (isAdmin)
+      ),
+      child: Builder(
+        builder: (context) {
+          // A terminal task is a locked record: no Assign / Edit / Delete. Only
+          // an approved task has the admin-only Reopen transition; a missed task
+          // stays closed.
+          final locked = task.status.isTerminal;
+          final canReopen = isAdmin && task.status == TaskStatus.approved;
+          return TaskCard(
+            task: task,
+            directory: directory,
+            branchName: cubit.branchNames[task.branchId ?? ''],
+            // Branch identity (logo) from the app-wide branch directory (§8b) so
+            // the card chip shows the real branch logo when one is uploaded.
+            branchLogoUrl: context
+                .watch<BranchCubit>()
+                .branchById(task.branchId)
+                ?.logoUrl,
+            onAssigneesTap: locked
+                ? null
+                : () => showAssignSheet(
+                    context: context,
+                    cubit: cubit,
+                    task: task,
+                  ),
+            actions: [
+              if (task.status == TaskStatus.waitingReview)
                 TaskActionButton(
-                  label: 'Reopen',
-                  icon: Icons.lock_open_rounded,
-                  onPressed: () => _confirmReopen(context),
+                  label: 'Review',
+                  icon: Icons.rate_review_outlined,
+                  onPressed: () => showReviewSheet(
+                    context: context,
+                    cubit: cubit,
+                    task: task,
+                  ),
                 ),
-            ] else ...[
-              TaskActionButton(
-                label: 'Assign',
-                icon: Icons.person_add_alt_1_outlined,
-                onPressed: () =>
-                    showAssignSheet(context: context, cubit: cubit, task: task),
-              ),
-              TaskActionButton(
-                label: 'Edit',
-                icon: Icons.edit_outlined,
-                onPressed: () => showTaskFormSheet(
-                  context: context,
-                  cubit: cubit,
-                  existing: task,
-                  isAdmin: isAdmin,
-                  defaultBranchId: defaultBranchId,
+              if (locked) ...[
+                if (canReopen)
+                  TaskActionButton(
+                    label: 'Reopen',
+                    icon: Icons.lock_open_rounded,
+                    onPressed: () => _confirmReopen(context),
+                  ),
+              ] else ...[
+                TaskActionButton(
+                  label: 'Assign',
+                  icon: Icons.person_add_alt_1_outlined,
+                  onPressed: () => showAssignSheet(
+                    context: context,
+                    cubit: cubit,
+                    task: task,
+                  ),
                 ),
-              ),
-              TaskActionButton(
-                label: 'Delete',
-                icon: Icons.delete_outline_rounded,
-                color: AppColors.error,
-                onPressed: () => _confirmDelete(context),
-              ),
+                TaskActionButton(
+                  label: 'Edit',
+                  icon: Icons.edit_outlined,
+                  onPressed: () => showTaskFormSheet(
+                    context: context,
+                    cubit: cubit,
+                    existing: task,
+                    isAdmin: isAdmin,
+                    defaultBranchId: defaultBranchId,
+                  ),
+                ),
+                TaskActionButton(
+                  label: 'Delete',
+                  icon: Icons.delete_outline_rounded,
+                  color: AppColors.error,
+                  onPressed: () => _confirmDelete(context),
+                ),
+              ],
             ],
-          ],
-        );
-      }),
+          );
+        },
+      ),
     );
   }
 }

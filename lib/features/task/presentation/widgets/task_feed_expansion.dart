@@ -60,7 +60,8 @@ class TaskFeedExpansion extends StatelessWidget {
       ...task.referenceAttachments,
       for (final e in task.activityLog) ...e.attachments,
     ];
-    final timeline = [...task.activityLog]..sort((a, b) => b.at.compareTo(a.at));
+    final timeline = [...task.activityLog]
+      ..sort((a, b) => b.at.compareTo(a.at));
 
     return Container(
       width: double.infinity,
@@ -75,15 +76,20 @@ class TaskFeedExpansion extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (description.isNotEmpty) ...[
-            Text(description,
-                style: AppTypography.bodySmall.copyWith(height: 1.5)),
+            Text(
+              description,
+              style: AppTypography.bodySmall.copyWith(height: 1.5),
+            ),
             const SizedBox(height: AppSpacing.md),
           ],
 
           // ── Facts (branch · shift · due · assignee) ──
           _info('Branch', Text(branchName ?? '—', style: _valueStyle)),
           if (task.shift != null)
-            _info('Shift', Text('${task.shift!.label} shift', style: _valueStyle)),
+            _info(
+              'Shift',
+              Text('${task.shift!.label} shift', style: _valueStyle),
+            ),
           _info(
             'Due',
             Text(
@@ -91,7 +97,8 @@ class TaskFeedExpansion extends StatelessWidget {
                   ? 'No due date'
                   : AppDateFormatter.dayMonth(task.deadline!),
               style: _valueStyle.copyWith(
-                  color: overdue ? AppColors.error : AppColors.textPrimary),
+                color: overdue ? AppColors.error : AppColors.textPrimary,
+              ),
             ),
           ),
           _info('Assignee', _assignee()),
@@ -115,7 +122,8 @@ class TaskFeedExpansion extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             _sectionLabel('Timeline'),
             const SizedBox(height: 6),
-            for (final e in timeline.take(3)) _TimelineRow(task: task, entry: e),
+            for (final e in timeline.take(3))
+              _TimelineRow(task: task, entry: e),
           ],
 
           // ── Quick actions (inline on desktop; pinned footer on mobile) ──
@@ -135,8 +143,9 @@ class TaskFeedExpansion extends StatelessWidget {
   Widget _assignee() {
     if (task.assignmentType == TaskAssignmentType.shift) {
       return Text(
-          task.shift == null ? 'Shift task' : '${task.shift!.label} shift',
-          style: _valueStyle);
+        task.shift == null ? 'Shift task' : '${task.shift!.label} shift',
+        style: _valueStyle,
+      );
     }
     final resolved = resolveAssignees(task, directory);
     if (resolved.isEmpty) return Text('Unassigned', style: _valueStyle);
@@ -147,10 +156,12 @@ class TaskFeedExpansion extends StatelessWidget {
           UserAvatar.fromUser(resolved.first, size: 20),
           const SizedBox(width: 6),
           Flexible(
-            child: Text(_name(resolved.first),
-                style: _valueStyle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              _name(resolved.first),
+              style: _valueStyle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       );
@@ -166,35 +177,39 @@ class TaskFeedExpansion extends StatelessWidget {
   }
 
   static Widget _info(String label, Widget value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 76,
-              child: Text(label,
-                  style: AppTypography.caption
-                      .copyWith(color: AppColors.textTertiary)),
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 76,
+          child: Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
             ),
-            Expanded(child: value),
-          ],
+          ),
         ),
-      );
+        Expanded(child: value),
+      ],
+    ),
+  );
 
   static Widget _sectionLabel(String s) => Text(
-        s.toUpperCase(),
-        style: AppTypography.caption.copyWith(
-          color: AppColors.textTertiary,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.5,
-        ),
-      );
+    s.toUpperCase(),
+    style: AppTypography.caption.copyWith(
+      color: AppColors.textTertiary,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.5,
+    ),
+  );
 
   static String _name(UserEntity u) =>
       (u.displayName?.isNotEmpty ?? false) ? u.displayName! : u.email;
 
-  static final _valueStyle =
-      AppTypography.bodySmall.copyWith(color: AppColors.textPrimary);
+  static final _valueStyle = AppTypography.bodySmall.copyWith(
+    color: AppColors.textPrimary,
+  );
 }
 
 /// The feed's quick-action row — shared by the desktop inline surface and the
@@ -219,6 +234,7 @@ class TaskFeedActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isMissed = task.status == TaskStatus.missed;
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.xs,
@@ -237,17 +253,19 @@ class TaskFeedActions extends StatelessWidget {
           ),
         ],
         if (task.status != TaskStatus.approved &&
+            !isMissed &&
             task.assignmentType != TaskAssignmentType.shift)
           TaskActionButton(
             label: 'Reassign',
             icon: Icons.person_add_alt_1_outlined,
             onPressed: () => _reassign(context),
           ),
-        TaskActionButton(
-          label: 'Note',
-          icon: Icons.chat_bubble_outline_rounded,
-          onPressed: () => _note(context),
-        ),
+        if (!isMissed)
+          TaskActionButton(
+            label: 'Note',
+            icon: Icons.chat_bubble_outline_rounded,
+            onPressed: () => _note(context),
+          ),
         TaskActionButton(
           label: 'Open full details',
           icon: Icons.open_in_full_rounded,
@@ -268,13 +286,19 @@ class TaskFeedActions extends StatelessWidget {
 
   Future<void> _reject(BuildContext context) async {
     await showReviewSheet(
-        context: context, cubit: context.read<TaskCubit>(), task: task);
+      context: context,
+      cubit: context.read<TaskCubit>(),
+      task: task,
+    );
     onClose?.call();
   }
 
   Future<void> _reassign(BuildContext context) async {
     await showAssignSheet(
-        context: context, cubit: context.read<TaskCubit>(), task: task);
+      context: context,
+      cubit: context.read<TaskCubit>(),
+      task: task,
+    );
     onClose?.call();
   }
 
@@ -301,25 +325,38 @@ Future<bool?> _showApproveConfirm(BuildContext context, TaskEntity task) {
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (ctx) => Padding(
-      padding: EdgeInsets.fromLTRB(AppSpacing.pagePadding, AppSpacing.lg,
-          AppSpacing.pagePadding, MediaQuery.of(ctx).viewInsets.bottom + AppSpacing.xl),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding,
+        AppSpacing.lg,
+        AppSpacing.pagePadding,
+        MediaQuery.of(ctx).viewInsets.bottom + AppSpacing.xl,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.verified_outlined,
-                  size: 20, color: AppColors.success),
+              const Icon(
+                Icons.verified_outlined,
+                size: 20,
+                color: AppColors.success,
+              ),
               const SizedBox(width: AppSpacing.sm),
-              Text('Approve this task?',
-                  style: AppTypography.label.copyWith(
-                      color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+              Text(
+                'Approve this task?',
+                style: AppTypography.label.copyWith(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text('"${task.title}" — review the submitted proof before you approve.',
-              style: AppTypography.bodySmall),
+          Text(
+            '"${task.title}" — review the submitted proof before you approve.',
+            style: AppTypography.bodySmall,
+          ),
           if (proof.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             _Thumbs(attachments: proof),
@@ -328,15 +365,19 @@ Future<bool?> _showApproveConfirm(BuildContext context, TaskEntity task) {
           Row(
             children: [
               Expanded(
-                  child: _SheetButton(
-                      label: 'Cancel',
-                      onTap: () => Navigator.of(ctx).pop(false))),
+                child: _SheetButton(
+                  label: 'Cancel',
+                  onTap: () => Navigator.of(ctx).pop(false),
+                ),
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                  child: _SheetButton(
-                      label: 'Approve',
-                      filled: true,
-                      onTap: () => Navigator.of(ctx).pop(true))),
+                child: _SheetButton(
+                  label: 'Approve',
+                  filled: true,
+                  onTap: () => Navigator.of(ctx).pop(true),
+                ),
+              ),
             ],
           ),
         ],
@@ -348,7 +389,8 @@ Future<bool?> _showApproveConfirm(BuildContext context, TaskEntity task) {
 /// A quick operational note input (bottom sheet) — text + a category (info /
 /// warning / issue). Returns the pair, or null on dismiss.
 Future<({String text, NoteCategory category})?> _showNoteSheet(
-    BuildContext context) {
+  BuildContext context,
+) {
   return showModalBottomSheet<({String text, NoteCategory category})>(
     context: context,
     isScrollControlled: true,
@@ -376,27 +418,35 @@ class _NoteSheetState extends State<_NoteSheet> {
     super.dispose();
   }
 
-  void _submit() => Navigator.of(context)
-      .pop((text: _controller.text, category: _category));
+  void _submit() =>
+      Navigator.of(context).pop((text: _controller.text, category: _category));
 
   Color _categoryColor(NoteCategory c) => switch (c) {
-        NoteCategory.info => AppColors.textSecondary,
-        NoteCategory.warning => AppColors.warning,
-        NoteCategory.issue => AppColors.error,
-      };
+    NoteCategory.info => AppColors.textSecondary,
+    NoteCategory.warning => AppColors.warning,
+    NoteCategory.issue => AppColors.error,
+  };
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpacing.pagePadding, AppSpacing.lg,
-          AppSpacing.pagePadding, MediaQuery.of(context).viewInsets.bottom + AppSpacing.xl),
+      padding: EdgeInsets.fromLTRB(
+        AppSpacing.pagePadding,
+        AppSpacing.lg,
+        AppSpacing.pagePadding,
+        MediaQuery.of(context).viewInsets.bottom + AppSpacing.xl,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Add a note',
-              style: AppTypography.label.copyWith(
-                  color: AppColors.textPrimary, fontWeight: FontWeight.w600)),
+          Text(
+            'Add a note',
+            style: AppTypography.label.copyWith(
+              color: AppColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: AppSpacing.md),
           // Category selector.
           Row(
@@ -418,11 +468,14 @@ class _NoteSheetState extends State<_NoteSheet> {
             autofocus: true,
             maxLines: 3,
             minLines: 1,
-            style: AppTypography.bodySmall.copyWith(color: AppColors.textPrimary),
+            style: AppTypography.bodySmall.copyWith(
+              color: AppColors.textPrimary,
+            ),
             decoration: InputDecoration(
               hintText: 'e.g. Front shelf still needs restocking',
-              hintStyle:
-                  AppTypography.bodySmall.copyWith(color: AppColors.textTertiary),
+              hintStyle: AppTypography.bodySmall.copyWith(
+                color: AppColors.textTertiary,
+              ),
               filled: true,
               fillColor: AppColors.darkSurfaceElevated,
               border: OutlineInputBorder(
@@ -467,7 +520,8 @@ class _CategoryChip extends StatelessWidget {
           color: selected ? color.withAlpha(30) : AppColors.darkSurfaceElevated,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-              color: selected ? color.withAlpha(140) : AppColors.darkBorder),
+            color: selected ? color.withAlpha(140) : AppColors.darkBorder,
+          ),
         ),
         child: Text(
           label,
@@ -482,8 +536,11 @@ class _CategoryChip extends StatelessWidget {
 }
 
 class _SheetButton extends StatelessWidget {
-  const _SheetButton(
-      {required this.label, required this.onTap, this.filled = false});
+  const _SheetButton({
+    required this.label,
+    required this.onTap,
+    this.filled = false,
+  });
   final String label;
   final VoidCallback onTap;
   final bool filled;
@@ -500,7 +557,8 @@ class _SheetButton extends StatelessWidget {
           color: filled ? AppColors.primary : AppColors.darkSurfaceElevated,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-              color: filled ? AppColors.primary : AppColors.darkBorder),
+            color: filled ? AppColors.primary : AppColors.darkBorder,
+          ),
         ),
         child: Text(
           label,
@@ -527,9 +585,12 @@ class _ChecklistPreview extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Checklist',
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textSecondary)),
+            Text(
+              'Checklist',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
+            ),
             Text(
               '${task.checklistDone} of ${task.checklistTotal}',
               style: AppTypography.caption.copyWith(
@@ -547,7 +608,8 @@ class _ChecklistPreview extends StatelessWidget {
             minHeight: 3,
             backgroundColor: AppColors.darkSurfaceElevated,
             valueColor: AlwaysStoppedAnimation(
-                complete ? AppColors.success : AppColors.textPrimary),
+              complete ? AppColors.success : AppColors.textPrimary,
+            ),
           ),
         ),
         const SizedBox(height: 8),
@@ -561,16 +623,20 @@ class _ChecklistPreview extends StatelessWidget {
                       ? Icons.check_circle_rounded
                       : Icons.radio_button_unchecked_rounded,
                   size: 15,
-                  color:
-                      item.completed ? AppColors.success : AppColors.textTertiary,
+                  color: item.completed
+                      ? AppColors.success
+                      : AppColors.textTertiary,
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(item.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.caption
-                          .copyWith(color: AppColors.textSecondary)),
+                  child: Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -578,9 +644,12 @@ class _ChecklistPreview extends StatelessWidget {
         if (task.checklistTotal > 4)
           Padding(
             padding: const EdgeInsets.only(top: 2, left: 23),
-            child: Text('+${task.checklistTotal - 4} more',
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textTertiary)),
+            child: Text(
+              '+${task.checklistTotal - 4} more',
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textTertiary,
+              ),
+            ),
           ),
       ],
     );
@@ -609,16 +678,20 @@ class _Thumbs extends StatelessWidget {
               height: 56,
               color: AppColors.darkSurfaceElevated,
               child: a.type == AttachmentType.video
-                  ? const Icon(Icons.play_circle_outline_rounded,
-                      size: 22, color: AppColors.textSecondary)
+                  ? const Icon(
+                      Icons.play_circle_outline_rounded,
+                      size: 22,
+                      color: AppColors.textSecondary,
+                    )
                   : Image.network(
                       a.url,
                       fit: BoxFit.cover,
                       cacheWidth: 120,
                       errorBuilder: (_, _, _) => const Icon(
-                          Icons.broken_image_outlined,
-                          size: 18,
-                          color: AppColors.textTertiary),
+                        Icons.broken_image_outlined,
+                        size: 18,
+                        color: AppColors.textTertiary,
+                      ),
                     ),
             ),
           );
@@ -651,13 +724,18 @@ class _TimelineRow extends StatelessWidget {
               '${entry.actorName ?? 'Someone'} · ${activityTitle(entry.status)}',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
           const SizedBox(width: 8),
-          Text(relativeTime(entry.at),
-              style:
-                  AppTypography.caption.copyWith(color: AppColors.textTertiary)),
+          Text(
+            relativeTime(entry.at),
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+            ),
+          ),
         ],
       ),
     );

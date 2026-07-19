@@ -116,6 +116,11 @@ class TaskEntity with _$TaskEntity {
     /// exposed as [dueAt]. Kept named `deadline` for backward compatibility (all
     /// existing reads + old Firestore docs are unchanged).
     DateTime? deadline,
+    /// When a recurring shift task was automatically ended because its shift
+    /// deadline passed before the work was completed. Written only by the
+    /// server-side automation sweep; null for every task that has not missed
+    /// its shift window. Additive — old task documents remain valid.
+    DateTime? missedAt,
     /// Free-text notes added by the executing employee.
     String? notes,
     /// Download URL of the proof image the employee uploads on completion.

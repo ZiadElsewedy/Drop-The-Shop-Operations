@@ -68,18 +68,18 @@ class _AdminTaskOverviewScreenState extends State<AdminTaskOverviewScreen>
   }
 
   Future<void> _create() => startNewTaskFlow(
-        context: context,
-        cubit: context.read<TaskCubit>(),
-        isAdmin: true,
-        defaultBranchId: '',
-      );
+    context: context,
+    cubit: context.read<TaskCubit>(),
+    isAdmin: true,
+    defaultBranchId: '',
+  );
 
   void _manageTemplates() => showManageTemplatesSheet(
-        context: context,
-        cubit: context.read<TaskCubit>(),
-        isAdmin: true,
-        defaultBranchId: '',
-      );
+    context: context,
+    cubit: context.read<TaskCubit>(),
+    isAdmin: true,
+    defaultBranchId: '',
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -87,14 +87,18 @@ class _AdminTaskOverviewScreenState extends State<AdminTaskOverviewScreen>
       title: 'Task Management',
       actions: [
         IconButton(
-          icon: const Icon(Icons.dashboard_customize_outlined,
-              color: AppColors.textSecondary),
+          icon: const Icon(
+            Icons.dashboard_customize_outlined,
+            color: AppColors.textSecondary,
+          ),
           tooltip: 'Templates',
           onPressed: _manageTemplates,
         ),
         IconButton(
-          icon: const Icon(Icons.refresh_rounded,
-              color: AppColors.textSecondary),
+          icon: const Icon(
+            Icons.refresh_rounded,
+            color: AppColors.textSecondary,
+          ),
           tooltip: 'Refresh',
           onPressed: _load,
         ),
@@ -108,8 +112,10 @@ class _AdminTaskOverviewScreenState extends State<AdminTaskOverviewScreen>
         backgroundColor: AppColors.accent,
         foregroundColor: AppColors.onAccent,
         icon: const Icon(Icons.add_rounded),
-        label: Text('New Task',
-            style: AppTypography.label.copyWith(color: AppColors.onAccent)),
+        label: Text(
+          'New Task',
+          style: AppTypography.label.copyWith(color: AppColors.onAccent),
+        ),
       ),
       body: BlocConsumer<TaskCubit, TaskState>(
         listener: (context, state) =>
@@ -152,11 +158,7 @@ class _AdminTaskOverviewScreenState extends State<AdminTaskOverviewScreen>
   /// One lens page — the same branch grid, re-sorted and re-framed for the
   /// [lens]. Active surfaces branches that need attention first; Done surfaces
   /// the branches that have completed the most work.
-  Widget _page(
-    List<_BranchRow> rows,
-    _BranchMetrics company,
-    _TaskLens lens,
-  ) {
+  Widget _page(List<_BranchRow> rows, _BranchMetrics company, _TaskLens lens) {
     final sorted = _sortForLens(rows, lens);
     return RefreshIndicator(
       onRefresh: () async => _load(),
@@ -200,12 +202,14 @@ class _AdminTaskOverviewScreenState extends State<AdminTaskOverviewScreen>
   void _openBranch(_BranchRow row) {
     // Drill into the operations cockpit (task→operations redesign) — the full
     // per-branch task list is reachable from there via "All tasks".
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => BranchOperationsScreen(
-        branchId: row.branchId,
-        branchName: row.name,
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BranchOperationsScreen(
+          branchId: row.branchId,
+          branchName: row.name,
+        ),
       ),
-    ));
+    );
   }
 
   /// Groups tasks by branch and joins them to the branch directory. Branches with
@@ -238,12 +242,14 @@ class _AdminTaskOverviewScreenState extends State<AdminTaskOverviewScreen>
     final known = branches.map((b) => b.id).toSet();
     for (final entry in byBranch.entries) {
       if (entry.key.isEmpty || known.contains(entry.key)) continue;
-      rows.add(_BranchRow(
-        branchId: entry.key,
-        name: 'Unknown branch',
-        location: null,
-        metrics: _BranchMetrics.from(entry.value),
-      ));
+      rows.add(
+        _BranchRow(
+          branchId: entry.key,
+          name: 'Unknown branch',
+          location: null,
+          metrics: _BranchMetrics.from(entry.value),
+        ),
+      );
     }
     return rows;
   }
@@ -264,13 +270,15 @@ List<_BranchRow> _sortForLens(List<_BranchRow> rows, _TaskLens lens) {
   switch (lens) {
     case _TaskLens.active:
       sorted.sort((a, b) {
-        final attn = (b.metrics.needsAttention ? 1 : 0)
-            .compareTo(a.metrics.needsAttention ? 1 : 0);
+        final attn = (b.metrics.needsAttention ? 1 : 0).compareTo(
+          a.metrics.needsAttention ? 1 : 0,
+        );
         if (attn != 0) return attn;
         final byOverdue = b.metrics.overdue.compareTo(a.metrics.overdue);
         if (byOverdue != 0) return byOverdue;
-        final byReview =
-            b.metrics.pendingReview.compareTo(a.metrics.pendingReview);
+        final byReview = b.metrics.pendingReview.compareTo(
+          a.metrics.pendingReview,
+        );
         if (byReview != 0) return byReview;
         return byName(a, b);
       });
@@ -278,8 +286,9 @@ List<_BranchRow> _sortForLens(List<_BranchRow> rows, _TaskLens lens) {
       sorted.sort((a, b) {
         final byDone = b.metrics.approved.compareTo(a.metrics.approved);
         if (byDone != 0) return byDone;
-        final byRate = (b.metrics.completionRate ?? -1)
-            .compareTo(a.metrics.completionRate ?? -1);
+        final byRate = (b.metrics.completionRate ?? -1).compareTo(
+          a.metrics.completionRate ?? -1,
+        );
         if (byRate != 0) return byRate;
         return byName(a, b);
       });
@@ -347,10 +356,14 @@ class _BranchMetrics {
         case TaskStatus.approved:
           approved++;
         case TaskStatus.pending ||
-              TaskStatus.started ||
-              TaskStatus.completed ||
-              TaskStatus.rejected:
+            TaskStatus.started ||
+            TaskStatus.completed ||
+            TaskStatus.rejected:
           active++;
+        case TaskStatus.missed:
+          // Closed by the recurring-task deadline sweep. It is retained in the
+          // total, but is neither active work nor an overdue task.
+          break;
       }
       if (_overdue(t)) overdue++;
     }
@@ -366,7 +379,8 @@ class _BranchMetrics {
   static bool _overdue(TaskEntity t) {
     final d = t.deadline;
     if (d == null) return false;
-    final done = t.status == TaskStatus.approved ||
+    final done =
+        t.status.isTerminal ||
         t.status == TaskStatus.completed ||
         t.status == TaskStatus.waitingReview;
     return !done && d.isBefore(DateTime.now());
@@ -431,11 +445,11 @@ class _CompanySummary extends StatelessWidget {
   }
 
   Widget _summaryDivider() => Container(
-        width: 1,
-        height: 34,
-        color: AppColors.darkBorder,
-        margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      );
+    width: 1,
+    height: 34,
+    color: AppColors.darkBorder,
+    margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+  );
 }
 
 class _SummaryStat extends StatelessWidget {
@@ -455,16 +469,21 @@ class _SummaryStat extends StatelessWidget {
     final color = alert
         ? AppColors.error
         : emphasised
-            ? AppColors.textPrimary
-            : AppColors.textPrimary;
+        ? AppColors.textPrimary
+        : AppColors.textPrimary;
     return Expanded(
       child: Column(
         children: [
-          Text(value,
-              style: AppTypography.h3.copyWith(color: color, fontSize: 20)),
+          Text(
+            value,
+            style: AppTypography.h3.copyWith(color: color, fontSize: 20),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: AppTypography.caption, textAlign: TextAlign.center),
+          Text(
+            label,
+            style: AppTypography.caption,
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -525,15 +544,17 @@ class _BranchOverviewCard extends StatelessWidget {
                         ? [
                             _Metric(value: '${m.approved}', label: 'Done'),
                             _Metric(
-                                value: '${m.pendingReview}',
-                                label: 'In review'),
+                              value: '${m.pendingReview}',
+                              label: 'In review',
+                            ),
                             _Metric(value: '${m.active}', label: 'Open'),
                           ]
                         : [
                             _Metric(value: '${m.active}', label: 'Active'),
                             _Metric(
-                                value: '${m.pendingReview}',
-                                label: 'Pending review'),
+                              value: '${m.pendingReview}',
+                              label: 'Pending review',
+                            ),
                             _Metric(
                               value: '${m.overdue}',
                               label: 'Overdue',
@@ -544,8 +565,9 @@ class _BranchOverviewCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                   Text(
                     _caption(m, pct, isDone),
-                    style: AppTypography.caption
-                        .copyWith(color: AppColors.textSecondary),
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
                   ),
                   if (pct != null) ...[
                     const SizedBox(height: AppSpacing.sm),
@@ -555,8 +577,9 @@ class _BranchOverviewCard extends StatelessWidget {
                         value: pct,
                         minHeight: 5,
                         backgroundColor: AppColors.darkSurfaceElevated,
-                        valueColor:
-                            const AlwaysStoppedAnimation(AppColors.textPrimary),
+                        valueColor: const AlwaysStoppedAnimation(
+                          AppColors.textPrimary,
+                        ),
                       ),
                     ),
                   ],
@@ -591,8 +614,10 @@ class _BranchOverviewCard extends StatelessWidget {
             children: [
               Text(
                 row.name,
-                style: AppTypography.label
-                    .copyWith(fontWeight: FontWeight.w600, fontSize: 16),
+                style: AppTypography.label.copyWith(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 16,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -611,8 +636,11 @@ class _BranchOverviewCard extends StatelessWidget {
               pendingReview: m.pendingReview,
             ),
           ),
-        const Icon(Icons.chevron_right_rounded,
-            size: 20, color: AppColors.textTertiary),
+        const Icon(
+          Icons.chevron_right_rounded,
+          size: 20,
+          color: AppColors.textTertiary,
+        ),
       ],
     );
   }
@@ -668,7 +696,11 @@ class _CoverHeader extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 BranchAvatar(
-                    logoUrl: row.logoUrl, name: row.name, size: 36, radius: 10),
+                  logoUrl: row.logoUrl,
+                  name: row.name,
+                  size: 36,
+                  radius: 10,
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Column(
@@ -688,16 +720,20 @@ class _CoverHeader extends StatelessWidget {
                       if ((row.location ?? '').isNotEmpty)
                         Text(
                           row.location!,
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textSecondary),
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                     ],
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded,
-                    size: 20, color: AppColors.textPrimary),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: AppColors.textPrimary,
+                ),
               ],
             ),
           ),
@@ -716,12 +752,13 @@ class _AttentionPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isOverdue = overdue > 0;
-    final label = isOverdue
-        ? '$overdue overdue'
-        : '$pendingReview to review';
+    final label = isOverdue ? '$overdue overdue' : '$pendingReview to review';
     final color = isOverdue ? AppColors.error : AppColors.textSecondary;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: 3),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 3,
+      ),
       decoration: BoxDecoration(
         color: AppColors.darkSurfaceElevated,
         borderRadius: BorderRadius.circular(8),
@@ -738,9 +775,13 @@ class _AttentionPill extends StatelessWidget {
             color: color,
           ),
           const SizedBox(width: 4),
-          Text(label,
-              style: AppTypography.caption
-                  .copyWith(color: color, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -773,4 +814,3 @@ class _Metric extends StatelessWidget {
     );
   }
 }
-

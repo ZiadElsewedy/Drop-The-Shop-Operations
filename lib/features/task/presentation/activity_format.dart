@@ -18,47 +18,49 @@ const Color kStateOverdue = Color(0xFFFB923C); // orange
 
 /// Human-readable title for a task activity entry (its post-transition status).
 String activityTitle(String status) => switch (status) {
-      'pending' => 'Task created',
-      'assigned' => 'Assigned to employee',
-      'started' => 'Started',
-      'completed' => 'Completed',
-      'waitingReview' => 'Submitted for review',
-      'approved' => 'Approved',
-      'rejected' => 'Rework requested',
-      'cancelled' => 'Cancelled',
-      'note' => 'Note',
-      'noteWarning' => 'Warning',
-      'noteIssue' => 'Issue',
-      _ => status,
-    };
+  'pending' => 'Task created',
+  'assigned' => 'Assigned to employee',
+  'started' => 'Started',
+  'completed' => 'Completed',
+  'waitingReview' => 'Submitted for review',
+  'approved' => 'Approved',
+  'rejected' => 'Rework requested',
+  'missed' => 'Missed deadline',
+  'cancelled' => 'Cancelled',
+  'note' => 'Note',
+  'noteWarning' => 'Warning',
+  'noteIssue' => 'Issue',
+  _ => status,
+};
 
 /// Dot / accent colour for a task activity entry — the soft state palette, so
 /// the timeline reads in the same hues as the cards' living borders.
 Color activityColor(String status) => switch (status) {
-      'approved' => AppColors.success,
-      'rejected' || 'noteIssue' => kStateRejected,
-      'waitingReview' || 'noteWarning' => kStateInReview,
-      'started' => kStateInProgress,
-      'pending' || 'assigned' => kStatePending,
-      'completed' => AppColors.textSecondary,
-      _ => AppColors.textTertiary,
-    };
+  'approved' => AppColors.success,
+  'rejected' || 'missed' || 'noteIssue' => kStateRejected,
+  'waitingReview' || 'noteWarning' => kStateInReview,
+  'started' => kStateInProgress,
+  'pending' || 'assigned' => kStatePending,
+  'completed' => AppColors.textSecondary,
+  _ => AppColors.textTertiary,
+};
 
 /// Glyph for a task activity entry — used by the richer timeline event cards.
 IconData activityIcon(String status) => switch (status) {
-      'pending' => Icons.add_task_rounded,
-      'assigned' => Icons.person_add_alt_1_rounded,
-      'started' => Icons.play_arrow_rounded,
-      'completed' => Icons.check_rounded,
-      'waitingReview' => Icons.hourglass_top_rounded,
-      'approved' => Icons.verified_rounded,
-      'rejected' => Icons.replay_rounded,
-      'cancelled' => Icons.close_rounded,
-      'note' => Icons.chat_bubble_outline_rounded,
-      'noteWarning' => Icons.warning_amber_rounded,
-      'noteIssue' => Icons.report_gmailerrorred_rounded,
-      _ => Icons.circle_outlined,
-    };
+  'pending' => Icons.add_task_rounded,
+  'assigned' => Icons.person_add_alt_1_rounded,
+  'started' => Icons.play_arrow_rounded,
+  'completed' => Icons.check_rounded,
+  'waitingReview' => Icons.hourglass_top_rounded,
+  'approved' => Icons.verified_rounded,
+  'rejected' => Icons.replay_rounded,
+  'missed' => Icons.event_busy_rounded,
+  'cancelled' => Icons.close_rounded,
+  'note' => Icons.chat_bubble_outline_rounded,
+  'noteWarning' => Icons.warning_amber_rounded,
+  'noteIssue' => Icons.report_gmailerrorred_rounded,
+  _ => Icons.circle_outlined,
+};
 
 /// Compact relative time ("Just now", "5m ago", "3h ago", "2d ago", "19 Jun").
 /// Delegates to the single [AppDateFormatter]; kept as a task-timeline alias so

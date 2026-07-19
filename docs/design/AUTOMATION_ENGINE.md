@@ -6,8 +6,11 @@
 > scope after a full automation audit. Calibrated to small-team scale per
 > [product philosophy](../../PROJECT_CONTEXT.md) — **no parallel automation
 > backend, no round-robin assignment engine, no standalone analytics dashboard,
-> no replay engine**. This doc is the source of truth for how recurring/scheduled
-> task automation works and why it is now deterministic and observable.
+> no replay engine**. **Recurring-shift deadline close implemented 2026-07-19:**
+> generated instances persist their resolved shift window and a bounded 15-minute
+> server sweep ends only unfinished instances as `missed`. This doc is the source
+> of truth for how recurring/scheduled task automation works and why it is now
+> deterministic and observable.
 
 ---
 
@@ -18,7 +21,7 @@ Two **independent** recurrence engines feed the one `tasks/{id}` collection:
 | | **Path A — Shift-template recurrence** | **Path B — Per-task recurrence** |
 |---|---|---|
 | Blueprint | `recurringTaskTemplates/{id}` (a standing routine) | A `RecurrenceConfig` embedded on a `TaskEntity` |
-| Trigger | `generateShiftTaskInstances` Cloud Function (daily) + client `_materializeTodayInstance` on template save | Client `_spawnNextRecurrence` **after** a task is approved |
+| Trigger | `generateShiftTaskInstances` Cloud Function (daily) + client `_materializeTodayInstance` on template save; `autoEndRecurringShiftTasks` checks persisted deadlines every 15 min | Client `_spawnNextRecurrence` **after** a task is approved |
 | Assignment | **Shift broadcast** — `assigneeIds: []`, targets whoever is rostered on that (day, shift) | Inherits the source task's `assigneeIds` |
 | Instance id | Deterministic `rt_{templateId}_{yyyy-MM-dd}` | Deterministic `rec_{sourceTaskId}` (**new** — was a random auto-id) |
 
@@ -75,8 +78,9 @@ written create-only.** Then retries, concurrency, and reopen→re-approve all
   actually succeeded**, and each notification uses a **deterministic id**
   (`autoassign_{taskId}_{uid}`) written with `set`, so a re-run can never
   double-notify.
-- **Scheduler:** `generateShiftTaskInstances` and `runTaskReminders` run with
-  `maxInstances: 1` (no overlap) + explicit `retryCount: 0` + `timeoutSeconds`.
+- **Scheduler:** `generateShiftTaskInstances`, `autoEndRecurringShiftTasks`, and
+  `runTaskReminders` run with `maxInstances: 1` (no overlap) + explicit
+  `retryCount: 0` + `timeoutSeconds`.
 
 ---
 
@@ -105,15 +109,18 @@ Cloud-Function-owned (like `version`/`createdAt`), so a client edit can't regres
 them. Template read failures render an error/retry state; they are not treated as
 an empty branch.
 
-The presentation is deliberately honest about backend gaps:
+The presentation is deliberately honest about the boundary between a template and
+one generated occurrence:
 
 - `nextRunAt` is labelled **Next automation check**, not guaranteed publish time;
   the current 24-hour scheduler makes it advisory.
-- Templates do not carry a frozen start/end window, so the Shift window row says
-  that exact hours are unavailable instead of inferring configurable roster hours.
-- Automatic `Missed` does not exist yet (`TaskStatus` has no such state and
-  generated tasks have no deadline), so the neutral policy row says **Not enabled**
-  and explains that tasks currently remain open.
+- The sheet's Shift window row is a standard-hours guide; a generated task itself
+  captures the exact resolved weekly window (`shiftHours` override → frozen
+  `shiftPlan` → standard) in `startsAt` / `deadline`.
+- The policy row is **Enabled**: at the persisted shift end, unfinished generated
+  tasks become server-owned `TaskStatus.missed`. The 15-minute sweep only moves
+  `pending`/`started` source-template instances, writes `missedAt` + an activity
+  entry atomically, and never falsely completes or approves work.
 - `lastStatus` describes the **generator** (`completed` / `skipped` / `failed`),
   not employee task completion; the UI therefore says Generated successfully,
   Already generated or Last generation failed.
@@ -232,7 +239,8 @@ captured onto each run's `version`, so history is attributable to a definition.
 
 Business-meaningful automation facts are written to the existing `audit_logs`
 collection (Admin SDK, `actorId: "system"`), via new `AuditEventType`s:
-`task.auto_generated`, `automation.assigned`, `automation.failed`
+`task.auto_generated`, `task.auto_missed`, `automation.assigned`,
+`automation.failed`
 (+ `automation` `AuditEntityType`). `automationRuns` (§5) is operational run
 telemetry, not audit — the two are complementary, mirroring how `taskReminders`
 and `broadcastSchedules` already sit beside `audit_logs`.
@@ -267,6 +275,8 @@ included) and an empty roster failed silently. Now the roster is filtered and th
   omitted from client `toMap`. Existing rules unchanged.
 - `tasks`: +`recurrenceRootId` / `occurrenceKey` / **`correlationId`** (additive,
   nullable). `correlationId` links a generated task to its run/notifications/audit.
+  Generated shift instances also persist additive `startsAt`, `deadline`, and
+  server-only `missedAt`; client rules deny creating/setting/reopening `missed`.
 - `automationRuns/{id}`: enriched execution record (§5) — read: admin, or manager
   of the run's branch; **write: server-only** (`allow write: if false`; the Admin
   SDK bypasses rules).
@@ -274,6 +284,8 @@ included) and an empty roster failed silently. Now the roster is filtered and th
   the paginated per-template history; `(branchId, status, startedAt desc)` for a
   future branch-failure view. The correlation-id lookup (`branchId` + `correlationId`,
   both equality) needs **no** composite index (Firestore zig-zag merge join).
+- **Recurring expiry index:** `tasks` `(assignmentType asc, status asc,
+  deadline asc)` backs the bounded `pending|started` deadline sweep.
 
 ## 9. Cloud Function summary
 
@@ -283,7 +295,16 @@ with deterministic notif ids · roster filtering (active + not-on-leave) · enri
 rollups + health counters · `audit_logs` events · `maxInstances:1` + `retryCount:0`
 + `timeoutSeconds`. **UTC date key** is kept deliberately (a Cloud Function has no
 per-branch local time; determinism is the priority — a branch-local "today" is a
-noted P2). Pure record-shape logic is extracted to `functions/automation_run.js`.
+noted P2). It resolves and persists the weekly shift window from the saved
+schedule; a duplicate created by an older client is repaired only when its deadline
+is missing. Pure record-shape logic is extracted to `functions/automation_run.js`.
+
+**`autoEndRecurringShiftTasks`** — every 15 minutes, queries the indexed due
+generated shift tasks and transactionally revalidates each one. It changes only a
+live source-template `pending`/`started` instance to `missed`, stamps `missedAt`,
+appends the system timeline entry, bumps `version`, and emits `task.auto_missed`.
+It does not send a notification or touch completed/review states. The pure window
+and eligibility policy is in `functions/recurring_task_deadline.js`.
 
 **`onRecurringTemplateWritten`** (ADR-011) — server-derived lifecycle audit
 (created / paused / resumed / config_changed / deleted) from the definition's
@@ -309,8 +330,9 @@ before/after diff; idempotent (audit id from the CloudEvent id) and non-looping
 
 ## 11. Deploy checklist (owner's machine)
 
-1. `firebase deploy --only functions:generateShiftTaskInstances,functions:onRecurringTemplateWritten,functions:runTaskReminders,functions:taskHousekeeping`
-2. `firebase deploy --only firestore:rules` (the `automationRuns` block)
-3. `firebase deploy --only firestore:indexes` (the two `automationRuns` composites)
+1. `firebase deploy --only functions:generateShiftTaskInstances,functions:autoEndRecurringShiftTasks,functions:onRecurringTemplateWritten,functions:runTaskReminders,functions:taskHousekeeping`
+2. `firebase deploy --only firestore:rules` (including the server-owned missed lock)
+3. `firebase deploy --only firestore:indexes` (the two `automationRuns` composites
+   and the recurring-expiry `tasks` composite)
 4. No data migration — every new field is additive and defaults cleanly (counters
    start at 0/1 via `?? ` fallbacks; historical runs simply lack the new blocks).

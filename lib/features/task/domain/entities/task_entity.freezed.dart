@@ -125,6 +125,12 @@ mixin _$TaskEntity {
   /// existing reads + old Firestore docs are unchanged).
   DateTime? get deadline => throw _privateConstructorUsedError;
 
+  /// When a recurring shift task was automatically ended because its shift
+  /// deadline passed before the work was completed. Written only by the
+  /// server-side automation sweep; null for every task that has not missed
+  /// its shift window. Additive — old task documents remain valid.
+  DateTime? get missedAt => throw _privateConstructorUsedError;
+
   /// Free-text notes added by the executing employee.
   String? get notes => throw _privateConstructorUsedError;
 
@@ -227,6 +233,7 @@ abstract class $TaskEntityCopyWith<$Res> {
     String? correlationId,
     DateTime? startsAt,
     DateTime? deadline,
+    DateTime? missedAt,
     String? notes,
     String? proofImageUrl,
     DateTime? startedAt,
@@ -288,6 +295,7 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
     Object? correlationId = freezed,
     Object? startsAt = freezed,
     Object? deadline = freezed,
+    Object? missedAt = freezed,
     Object? notes = freezed,
     Object? proofImageUrl = freezed,
     Object? startedAt = freezed,
@@ -400,6 +408,10 @@ class _$TaskEntityCopyWithImpl<$Res, $Val extends TaskEntity>
             deadline: freezed == deadline
                 ? _value.deadline
                 : deadline // ignore: cast_nullable_to_non_nullable
+                      as DateTime?,
+            missedAt: freezed == missedAt
+                ? _value.missedAt
+                : missedAt // ignore: cast_nullable_to_non_nullable
                       as DateTime?,
             notes: freezed == notes
                 ? _value.notes
@@ -526,6 +538,7 @@ abstract class _$$TaskEntityImplCopyWith<$Res>
     String? correlationId,
     DateTime? startsAt,
     DateTime? deadline,
+    DateTime? missedAt,
     String? notes,
     String? proofImageUrl,
     DateTime? startedAt,
@@ -587,6 +600,7 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
     Object? correlationId = freezed,
     Object? startsAt = freezed,
     Object? deadline = freezed,
+    Object? missedAt = freezed,
     Object? notes = freezed,
     Object? proofImageUrl = freezed,
     Object? startedAt = freezed,
@@ -700,6 +714,10 @@ class __$$TaskEntityImplCopyWithImpl<$Res>
             ? _value.deadline
             : deadline // ignore: cast_nullable_to_non_nullable
                   as DateTime?,
+        missedAt: freezed == missedAt
+            ? _value.missedAt
+            : missedAt // ignore: cast_nullable_to_non_nullable
+                  as DateTime?,
         notes: freezed == notes
             ? _value.notes
             : notes // ignore: cast_nullable_to_non_nullable
@@ -804,6 +822,7 @@ class _$TaskEntityImpl extends _TaskEntity {
     this.correlationId,
     this.startsAt,
     this.deadline,
+    this.missedAt,
     this.notes,
     this.proofImageUrl,
     this.startedAt,
@@ -1006,6 +1025,13 @@ class _$TaskEntityImpl extends _TaskEntity {
   @override
   final DateTime? deadline;
 
+  /// When a recurring shift task was automatically ended because its shift
+  /// deadline passed before the work was completed. Written only by the
+  /// server-side automation sweep; null for every task that has not missed
+  /// its shift window. Additive — old task documents remain valid.
+  @override
+  final DateTime? missedAt;
+
   /// Free-text notes added by the executing employee.
   @override
   final String? notes;
@@ -1102,7 +1128,7 @@ class _$TaskEntityImpl extends _TaskEntity {
 
   @override
   String toString() {
-    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, workType: $workType, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, data: $data, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, recurrenceRootId: $recurrenceRootId, occurrenceKey: $occurrenceKey, correlationId: $correlationId, startsAt: $startsAt, deadline: $deadline, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt, version: $version)';
+    return 'TaskEntity(id: $id, title: $title, description: $description, type: $type, workType: $workType, status: $status, priority: $priority, branchId: $branchId, assigneeIds: $assigneeIds, checklist: $checklist, referenceAttachments: $referenceAttachments, data: $data, createdBy: $createdBy, assignedShiftId: $assignedShiftId, shift: $shift, assignmentType: $assignmentType, instanceDate: $instanceDate, sourceTemplateId: $sourceTemplateId, recurrenceRootId: $recurrenceRootId, occurrenceKey: $occurrenceKey, correlationId: $correlationId, startsAt: $startsAt, deadline: $deadline, missedAt: $missedAt, notes: $notes, proofImageUrl: $proofImageUrl, startedAt: $startedAt, submittedAt: $submittedAt, approvedBy: $approvedBy, approvedAt: $approvedAt, rejectedBy: $rejectedBy, rejectedAt: $rejectedAt, reviewNotes: $reviewNotes, revisionNumber: $revisionNumber, requiresRework: $requiresRework, rejectionReason: $rejectionReason, recurrence: $recurrence, activityLog: $activityLog, createdAt: $createdAt, updatedAt: $updatedAt, archivedAt: $archivedAt, version: $version)';
   }
 
   @override
@@ -1156,6 +1182,8 @@ class _$TaskEntityImpl extends _TaskEntity {
                 other.startsAt == startsAt) &&
             (identical(other.deadline, deadline) ||
                 other.deadline == deadline) &&
+            (identical(other.missedAt, missedAt) ||
+                other.missedAt == missedAt) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.proofImageUrl, proofImageUrl) ||
                 other.proofImageUrl == proofImageUrl) &&
@@ -1220,6 +1248,7 @@ class _$TaskEntityImpl extends _TaskEntity {
     correlationId,
     startsAt,
     deadline,
+    missedAt,
     notes,
     proofImageUrl,
     startedAt,
@@ -1274,6 +1303,7 @@ abstract class _TaskEntity extends TaskEntity {
     final String? correlationId,
     final DateTime? startsAt,
     final DateTime? deadline,
+    final DateTime? missedAt,
     final String? notes,
     final String? proofImageUrl,
     final DateTime? startedAt,
@@ -1424,6 +1454,13 @@ abstract class _TaskEntity extends TaskEntity {
   /// existing reads + old Firestore docs are unchanged).
   @override
   DateTime? get deadline;
+
+  /// When a recurring shift task was automatically ended because its shift
+  /// deadline passed before the work was completed. Written only by the
+  /// server-side automation sweep; null for every task that has not missed
+  /// its shift window. Additive — old task documents remain valid.
+  @override
+  DateTime? get missedAt;
 
   /// Free-text notes added by the executing employee.
   @override

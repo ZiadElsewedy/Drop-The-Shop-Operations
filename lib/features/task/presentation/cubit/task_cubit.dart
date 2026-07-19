@@ -26,6 +26,7 @@ import 'package:drop/features/branch/domain/repositories/branch_repository.dart'
 import 'package:drop/core/enums/attachment_type.dart';
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
 import 'package:drop/features/schedule/domain/schedule_week.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 import 'package:drop/features/task/domain/entities/activity_entry.dart';
 import 'package:drop/features/task/domain/entities/checklist_item.dart';
 import 'package:drop/features/task/domain/entities/recurrence_config.dart';
@@ -72,6 +73,7 @@ class TaskCubit extends Cubit<TaskState> {
   final EventTrackingService? _eventTracking;
 
   UserEntity? _user;
+
   /// One subscription per task source feeding the current scope. Admin/manager
   /// have exactly one (all tasks / branch tasks); an employee has one for their
   /// individually-assigned tasks plus one per shift they're rostered on today
@@ -83,9 +85,11 @@ class TaskCubit extends Cubit<TaskState> {
   // it survives rebuilds; carried on every `loaded` emit (incl. the stream).
   bool _submitting = false;
   SubmissionProgress? _submissionProgress;
+
   /// Cancels the in-flight submission's uploads (the overlay's Cancel button).
   /// Non-null only while [completeAndSubmit] is uploading.
   UploadCanceller? _canceller;
+
   /// Per-submission cache of already-uploaded attachments (file path → result),
   /// so a retry after a partial failure/cancel re-uploads ONLY what didn't
   /// already succeed. Scoped to one task; cleared on success or a task change.
@@ -178,8 +182,10 @@ class TaskCubit extends Cubit<TaskState> {
     _user = user;
     _loadBranchNames();
     // Only show the full-screen spinner when there's nothing to show yet.
-    final hasTasks =
-        state.maybeWhen(loaded: (t, _, _, _, _) => true, orElse: () => false);
+    final hasTasks = state.maybeWhen(
+      loaded: (t, _, _, _, _) => true,
+      orElse: () => false,
+    );
     if (!hasTasks) emit(const TaskState.loading());
     await _cancelSubs();
     _taskSources.clear();
@@ -218,18 +224,26 @@ class TaskCubit extends Cubit<TaskState> {
   }
 
   void _subscribe(String sourceKey, Stream<List<TaskEntity>> stream) {
-    _subs.add(stream.listen(
-      (tasks) => _updateSource(sourceKey, tasks),
-      // Capture the real error/stack (a swallowed exception is why this only
-      // ever showed a generic UI message — e.g. a missing Firestore composite
-      // index surfaces here as `failed-precondition`). The UI message stays
-      // friendly.
-      onError: (Object error, StackTrace stackTrace) {
-        developer.log('Task stream "$sourceKey" failed',
-            name: 'TaskCubit', error: error, stackTrace: stackTrace);
-        emit(const TaskState.error('Failed to load tasks. Please try again.'));
-      },
-    ));
+    _subs.add(
+      stream.listen(
+        (tasks) => _updateSource(sourceKey, tasks),
+        // Capture the real error/stack (a swallowed exception is why this only
+        // ever showed a generic UI message — e.g. a missing Firestore composite
+        // index surfaces here as `failed-precondition`). The UI message stays
+        // friendly.
+        onError: (Object error, StackTrace stackTrace) {
+          developer.log(
+            'Task stream "$sourceKey" failed',
+            name: 'TaskCubit',
+            error: error,
+            stackTrace: stackTrace,
+          );
+          emit(
+            const TaskState.error('Failed to load tasks. Please try again.'),
+          );
+        },
+      ),
+    );
   }
 
   /// Resolves the employee's shift(s) today from the branch's weekly schedule
@@ -244,7 +258,9 @@ class TaskCubit extends Cubit<TaskState> {
     if (branchId == null || branchId.isEmpty) return;
     try {
       final schedule = await _scheduleRepository.getSchedule(
-          branchId, ScheduleWeek.currentWeekStart());
+        branchId,
+        ScheduleWeek.currentWeekStart(),
+      );
       if (schedule == null) return;
       final today = ScheduleDay.today();
       for (final shift in schedule.shiftsFor(user.uid, today)) {
@@ -273,8 +289,10 @@ class TaskCubit extends Cubit<TaskState> {
       return (fit: AssigneeShiftFit.none, shift: null);
     }
     try {
-      final schedule =
-          await _scheduleRepository.getSchedule(branchId, ScheduleWeek.startOf(date));
+      final schedule = await _scheduleRepository.getSchedule(
+        branchId,
+        ScheduleWeek.startOf(date),
+      );
       if (schedule == null) return (fit: AssigneeShiftFit.none, shift: null);
       final day = ScheduleDay.fromDate(date);
       return assigneeShiftFit([
@@ -301,11 +319,15 @@ class TaskCubit extends Cubit<TaskState> {
     final combined = sortTasksNewestFirst(merged.values.toList());
     // Preserve in-flight submission state — a Firestore write during submit
     // fires this stream, and we must not drop the overlay mid-finalize.
-    emit(TaskState.loaded(combined,
+    emit(
+      TaskState.loaded(
+        combined,
         busy: _mutating,
         directory: _directory,
         isSubmitting: _submitting,
-        submissionProgress: _submissionProgress));
+        submissionProgress: _submissionProgress,
+      ),
+    );
     _ensureDirectory(combined);
   }
 
@@ -360,14 +382,17 @@ class TaskCubit extends Cubit<TaskState> {
     required String title,
     String? description,
     required TaskType type,
+
     /// The operational work type (Registry id — `general`, `transfer`,
     /// `inventoryCount`, …). Defaults to `general` so every existing call site
     /// (recurrence spawn, template materialize) is unaffected.
     String workType = 'general',
+
     /// Schema-driven values for [workType]'s dynamic fields.
     Map<String, dynamic> data = const {},
     required TaskPriority priority,
     required String branchId,
+
     /// Task Scheduling V2 — when the task is scheduled to start (smart-defaulted
     /// from the shift in the form, fully overridable). Additive/optional; every
     /// existing call site omits it (→ null).
@@ -377,11 +402,14 @@ class TaskCubit extends Cubit<TaskState> {
     List<ChecklistItem> checklist = const [],
     RecurrenceConfig? recurrence,
     List<PickedAttachment> referenceAttachments = const [],
+
     /// Shift Assignment feature. Defaults to [TaskAssignmentType.individual]
     /// (existing behaviour, unchanged) for every pre-existing call site.
     TaskAssignmentType assignmentType = TaskAssignmentType.individual,
+
     /// Required when [assignmentType] is [TaskAssignmentType.shift].
     ScheduleShift? shift,
+
     /// The day a shift instance is *for*; defaults to [deadline] (date part) or
     /// today when omitted. Ignored for individual/team tasks.
     DateTime? instanceDate,
@@ -389,45 +417,50 @@ class TaskCubit extends Cubit<TaskState> {
     // A shift task targets whoever's rostered on `shift`, never named people.
     final isShift = assignmentType == TaskAssignmentType.shift;
     final effectiveAssigneeIds = isShift ? const <String>[] : assigneeIds;
-    final effectiveInstanceDate =
-        isShift ? (instanceDate ?? deadline ?? DateTime.now()) : null;
+    final effectiveInstanceDate = isShift
+        ? (instanceDate ?? deadline ?? DateTime.now())
+        : null;
 
     TaskEntity? created;
     final ok = await _mutate(() async {
-      created = await _createTask(TaskEntity(
-        id: '',
-        title: title,
-        description: description,
-        type: type,
-        workType: workType,
-        data: data,
-        priority: priority,
-        branchId: branchId,
-        assigneeIds: effectiveAssigneeIds,
-        checklist: checklist,
-        recurrence: recurrence,
-        assignmentType: assignmentType,
-        shift: shift,
-        instanceDate: effectiveInstanceDate,
-        createdBy: _user?.uid,
-        startsAt: startsAt,
-        deadline: deadline,
-        activityLog: [
-          ActivityEntry(
-            status: TaskStatus.pending.value,
-            actorId: _user?.uid ?? '',
-            actorName: _user?.displayName,
-            at: DateTime.now(),
-          ),
-        ],
-      ));
+      created = await _createTask(
+        TaskEntity(
+          id: '',
+          title: title,
+          description: description,
+          type: type,
+          workType: workType,
+          data: data,
+          priority: priority,
+          branchId: branchId,
+          assigneeIds: effectiveAssigneeIds,
+          checklist: checklist,
+          recurrence: recurrence,
+          assignmentType: assignmentType,
+          shift: shift,
+          instanceDate: effectiveInstanceDate,
+          createdBy: _user?.uid,
+          startsAt: startsAt,
+          deadline: deadline,
+          activityLog: [
+            ActivityEntry(
+              status: TaskStatus.pending.value,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: DateTime.now(),
+            ),
+          ],
+        ),
+      );
       // Reference images upload AFTER create (the Storage path needs the task
       // id), then patch the task. Best-effort relative to the task itself: a
       // failed upload throws inside _mutate, which rolls the list back so the
       // manager can retry — the half-created task without images would be worse.
       if (referenceAttachments.isNotEmpty && created != null) {
-        final uploaded =
-            await _uploadReferences(created!.id, referenceAttachments);
+        final uploaded = await _uploadReferences(
+          created!.id,
+          referenceAttachments,
+        );
         created = created!.copyWith(referenceAttachments: uploaded);
         await _updateTask(created!);
       }
@@ -487,8 +520,10 @@ class TaskCubit extends Cubit<TaskState> {
     required DateTime day,
   }) async {
     try {
-      final schedule =
-          await _scheduleRepository.getSchedule(branchId, ScheduleWeek.startOf(day));
+      final schedule = await _scheduleRepository.getSchedule(
+        branchId,
+        ScheduleWeek.startOf(day),
+      );
       if (schedule == null) return const [];
       return schedule.employeesFor(ScheduleDay.fromDate(day), shift);
     } catch (_) {
@@ -500,24 +535,30 @@ class TaskCubit extends Cubit<TaskState> {
     TaskEntity task, {
     List<PickedAttachment> newReferenceAttachments = const [],
   }) async {
-    // An approved task is a locked, reviewed record — block edits/reassignment
-    // (the UI hides the affordance; this is the cubit-level backstop). An admin
-    // must reopen it first (reopenTask).
-    if (_taskById(task.id)?.status == TaskStatus.approved) {
-      _emitTransientError('Approved tasks are locked. Reopen the task to edit it.');
+    // Terminal records are immutable. The UI hides these affordances, but this
+    // remains the cubit-level backstop for a stale route/snapshot. An approved
+    // task has an admin reopen path; a deadline-missed task does not.
+    final existing = _taskById(task.id);
+    if (existing?.status.isTerminal ?? false) {
+      _emitTransientError(
+        existing!.status == TaskStatus.missed
+            ? 'Missed tasks are closed and cannot be edited.'
+            : 'Approved tasks are locked. Reopen the task to edit it.',
+      );
       return;
     }
     // Notify only employees newly added by this edit (not the existing ones).
-    final before = _taskById(task.id)?.assigneeIds.toSet() ?? const {};
-    final added =
-        task.assigneeIds.where((id) => !before.contains(id)).toList();
+    final before = existing?.assigneeIds.toSet() ?? const {};
+    final added = task.assigneeIds.where((id) => !before.contains(id)).toList();
     final ok = await _mutate(() async {
       // [task] already carries the kept reference images (the form drops removed
       // ones); upload any newly-picked ones and append before the write.
       var next = task;
       if (newReferenceAttachments.isNotEmpty) {
-        final uploaded =
-            await _uploadReferences(task.id, newReferenceAttachments);
+        final uploaded = await _uploadReferences(
+          task.id,
+          newReferenceAttachments,
+        );
         next = task.copyWith(
           referenceAttachments: [...task.referenceAttachments, ...uploaded],
         );
@@ -533,8 +574,11 @@ class TaskCubit extends Cubit<TaskState> {
           actor: _user!,
           recipientOverride: added,
         );
-        _trackTask(task, AuditEventType.taskAssigned,
-            metadata: {'assignedTo': added});
+        _trackTask(
+          task,
+          AuditEventType.taskAssigned,
+          metadata: {'assignedTo': added},
+        );
       }
       // …and always audit the edit itself (P1-4 — was previously unaudited).
       _trackTask(task, AuditEventType.taskUpdated);
@@ -543,9 +587,12 @@ class TaskCubit extends Cubit<TaskState> {
 
   Future<void> deleteTask(String taskId) async {
     final existing = _taskById(taskId);
-    if (existing?.status == TaskStatus.approved) {
+    if (existing?.status.isTerminal ?? false) {
       _emitTransientError(
-          'Approved tasks are locked. Reopen the task before deleting it.');
+        existing!.status == TaskStatus.missed
+            ? 'Missed tasks are closed and cannot be deleted.'
+            : 'Approved tasks are locked. Reopen the task before deleting it.',
+      );
       return;
     }
     final ok = await _mutate(() => _deleteTask(taskId));
@@ -596,18 +643,23 @@ class TaskCubit extends Cubit<TaskState> {
     String? shiftId,
   }) async {
     final existing = _taskById(taskId);
-    if (existing?.status == TaskStatus.approved) {
+    if (existing?.status.isTerminal ?? false) {
       _emitTransientError(
-          'Approved tasks are locked. Reopen the task to change assignees.');
+        existing!.status == TaskStatus.missed
+            ? 'Missed tasks are closed and cannot change assignees.'
+            : 'Approved tasks are locked. Reopen the task to change assignees.',
+      );
       return;
     }
     final before = existing?.assigneeIds.toSet() ?? const {};
     final added = employeeIds.where((id) => !before.contains(id)).toList();
-    final ok = await _mutate(() => _assignTask(
-          taskId: taskId,
-          employeeIds: employeeIds,
-          assignedShiftId: shiftId,
-        ));
+    final ok = await _mutate(
+      () => _assignTask(
+        taskId: taskId,
+        employeeIds: employeeIds,
+        assignedShiftId: shiftId,
+      ),
+    );
     // Notify + audit the newly-assigned employees (best-effort).
     if (ok && added.isNotEmpty && existing != null && _user != null) {
       await _notifyTaskEvent(
@@ -616,8 +668,11 @@ class TaskCubit extends Cubit<TaskState> {
         actor: _user!,
         recipientOverride: added,
       );
-      _trackTask(existing, AuditEventType.taskAssigned,
-          metadata: {'assignedTo': added});
+      _trackTask(
+        existing,
+        AuditEventType.taskAssigned,
+        metadata: {'assignedTo': added},
+      );
     }
   }
 
@@ -657,9 +712,13 @@ class TaskCubit extends Cubit<TaskState> {
         actor: _user!,
         recipientOverride: await _reviewRecipients(task),
       );
-      _trackTask(task, AuditEventType.taskApproved, metadata: {
-        if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
-      });
+      _trackTask(
+        task,
+        AuditEventType.taskApproved,
+        metadata: {
+          if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
+        },
+      );
     }
   }
 
@@ -707,10 +766,14 @@ class TaskCubit extends Cubit<TaskState> {
         actor: _user!,
         recipientOverride: await _reviewRecipients(task),
       );
-      _trackTask(task, AuditEventType.taskReworkRequested, metadata: {
-        'revision': nextRevision,
-        if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
-      });
+      _trackTask(
+        task,
+        AuditEventType.taskReworkRequested,
+        metadata: {
+          'revision': nextRevision,
+          if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
+        },
+      );
     }
   }
 
@@ -747,9 +810,13 @@ class TaskCubit extends Cubit<TaskState> {
         actor: _user!,
         recipientOverride: await _reviewRecipients(task),
       );
-      _trackTask(task, AuditEventType.taskRejected, metadata: {
-        if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
-      });
+      _trackTask(
+        task,
+        AuditEventType.taskRejected,
+        metadata: {
+          if ((reviewNotes ?? '').trim().isNotEmpty) 'reviewNotes': reviewNotes,
+        },
+      );
     }
   }
 
@@ -824,20 +891,22 @@ class TaskCubit extends Cubit<TaskState> {
     }
     // Pure log append (a per-type milestone, no core-status change) — atomic
     // against the server's current log so it never clobbers a concurrent write.
-    return _mutate(() => _repository.transitionTask(
-          taskId: task.id,
-          expectedFrom: const {},
-          patch: const {},
-          appendLog: [
-            ActivityEntry(
-              status: eventId,
-              actorId: _user?.uid ?? '',
-              actorName: _user?.displayName,
-              at: DateTime.now(),
-              note: note,
-            ),
-          ],
-        ));
+    return _mutate(
+      () => _repository.transitionTask(
+        taskId: task.id,
+        expectedFrom: const {},
+        patch: const {},
+        appendLog: [
+          ActivityEntry(
+            status: eventId,
+            actorId: _user?.uid ?? '',
+            actorName: _user?.displayName,
+            at: DateTime.now(),
+            note: note,
+          ),
+        ],
+      ),
+    );
   }
 
   /// Appends a manager/admin operational **note** to the task's timeline WITHOUT
@@ -853,28 +922,30 @@ class TaskCubit extends Cubit<TaskState> {
     if (text.isEmpty) return Future<void>.value();
     // Pure log append (manager note, no status change) — atomic against the
     // server's current log so it can't clobber a concurrent transition's entry.
-    return _mutate(() => _repository.transitionTask(
-          taskId: task.id,
-          expectedFrom: const {},
-          patch: const {},
-          appendLog: [
-            ActivityEntry(
-              status: category.activityStatus,
-              actorId: _user?.uid ?? '',
-              actorName: _user?.displayName,
-              at: DateTime.now(),
-              note: text,
-            ),
-          ],
-        ));
+    return _mutate(
+      () => _repository.transitionTask(
+        taskId: task.id,
+        expectedFrom: const {},
+        patch: const {},
+        appendLog: [
+          ActivityEntry(
+            status: category.activityStatus,
+            actorId: _user?.uid ?? '',
+            actorName: _user?.displayName,
+            at: DateTime.now(),
+            note: text,
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> submitForReview(TaskEntity task) async {
-    final submission =
-        task.workDefinition.validateSubmission(task.workContext);
+    final submission = task.workDefinition.validateSubmission(task.workContext);
     if (!submission.ok) {
       _emitTransientError(
-          submission.firstError ?? "This task isn't ready to submit yet.");
+        submission.firstError ?? "This task isn't ready to submit yet.",
+      );
       return;
     }
     final now = DateTime.now();
@@ -922,7 +993,8 @@ class TaskCubit extends Cubit<TaskState> {
   }) async {
     if (task.status != TaskStatus.started) {
       _emitTransientError(
-          "That action isn't allowed for this task's current status.");
+        "That action isn't allowed for this task's current status.",
+      );
       return false;
     }
     // The work type owns its completion gate (a general task = required checklist
@@ -933,7 +1005,8 @@ class TaskCubit extends Cubit<TaskState> {
     );
     if (!submission.ok) {
       _emitTransientError(
-          submission.firstError ?? "This task isn't ready to submit yet.");
+        submission.firstError ?? "This task isn't ready to submit yet.",
+      );
       return false;
     }
     if (_user == null || _mutating) return false;
@@ -966,11 +1039,15 @@ class TaskCubit extends Cubit<TaskState> {
       lastStage = p.stage;
       lastPercent = p.percent;
       _submissionProgress = p;
-      emit(TaskState.loaded(_tasks,
+      emit(
+        TaskState.loaded(
+          _tasks,
           busy: true,
           directory: _directory,
           isSubmitting: true,
-          submissionProgress: p));
+          submissionProgress: p,
+        ),
+      );
     }
 
     void clearSubmissionState() {
@@ -989,20 +1066,26 @@ class TaskCubit extends Cubit<TaskState> {
       final transferred = List<int>.filled(attachments.length, 0);
       final totals = <int>[for (final a in attachments) await a.file.length()];
       final totalBytes = totals.fold(0, (a, b) => a + b);
-      void report() => setProgress(SubmissionProgress(
-            SubmissionStage.uploading,
-            transferredBytes: transferred.fold(0, (a, b) => a + b),
-            totalBytes: totalBytes,
-          ));
+      void report() => setProgress(
+        SubmissionProgress(
+          SubmissionStage.uploading,
+          transferredBytes: transferred.fold(0, (a, b) => a + b),
+          totalBytes: totalBytes,
+        ),
+      );
 
       // Analytics: the upload attempt started (best-effort, never blocks).
       if (hasMedia) {
-        _trackTask(task, AuditEventType.mediaUploadStarted, metadata: {
-          'fileCount': attachments.length,
-          'imageCount': imageCount,
-          'videoCount': videoCount,
-          'totalBytes': totalBytes,
-        });
+        _trackTask(
+          task,
+          AuditEventType.mediaUploadStarted,
+          metadata: {
+            'fileCount': attachments.length,
+            'imageCount': imageCount,
+            'videoCount': videoCount,
+            'totalBytes': totalBytes,
+          },
+        );
       }
 
       // Reuse anything a previous (failed / cancelled) attempt already uploaded,
@@ -1110,13 +1193,20 @@ class TaskCubit extends Cubit<TaskState> {
         );
       }
       // Audit: the business facts (unchanged), plus upload analytics with metrics.
-      _trackTask(task, AuditEventType.taskCompleted,
-          metadata: {'attachments': uploaded.length});
+      _trackTask(
+        task,
+        AuditEventType.taskCompleted,
+        metadata: {'attachments': uploaded.length},
+      );
       if (uploaded.isNotEmpty) {
-        _trackTask(task, AuditEventType.taskPhotoUploaded, metadata: {
-          'count': uploaded.length,
-          'storagePaths': [for (final a in uploaded) a.url],
-        });
+        _trackTask(
+          task,
+          AuditEventType.taskPhotoUploaded,
+          metadata: {
+            'count': uploaded.length,
+            'storagePaths': [for (final a in uploaded) a.url],
+          },
+        );
         // compressionRatio = compressed / original across the videos that were
         // compressed (originalBytes captured at pick time); null when none were.
         var origBytes = 0;
@@ -1128,14 +1218,18 @@ class TaskCubit extends Cubit<TaskState> {
             compBytes += totals[i];
           }
         }
-        _trackTask(task, AuditEventType.mediaUploadCompleted, metadata: {
-          'fileCount': uploaded.length,
-          'imageCount': imageCount,
-          'videoCount': videoCount,
-          'totalBytes': totalBytes,
-          'durationMs': stopwatch.elapsedMilliseconds,
-          if (origBytes > 0) 'compressionRatio': compBytes / origBytes,
-        });
+        _trackTask(
+          task,
+          AuditEventType.mediaUploadCompleted,
+          metadata: {
+            'fileCount': uploaded.length,
+            'imageCount': imageCount,
+            'videoCount': videoCount,
+            'totalBytes': totalBytes,
+            'durationMs': stopwatch.elapsedMilliseconds,
+            if (origBytes > 0) 'compressionRatio': compBytes / origBytes,
+          },
+        );
       }
       return true;
     } on UploadCancelledException {
@@ -1145,11 +1239,15 @@ class TaskCubit extends Cubit<TaskState> {
       stopwatch.stop();
       if (!isClosed) emit(TaskState.loaded(prev, directory: _directory));
       if (hasMedia) {
-        _trackTask(task, AuditEventType.mediaUploadCancelled, metadata: {
-          'fileCount': attachments.length,
-          'uploadedCount': _uploadedCache.length,
-          'durationMs': stopwatch.elapsedMilliseconds,
-        });
+        _trackTask(
+          task,
+          AuditEventType.mediaUploadCancelled,
+          metadata: {
+            'fileCount': attachments.length,
+            'uploadedCount': _uploadedCache.length,
+            'durationMs': stopwatch.elapsedMilliseconds,
+          },
+        );
       }
       return false;
     } on Failure catch (e) {
@@ -1158,12 +1256,16 @@ class TaskCubit extends Cubit<TaskState> {
       emit(TaskState.error(e.message));
       emit(TaskState.loaded(prev, directory: _directory));
       if (hasMedia) {
-        _trackTask(task, AuditEventType.mediaUploadFailed, metadata: {
-          'fileCount': attachments.length,
-          'uploadedCount': _uploadedCache.length,
-          'durationMs': stopwatch.elapsedMilliseconds,
-          'error': e.message,
-        });
+        _trackTask(
+          task,
+          AuditEventType.mediaUploadFailed,
+          metadata: {
+            'fileCount': attachments.length,
+            'uploadedCount': _uploadedCache.length,
+            'durationMs': stopwatch.elapsedMilliseconds,
+            'error': e.message,
+          },
+        );
       }
       return false;
     } catch (_) {
@@ -1172,11 +1274,15 @@ class TaskCubit extends Cubit<TaskState> {
       emit(const TaskState.error('Something went wrong. Please try again.'));
       emit(TaskState.loaded(prev, directory: _directory));
       if (hasMedia) {
-        _trackTask(task, AuditEventType.mediaUploadFailed, metadata: {
-          'fileCount': attachments.length,
-          'uploadedCount': _uploadedCache.length,
-          'durationMs': stopwatch.elapsedMilliseconds,
-        });
+        _trackTask(
+          task,
+          AuditEventType.mediaUploadFailed,
+          metadata: {
+            'fileCount': attachments.length,
+            'uploadedCount': _uploadedCache.length,
+            'durationMs': stopwatch.elapsedMilliseconds,
+          },
+        );
       }
       return false;
     }
@@ -1215,8 +1321,7 @@ class TaskCubit extends Cubit<TaskState> {
       final all = await _repository.getTemplates();
       if (branchId == null || branchId.isEmpty) return all;
       return all
-          .where((t) =>
-              (t.branchId ?? '').isEmpty || t.branchId == branchId)
+          .where((t) => (t.branchId ?? '').isEmpty || t.branchId == branchId)
           .toList();
     } catch (_) {
       return const [];
@@ -1230,25 +1335,26 @@ class TaskCubit extends Cubit<TaskState> {
     required TaskPriority priority,
     String? branchId,
     List<ChecklistItemTemplate> checklistItems = const [],
-  }) =>
-      _repository.createTemplate(TaskTemplateEntity(
-        id: '',
-        title: title,
-        description: description,
-        type: type,
-        priority: priority,
-        branchId: branchId,
-        checklistItems: checklistItems,
-        createdBy: _user?.uid,
-      ));
+  }) => _repository.createTemplate(
+    TaskTemplateEntity(
+      id: '',
+      title: title,
+      description: description,
+      type: type,
+      priority: priority,
+      branchId: branchId,
+      checklistItems: checklistItems,
+      createdBy: _user?.uid,
+    ),
+  );
 
   Future<void> deleteTemplate(String templateId) =>
       _repository.deleteTemplate(templateId);
 
   // ─── Recurring shift-task templates ────────────────────────────
   Future<List<RecurringTaskTemplateEntity>> recurringTemplates(
-      String branchId) =>
-      _repository.getRecurringTemplates(branchId);
+    String branchId,
+  ) => _repository.getRecurringTemplates(branchId);
 
   /// Creates a daily/weekly recurring shift-task template, then starts a
   /// best-effort materialization of *today's* instance (if due today) without
@@ -1286,9 +1392,9 @@ class TaskCubit extends Cubit<TaskState> {
   Future<void> setRecurringTemplateActive(
     RecurringTaskTemplateEntity template,
     bool active,
-  ) =>
-      _repository.updateRecurringTemplate(
-          template.copyWith(active: active, updatedBy: _user?.uid));
+  ) => _repository.updateRecurringTemplate(
+    template.copyWith(active: active, updatedBy: _user?.uid),
+  );
 
   Future<void> deleteRecurringTemplate(String templateId) =>
       _repository.deleteRecurringTemplate(templateId);
@@ -1302,24 +1408,22 @@ class TaskCubit extends Cubit<TaskState> {
     required String branchId,
     int limit = 20,
     DateTime? before,
-  }) =>
-      _repository.getAutomationRuns(
-        templateId,
-        branchId: branchId,
-        limit: limit,
-        before: before,
-      );
+  }) => _repository.getAutomationRuns(
+    templateId,
+    branchId: branchId,
+    limit: limit,
+    before: before,
+  );
 
   /// Traceability: the automation run a generated task / notification / audit
   /// entry belongs to, looked up by its shared [correlationId] (null if none).
   Future<AutomationRunEntity?> automationRunByCorrelationId(
     String correlationId, {
     required String branchId,
-  }) =>
-      _repository.getAutomationRunByCorrelationId(
-        correlationId,
-        branchId: branchId,
-      );
+  }) => _repository.getAutomationRunByCorrelationId(
+    correlationId,
+    branchId: branchId,
+  );
 
   /// Creates *today's* instance of [template] at the same deterministic id
   /// (`rt_{templateId}_{yyyy-MM-dd}`, UTC) the `generateShiftTaskInstances`
@@ -1329,7 +1433,8 @@ class TaskCubit extends Cubit<TaskState> {
   /// already succeeded, and the Cloud Function will generate the instance on
   /// its next scheduled run if this fails.
   Future<void> _materializeTodayInstance(
-      RecurringTaskTemplateEntity template) async {
+    RecurringTaskTemplateEntity template,
+  ) async {
     final utcNow = DateTime.now().toUtc();
     if (template.repeat == TemplateRepeatMode.weekly &&
         template.weekday != utcNow.weekday) {
@@ -1337,6 +1442,31 @@ class TaskCubit extends Cubit<TaskState> {
     }
     final today = DateTime.utc(utcNow.year, utcNow.month, utcNow.day);
     final instanceId = 'rt_${template.id}_${_dateKey(today)}';
+    // The deterministic instance key remains UTC (the server's existing
+    // convention), while the actual shift window is based on the schedule's
+    // local-midnight week snapshot. That keeps a configured 08:30–16:30 shift
+    // at those wall-clock times rather than treating it as an arbitrary UTC
+    // offset. A missing/unreadable schedule gracefully uses the standard slot.
+    final occurrenceDay = DateTime(today.year, today.month, today.day);
+    final scheduleDay = ScheduleDay.fromDate(occurrenceDay);
+    var weekStart = ScheduleWeek.startOf(occurrenceDay);
+    ShiftHours hours = ShiftHours.standard(scheduleDay, template.shift);
+    try {
+      final schedule = await _scheduleRepository.getSchedule(
+        template.branchId,
+        weekStart,
+      );
+      if (schedule != null) {
+        weekStart = ScheduleWeek.startOf(schedule.weekStart);
+        hours = schedule.hoursFor(scheduleDay, template.shift);
+      }
+    } catch (_) {
+      // This is best-effort materialization; the server generator is still the
+      // durable fallback and resolves the same policy on its next run.
+    }
+    final slotDay = weekStart.add(Duration(days: scheduleDay.index));
+    final startsAt = slotDay.add(Duration(minutes: hours.startMinutes));
+    final deadline = slotDay.add(Duration(minutes: hours.endMinutes));
     final instance = TaskEntity(
       id: instanceId,
       title: template.title,
@@ -1347,8 +1477,10 @@ class TaskCubit extends Cubit<TaskState> {
       checklist: template.buildTaskChecklist(),
       assignmentType: TaskAssignmentType.shift,
       shift: template.shift,
-      instanceDate: today,
+      instanceDate: slotDay,
       sourceTemplateId: template.id,
+      startsAt: startsAt,
+      deadline: deadline,
       createdBy: _user?.uid,
       activityLog: [
         ActivityEntry(
@@ -1365,7 +1497,7 @@ class TaskCubit extends Cubit<TaskState> {
       final recipients = await _shiftRecipients(
         branchId: template.branchId,
         shift: template.shift,
-        day: today,
+        day: slotDay,
       );
       if (recipients.isNotEmpty && _user != null) {
         await _notifyTaskEvent(
@@ -1392,18 +1524,17 @@ class TaskCubit extends Cubit<TaskState> {
   Future<List<TaskAttachment>> _uploadReferences(
     String taskId,
     List<PickedAttachment> picked,
-  ) =>
-      Future.wait([
-        for (final p in picked)
-          _uploadTaskAttachment(
-            taskId: taskId,
-            file: p.file,
-            type: p.type,
-            uploadedBy: _user?.uid ?? '',
-            uploadedByName: _user?.displayName,
-            durationMs: p.durationMs,
-          ),
-      ]);
+  ) => Future.wait([
+    for (final p in picked)
+      _uploadTaskAttachment(
+        taskId: taskId,
+        file: p.file,
+        type: p.type,
+        uploadedBy: _user?.uid ?? '',
+        uploadedByName: _user?.displayName,
+        durationMs: p.durationMs,
+      ),
+  ]);
 
   /// Creates the next instance of a recurring task immediately after [source]
   /// is approved. Resets checklist items to uncompleted; inherits everything
@@ -1420,44 +1551,47 @@ class TaskCubit extends Cubit<TaskState> {
   /// already committed.
   Future<void> _spawnNextRecurrence(TaskEntity source) async {
     final recurrence = source.recurrence!;
-    final nextDeadline =
-        recurrence.nextOccurrence(source.deadline ?? DateTime.now());
+    final nextDeadline = recurrence.nextOccurrence(
+      source.deadline ?? DateTime.now(),
+    );
     try {
-      await _repository.createTaskWithId(TaskEntity(
-        id: 'rec_${source.id}',
-        title: source.title,
-        description: source.description,
-        type: source.type,
-        priority: source.priority,
-        branchId: source.branchId,
-        assigneeIds: source.assigneeIds,
-        checklist: [
-          for (final item in source.checklist)
-            ChecklistItem(
-              id: item.id,
-              title: item.title,
-              isRequired: item.isRequired,
-              completed: false,
-              completedAt: null,
+      await _repository.createTaskWithId(
+        TaskEntity(
+          id: 'rec_${source.id}',
+          title: source.title,
+          description: source.description,
+          type: source.type,
+          priority: source.priority,
+          branchId: source.branchId,
+          assigneeIds: source.assigneeIds,
+          checklist: [
+            for (final item in source.checklist)
+              ChecklistItem(
+                id: item.id,
+                title: item.title,
+                isRequired: item.isRequired,
+                completed: false,
+                completedAt: null,
+              ),
+          ],
+          recurrence: recurrence,
+          assignmentType: source.assignmentType,
+          shift: source.shift,
+          createdBy: source.createdBy,
+          deadline: nextDeadline,
+          recurrenceRootId: source.recurrenceRootId ?? source.id,
+          occurrenceKey: _dateKey(nextDeadline),
+          activityLog: [
+            ActivityEntry(
+              status: TaskStatus.pending.value,
+              actorId: _user?.uid ?? '',
+              actorName: _user?.displayName,
+              at: DateTime.now(),
+              note: 'Auto-created (recurring)',
             ),
-        ],
-        recurrence: recurrence,
-        assignmentType: source.assignmentType,
-        shift: source.shift,
-        createdBy: source.createdBy,
-        deadline: nextDeadline,
-        recurrenceRootId: source.recurrenceRootId ?? source.id,
-        occurrenceKey: _dateKey(nextDeadline),
-        activityLog: [
-          ActivityEntry(
-            status: TaskStatus.pending.value,
-            actorId: _user?.uid ?? '',
-            actorName: _user?.displayName,
-            at: DateTime.now(),
-            note: 'Auto-created (recurring)',
-          ),
-        ],
-      ));
+          ],
+        ),
+      );
     } catch (_) {
       // Recurrence spawn is best-effort; the approval itself already succeeded.
     }
@@ -1510,15 +1644,18 @@ class TaskCubit extends Cubit<TaskState> {
   }) {
     if (!from.contains(task.status)) {
       _emitTransientError(
-          "That action isn't allowed for this task's current status.");
+        "That action isn't allowed for this task's current status.",
+      );
       return Future.value(false);
     }
-    return _mutate(() => _repository.transitionTask(
-          taskId: task.id,
-          expectedFrom: {for (final s in from) s.value},
-          patch: patch,
-          appendLog: appendLog,
-        ));
+    return _mutate(
+      () => _repository.transitionTask(
+        taskId: task.id,
+        expectedFrom: {for (final s in from) s.value},
+        patch: patch,
+        appendLog: appendLog,
+      ),
+    );
   }
 
   /// Recipients for a manager/admin review action (approve / reject / rework).

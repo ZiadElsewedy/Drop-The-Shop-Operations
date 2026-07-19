@@ -69,7 +69,7 @@ Non-obvious and load-bearing. Each one buys idempotency for free.
 | `attendance/{id}` | `{uid}_{yyyyMMdd}_{shift}` | Clock-in is **idempotent and offline-safe** — a retry writes the same doc rather than a duplicate shift |
 | `weekly_schedules/{id}` | `{branchId}_{Sunday-yyyy-MM-dd}` | One doc per branch-week; addressable without a query |
 | `shift_templates/{id}` | `{branchId}__{role}` | Direct lookup |
-| Recurring shift-task instance | `rt_{templateId}_{yyyy-MM-dd}` (UTC) | The id **is** the duplicate guard for `generateShiftTaskInstances` |
+| Recurring shift-task instance | `rt_{templateId}_{yyyy-MM-dd}` (UTC) | The id **is** the duplicate guard; each instance persists its resolved `startsAt` / `deadline` window |
 | Recurrence respawn | `rec_{sourceTaskId}` | Fixed the reopen → re-approve duplicate-task bug |
 
 ## 3. The two privacy splits
@@ -107,7 +107,7 @@ claims; role and branch are read from the caller's own `users/{uid}` doc.
 | --- | --- | --- | --- | --- |
 | `users/{uid}` | owner · admin · same-branch member | **false** — `createUserAccount` only | admin (all) · owner (profile + first-login flags + fcmToken; **privileged fields frozen**) | **false** — deactivate via `isActive` |
 | `users/{uid}/private/{doc}` | owner · admin | admin · owner (`compensation`/`paymentNumber` only) | admin · owner (`paymentNumber` diff only) | false |
-| `tasks/{id}` | branch-reachable · assignee · shift-task-in-my-branch | branch-reachable | branch-reachable (approved locked except admin reopen) **or** assignee (can't reassign / move branch / forge review / set terminal; `activityLog` non-decreasing) | branch-reachable & not approved |
+| `tasks/{id}` | branch-reachable · assignee · shift-task-in-my-branch | branch-reachable (never `missed` / `missedAt`) | branch-reachable (approved locked except admin reopen; missed locked) **or** assignee (can't reassign / move branch / forge review / set terminal; `activityLog` non-decreasing) | branch-reachable & neither approved nor missed |
 | `attendance/{id}` | own · own-branch manager · admin | own | own (clock fields) · manager/admin | false |
 | `attendance/{id}/events` | whoever can read the record | **false** | **false** | **false** — Admin SDK only |
 | `attendance_corrections/{id}` | involved · manager · admin | employee (own) | reviewer — **self-approval forbidden** | false |
@@ -143,7 +143,7 @@ claims; role and branch are read from the caller's own `users/{uid}` doc.
 
 ## 5. Cloud Functions
 
-21 functions, all in `functions/index.js`. `dispatchBroadcast(params)` is shared by
+23 functions, all in `functions/index.js`. `dispatchBroadcast(params)` is shared by
 the callable and the scheduler.
 
 | Function | Trigger | Purpose |
@@ -164,11 +164,12 @@ the callable and the scheduler.
 | `onAttendanceWritten` | `onDocumentWritten attendance/{id}` | **Derive the audit trail by diffing** — the client never writes it |
 | `onAttendanceCorrectionWritten` | `onDocumentWritten attendance_corrections/{id}` | Correction lifecycle → apply resolution → audit event → notify |
 | `autoCloseAttendance` | `onSchedule` | Never-clocked-out sessions → `pendingReview` |
-| `generateShiftTaskInstances` | `onSchedule 24h` | Materialize one task per due recurring template; roster-filtered; deterministic id = dup guard |
+| `generateShiftTaskInstances` | `onSchedule 24h` | Materialize one task per due recurring template; resolve/persist frozen weekly shift window; roster-filtered; deterministic id = dup guard |
+| `autoEndRecurringShiftTasks` | `onSchedule 15 min` | Transactionally end only overdue generated `pending`/`started` shift tasks as server-owned `missed` |
 | `runTaskReminders` | `onSchedule 30 min` | Escalating due24h → due1h → overdue, with a per-task ledger + quiet hours + cap |
 | `runBroadcastSchedules` | `onSchedule 5 min` | Fire due schedules, advance `nextRunAt` |
 | `broadcastHousekeeping` | `onSchedule 24h` | Delete archived notifications > 60d |
-| `taskHousekeeping` | `onSchedule 24h` | Soft-archive approved tasks, cold-tier Storage, opt-in hard delete |
+| `taskHousekeeping` | `onSchedule 24h` | Soft-archive approved/missed tasks, cold-tier Storage, opt-in hard delete |
 
 Push carries `data.recipientUid` per token so the client can **drop** a message
 addressed to a different user (defence against token drift). Dead tokens are pruned
@@ -206,7 +207,7 @@ extension. All uploads go through
 attachments), `Cache-Control`, and error translation that distinguishes permission
 from network failures.
 
-**Cleanup.** `taskHousekeeping` re-tiers archived task media to COLDLINE, and hard-
-deletes only under the opt-in `deleteAfterDays` purge. Client `deleteTask` /
+**Cleanup.** `taskHousekeeping` re-tiers media for archived approved/missed task
+records to COLDLINE, and hard-deletes only under the opt-in `deleteAfterDays` purge. Client `deleteTask` /
 `deleteRequest` remove the doc only — a deleted request **intentionally orphans** its
 `events` subcollection (rare admin op).

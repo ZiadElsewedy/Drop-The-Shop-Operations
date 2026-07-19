@@ -16,6 +16,26 @@ released — DROP ships from branches and has no version tags.
 
 ## Unreleased
 
+### 2026-07-19
+
+- **Recurring shift tasks now end at their real shift deadline.** Every generated
+  instance persists `instanceDate` + `startsAt` + `deadline` from the saved weekly
+  schedule (per-day `shiftHours` override → frozen `shiftPlan` → standard hours;
+  overnight windows included). The new `autoEndRecurringShiftTasks` Cloud Function
+  runs every 15 minutes, queries the indexed due shift instances, and transactionally
+  changes only still-open source-template tasks to terminal **Missed** — with
+  `missedAt`, a system timeline entry, a version bump, and `task.auto_missed` audit
+  evidence. It never converts unperformed work into completed/approved, and a
+  simultaneous submit wins through transaction revalidation. A duplicate created by
+  an older client is repaired only when its window is missing.
+- **Missed is visible, truthful, and protected.** `TaskStatus.missed` is a closed,
+  server-owned outcome: it leaves active queues and overdue metrics, shows as
+  Missed in task surfaces/timelines, and cannot be forged, reopened, or deleted by a
+  client. The Automation Center now says the missed policy is enabled. Retention
+  archives missed records using the same window as approved work. Added the
+  recurring-expiry composite index and pure Node coverage for resolved weekly
+  shift windows / auto-end eligibility.
+
 ### 2026-07-18
 
 - **Schedule default hours updated + "Today" highlight bug fixed + overnight

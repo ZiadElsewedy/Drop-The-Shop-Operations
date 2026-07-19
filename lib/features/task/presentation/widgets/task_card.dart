@@ -218,7 +218,7 @@ bool _isOverdue(TaskEntity task) {
   final d = task.deadline;
   if (d == null) return false;
   final terminal =
-      task.status == TaskStatus.approved ||
+      task.status.isTerminal ||
       task.status == TaskStatus.completed ||
       task.status == TaskStatus.waitingReview;
   return !terminal && d.isBefore(DateTime.now());
@@ -243,13 +243,13 @@ const Color _stateOverdue = kStateOverdue; // orange
 ///   • in review  → amber     `#F59E0B`
 ///   • rejected   → soft red  `#F87171`
 ///   • **overdue** → orange   `#FB923C` — *takes precedence*
-///   • approved / completed → `null` (no orbit; only the static card border)
+///   • approved / completed / missed → `null` (no orbit; only the static card
+///     border)
 ///
 /// Overdue (time-critical) wins over the base status colour. Kept public so the
 /// mapping is unit-tested in exactly one place.
 Color? liveActivityColor(TaskEntity task) {
-  if (task.status == TaskStatus.approved ||
-      task.status == TaskStatus.completed) {
+  if (task.status.isTerminal || task.status == TaskStatus.completed) {
     return null;
   }
   if (_isOverdue(task)) return _stateOverdue;
@@ -258,7 +258,7 @@ Color? liveActivityColor(TaskEntity task) {
     TaskStatus.started => _stateInProgress,
     TaskStatus.waitingReview => _stateInReview,
     TaskStatus.rejected => _stateRejected,
-    TaskStatus.approved || TaskStatus.completed => null,
+    TaskStatus.approved || TaskStatus.completed || TaskStatus.missed => null,
   };
 }
 
@@ -271,7 +271,7 @@ double liveOrbitSpeed(TaskEntity task) {
     TaskStatus.started => 1.2, // medium
     TaskStatus.waitingReview => 0.9, // slightly slow
     TaskStatus.rejected => 1.3, // slightly fast
-    TaskStatus.approved || TaskStatus.completed => 1.0,
+    TaskStatus.approved || TaskStatus.completed || TaskStatus.missed => 1.0,
   };
 }
 
@@ -340,6 +340,7 @@ class _StatusPill extends StatelessWidget {
     TaskStatus.waitingReview => ('In review', Icons.hourglass_empty_rounded),
     TaskStatus.approved => ('Approved', Icons.check_circle_rounded),
     TaskStatus.rejected => ('Needs rework', Icons.replay_rounded),
+    TaskStatus.missed => ('Missed', Icons.event_busy_rounded),
   };
 }
 

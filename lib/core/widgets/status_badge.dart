@@ -25,14 +25,12 @@ class StatusBadge extends StatelessWidget {
       StatusBadge(label: _swapLabel(status), color: _swapColor(status));
 
   factory StatusBadge.active(bool isActive) => StatusBadge(
-        label: isActive ? 'Active' : 'Inactive',
-        color: isActive ? AppColors.success : AppColors.error,
-      );
+    label: isActive ? 'Active' : 'Inactive',
+    color: isActive ? AppColors.success : AppColors.error,
+  );
 
-  factory StatusBadge.attendance(AttendanceStatus status) => StatusBadge(
-        label: status.label,
-        color: attendanceStatusColor(status),
-      );
+  factory StatusBadge.attendance(AttendanceStatus status) =>
+      StatusBadge(label: status.label, color: attendanceStatusColor(status));
 
   @override
   Widget build(BuildContext context) {
@@ -90,6 +88,8 @@ Color _taskColor(TaskStatus s) {
       return AppColors.success;
     case TaskStatus.rejected:
       return AppColors.error;
+    case TaskStatus.missed:
+      return AppColors.error;
   }
 }
 
@@ -107,6 +107,8 @@ String _taskLabel(TaskStatus s) {
       return 'Approved';
     case TaskStatus.rejected:
       return 'Rejected';
+    case TaskStatus.missed:
+      return 'Missed';
   }
 }
 
