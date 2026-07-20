@@ -1,5 +1,6 @@
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 
 /// Pure, framework-free validation for **shift-swap requests** (spec §2).
 ///
@@ -11,28 +12,28 @@ import 'package:drop/core/enums/schedule_shift.dart';
 ///
 /// A slot is addressed by (week, [ScheduleDay], [ScheduleShift]); its concrete
 /// start instant is derived from the week's Sunday plus the day offset and the
-/// shift's start time (mirrors [ScheduleShift.timeRange]).
+/// **standing** shift start from [ShiftHours.standard] — so the swap gate tracks
+/// the schedule's single source of truth (weekday night 15:00, weekend night
+/// 16:00), never a hardcoded time. Per-week start overrides aren't reflected
+/// here by design; this is a coarse "is the slot still in the future" gate.
 class SwapEligibility {
   SwapEligibility._();
 
-  /// Morning shifts start 08:30, night shifts 16:30 (mirrors the displayed
-  /// [ScheduleShift.timeRange]). Kept here so the requestable check, the entity
-  /// getter, and the tests all agree on one definition.
-  static (int hour, int minute) _startTime(ScheduleShift shift) =>
-      shift == ScheduleShift.morning ? (8, 30) : (16, 30);
-
   /// The concrete start instant of the (week, [day], [shift]) slot. [weekStart]
   /// is the week's Sunday; [ScheduleDay] is ordered Sunday→Saturday, so its
-  /// index is the day offset.
+  /// index is the day offset. The start minute comes from [ShiftHours.standard]
+  /// (the same source attendance and the grid resolve through), keeping the
+  /// gate in lockstep with the default schedule.
   static DateTime slotStart(
     DateTime weekStart,
     ScheduleDay day,
     ScheduleShift shift,
   ) {
-    final (h, m) = _startTime(shift);
     final base = DateTime(weekStart.year, weekStart.month, weekStart.day)
         .add(Duration(days: day.index));
-    return DateTime(base.year, base.month, base.day, h, m);
+    return base.add(
+      Duration(minutes: ShiftHours.standard(day, shift).startMinutes),
+    );
   }
 
   /// Whether a swap may be requested for this slot — true only when the shift's

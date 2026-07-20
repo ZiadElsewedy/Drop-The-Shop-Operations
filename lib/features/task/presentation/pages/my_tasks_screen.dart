@@ -256,11 +256,16 @@ class _DoneTasksTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final done = tasks.where((t) => t.status == TaskStatus.approved).toList();
+    final done = tasks
+        .where(
+          (t) =>
+              t.status == TaskStatus.approved || t.status == TaskStatus.missed,
+        )
+        .toList();
 
     if (done.isEmpty) {
       return const TaskEmptyState(
-        message: "No completed tasks yet.\nApproved tasks will appear here.",
+        message: "No closed tasks yet.\nApproved and missed tasks appear here.",
       );
     }
 
@@ -567,6 +572,7 @@ class _StatusDot extends StatelessWidget {
       TaskStatus.waitingReview => AppColors.warning,
       TaskStatus.approved => AppColors.success,
       TaskStatus.rejected => AppColors.error,
+      TaskStatus.missed => AppColors.error,
       _ => AppColors.textTertiary,
     };
     return Container(
@@ -626,7 +632,8 @@ bool _isOverdue(TaskEntity task) {
   final d = task.deadline;
   if (d == null) return false;
   final done =
-      task.status == TaskStatus.approved ||
+      task.status.isTerminal ||
+      task.status == TaskStatus.completed ||
       task.status == TaskStatus.waitingReview;
   return !done && d.isBefore(DateTime.now());
 }

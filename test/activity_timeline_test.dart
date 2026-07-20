@@ -23,20 +23,20 @@ ActivityEntry _e(String status, int minutesAgo, {String? note}) =>
     );
 
 Widget _host(TaskEntity task) => MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: SizedBox(
-            width: 520,
-            child: ActivityTimeline(
-              task: task,
-              directory: const {},
-              cubit: _FakeTaskCubit(),
-              canReview: true,
-            ),
-          ),
+  home: Scaffold(
+    body: SingleChildScrollView(
+      child: SizedBox(
+        width: 520,
+        child: ActivityTimeline(
+          task: task,
+          directory: const {},
+          cubit: _FakeTaskCubit(),
+          canReview: true,
         ),
       ),
-    );
+    ),
+  ),
+);
 
 void main() {
   test('activityColor wears the soft living-border state palette', () {
@@ -46,6 +46,9 @@ void main() {
     expect(activityColor('waitingReview'), kStateInReview);
     expect(activityColor('rejected'), kStateRejected);
     expect(activityColor('approved'), AppColors.success);
+    expect(activityColor('missed'), kStateRejected);
+    expect(activityTitle('missed'), 'Missed deadline');
+    expect(activityIcon('missed'), Icons.event_busy_rounded);
   });
 
   test('clockTime formats a 12-hour wall clock', () {
@@ -55,8 +58,9 @@ void main() {
     expect(clockTime(DateTime(2026, 7, 6, 23, 30)), '11:30 PM');
   });
 
-  testWidgets('head hero + compact history rows render from the log',
-      (tester) async {
+  testWidgets('head hero + compact history rows render from the log', (
+    tester,
+  ) async {
     final task = TaskEntity(
       id: 't1',
       title: 'Till count',
@@ -77,8 +81,9 @@ void main() {
     expect(find.text('“On it”'), findsOneWidget); // note quote on a ledger row
   });
 
-  testWidgets('long histories fold behind "Show earlier" and expand on tap',
-      (tester) async {
+  testWidgets('long histories fold behind "Show earlier" and expand on tap', (
+    tester,
+  ) async {
     final task = TaskEntity(
       id: 't2',
       title: 'Long history',

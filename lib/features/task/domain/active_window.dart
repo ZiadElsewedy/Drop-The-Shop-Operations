@@ -18,6 +18,7 @@ import 'package:drop/features/task/domain/entities/task_entity.dart';
 ///
 /// **Excluded**
 ///  - approved tasks from a previous day — historical / effectively archived.
+///  - missed tasks — closed operational records, never active work.
 bool isTaskInActiveWindow(TaskEntity task, DateTime now) {
   switch (task.status) {
     case TaskStatus.pending:
@@ -29,16 +30,17 @@ bool isTaskInActiveWindow(TaskEntity task, DateTime now) {
     case TaskStatus.approved:
       final at = task.approvedAt;
       return at != null && _isSameDay(at, now);
+    case TaskStatus.missed:
+      return false;
   }
 }
 
 /// The subset of [tasks] inside the active operational window — see
 /// [isTaskInActiveWindow].
-List<TaskEntity> activeWindowTasks(List<TaskEntity> tasks, DateTime now) =>
-    [
-      for (final t in tasks)
-        if (isTaskInActiveWindow(t, now)) t,
-    ];
+List<TaskEntity> activeWindowTasks(List<TaskEntity> tasks, DateTime now) => [
+  for (final t in tasks)
+    if (isTaskInActiveWindow(t, now)) t,
+];
 
 bool _isSameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;

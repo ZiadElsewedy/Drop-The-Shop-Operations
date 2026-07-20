@@ -12,29 +12,33 @@ void main() {
     TaskStatus status = TaskStatus.pending,
     DateTime? startsAt,
     DateTime? dueAt,
-  }) =>
-      TaskEntity(
-        id: 't',
-        title: 't',
-        status: status,
-        startsAt: startsAt,
-        deadline: dueAt,
-      );
+  }) => TaskEntity(
+    id: 't',
+    title: 't',
+    status: status,
+    startsAt: startsAt,
+    deadline: dueAt,
+  );
 
   group('shiftDefaultSchedule', () {
-    test('morning shift → same-day 08:30 → 16:30 (from the standard baseline)',
-        () {
-      final date = DateTime(2026, 7, 8); // Wed
-      final w = shiftDefaultSchedule(date, ScheduleShift.morning);
-      expect(w.start, DateTime(2026, 7, 8, 8, 30));
-      expect(w.due, DateTime(2026, 7, 8, 16, 30));
-    });
+    test(
+      'morning shift → same-day 08:30 → 16:30 (from the standard baseline)',
+      () {
+        final date = DateTime(2026, 7, 8); // Wed
+        final w = shiftDefaultSchedule(date, ScheduleShift.morning);
+        expect(w.start, DateTime(2026, 7, 8, 8, 30));
+        expect(w.due, DateTime(2026, 7, 8, 16, 30));
+      },
+    );
 
     test('overnight hours roll the due instant into the next day', () {
       final date = DateTime(2026, 7, 9);
       // 16:30 → 00:30 next day (endMinutes 1470 > 1440).
-      final w = shiftDefaultSchedule(date, ScheduleShift.night,
-          hours: const ShiftHours(990, 1470));
+      final w = shiftDefaultSchedule(
+        date,
+        ScheduleShift.night,
+        hours: const ShiftHours(990, 1470),
+      );
       expect(w.start, DateTime(2026, 7, 9, 16, 30));
       expect(w.due, DateTime(2026, 7, 10, 0, 30));
     });
@@ -50,8 +54,14 @@ void main() {
         dueAt: now.subtract(const Duration(hours: 1)),
       );
       expect(schedulePhase(t, now), TaskSchedulePhase.done);
-      expect(schedulePhase(task(status: TaskStatus.waitingReview), now),
-          TaskSchedulePhase.done);
+      expect(
+        schedulePhase(task(status: TaskStatus.waitingReview), now),
+        TaskSchedulePhase.done,
+      );
+      expect(
+        schedulePhase(task(status: TaskStatus.missed), now),
+        TaskSchedulePhase.done,
+      );
     });
 
     test('past due + non-terminal → overdue', () {
@@ -92,7 +102,10 @@ void main() {
       task(dueAt: now.add(const Duration(minutes: 25))), // due soon
       task(dueAt: now.add(const Duration(hours: 3))), // active
       task(dueAt: now.subtract(const Duration(minutes: 5))), // overdue
-      task(status: TaskStatus.approved, dueAt: now.add(const Duration(minutes: 5))), // done
+      task(
+        status: TaskStatus.approved,
+        dueAt: now.add(const Duration(minutes: 5)),
+      ), // done
     ];
     expect(dueSoonCount(tasks, now), 2);
   });
@@ -121,22 +134,30 @@ void main() {
   });
 
   group('duration', () {
-    test('formatScheduleDuration renders compactly / empty for non-positive', () {
-      expect(formatScheduleDuration(const Duration(hours: 8)), '8h');
-      expect(
-          formatScheduleDuration(const Duration(hours: 8, minutes: 30)), '8h 30m');
-      expect(formatScheduleDuration(const Duration(minutes: 45)), '45m');
-      expect(formatScheduleDuration(Duration.zero), '');
-      expect(formatScheduleDuration(const Duration(minutes: -10)), '');
-    });
-    test('scheduledDuration spans midnight (overnight) as a positive value', () {
-      final t = TaskEntity(
-        id: 't',
-        title: 't',
-        startsAt: DateTime(2026, 7, 8, 23, 0),
-        deadline: DateTime(2026, 7, 9, 3, 0),
-      );
-      expect(scheduledDuration(t), const Duration(hours: 4));
-    });
+    test(
+      'formatScheduleDuration renders compactly / empty for non-positive',
+      () {
+        expect(formatScheduleDuration(const Duration(hours: 8)), '8h');
+        expect(
+          formatScheduleDuration(const Duration(hours: 8, minutes: 30)),
+          '8h 30m',
+        );
+        expect(formatScheduleDuration(const Duration(minutes: 45)), '45m');
+        expect(formatScheduleDuration(Duration.zero), '');
+        expect(formatScheduleDuration(const Duration(minutes: -10)), '');
+      },
+    );
+    test(
+      'scheduledDuration spans midnight (overnight) as a positive value',
+      () {
+        final t = TaskEntity(
+          id: 't',
+          title: 't',
+          startsAt: DateTime(2026, 7, 8, 23, 0),
+          deadline: DateTime(2026, 7, 9, 3, 0),
+        );
+        expect(scheduledDuration(t), const Duration(hours: 4));
+      },
+    );
   });
 }

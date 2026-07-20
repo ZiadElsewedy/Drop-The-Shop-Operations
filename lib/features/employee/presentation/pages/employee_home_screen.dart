@@ -185,6 +185,10 @@ class _Counts {
           c++;
         case TaskStatus.rejected:
           rej++;
+        case TaskStatus.missed:
+          // A missed task is closed and must not affect today's active-work
+          // progress, even when this count helper is called with a broad list.
+          break;
       }
     }
     return _Counts(
@@ -780,13 +784,20 @@ class _TaskSection extends StatelessWidget {
       t.status == TaskStatus.pending || t.status == TaskStatus.started;
   static bool _isRejected(TaskEntity t) => t.status == TaskStatus.rejected;
   static bool _isReview(TaskEntity t) => t.status == TaskStatus.waitingReview;
+  static bool _isMissedToday(TaskEntity t, DateTime now) {
+    if (t.status != TaskStatus.missed) return false;
+    final at = t.missedAt ?? t.deadline ?? t.updatedAt ?? t.createdAt;
+    return at == null || _isSameDay(at, now);
+  }
 
   @override
   Widget build(BuildContext context) {
     if (tasks.isEmpty) return const _EmptyTaskState();
 
+    final now = DateTime.now();
     final rejected = tasks.where(_isRejected).toList();
     final inReview = tasks.where(_isReview).toList();
+    final missed = tasks.where((t) => _isMissedToday(t, now)).toList();
     final active = tasks.where(_isActive).toList()
       ..sort((a, b) {
         // Started first, then by soonest deadline.
@@ -804,7 +815,10 @@ class _TaskSection extends StatelessWidget {
     final preview = active.take(3).toList();
     final remaining = (active.length - preview.length).clamp(0, 999);
 
-    if (active.isEmpty && rejected.isEmpty && inReview.isEmpty) {
+    if (active.isEmpty &&
+        rejected.isEmpty &&
+        inReview.isEmpty &&
+        missed.isEmpty) {
       return const _AllDoneCard();
     }
 
@@ -846,6 +860,26 @@ class _TaskSection extends StatelessWidget {
                 directory: directory,
                 busy: busy,
                 onOpen: () => _openTask(context, inReview[i]),
+              ),
+            ),
+          const SizedBox(height: AppSpacing.xl),
+        ],
+        if (missed.isNotEmpty) ...[
+          _SectionRow(
+            label: 'Missed',
+            count: missed.length,
+            color: AppColors.error,
+            icon: Icons.event_busy_rounded,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          for (var i = 0; i < missed.length; i++)
+            EntranceFade(
+              delay: Duration(milliseconds: i * 50),
+              child: _HomeTaskCard(
+                task: missed[i],
+                directory: directory,
+                busy: busy,
+                onOpen: () => _openTask(context, missed[i]),
               ),
             ),
           const SizedBox(height: AppSpacing.xl),
@@ -976,6 +1010,7 @@ class _HomeTaskCard extends StatelessWidget {
     final isStarted = task.status == TaskStatus.started;
     final isRejected = task.status == TaskStatus.rejected;
     final isReview = task.status == TaskStatus.waitingReview;
+    final isMissed = task.status == TaskStatus.missed;
 
     final assignedBy = directory[task.createdBy]?.displayName;
 
@@ -996,7 +1031,7 @@ class _HomeTaskCard extends StatelessWidget {
             border: Border.all(
               color: isStarted
                   ? AppColors.primary.withAlpha(45)
-                  : isRejected
+                  : isRejected || isMissed
                   ? AppColors.error.withAlpha(45)
                   : AppColors.darkBorder,
             ),
@@ -1062,6 +1097,7 @@ class _HomeTaskCard extends StatelessWidget {
                 isStarted: isStarted,
                 isRejected: isRejected,
                 isReview: isReview,
+                isMissed: isMissed,
               ),
             ],
           ),
@@ -1082,6 +1118,7 @@ class _CardFooter extends StatelessWidget {
     required this.isStarted,
     required this.isRejected,
     required this.isReview,
+    required this.isMissed,
   });
 
   final TaskEntity task;
@@ -1091,11 +1128,17 @@ class _CardFooter extends StatelessWidget {
   final bool isStarted;
   final bool isRejected;
   final bool isReview;
+  final bool isMissed;
 
   @override
   Widget build(BuildContext context) {
     final Widget action;
-    if (isReview) {
+    if (isMissed) {
+      action = const _MutedFooter(
+        icon: Icons.event_busy_rounded,
+        label: 'Missed — task closed',
+      );
+    } else if (isReview) {
       action = const _MutedFooter(
         icon: Icons.hourglass_top_rounded,
         label: 'Awaiting review',
@@ -1212,6 +1255,7 @@ class _StatusPill extends StatelessWidget {
       TaskStatus.waitingReview => ('In review', AppColors.warning),
       TaskStatus.approved => ('Approved', AppColors.success),
       TaskStatus.rejected => ('Rejected', AppColors.error),
+      TaskStatus.missed => ('Missed', AppColors.error),
     };
 
     return Container(
@@ -1296,7 +1340,7 @@ class _MetaRow extends StatelessWidget {
   bool get _overdue {
     final d = task.deadline;
     if (d == null) return false;
-    return task.status != TaskStatus.approved &&
+    return !task.status.isTerminal &&
         task.status != TaskStatus.completed &&
         task.status != TaskStatus.waitingReview &&
         d.isBefore(DateTime.now());
@@ -1351,6 +1395,9 @@ class _MetaRow extends StatelessWidget {
     );
   }
 }
+
+bool _isSameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
 
 class _MetaChip extends StatelessWidget {
   const _MetaChip({
@@ -1750,7 +1797,10 @@ class _OutgoingSwapCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Your swap request', style: AppTypography.label),
+                      const Text(
+                        'Your swap request',
+                        style: AppTypography.label,
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         detail,

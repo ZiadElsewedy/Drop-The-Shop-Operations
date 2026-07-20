@@ -30,29 +30,29 @@ enum FeedSort { smart, dueDate, priority, newest }
 
 extension FeedPresetX on FeedPreset {
   String get label => switch (this) {
-        FeedPreset.overdue => 'Overdue',
-        FeedPreset.needsReview => 'Needs review',
-        FeedPreset.dueToday => 'Due today',
-        FeedPreset.unassigned => 'Unassigned',
-      };
+    FeedPreset.overdue => 'Overdue',
+    FeedPreset.needsReview => 'Needs review',
+    FeedPreset.dueToday => 'Due today',
+    FeedPreset.unassigned => 'Unassigned',
+  };
 }
 
 extension FeedGroupingX on FeedGrouping {
   String get label => switch (this) {
-        FeedGrouping.dueTime => 'Due',
-        FeedGrouping.branch => 'Branch',
-        FeedGrouping.employee => 'Employee',
-        FeedGrouping.priority => 'Priority',
-      };
+    FeedGrouping.dueTime => 'Due',
+    FeedGrouping.branch => 'Branch',
+    FeedGrouping.employee => 'Employee',
+    FeedGrouping.priority => 'Priority',
+  };
 }
 
 extension FeedSortX on FeedSort {
   String get label => switch (this) {
-        FeedSort.smart => 'Smart Queue',
-        FeedSort.dueDate => 'Due date',
-        FeedSort.priority => 'Priority',
-        FeedSort.newest => 'Newest',
-      };
+    FeedSort.smart => 'Smart Queue',
+    FeedSort.dueDate => 'Due date',
+    FeedSort.priority => 'Priority',
+    FeedSort.newest => 'Newest',
+  };
 }
 
 /// Sentinel so [TaskFeedFilter.copyWith] can distinguish "leave unchanged" from
@@ -105,19 +105,19 @@ class TaskFeedFilter {
     Object? preset = _unset,
     FeedGrouping? grouping,
     FeedSort? sort,
-  }) =>
-      TaskFeedFilter(
-        branchId: branchId == _unset ? this.branchId : branchId as String?,
-        assigneeUid:
-            assigneeUid == _unset ? this.assigneeUid : assigneeUid as String?,
-        shift: shift == _unset ? this.shift : shift as ScheduleShift?,
-        priority: priority == _unset ? this.priority : priority as TaskPriority?,
-        status: status == _unset ? this.status : status as TaskStatus?,
-        query: query ?? this.query,
-        preset: preset == _unset ? this.preset : preset as FeedPreset?,
-        grouping: grouping ?? this.grouping,
-        sort: sort ?? this.sort,
-      );
+  }) => TaskFeedFilter(
+    branchId: branchId == _unset ? this.branchId : branchId as String?,
+    assigneeUid: assigneeUid == _unset
+        ? this.assigneeUid
+        : assigneeUid as String?,
+    shift: shift == _unset ? this.shift : shift as ScheduleShift?,
+    priority: priority == _unset ? this.priority : priority as TaskPriority?,
+    status: status == _unset ? this.status : status as TaskStatus?,
+    query: query ?? this.query,
+    preset: preset == _unset ? this.preset : preset as FeedPreset?,
+    grouping: grouping ?? this.grouping,
+    sort: sort ?? this.sort,
+  );
 
   /// Toggles [p] on/off (tapping the active preset clears it).
   TaskFeedFilter togglePreset(FeedPreset p) =>
@@ -143,12 +143,14 @@ class FeedGroup {
 }
 
 /// Whether [t] is past its [TaskEntity.deadline] and still needs work. Terminal
-/// states (approved / completed / submitted-for-review) are never "overdue".
+/// states (approved / completed / submitted-for-review / missed) are never
+/// "overdue".
 /// The one shared definition — the row, the KPI, and the preset all use it.
 bool isTaskOverdue(TaskEntity t, DateTime now) {
   final d = t.deadline;
   if (d == null) return false;
-  final terminal = t.status == TaskStatus.approved ||
+  final terminal =
+      t.status.isTerminal ||
       t.status == TaskStatus.completed ||
       t.status == TaskStatus.waitingReview;
   return !terminal && d.isBefore(now);
@@ -247,18 +249,18 @@ class _Acc {
 }
 
 bool _isDone(TaskEntity t) =>
-    t.status == TaskStatus.approved || t.status == TaskStatus.completed;
+    t.status.isTerminal || t.status == TaskStatus.completed;
 
 bool _matchesPreset(TaskEntity t, FeedPreset p, DateTime now) => switch (p) {
-      FeedPreset.overdue => isTaskOverdue(t, now),
-      FeedPreset.needsReview => t.status == TaskStatus.waitingReview,
-      FeedPreset.dueToday =>
-        t.deadline != null && _sameDay(t.deadline!, now) && !_isDone(t),
-      // Shift tasks target a shift (never "unassigned"); only individual/team
-      // tasks with no assignee count.
-      FeedPreset.unassigned => t.assignmentType != TaskAssignmentType.shift &&
-          t.assigneeIds.isEmpty,
-    };
+  FeedPreset.overdue => isTaskOverdue(t, now),
+  FeedPreset.needsReview => t.status == TaskStatus.waitingReview,
+  FeedPreset.dueToday =>
+    t.deadline != null && _sameDay(t.deadline!, now) && !_isDone(t),
+  // Shift tasks target a shift (never "unassigned"); only individual/team
+  // tasks with no assignee count.
+  FeedPreset.unassigned =>
+    t.assignmentType != TaskAssignmentType.shift && t.assigneeIds.isEmpty,
+};
 
 bool _matchesQuery(
   TaskEntity t,
@@ -274,8 +276,9 @@ bool _matchesQuery(
   for (final uid in t.assigneeIds) {
     final u = directory[uid];
     if (u == null) continue;
-    final name = ((u.displayName?.isNotEmpty ?? false) ? u.displayName! : u.email)
-        .toLowerCase();
+    final name =
+        ((u.displayName?.isNotEmpty ?? false) ? u.displayName! : u.email)
+            .toLowerCase();
     if (name.contains(q)) return true;
   }
   return false;
@@ -313,10 +316,10 @@ int _compareDue(TaskEntity a, TaskEntity b) {
 }
 
 int _prioRank(TaskPriority p) => switch (p) {
-      TaskPriority.high => 2,
-      TaskPriority.normal => 1,
-      TaskPriority.low => 0,
-    };
+  TaskPriority.high => 2,
+  TaskPriority.normal => 1,
+  TaskPriority.low => 0,
+};
 
 int _epoch(DateTime? d) => d?.millisecondsSinceEpoch ?? 0;
 
@@ -336,8 +339,11 @@ int _epoch(DateTime? d) => d?.millisecondsSinceEpoch ?? 0;
       final d = t.deadline;
       if (d == null) return (key: 'nodate', label: 'No due date', order: 4);
       if (_sameDay(d, now)) return (key: 'today', label: 'Today', order: 1);
-      final weekEnd =
-          DateTime(now.year, now.month, now.day).add(const Duration(days: 7));
+      final weekEnd = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).add(const Duration(days: 7));
       if (d.isBefore(weekEnd)) {
         return (key: 'week', label: 'This week', order: 2);
       }

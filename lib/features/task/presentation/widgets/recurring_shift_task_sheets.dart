@@ -1110,12 +1110,12 @@ class _MissedPolicyNote extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Missed policy · Not enabled',
+                  'Missed policy · Enabled',
                   style: AppTypography.labelSmall,
                 ),
                 SizedBox(height: AppSpacing.xs),
                 Text(
-                  'Generated tasks stay open after the shift until someone handles them.',
+                  'Generated tasks are due at shift end. Unfinished tasks automatically end as Missed.',
                   style: AppTypography.caption,
                 ),
               ],

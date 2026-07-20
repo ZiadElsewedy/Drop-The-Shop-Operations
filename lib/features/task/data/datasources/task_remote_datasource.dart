@@ -262,7 +262,7 @@ class TaskRemoteDataSourceImpl implements TaskRemoteDataSource {
     'startedAt', 'submittedAt',
     'approvedBy', 'approvedAt', 'rejectedBy', 'rejectedAt',
     'reviewNotes', 'rejectionReason', 'revisionNumber', 'requiresRework',
-    'archivedAt',
+    'archivedAt', 'missedAt',
   };
 
   @override

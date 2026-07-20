@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drop/core/enums/task_status.dart';
 import 'package:drop/features/task/data/models/task_model.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 
@@ -29,4 +30,24 @@ void main() {
     expect(back.startsAt, isNull);
     expect(back.hasSchedule, isFalse);
   });
+
+  test(
+    'server-owned missedAt round-trips without changing its terminal status',
+    () {
+      final missedAt = DateTime.utc(2026, 7, 8, 16, 31);
+      final entity = TaskEntity(
+        id: 'missed',
+        title: 'Open the shop',
+        status: TaskStatus.missed,
+        missedAt: missedAt,
+      );
+
+      final map = TaskModel.fromEntity(entity).toMap();
+      expect(map['missedAt'], isNotNull);
+
+      final back = TaskModel.fromMap(map).toEntity();
+      expect(back.status, TaskStatus.missed);
+      expect(back.missedAt!.isAtSameMomentAs(missedAt), isTrue);
+    },
+  );
 }

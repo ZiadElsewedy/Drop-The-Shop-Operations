@@ -62,7 +62,10 @@ class TaskFeedRow extends StatelessWidget {
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 SizedBox(
@@ -92,11 +95,18 @@ class TaskFeedRow extends StatelessWidget {
 
                 // ── trailing meta (branch · High · assignee · due) ──
                 if ((branchName ?? '').isNotEmpty) ...[
-                  _Chip(icon: Icons.store_mall_directory_outlined, label: branchName!),
+                  _Chip(
+                    icon: Icons.store_mall_directory_outlined,
+                    label: branchName!,
+                  ),
                   const SizedBox(width: 8),
                 ],
                 if (task.priority == TaskPriority.high) ...[
-                  const Icon(Icons.flag_rounded, size: 14, color: AppColors.error),
+                  const Icon(
+                    Icons.flag_rounded,
+                    size: 14,
+                    color: AppColors.error,
+                  ),
                   const SizedBox(width: 8),
                 ],
                 _AssigneeMini(task: task, directory: directory),
@@ -140,13 +150,14 @@ class TaskFeedRow extends StatelessWidget {
 /// The card's friendly label, kept local (like `TaskCard`) so the row doesn't
 /// fork a third status→colour map — only the label/short form is row-local.
 String _statusLabel(TaskStatus s) => switch (s) {
-      TaskStatus.pending => 'To do',
-      TaskStatus.started => 'In progress',
-      TaskStatus.completed => 'Completed',
-      TaskStatus.waitingReview => 'In review',
-      TaskStatus.approved => 'Approved',
-      TaskStatus.rejected => 'Rejected',
-    };
+  TaskStatus.pending => 'To do',
+  TaskStatus.started => 'In progress',
+  TaskStatus.completed => 'Completed',
+  TaskStatus.waitingReview => 'In review',
+  TaskStatus.approved => 'Approved',
+  TaskStatus.rejected => 'Rejected',
+  TaskStatus.missed => 'Missed',
+};
 
 class _Chip extends StatelessWidget {
   const _Chip({required this.icon, required this.label});
@@ -173,7 +184,9 @@ class _Chip extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -198,7 +211,9 @@ class _AssigneeMini extends StatelessWidget {
       for (final uid in task.assigneeIds)
         if (directory[uid] != null) directory[uid]!,
     ];
-    if (task.assigneeIds.isEmpty) return _glyph(Icons.person_add_alt_1_outlined);
+    if (task.assigneeIds.isEmpty) {
+      return _glyph(Icons.person_add_alt_1_outlined);
+    }
     if (resolved.length == 1) {
       return Row(
         mainAxisSize: MainAxisSize.min,
@@ -211,7 +226,9 @@ class _AssigneeMini extends StatelessWidget {
               _name(resolved.first),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption.copyWith(color: AppColors.textSecondary),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+              ),
             ),
           ),
         ],
@@ -222,15 +239,15 @@ class _AssigneeMini extends StatelessWidget {
   }
 
   Widget _glyph(IconData icon) => Container(
-        width: 22,
-        height: 22,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: AppColors.darkSurfaceElevated,
-          border: Border.all(color: AppColors.darkBorder),
-        ),
-        child: Icon(icon, size: 12, color: AppColors.textTertiary),
-      );
+    width: 22,
+    height: 22,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      color: AppColors.darkSurfaceElevated,
+      border: Border.all(color: AppColors.darkBorder),
+    ),
+    child: Icon(icon, size: 12, color: AppColors.textTertiary),
+  );
 
   static String _name(UserEntity u) =>
       (u.displayName?.isNotEmpty ?? false) ? u.displayName! : u.email;
@@ -245,8 +262,10 @@ class _DueLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     final d = task.deadline;
     if (d == null) {
-      return Text('—',
-          style: AppTypography.caption.copyWith(color: AppColors.textTertiary));
+      return Text(
+        '—',
+        style: AppTypography.caption.copyWith(color: AppColors.textTertiary),
+      );
     }
     final label = AppDateFormatter.dayMonth(d);
     return Text(

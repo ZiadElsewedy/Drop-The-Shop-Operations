@@ -15,11 +15,18 @@ void main() {
       expect(slot, DateTime(2026, 6, 21, 8, 30));
     });
 
-    test('Saturday night = week start + 6 days at 16:30', () {
+    test('Saturday night (weekend) = week start + 6 days at 16:00', () {
       final week = DateTime(2026, 6, 21);
       final slot =
           SwapEligibility.slotStart(week, ScheduleDay.saturday, ScheduleShift.night);
-      expect(slot, DateTime(2026, 6, 27, 16, 30));
+      expect(slot, DateTime(2026, 6, 27, 16, 0));
+    });
+
+    test('Wednesday night (weekday) = week start + 3 days at 15:00', () {
+      final week = DateTime(2026, 6, 21);
+      final slot = SwapEligibility.slotStart(
+          week, ScheduleDay.wednesday, ScheduleShift.night);
+      expect(slot, DateTime(2026, 6, 24, 15, 0));
     });
   });
 
@@ -49,7 +56,7 @@ void main() {
     });
 
     test("today's later shift (not yet started) → valid", () {
-      // Wednesday night (16:30) is still ahead at 12:00.
+      // Wednesday night (weekday, 15:00) is still ahead at 12:00.
       expect(
         SwapEligibility.isRequestable(
             week, ScheduleDay.wednesday, ScheduleShift.night,
@@ -78,8 +85,8 @@ void main() {
     });
 
     test('exactly at start time → invalid (must be strictly future)', () {
-      // now == Wednesday night start exactly.
-      final atStart = DateTime(2026, 6, 24, 16, 30);
+      // now == Wednesday night (weekday) start exactly: 15:00.
+      final atStart = DateTime(2026, 6, 24, 15, 0);
       expect(
         SwapEligibility.isRequestable(
             week, ScheduleDay.wednesday, ScheduleShift.night,

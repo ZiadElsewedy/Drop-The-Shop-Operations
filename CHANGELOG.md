@@ -16,6 +16,26 @@ released — DROP ships from branches and has no version tags.
 
 ## Unreleased
 
+### 2026-07-19
+
+- **Recurring shift tasks now end at their real shift deadline.** Every generated
+  instance persists `instanceDate` + `startsAt` + `deadline` from the saved weekly
+  schedule (per-day `shiftHours` override → frozen `shiftPlan` → standard hours;
+  overnight windows included). The new `autoEndRecurringShiftTasks` Cloud Function
+  runs every 15 minutes, queries the indexed due shift instances, and transactionally
+  changes only still-open source-template tasks to terminal **Missed** — with
+  `missedAt`, a system timeline entry, a version bump, and `task.auto_missed` audit
+  evidence. It never converts unperformed work into completed/approved, and a
+  simultaneous submit wins through transaction revalidation. A duplicate created by
+  an older client is repaired only when its window is missing.
+- **Missed is visible, truthful, and protected.** `TaskStatus.missed` is a closed,
+  server-owned outcome: it leaves active queues and overdue metrics, shows as
+  Missed in task surfaces/timelines, and cannot be forged, reopened, or deleted by a
+  client. The Automation Center now says the missed policy is enabled. Retention
+  archives missed records using the same window as approved work. Added the
+  recurring-expiry composite index and pure Node coverage for resolved weekly
+  shift windows / auto-end eligibility.
+
 ### 2026-07-18
 
 - **Schedule default hours updated + "Today" highlight bug fixed + overnight
@@ -35,10 +55,21 @@ released — DROP ships from branches and has no version tags.
   weekend "till HH:MM" header tag is now data-driven from the resolved night hours
   (shows for any night that crosses midnight) instead of a hardcoded "till 00:30".
   `ScheduleShift` display strings (`timeRange`/`timeRangeOn`/`startMinutes`/
-  `endMinutesOn`) realigned to the new defaults. Tests updated; suite 956 pass / 2
-  known splash fails. **Deliberately left (flagged):** the swap-eligibility /
-  `firestore.rules` / `approveSwap` night-start contract still hardcodes 16:30 — a
-  three-way synced backstop that must change together and is on the pending deploy.
+  `endMinutesOn`) realigned to the new defaults.
+- **Shift-swap timing contract synchronized to the new defaults (all four
+  layers).** The swap "is this slot still in the future" / rest-gap contract
+  previously hardcoded a night start of 16:30 in four synced places; all now read
+  the day-aware default (weekday night **15:00**, weekend night **16:00**, end
+  **00:00** = `1440`): client `SwapEligibility.slotStart` +
+  `SwapValidation.shiftMinutes` derive from `ShiftHours.standard` (now day-aware);
+  `firestore.rules` `swapShiftMinutes(s, d)` gained a `swapIsWeekendDay` split;
+  `functions/index.js` `swapShiftMinutes(s, day)` mirrors it at both call sites
+  (`approveSwap` future check + rest-gap). No legacy 16:30/00:30 shift-timing
+  literals remain (the surviving 16:30 is the unchanged morning **end**). Schedule
+  is now the single source of truth across Schedule, Attendance, Shift Swap, and
+  backend validation. Tests updated; suite **957 pass / 2** known splash fails;
+  Cloud Functions **28 pass**. **`firestore.rules` + `functions` still need the
+  standing deploy** for the server side to take effect.
 
 - **Schedule creation `permission-denied` diagnosed — deployment drift, not an
   admin-role bug.** Read-only verification of the active production Firestore

@@ -72,6 +72,10 @@ const ATTENDANCE_MAX_SESSION_MINUTES = 16 * 60;
 // The pure auto-close decision (unit-tested in test/auto_close.test.js).
 const { isAutoCloseDue } = require("./attendance_auto_close");
 const {
+  resolveRecurringTaskWindow,
+  shouldAutoEndRecurringTask,
+} = require("./recurring_task_deadline");
+const {
   SEVERITY,
   logStep,
   buildValidations,
@@ -683,12 +687,18 @@ const SWAP_SHIFTS = ["morning", "night"];
 function swapOppositeShift(s) {
   return s === "night" ? "morning" : "night";
 }
-// Minutes past midnight: morning 08:30–16:30, night 16:30–23:00 (mirrors
-// ScheduleShift.timeRange / SwapEligibility / SwapValidation).
-function swapShiftMinutes(s) {
-  return s === "night"
-    ? { start: 16 * 60 + 30, end: 23 * 60 }
-    : { start: 8 * 60 + 30, end: 16 * 60 + 30 };
+// Minutes past the slot day's midnight, mirroring ShiftHours.standard /
+// SwapEligibility / SwapValidation: morning 08:30–16:30; weekday night
+// 15:00–23:00; weekend night (Thu/Fri/Sat) 16:00–00:00 (end 1440 = next-day
+// midnight). Day-aware because weekday and weekend nights now differ.
+function swapIsWeekendDay(day) {
+  return day === "thursday" || day === "friday" || day === "saturday";
+}
+function swapShiftMinutes(s, day) {
+  if (s !== "night") return { start: 8 * 60 + 30, end: 16 * 60 + 30 };
+  return swapIsWeekendDay(day)
+    ? { start: 16 * 60, end: 24 * 60 }
+    : { start: 15 * 60, end: 23 * 60 };
 }
 function swapAssignedUids(assignments, day, shift) {
   const d = assignments && assignments[day];
@@ -704,7 +714,7 @@ function swapMinGapMinutes(assignments, uid) {
     const di = SWAP_DAY_INDEX[day];
     for (const sh of SWAP_SHIFTS) {
       if (swapAssignedUids(assignments, day, sh).includes(uid)) {
-        const m = swapShiftMinutes(sh);
+        const m = swapShiftMinutes(sh, day);
         intervals.push([di * 1440 + m.start, di * 1440 + m.end]);
       }
     }
@@ -819,7 +829,7 @@ exports.approveSwap = onCall(async (request) => {
   const slotStartMs =
     weekStartMs +
     (SWAP_DAY_INDEX[day] || 0) * 24 * 60 * 60 * 1000 +
-    swapShiftMinutes(shift).start * 60 * 1000;
+    swapShiftMinutes(shift, day).start * 60 * 1000;
   if (slotStartMs <= Date.now()) {
     throw new HttpsError(
       "failed-precondition",
@@ -1644,6 +1654,8 @@ exports.generateShiftTaskInstances = onSchedule(
 
       let snapshot = null; // immutable execution snapshot (written on `created`)
       let scheduleExists = null; // null = not reached
+      let scheduleData = null;
+      let taskWindow = null;
       let employeesFound = null;
       const recipients = []; // { uid, name }
       const notificationIds = [];
@@ -1667,11 +1679,46 @@ exports.generateShiftTaskInstances = onSchedule(
           : [];
         checklistCount = checklist.length;
 
+        // Resolve the same frozen-week hours that attendance/scheduling use.
+        // A missing/unreadable weekly document is deliberately non-fatal: the
+        // standing shift hours are the durable fallback, just as they are in
+        // the client. Reading once here also lets notification resolution reuse
+        // the exact schedule snapshot that set this task's deadline.
+        const scheduleId = `${branchId}_${weekStartKey(now)}`;
+        try {
+          const schedSnap = await db.collection(WEEKLY_SCHEDULES).doc(scheduleId).get();
+          scheduleExists = schedSnap.exists;
+          scheduleData = schedSnap.exists ? (schedSnap.data() || {}) : null;
+        } catch (scheduleErr) {
+          scheduleExists = null;
+          step(SEVERITY.warning, "Weekly schedule unavailable; using standard shift hours", {
+            scheduleId,
+            error: String(scheduleErr),
+          });
+          logger.warn("recurring task schedule lookup failed", {
+            templateId: doc.id,
+            scheduleId,
+            error: String(scheduleErr),
+          });
+        }
+        taskWindow = resolveRecurringTaskWindow({
+          schedule: scheduleData,
+          occurrenceAt: now,
+          day: dayName,
+          shift,
+        });
+        if (!taskWindow) {
+          throw new Error("Could not resolve recurring task shift window.");
+        }
+
         stage("validate");
         step(SEVERITY.info, `Schedule window resolved for ${dayName} ${shift}`, {
           day: dayName,
           shift,
           branchId,
+          source: taskWindow.source,
+          startsAtMs: taskWindow.startsAtMs,
+          deadlineMs: taskWindow.deadlineMs,
         });
 
         stage("generate");
@@ -1696,12 +1743,12 @@ exports.generateShiftTaskInstances = onSchedule(
             assignedShiftId: null,
             shift,
             assignmentType: "shift",
-            instanceDate: admin.firestore.Timestamp.fromDate(
-              new Date(`${todayKey}T00:00:00.000Z`),
-            ),
+            instanceDate: admin.firestore.Timestamp.fromMillis(taskWindow.instanceDateMs),
             sourceTemplateId: doc.id,
             correlationId: runCorrelationId,
-            deadline: null,
+            startsAt: admin.firestore.Timestamp.fromMillis(taskWindow.startsAtMs),
+            deadline: admin.firestore.Timestamp.fromMillis(taskWindow.deadlineMs),
+            missedAt: null,
             notes: null,
             proofImageUrl: null,
             startedAt: null,
@@ -1735,8 +1782,33 @@ exports.generateShiftTaskInstances = onSchedule(
           if (isAlreadyExists(createErr)) {
             status = "skipped";
             outcome = "alreadyExists";
+            // A pre-deployment app may have materialized this deterministic
+            // instance without a deadline before the server run reached it.
+            // Repair only missing window fields, transactionally, and never
+            // overwrite a window already persisted for the occurrence.
+            let windowBackfilled = false;
+            await db.runTransaction(async (tx) => {
+              const existing = await tx.get(ref);
+              if (!existing.exists) return;
+              const existingTask = existing.data() || {};
+              if (
+                existingTask.sourceTemplateId !== doc.id ||
+                existingTask.assignmentType !== "shift" ||
+                existingTask.deadline != null
+              ) {
+                return;
+              }
+              tx.update(ref, {
+                instanceDate: admin.firestore.Timestamp.fromMillis(taskWindow.instanceDateMs),
+                startsAt: admin.firestore.Timestamp.fromMillis(taskWindow.startsAtMs),
+                deadline: admin.firestore.Timestamp.fromMillis(taskWindow.deadlineMs),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              });
+              windowBackfilled = true;
+            });
             step(SEVERITY.info, "Skipped — task already generated for today", {
               taskId: instanceId,
+              windowBackfilled,
             });
           } else {
             throw createErr;
@@ -1748,11 +1820,8 @@ exports.generateShiftTaskInstances = onSchedule(
         if (outcome === "created") {
           stage("notify");
           try {
-            const scheduleId = `${branchId}_${weekStartKey(now)}`;
-            const schedSnap = await db.collection(WEEKLY_SCHEDULES).doc(scheduleId).get();
-            scheduleExists = schedSnap.exists;
-            const resolved = schedSnap.exists
-              ? await eligibleRecipients(schedSnap.data(), dayName, shift)
+            const resolved = scheduleExists
+              ? await eligibleRecipients(scheduleData, dayName, shift)
               : [];
             recipients.push(...resolved);
             recipientCount = recipients.length;
@@ -2016,6 +2085,112 @@ exports.generateShiftTaskInstances = onSchedule(
       templates: snap.size,
       created,
       executionId,
+    });
+  },
+);
+
+/**
+ * Ends generated recurring shift tasks once their persisted shift deadline has
+ * passed. This is deliberately server-authoritative: client clocks and app
+ * foreground state cannot decide a terminal outcome. Only source-template
+ * instances still in `pending`/`started` can become `missed`; completed and
+ * review states are never rewritten. The query is index-backed and bounded to
+ * one batch per 15-minute tick, while each candidate is revalidated in a
+ * transaction so a simultaneous employee submission always wins safely.
+ */
+exports.autoEndRecurringShiftTasks = onSchedule(
+  { schedule: "every 15 minutes", maxInstances: 1, retryCount: 0, timeoutSeconds: 300 },
+  async () => {
+    const now = new Date();
+    const nowTs = admin.firestore.Timestamp.fromDate(now);
+    let due;
+    try {
+      due = await db
+        .collection(TASKS)
+        .where("assignmentType", "==", "shift")
+        .where("status", "in", ["pending", "started"])
+        .where("deadline", "<=", nowTs)
+        .orderBy("deadline", "asc")
+        .limit(BATCH_LIMIT)
+        .get();
+    } catch (queryErr) {
+      logger.error("recurring task auto-end query failed", {
+        error: String(queryErr),
+      });
+      return;
+    }
+
+    let missed = 0;
+    let skipped = 0;
+    let failures = 0;
+    for (const doc of due.docs) {
+      let ended = null;
+      try {
+        await db.runTransaction(async (tx) => {
+          const live = await tx.get(doc.ref);
+          if (!live.exists) return;
+          const task = live.data() || {};
+          if (!shouldAutoEndRecurringTask({
+            sourceTemplateId: String(task.sourceTemplateId || ""),
+            status: task.status,
+            archivedAt: task.archivedAt,
+            deadline: task.deadline,
+            nowMs: now.getTime(),
+          })) {
+            return;
+          }
+
+          const currentVersion = Number(task.version);
+          const activityLog = Array.isArray(task.activityLog) ? task.activityLog : [];
+          tx.update(doc.ref, {
+            status: "missed",
+            missedAt: nowTs,
+            activityLog: [
+              ...activityLog,
+              {
+                status: "missed",
+                actorId: "system",
+                actorName: "Automation",
+                at: nowTs,
+                note: "Automatically marked missed after the shift deadline.",
+                attachments: [],
+              },
+            ],
+            version: Number.isFinite(currentVersion) ? currentVersion + 1 : 1,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+          ended = {
+            branchId: String(task.branchId || ""),
+            deadline: task.deadline || null,
+            templateId: String(task.sourceTemplateId || ""),
+          };
+        });
+      } catch (transitionErr) {
+        failures++;
+        logger.warn("recurring task auto-end transition failed", {
+          taskId: doc.id,
+          error: String(transitionErr),
+        });
+        continue;
+      }
+
+      if (ended == null) {
+        skipped++;
+        continue;
+      }
+
+      missed++;
+      await writeAutomationAudit("task.auto_missed", "task", doc.id, ended.branchId, {
+        deadline: ended.deadline,
+        templateId: ended.templateId,
+      });
+    }
+
+    logger.info("recurring task auto-end complete", {
+      candidates: due.size,
+      failures,
+      missed,
+      skipped,
     });
   },
 );
@@ -2309,48 +2484,56 @@ exports.taskHousekeeping = onSchedule("every 24 hours", async () => {
     }
   };
 
-  // ── 1. ARCHIVE approved tasks past the window ──
-  // `approvedAt` is set ONLY on a currently-approved task (an admin reopen
-  // clears it), so `approvedAt <= cutoff` returns exactly the approved tasks
-  // old enough to archive. We page by `approvedAt` (cursor) and skip any doc
-  // already archived, so re-runs / long outages can't starve un-archived docs.
+  // ── 1. ARCHIVE terminal tasks past the window ──
+  // `approvedAt` is cleared on an admin reopen, and `missedAt` is only written
+  // by the recurring shift expiry sweep. Each timestamp therefore selects the
+  // current terminal outcome precisely. We page by its timestamp and skip any
+  // already-archived doc, so re-runs / long outages cannot starve the backlog.
   const RUN_CAP = 5000; // bound per-run scan; daily cadence drains any backlog
-  try {
+  const archiveTerminalTasks = async (status, timestampField) => {
     let scanned = 0;
     let last = null;
-    // eslint-disable-next-line no-constant-condition
-    while (scanned < RUN_CAP) {
-      let q = db
-        .collection(TASKS)
-        .where("approvedAt", "<=", cutoff(cfg.archiveAfterDays))
-        .orderBy("approvedAt", "asc")
-        .limit(BATCH_LIMIT);
-      if (last) q = q.startAfter(last);
-      const snap = await q.get();
-      if (snap.empty) break;
+    try {
+      // eslint-disable-next-line no-constant-condition
+      while (scanned < RUN_CAP) {
+        let q = db
+          .collection(TASKS)
+          .where(timestampField, "<=", cutoff(cfg.archiveAfterDays))
+          .orderBy(timestampField, "asc")
+          .limit(BATCH_LIMIT);
+        if (last) q = q.startAfter(last);
+        const snap = await q.get();
+        if (snap.empty) break;
 
-      const batch = db.batch();
-      const toColdTier = [];
-      let n = 0;
-      for (const doc of snap.docs) {
-        last = doc;
-        const t = doc.data() || {};
-        if ((t.status || "") !== "approved") continue; // reopened → skip
-        if (t.archivedAt) continue; // already archived on a prior run
-        batch.update(doc.ref, { archivedAt: nowTs });
-        if (cfg.coldTierImages) toColdTier.push(doc.id);
-        n++;
+        const batch = db.batch();
+        const toColdTier = [];
+        let n = 0;
+        for (const doc of snap.docs) {
+          last = doc;
+          const task = doc.data() || {};
+          if ((task.status || "") !== status) continue;
+          if (task.archivedAt) continue;
+          batch.update(doc.ref, { archivedAt: nowTs });
+          if (cfg.coldTierImages) toColdTier.push(doc.id);
+          n++;
+        }
+        if (n > 0) await batch.commit();
+        archived += n;
+        for (const id of toColdTier) await coldTier(id);
+
+        scanned += snap.size;
+        if (snap.size < BATCH_LIMIT) break;
       }
-      if (n > 0) await batch.commit();
-      archived += n;
-      for (const id of toColdTier) await coldTier(id);
-
-      scanned += snap.size;
-      if (snap.size < BATCH_LIMIT) break;
+    } catch (err) {
+      logger.warn("task archive sweep failed", {
+        error: String(err),
+        status,
+        timestampField,
+      });
     }
-  } catch (err) {
-    logger.warn("task archive sweep failed", { error: String(err) });
-  }
+  };
+  await archiveTerminalTasks("approved", "approvedAt");
+  await archiveTerminalTasks("missed", "missedAt");
 
   // ── 2. DELETE archived tasks past the (opt-in) purge window ──
   if (cfg.deleteAfterDays) {

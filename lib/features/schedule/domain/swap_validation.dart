@@ -1,6 +1,7 @@
 import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 import 'package:drop/features/schedule/domain/swap_policy.dart';
 
 /// Pure, framework-free validation for the **shift-swap exchange** (2026-06-25
@@ -18,10 +19,15 @@ import 'package:drop/features/schedule/domain/swap_policy.dart';
 class SwapValidation {
   SwapValidation._();
 
-  /// Shift start/end as minutes past midnight (mirrors `ScheduleShift.timeRange`
-  /// / `SwapEligibility`): morning 08:30–16:30, night 16:30–23:00.
-  static (int start, int end) shiftMinutes(ScheduleShift s) =>
-      s == ScheduleShift.morning ? (8 * 60 + 30, 16 * 60 + 30) : (16 * 60 + 30, 23 * 60);
+  /// Shift start/end as minutes past the slot day's midnight, read from
+  /// [ShiftHours.standard] (the single source of truth) so the rest-gap check
+  /// tracks the real schedule: morning 08:30–16:30, weekday night 15:00–23:00,
+  /// weekend night 16:00–00:00 (end `1440`, i.e. next-day midnight). Day-aware
+  /// because weekday and weekend nights now differ.
+  static (int start, int end) shiftMinutes(ScheduleDay day, ScheduleShift s) {
+    final h = ShiftHours.standard(day, s);
+    return (h.startMinutes, h.endMinutes);
+  }
 
   /// Validates the proposed exchange. Returns `null` if legal, else the reason.
   ///
@@ -115,7 +121,7 @@ class SwapValidation {
   static int _minGapMinutes(List<(ScheduleDay, ScheduleShift)> slots) {
     final intervals = <(int start, int end)>[];
     for (final (d, s) in slots) {
-      final (sm, em) = shiftMinutes(s);
+      final (sm, em) = shiftMinutes(d, s);
       intervals.add((d.index * 1440 + sm, d.index * 1440 + em));
     }
     if (intervals.length < 2) return 1 << 30;

@@ -64,12 +64,12 @@ class _ActivityTimelineState extends State<ActivityTimeline> {
   VoidCallback? _tapFor(BuildContext context, int index, ActivityEntry entry) {
     if (!_isSubmission(entry.status)) return null;
     return () => showSubmissionDetailsSheet(
-          context: context,
-          task: widget.task,
-          submissionIndex: index,
-          cubit: widget.cubit,
-          canReview: widget.canReview,
-        );
+      context: context,
+      task: widget.task,
+      submissionIndex: index,
+      cubit: widget.cubit,
+      canReview: widget.canReview,
+    );
   }
 
   @override
@@ -91,18 +91,22 @@ class _ActivityTimelineState extends State<ActivityTimeline> {
     var pos = 0; // render order (newest first) — drives the entrance stagger
 
     // ── Head: the current status, hero treatment ─────────────────────
-    children.add(EntranceFade(
-      delay: staggerDelay(pos++),
-      offset: 10,
-      child: _HeadRow(
-        entry: head,
-        actor: widget.directory[head.actorId],
-        media: attachmentsForEvent(head, widget.task),
-        // Spine continues down into the history (if any).
-        nextColor: historyCount > 0 ? activityColor(log[newest - 1].status) : null,
-        onTap: _tapFor(context, newest, head),
+    children.add(
+      EntranceFade(
+        delay: staggerDelay(pos++),
+        offset: 10,
+        child: _HeadRow(
+          entry: head,
+          actor: widget.directory[head.actorId],
+          media: attachmentsForEvent(head, widget.task),
+          // Spine continues down into the history (if any).
+          nextColor: historyCount > 0
+              ? activityColor(log[newest - 1].status)
+              : null,
+          onTap: _tapFor(context, newest, head),
+        ),
       ),
-    ));
+    );
 
     // ── History: compact ledger rows ─────────────────────────────────
     for (var n = 0; n < visible; n++) {
@@ -112,25 +116,29 @@ class _ActivityTimelineState extends State<ActivityTimeline> {
       final nextColor = !isLastVisible
           ? activityColor(log[i - 1].status)
           : (hiddenCount > 0 ? AppColors.textTertiary : null);
-      children.add(EntranceFade(
-        delay: staggerDelay(pos++),
-        offset: 10,
-        child: _LedgerRow(
-          entry: entry,
-          actor: widget.directory[entry.actorId],
-          media: attachmentsForEvent(entry, widget.task),
-          nextColor: nextColor,
-          onTap: _tapFor(context, i, entry),
+      children.add(
+        EntranceFade(
+          delay: staggerDelay(pos++),
+          offset: 10,
+          child: _LedgerRow(
+            entry: entry,
+            actor: widget.directory[entry.actorId],
+            media: attachmentsForEvent(entry, widget.task),
+            nextColor: nextColor,
+            onTap: _tapFor(context, i, entry),
+          ),
         ),
-      ));
+      );
     }
 
     // ── Fold affordance for long histories ───────────────────────────
     if (hiddenCount > 0) {
-      children.add(_ShowMoreRow(
-        count: hiddenCount,
-        onTap: () => setState(() => _expanded = true),
-      ));
+      children.add(
+        _ShowMoreRow(
+          count: hiddenCount,
+          onTap: () => setState(() => _expanded = true),
+        ),
+      );
     }
 
     return Column(children: children);
@@ -145,7 +153,11 @@ const double _railWidth = 34;
 /// The vertical connecting segment under a node — blends this event's colour
 /// into the next (older) event's colour so the spine reads the state flow.
 class _SpineSegment extends StatelessWidget {
-  const _SpineSegment({required this.from, required this.to, this.emphasis = false});
+  const _SpineSegment({
+    required this.from,
+    required this.to,
+    this.emphasis = false,
+  });
 
   final Color from;
   final Color to;
@@ -209,7 +221,9 @@ class _TimelineNodeState extends State<_TimelineNode>
   void _syncController() {
     if (widget.breathing) {
       _c ??= AnimationController(
-          vsync: this, duration: const Duration(milliseconds: 2400));
+        vsync: this,
+        duration: const Duration(milliseconds: 2400),
+      );
       _c!.repeat(reverse: true);
     } else {
       _c?.stop();
@@ -228,26 +242,26 @@ class _TimelineNodeState extends State<_TimelineNode>
     final color = widget.color;
 
     Widget node(double t) => Container(
-          width: size,
-          height: size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: color.withAlpha(widget.head ? 46 : 24),
-            border: Border.all(
-              color: color.withAlpha(widget.head ? 170 : 80),
-              width: widget.head ? 1.6 : 1,
-            ),
-            boxShadow: widget.head
-                ? [
-                    BoxShadow(
-                      color: color.withAlpha((52 + 44 * t).round()),
-                      blurRadius: 10 + 8 * t,
-                    ),
-                  ]
-                : null,
-          ),
-          child: Icon(widget.icon, size: widget.head ? 17 : 13, color: color),
-        );
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color.withAlpha(widget.head ? 46 : 24),
+        border: Border.all(
+          color: color.withAlpha(widget.head ? 170 : 80),
+          width: widget.head ? 1.6 : 1,
+        ),
+        boxShadow: widget.head
+            ? [
+                BoxShadow(
+                  color: color.withAlpha((52 + 44 * t).round()),
+                  blurRadius: 10 + 8 * t,
+                ),
+              ]
+            : null,
+      ),
+      child: Icon(widget.icon, size: widget.head ? 17 : 13, color: color),
+    );
 
     final c = _c;
     if (!widget.breathing || c == null) return node(widget.head ? 0.4 : 0);
@@ -263,24 +277,29 @@ class _TimelineNodeState extends State<_TimelineNode>
 
 /// Actor line prefix for the hero ("Approved by", "Submitted by", …).
 String _actorPrefix(String status) => switch (status) {
-      'pending' => 'Created by',
-      'assigned' => 'Assigned by',
-      'started' => 'Started by',
-      'completed' => 'Completed by',
-      'waitingReview' => 'Submitted by',
-      'approved' => 'Approved by',
-      'rejected' => 'Requested by',
-      'cancelled' => 'Cancelled by',
-      'note' || 'noteWarning' || 'noteIssue' => 'Note by',
-      _ => 'By',
-    };
+  'pending' => 'Created by',
+  'assigned' => 'Assigned by',
+  'started' => 'Started by',
+  'completed' => 'Completed by',
+  'waitingReview' => 'Submitted by',
+  'approved' => 'Approved by',
+  'rejected' => 'Requested by',
+  'missed' => 'Marked missed by',
+  'cancelled' => 'Cancelled by',
+  'note' || 'noteWarning' || 'noteIssue' => 'Note by',
+  _ => 'By',
+};
 
 /// States whose head node breathes — the task is still moving.
 bool _isLiveStatus(String status) => switch (status) {
-      'pending' || 'assigned' || 'started' || 'completed' ||
-      'waitingReview' || 'rejected' => true,
-      _ => false,
-    };
+  'pending' ||
+  'assigned' ||
+  'started' ||
+  'completed' ||
+  'waitingReview' ||
+  'rejected' => true,
+  _ => false,
+};
 
 class _HeadRow extends StatelessWidget {
   const _HeadRow({
@@ -341,8 +360,11 @@ class _HeadRow extends StatelessWidget {
               ),
               if (onTap != null) ...[
                 const SizedBox(width: 2),
-                const Icon(Icons.chevron_right_rounded,
-                    size: 16, color: AppColors.textTertiary),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 16,
+                  color: AppColors.textTertiary,
+                ),
               ],
             ],
           ),
@@ -357,9 +379,13 @@ class _HeadRow extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           // Actor.
-          Text(_actorPrefix(entry.status),
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textTertiary, fontSize: 10.5)),
+          Text(
+            _actorPrefix(entry.status),
+            style: AppTypography.caption.copyWith(
+              color: AppColors.textTertiary,
+              fontSize: 10.5,
+            ),
+          ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -391,7 +417,9 @@ class _HeadRow extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm,
+              ),
               decoration: BoxDecoration(
                 color: AppColors.darkSurface.withAlpha(160),
                 borderRadius: BorderRadius.circular(10),
@@ -401,8 +429,10 @@ class _HeadRow extends StatelessWidget {
                 '“$note”',
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
-                style: AppTypography.caption
-                    .copyWith(color: AppColors.textSecondary, height: 1.45),
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.textSecondary,
+                  height: 1.45,
+                ),
               ),
             ),
           ],
@@ -431,7 +461,10 @@ class _HeadRow extends StatelessWidget {
                 if (nextColor != null)
                   Expanded(
                     child: _SpineSegment(
-                        from: color, to: nextColor!, emphasis: true),
+                      from: color,
+                      to: nextColor!,
+                      emphasis: true,
+                    ),
                   ),
               ],
             ),
@@ -440,7 +473,8 @@ class _HeadRow extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(
-                  bottom: nextColor != null ? AppSpacing.lg : 0),
+                bottom: nextColor != null ? AppSpacing.lg : 0,
+              ),
               child: onTap == null
                   ? card
                   : InkWell(
@@ -463,11 +497,11 @@ String _displayName(ActivityEntry entry, UserEntity? actor) =>
     (actor != null ? (actor.displayName ?? actor.email) : 'Someone');
 
 String? _roleLabel(UserEntity? actor) => switch (actor?.role) {
-      UserRole.admin => 'Admin',
-      UserRole.manager => 'Manager',
-      UserRole.employee => 'Employee',
-      null => null,
-    };
+  UserRole.admin => 'Admin',
+  UserRole.manager => 'Manager',
+  UserRole.employee => 'Employee',
+  null => null,
+};
 
 class _LedgerRow extends StatelessWidget {
   const _LedgerRow({
@@ -511,7 +545,9 @@ class _LedgerRow extends StatelessWidget {
                   Text(
                     activityTitle(entry.status),
                     style: AppTypography.label.copyWith(
-                        color: titleColor, fontWeight: FontWeight.w600),
+                      color: titleColor,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Row(
@@ -524,8 +560,9 @@ class _LedgerRow extends StatelessWidget {
                       Flexible(
                         child: Text(
                           role != null ? '$name · $role' : name,
-                          style: AppTypography.caption
-                              .copyWith(color: AppColors.textSecondary),
+                          style: AppTypography.caption.copyWith(
+                            color: AppColors.textSecondary,
+                          ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -545,15 +582,20 @@ class _LedgerRow extends StatelessWidget {
                 Text(
                   clockTime(entry.at),
                   style: AppTypography.caption.copyWith(
-                      fontSize: 10, color: AppColors.textTertiary),
+                    fontSize: 10,
+                    color: AppColors.textTertiary,
+                  ),
                 ),
               ],
             ),
             if (onTap != null)
               const Padding(
                 padding: EdgeInsets.only(left: 2, top: 1),
-                child: Icon(Icons.chevron_right_rounded,
-                    size: 15, color: AppColors.textTertiary),
+                child: Icon(
+                  Icons.chevron_right_rounded,
+                  size: 15,
+                  color: AppColors.textTertiary,
+                ),
               ),
           ],
         ),
@@ -571,8 +613,10 @@ class _LedgerRow extends StatelessWidget {
               '“$note”',
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption
-                  .copyWith(color: AppColors.textSecondary, height: 1.4),
+              style: AppTypography.caption.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
             ),
           ),
         if (media.isNotEmpty)
@@ -593,7 +637,9 @@ class _LedgerRow extends StatelessWidget {
               children: [
                 _TimelineNode(color: color, icon: activityIcon(entry.status)),
                 if (nextColor != null)
-                  Expanded(child: _SpineSegment(from: color, to: nextColor!)),
+                  Expanded(
+                    child: _SpineSegment(from: color, to: nextColor!),
+                  ),
               ],
             ),
           ),
@@ -601,7 +647,8 @@ class _LedgerRow extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: EdgeInsets.only(
-                  bottom: nextColor != null ? AppSpacing.lg : 0),
+                bottom: nextColor != null ? AppSpacing.lg : 0,
+              ),
               child: onTap == null
                   ? content
                   : InkWell(
@@ -640,8 +687,11 @@ class _ShowMoreRow extends StatelessWidget {
                 border: Border.all(color: AppColors.darkBorder),
                 color: AppColors.darkSurfaceElevated,
               ),
-              child: const Icon(Icons.unfold_more_rounded,
-                  size: 13, color: AppColors.textTertiary),
+              child: const Icon(
+                Icons.unfold_more_rounded,
+                size: 13,
+                color: AppColors.textTertiary,
+              ),
             ),
           ),
         ),
@@ -709,18 +759,23 @@ class _MicroThumbs extends StatelessWidget {
               borderRadius: BorderRadius.circular(6),
               border: Border.all(color: AppColors.darkBorder),
             ),
-            child: Text('+$extra',
-                style: AppTypography.caption.copyWith(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textSecondary)),
+            child: Text(
+              '+$extra',
+              style: AppTypography.caption.copyWith(
+                fontSize: 9,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ),
         const SizedBox(width: 6),
         Flexible(
           child: Text(
             attachmentSummary(media),
-            style: AppTypography.caption
-                .copyWith(fontSize: 10.5, color: AppColors.textTertiary),
+            style: AppTypography.caption.copyWith(
+              fontSize: 10.5,
+              color: AppColors.textTertiary,
+            ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -730,15 +785,15 @@ class _MicroThumbs extends StatelessWidget {
   }
 
   Widget _fallback({bool video = false}) => Container(
-        width: size,
-        height: size,
-        color: AppColors.darkSurfaceElevated,
-        child: Icon(
-          video ? Icons.play_arrow_rounded : Icons.image_outlined,
-          size: size * 0.55,
-          color: AppColors.textSecondary,
-        ),
-      );
+    width: size,
+    height: size,
+    color: AppColors.darkSurfaceElevated,
+    child: Icon(
+      video ? Icons.play_arrow_rounded : Icons.image_outlined,
+      size: size * 0.55,
+      color: AppColors.textSecondary,
+    ),
+  );
 }
 
 // ─── Role chip ───────────────────────────────────────────────────────

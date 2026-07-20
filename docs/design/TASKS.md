@@ -12,9 +12,12 @@ the same stream).
 pending ──start──► started ──submit──► waitingReview ──approve──► approved
                       ▲                      │
                       └────── reject ────────┘  (rework: revisionNumber++)
+
+pending / started ──shift deadline──► missed  (generated recurring shift task only)
 ```
 
-`approved` is terminal (an admin may reopen). Statuses live in
+`approved` and `missed` are terminal. An admin may reopen an approved task;
+`missed` is a server-owned operational record and remains closed. Statuses live in
 `core/enums/task_status.dart`; the status → colour mapping has exactly one home,
 `core/widgets/status_badge.dart` (`taskStatusColor`).
 
@@ -33,6 +36,15 @@ vanished. See [ADR-005](../decisions/ADR-005-server-authoritative-writes.md).
 
 > **Never split a status change and its activity entry into two writes.** That bug
 > has been fixed once (2026-06-18) and the transaction is what keeps it fixed.
+
+The one exception is the server-side recurring-shift expiry sweep. Every 15 minutes
+`autoEndRecurringShiftTasks` re-reads each due candidate in an Admin-SDK
+transaction. Only a live generated instance (`sourceTemplateId` present) still in
+`pending` or `started` can become `missed`; it appends the system activity entry,
+sets `missedAt`, and increments `version` in that same write. It never turns
+unfinished work into `completed`, `waitingReview`, or `approved`. Firestore rules
+make `missed`/`missedAt` server-only and lock the record against client reopen or
+deletion.
 
 Recurrence respawn happens **post-commit**, so only the winning reviewer spawns the
 next instance (`rec_{sourceTaskId}` — a deterministic id, which is what stops the
@@ -75,6 +87,23 @@ unawaited) so a new template is usable before the scheduler runs. The template w
 is the Save boundary — see `recurring_shift_task_sheets.dart` (single-modal
 Manage → Add; never stack bottom sheets).
 
+Every generated instance persists its exact `instanceDate`, `startsAt`, and
+`deadline`. The generator and the client materializer resolve the week slot using
+the saved weekly schedule in the same order as attendance: per-day `shiftHours`
+override → frozen `shiftPlan` → `ShiftHours.standard`. The saved `weekStart`
+instant is the local-midnight anchor, so a configured 08:30–16:30 Morning shift is
+actually due at that shift end (and night windows may cross midnight). The task id
+remains UTC-keyed for existing duplicate protection; the deadline itself is an
+absolute timestamp.
+
+At or after that persisted deadline, `autoEndRecurringShiftTasks` marks an
+unfinished generated task **Missed**. A normal task that merely has a past deadline
+remains a derived **Overdue** phase — it is not auto-closed. The expiry query needs
+the deployed `tasks` composite index
+`assignmentType` + `status` + `deadline`; its transaction revalidation means a
+simultaneous employee submission wins instead of being overwritten. Missed records
+leave active queues immediately and follow the ordinary task-retention window.
+
 ⚠️ The employee shift-task **stream** needs the `tasks` composite index
 (`branchId`+`assignmentType`+`shift`) — it fails `failed-precondition` until
 deployed.
@@ -92,7 +121,10 @@ rail thumb and animates the duration rail under the Start/Due rows.
 
 **`TaskSchedulePhase` is derived, not persisted** — Scheduled / Active / Due-soon /
 Overdue / Done, computed from the times + lifecycle in pure
-`domain/task_schedule.dart`. It is **not** a new `TaskStatus`; do not add one.
+`domain/task_schedule.dart`. It is not a replacement for lifecycle state:
+`TaskStatus.missed` is the narrow server-only terminal result for an expired
+generated recurring shift task, while **Overdue** remains a derived phase for any
+other open task.
 
 Smart defaults pre-fill start/due from the assigned shift's hours
 (`shiftDefaultSchedule`) as a *suggestion that is never locked*. For

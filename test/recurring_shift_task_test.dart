@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:drop/core/routes/route_names.dart';
+import 'package:drop/core/enums/schedule_day.dart';
 import 'package:drop/core/enums/schedule_shift.dart';
 import 'package:drop/core/enums/task_priority.dart';
 import 'package:drop/core/enums/template_repeat_mode.dart';
@@ -13,7 +14,10 @@ import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
 import 'package:drop/features/branch/domain/repositories/branch_repository.dart';
 import 'package:drop/features/notifications/domain/repositories/notification_repository.dart';
 import 'package:drop/features/notifications/domain/usecases/notify_task_event.dart';
+import 'package:drop/features/schedule/domain/entities/weekly_schedule_entity.dart';
 import 'package:drop/features/schedule/domain/repositories/schedule_repository.dart';
+import 'package:drop/features/schedule/domain/schedule_week.dart';
+import 'package:drop/features/schedule/domain/shift_hours.dart';
 import 'package:drop/features/task/domain/entities/recurring_task_template_entity.dart';
 import 'package:drop/features/task/domain/entities/task_entity.dart';
 import 'package:drop/features/task/domain/repositories/task_repository.dart';
@@ -53,6 +57,48 @@ void main() {
       await Future<void>.delayed(Duration.zero);
     },
   );
+
+  test('today instance persists the weekly schedule shift deadline', () async {
+    final utcNow = DateTime.now().toUtc();
+    final occurrenceDay = DateTime(utcNow.year, utcNow.month, utcNow.day);
+    final scheduleDay = ScheduleDay.fromDate(occurrenceDay);
+    final weekStart = ScheduleWeek.startOf(occurrenceDay);
+    const hours = ShiftHours(8 * 60, 17 * 60);
+    final repository = _TaskRepository();
+    final cubit = _createCubit(
+      repository,
+      scheduleRepository: _ScheduleRepository(
+        schedule: WeeklyScheduleEntity(
+          id: 'branch-1_week',
+          branchId: 'branch-1',
+          weekStart: weekStart,
+          shiftHours: {
+            scheduleDay: {ScheduleShift.morning: hours},
+          },
+        ),
+      ),
+    );
+    addTearDown(cubit.close);
+
+    await cubit.createRecurringShiftTemplate(
+      title: 'Open Store',
+      priority: TaskPriority.normal,
+      branchId: 'branch-1',
+      shift: ScheduleShift.morning,
+      repeat: TemplateRepeatMode.daily,
+    );
+    await Future<void>.delayed(Duration.zero);
+
+    final instance = repository.lastInstance;
+    expect(instance, isNotNull);
+    final slotDay = weekStart.add(Duration(days: scheduleDay.index));
+    expect(instance!.instanceDate, slotDay);
+    expect(instance.startsAt, slotDay.add(const Duration(hours: 8)));
+    expect(instance.deadline, slotDay.add(const Duration(hours: 17)));
+
+    repository.instanceWrite.complete(null);
+    await Future<void>.delayed(Duration.zero);
+  });
 
   testWidgets('Automation Center empty state stays usable on a phone', (
     tester,
@@ -146,7 +192,13 @@ void main() {
     expect(find.text('SCHEDULE'), findsOneWidget);
     expect(find.text('Shift window'), findsOneWidget);
     expect(find.text('08:30 – 16:30'), findsOneWidget);
-    expect(find.text('Missed policy · Not enabled'), findsOneWidget);
+    expect(find.text('Missed policy · Enabled'), findsOneWidget);
+    expect(
+      find.text(
+        'Generated tasks are due at shift end. Unfinished tasks automatically end as Missed.',
+      ),
+      findsOneWidget,
+    );
     expect(find.text('Last task'), findsOneWidget);
     expect(find.text('Tap to open'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -196,43 +248,46 @@ void main() {
     },
   );
 
-  testWidgets('details sheet surfaces failure information for a failing routine', (
-    tester,
-  ) async {
-    await _usePhoneViewport(tester);
-    final repository = _TaskRepository(
-      templates: [
-        const RecurringTaskTemplateEntity(
-          id: 'failing',
-          title: 'Nightly Close',
-          branchId: 'branch-1',
-          shift: ScheduleShift.night,
-          repeat: TemplateRepeatMode.daily,
-          lastStatus: 'failed',
-          failureCount: 3,
-        ),
-      ],
-    );
-    final cubit = _createCubit(repository);
-    addTearDown(cubit.close);
+  testWidgets(
+    'details sheet surfaces failure information for a failing routine',
+    (tester) async {
+      await _usePhoneViewport(tester);
+      final repository = _TaskRepository(
+        templates: [
+          const RecurringTaskTemplateEntity(
+            id: 'failing',
+            title: 'Nightly Close',
+            branchId: 'branch-1',
+            shift: ScheduleShift.night,
+            repeat: TemplateRepeatMode.daily,
+            lastStatus: 'failed',
+            failureCount: 3,
+          ),
+        ],
+      );
+      final cubit = _createCubit(repository);
+      addTearDown(cubit.close);
 
-    await _openAutomationCenter(tester, cubit);
-    await tester.ensureVisible(
-      find.byKey(const ValueKey('automation-details-failing')),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('automation-details-failing')));
-    await tester.pumpAndSettle();
+      await _openAutomationCenter(tester, cubit);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('automation-details-failing')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey('automation-details-failing')),
+      );
+      await tester.pumpAndSettle();
 
-    expect(find.text('Needs attention'), findsOneWidget);
-    expect(
-      find.textContaining('3 consecutive generation failures'),
-      findsOneWidget,
-    );
-    // The night-daily window carries its weekend qualifier.
-    expect(find.textContaining('later on weekends'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      expect(find.text('Needs attention'), findsOneWidget);
+      expect(
+        find.textContaining('3 consecutive generation failures'),
+        findsOneWidget,
+      );
+      // The night-daily window carries its weekend qualifier.
+      expect(find.textContaining('later on weekends'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('toggle, delete confirmation, and last-task link work', (
     tester,
@@ -321,10 +376,13 @@ void main() {
   });
 }
 
-TaskCubit _createCubit(_TaskRepository repository) => TaskCubit(
+TaskCubit _createCubit(
+  _TaskRepository repository, {
+  ScheduleRepository? scheduleRepository,
+}) => TaskCubit(
   repository: repository,
   branchRepository: _BranchRepository(),
-  scheduleRepository: _ScheduleRepository(),
+  scheduleRepository: scheduleRepository ?? _ScheduleRepository(),
   createTask: CreateTask(repository),
   updateTask: UpdateTask(repository),
   deleteTask: DeleteTask(repository),
@@ -384,6 +442,7 @@ class _TaskRepository implements TaskRepository {
   final List<RecurringTaskTemplateEntity> templates;
   final Object? recurringError;
   RecurringTaskTemplateEntity? lastUpdated;
+  TaskEntity? lastInstance;
   String? lastDeletedId;
 
   @override
@@ -402,7 +461,10 @@ class _TaskRepository implements TaskRepository {
   ) async => template.copyWith(id: 'template-1');
 
   @override
-  Future<TaskEntity?> createTaskWithId(TaskEntity task) => instanceWrite.future;
+  Future<TaskEntity?> createTaskWithId(TaskEntity task) {
+    lastInstance = task;
+    return instanceWrite.future;
+  }
 
   @override
   Future<void> updateRecurringTemplate(
@@ -429,6 +491,16 @@ class _BranchRepository implements BranchRepository {
 }
 
 class _ScheduleRepository implements ScheduleRepository {
+  _ScheduleRepository({this.schedule});
+
+  final WeeklyScheduleEntity? schedule;
+
+  @override
+  Future<WeeklyScheduleEntity?> getSchedule(
+    String branchId,
+    DateTime weekStart,
+  ) async => schedule;
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

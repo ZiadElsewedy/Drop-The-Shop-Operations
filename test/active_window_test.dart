@@ -9,12 +9,8 @@ import 'package:drop/features/task/domain/entities/task_entity.dart';
 void main() {
   final now = DateTime(2026, 6, 25, 14, 0);
 
-  TaskEntity task(TaskStatus status, {DateTime? approvedAt}) => TaskEntity(
-        id: 't',
-        title: 'T',
-        status: status,
-        approvedAt: approvedAt,
-      );
+  TaskEntity task(TaskStatus status, {DateTime? approvedAt}) =>
+      TaskEntity(id: 't', title: 'T', status: status, approvedAt: approvedAt);
 
   group('isTaskInActiveWindow', () {
     test('outstanding/in-flight statuses are always in the window', () {
@@ -30,19 +26,27 @@ void main() {
     });
 
     test('approved today is in the window (credit for this shift)', () {
-      final approved = task(TaskStatus.approved,
-          approvedAt: DateTime(2026, 6, 25, 9, 0));
+      final approved = task(
+        TaskStatus.approved,
+        approvedAt: DateTime(2026, 6, 25, 9, 0),
+      );
       expect(isTaskInActiveWindow(approved, now), isTrue);
     });
 
     test('approved on a previous day is excluded (historical)', () {
-      final approved = task(TaskStatus.approved,
-          approvedAt: DateTime(2026, 6, 24, 23, 59));
+      final approved = task(
+        TaskStatus.approved,
+        approvedAt: DateTime(2026, 6, 24, 23, 59),
+      );
       expect(isTaskInActiveWindow(approved, now), isFalse);
     });
 
     test('approved with no timestamp is excluded (legacy/unknown date)', () {
       expect(isTaskInActiveWindow(task(TaskStatus.approved), now), isFalse);
+    });
+
+    test('missed work is a closed record, never active work', () {
+      expect(isTaskInActiveWindow(task(TaskStatus.missed), now), isFalse);
     });
   });
 
@@ -52,9 +56,13 @@ void main() {
         task(TaskStatus.pending),
         task(TaskStatus.started),
         task(TaskStatus.waitingReview),
-        task(TaskStatus.approved, approvedAt: DateTime(2026, 6, 25, 8)), // today
+        task(
+          TaskStatus.approved,
+          approvedAt: DateTime(2026, 6, 25, 8),
+        ), // today
         task(TaskStatus.approved, approvedAt: DateTime(2026, 6, 20)), // old
         task(TaskStatus.approved), // no date
+        task(TaskStatus.missed),
       ];
       expect(activeWindowTasks(tasks, now).length, 4);
     });

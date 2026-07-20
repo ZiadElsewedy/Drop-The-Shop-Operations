@@ -3,7 +3,7 @@
 > **Today's snapshot. Nothing historical.** The moment something here becomes
 > history, it moves to [CHANGELOG.md](CHANGELOG.md) and leaves this file.
 >
-> **Last verified against the code:** 2026-07-18.
+> **Last verified against the code:** 2026-07-19.
 
 ## At a glance
 
@@ -11,7 +11,7 @@
 | --- | --- |
 | **Branch** | `feature/attendance-management` |
 | **Build** | `flutter analyze`: 1 info, no errors/warnings (pre-existing test style) |
-| **Tests** | **956 pass · 2 fail** across 142 files (~17s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **28 pass** (`cd functions && node --test`) |
+| **Tests** | **965 pass · 2 fail** across 143 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **34 pass** (`cd functions && node --test`) |
 | **Blocking release** | Firebase deploy (rules · indexes · functions; live `shift_templates` rule missing) · recurring-template manager read isolation · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
@@ -47,7 +47,7 @@ pruning. `Community-Hub` is **dead** — the feature was removed 2026-07-15.
 | **Auth** | Admin-provisioned email/password. No registration/Google/OTP/approval. First-login gate: force password change → profile completion → (employees) Welcome → role home |
 | **Roles & routing** | 43 routes, role-guarded. admin ⊇ manager |
 | **Profile** | View/edit, avatar/cover upload, contact + payment (payment in a private subdoc; hidden for admin) |
-| **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets). The recurring-shift Automation Center is productionized: skeleton loading, premium header, slim tap-through cards, a per-routine details sheet (overview/schedule/next execution/history/failure info/generated task/actions) with real shift-window times, and confirmed delete. |
+| **Tasks** | Full workflow: create → execute (checklist · notes · proof) → review. Multi-assignee, recurrence, activity timeline, templates, shift assignment, work-type framework, Scheduling V2 (start/due windows + quick deadline presets). Generated recurring shift tasks now persist their resolved weekly window and unfinished `pending`/`started` instances automatically close as server-owned **Missed** at shift end; the status is closed, visible, and excluded from active/overdue queues. The recurring-shift Automation Center is productionized: skeleton loading, premium header, slim tap-through cards, a per-routine details sheet (overview/schedule/next execution/history/failure info/generated task/actions), and confirmed delete. |
 | **Schedule** | Weekly roster, shift swaps, leave, day notes, configurable shift hours, shift templates, Final View + PNG export |
 | **Branches** | CRUD, soft delete, swap policy, GPS geofences |
 | **Admin** | User administration, account provisioning, Admin Home V2 command center |
@@ -197,9 +197,9 @@ Nothing below works in production until it is deployed. The missing live
 
 | Target | Carries | Blocks |
 | --- | --- | --- |
-| `functions` | 22 functions incl. `onAttendanceWritten`, `onAttendanceCorrectionWritten`, `autoCloseAttendance`, `generateShiftTaskInstances`, **`onRecurringTemplateWritten`** (new — automation lifecycle audit), `onCase*`, `onRequest*`, `sendBroadcast`, `claimFcmToken` | Attendance audit · automation · cases · requests · **all push** |
-| `firestore:rules` | `shift_templates`; Task review-field freeze + non-decreasing `activityLog`; attendance + corrections; cases; requests | **Schedule creation/configurable hours** · Task hardening (P0/P1) · attendance · cases |
-| `firestore:indexes` | `tasks` composite (`branchId`+`assignmentType`+`shift`); **`automationRuns` `(branchId,templateId,startedAt)` + `(branchId,status,startedAt)`** | Employee shift-task stream (`failed-precondition` without it) · automation run history |
+| `functions` | 23 functions incl. `onAttendanceWritten`, `onAttendanceCorrectionWritten`, `autoCloseAttendance`, `generateShiftTaskInstances`, **`autoEndRecurringShiftTasks`** (15-min missed close), **`onRecurringTemplateWritten`** (automation lifecycle audit), `onCase*`, `onRequest*`, `sendBroadcast`, `claimFcmToken` | Attendance audit · recurring deadlines · automation · cases · requests · **all push** |
+| `firestore:rules` | `shift_templates`; Task review-field freeze + non-decreasing `activityLog` + server-owned Missed lock; attendance + corrections; cases; requests | **Schedule creation/configurable hours** · Task hardening (P0/P1) · recurring deadline integrity · attendance · cases |
+| `firestore:indexes` | `tasks` composites (`branchId`+`assignmentType`+`shift`; `assignmentType`+`status`+`deadline`); **`automationRuns` `(branchId,templateId,startedAt)` + `(branchId,status,startedAt)`** | Employee shift-task stream (`failed-precondition` without it) · automatic recurring close · automation run history |
 | `storage` | `validMedia()` + orphan GC | Media hardening |
 
 ```bash
@@ -247,10 +247,11 @@ unknowingly reversed:
    inert in production and fails at runtime rather than at compile time.
 2. **Close out attendance** — on-device QA, then merge.
 3. **Get the suite green** — 2 failures is 2 too many to notice a third.
-4. **Automation Task UI — productionized (2026-07-18).** Phases 2–4 landed
-   behind owner sign-off (skeleton loading, premium header, details sheet, real
-   shift-window times, confirmed delete). Backend execution, frozen shift
-   windows, new routes and packages remain out of scope by design.
+4. **Recurring shift deadline close — implemented (2026-07-19).** Generator and
+   client materializer persist the resolved weekly shift window; the new
+   server-authoritative 15-minute sweep changes only unfinished generated shift
+   tasks to locked Missed records. **Gated on the standing functions/rules/indexes
+   deploy.** No new route or package was added.
 5. **Automation observability backend — built (2026-07-18, [ADR-011](docs/decisions/ADR-011-automation-observability.md)).**
    Tier 1: enriched `automationRuns` execution records (schedule · validations ·
    target+names · generation · notification · structured error · embedded step
@@ -273,8 +274,8 @@ If you change status, gaps, or priorities, update this file **in the same task**
 
 ```bash
 flutter analyze                          # expect: 1 info, 0 errors/warnings
-flutter test                             # expect: 956 pass, 2 fail (splash)
-(cd functions && node --test)            # expect: 28 pass
+flutter test                             # expect: 965 pass, 2 fail (splash)
+(cd functions && node --test)            # expect: 34 pass
 grep -c "static const String" lib/core/routes/route_names.dart   # expect: 43
 ls lib/features | wc -l                  # expect: 17
 ```

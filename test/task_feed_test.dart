@@ -12,8 +12,12 @@ import 'package:drop/features/task/domain/task_feed.dart';
 void main() {
   final now = DateTime(2026, 7, 3, 10); // Fri 3 Jul, 10:00
 
-  UserEntity user(String uid, String name) =>
-      UserEntity(uid: uid, email: '$uid@x.co', authProvider: 'password', displayName: name);
+  UserEntity user(String uid, String name) => UserEntity(
+    uid: uid,
+    email: '$uid@x.co',
+    authProvider: 'password',
+    displayName: name,
+  );
 
   TaskEntity task(
     String id, {
@@ -28,35 +32,48 @@ void main() {
     DateTime? createdAt,
     String title = 'Task',
     String? description,
-  }) =>
-      TaskEntity(
-        id: id,
-        title: title,
-        description: description,
-        status: status,
-        priority: priority,
-        branchId: branchId,
-        assigneeIds: assignees,
-        shift: shift,
-        assignmentType: type,
-        deadline: deadline,
-        approvedAt: approvedAt,
-        createdAt: createdAt,
-      );
+  }) => TaskEntity(
+    id: id,
+    title: title,
+    description: description,
+    status: status,
+    priority: priority,
+    branchId: branchId,
+    assigneeIds: assignees,
+    shift: shift,
+    assignmentType: type,
+    deadline: deadline,
+    approvedAt: approvedAt,
+    createdAt: createdAt,
+  );
 
   final directory = {'u1': user('u1', 'Ziad'), 'u2': user('u2', 'Richard')};
   final branchNames = {'b1': 'Arkan', 'b2': 'Maadi'};
 
   group('active-set base', () {
-    test('drops approved tasks from a previous day, keeps approved-today', () {
+    test('drops closed historical work from the active feed', () {
       final tasks = [
-        task('old', status: TaskStatus.approved, approvedAt: DateTime(2026, 6, 1)),
+        task(
+          'old',
+          status: TaskStatus.approved,
+          approvedAt: DateTime(2026, 6, 1),
+        ),
         task('today', status: TaskStatus.approved, approvedAt: now),
+        task(
+          'missed',
+          status: TaskStatus.missed,
+          deadline: now.subtract(const Duration(hours: 1)),
+        ),
         task('open'),
       ];
-      final ids = applyFeed(tasks, const TaskFeedFilter(), now).map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(),
+        now,
+      ).map((t) => t.id);
       expect(ids, containsAll(['today', 'open']));
       expect(ids, isNot(contains('old')));
+      expect(ids, isNot(contains('missed')));
     });
   });
 
@@ -68,13 +85,19 @@ void main() {
     ];
 
     test('branch', () {
-      final ids = applyFeed(tasks, const TaskFeedFilter(branchId: 'b1'), now)
-          .map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(branchId: 'b1'),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['a', 'c']);
     });
     test('assignee', () {
-      final ids = applyFeed(tasks, const TaskFeedFilter(assigneeUid: 'u2'), now)
-          .map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(assigneeUid: 'u2'),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['b', 'c']);
     });
     test('branch + priority together', () {
@@ -86,9 +109,11 @@ void main() {
       expect(ids, ['a']);
     });
     test('shift', () {
-      final ids =
-          applyFeed(tasks, const TaskFeedFilter(shift: ScheduleShift.night), now)
-              .map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(shift: ScheduleShift.night),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['c']);
     });
   });
@@ -96,36 +121,52 @@ void main() {
   group('presets', () {
     final tasks = [
       task('overdue', deadline: DateTime(2026, 6, 30)),
+      task(
+        'missed',
+        status: TaskStatus.missed,
+        deadline: DateTime(2026, 6, 30),
+      ),
       task('review', status: TaskStatus.waitingReview),
       task('today', deadline: DateTime(2026, 7, 3, 15)),
       task('unassigned'),
       task('assigned', assignees: ['u1']),
-      task('shiftTask', type: TaskAssignmentType.shift, shift: ScheduleShift.morning),
+      task(
+        'shiftTask',
+        type: TaskAssignmentType.shift,
+        shift: ScheduleShift.morning,
+      ),
     ];
 
     test('overdue → only late, non-terminal tasks', () {
-      final ids =
-          applyFeed(tasks, const TaskFeedFilter(preset: FeedPreset.overdue), now)
-              .map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(preset: FeedPreset.overdue),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['overdue']);
     });
     test('needsReview → waitingReview only', () {
       final ids = applyFeed(
-              tasks, const TaskFeedFilter(preset: FeedPreset.needsReview), now)
-          .map((t) => t.id);
+        tasks,
+        const TaskFeedFilter(preset: FeedPreset.needsReview),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['review']);
     });
     test('dueToday → deadline is today', () {
       final ids = applyFeed(
-              tasks, const TaskFeedFilter(preset: FeedPreset.dueToday), now)
-          .map((t) => t.id);
+        tasks,
+        const TaskFeedFilter(preset: FeedPreset.dueToday),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['today']);
     });
     test('unassigned → no assignee, excludes shift tasks', () {
       final ids = applyFeed(
-              tasks, const TaskFeedFilter(preset: FeedPreset.unassigned), now)
-          .map((t) => t.id)
-          .toList();
+        tasks,
+        const TaskFeedFilter(preset: FeedPreset.unassigned),
+        now,
+      ).map((t) => t.id).toList();
       expect(ids, containsAll(['overdue', 'review', 'today', 'unassigned']));
       expect(ids, isNot(contains('assigned')));
       expect(ids, isNot(contains('shiftTask')));
@@ -138,11 +179,13 @@ void main() {
       task('b', title: 'Clean boxes', assignees: ['u2'], branchId: 'b2'),
       task('c', title: 'Restock', description: 'display wall'),
     ];
-    List<String> search(String q) =>
-        applyFeed(tasks, TaskFeedFilter(query: q), now,
-                directory: directory, branchNames: branchNames)
-            .map((t) => t.id)
-            .toList();
+    List<String> search(String q) => applyFeed(
+      tasks,
+      TaskFeedFilter(query: q),
+      now,
+      directory: directory,
+      branchNames: branchNames,
+    ).map((t) => t.id).toList();
 
     test('matches title', () => expect(search('shop'), ['a']));
     test('matches description', () => expect(search('wall'), ['c']));
@@ -158,8 +201,11 @@ void main() {
         task('none'),
         task('a', deadline: DateTime(2026, 7, 4)),
       ];
-      final ids = applyFeed(tasks, const TaskFeedFilter(sort: FeedSort.dueDate), now)
-          .map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(sort: FeedSort.dueDate),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['a', 'c', 'none']);
     });
 
@@ -169,9 +215,11 @@ void main() {
         task('high', priority: TaskPriority.high),
         task('normal'),
       ];
-      final ids =
-          applyFeed(tasks, const TaskFeedFilter(sort: FeedSort.priority), now)
-              .map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(sort: FeedSort.priority),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['high', 'normal', 'low']);
     });
 
@@ -180,9 +228,11 @@ void main() {
         task('old', createdAt: DateTime(2026, 6, 1)),
         task('new', createdAt: DateTime(2026, 7, 1)),
       ];
-      final ids =
-          applyFeed(tasks, const TaskFeedFilter(sort: FeedSort.newest), now)
-              .map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(sort: FeedSort.newest),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['new', 'old']);
     });
 
@@ -192,12 +242,17 @@ void main() {
         task('today', deadline: DateTime(2026, 7, 3, 18)),
         task('overdue', deadline: DateTime(2026, 6, 30)),
         task('review', status: TaskStatus.waitingReview),
-        task('overdueHigh',
-            deadline: DateTime(2026, 6, 30), priority: TaskPriority.high),
+        task(
+          'overdueHigh',
+          deadline: DateTime(2026, 6, 30),
+          priority: TaskPriority.high,
+        ),
       ];
-      final ids =
-          applyFeed(tasks, const TaskFeedFilter(sort: FeedSort.smart), now)
-              .map((t) => t.id);
+      final ids = applyFeed(
+        tasks,
+        const TaskFeedFilter(sort: FeedSort.smart),
+        now,
+      ).map((t) => t.id);
       expect(ids, ['overdueHigh', 'review', 'overdue', 'today', 'normal']);
     });
 
@@ -209,11 +264,16 @@ void main() {
   group('smartRank', () {
     test('assigns the documented tiers', () {
       expect(
-          smartRank(
-              task('a',
-                  deadline: DateTime(2026, 6, 1), priority: TaskPriority.high),
-              now),
-          0);
+        smartRank(
+          task(
+            'a',
+            deadline: DateTime(2026, 6, 1),
+            priority: TaskPriority.high,
+          ),
+          now,
+        ),
+        0,
+      );
       expect(smartRank(task('b', status: TaskStatus.waitingReview), now), 1);
       expect(smartRank(task('c', deadline: DateTime(2026, 6, 1)), now), 2);
       expect(smartRank(task('d', deadline: DateTime(2026, 7, 3, 20)), now), 3);
@@ -222,37 +282,59 @@ void main() {
   });
 
   group('grouping', () {
-    test('dueTime buckets are ordered Overdue → Today → Week → Later → Done', () {
-      final tasks = [
-        task('done', status: TaskStatus.approved, approvedAt: now),
-        task('later', deadline: DateTime(2026, 7, 20)),
-        task('overdue', deadline: DateTime(2026, 6, 30)),
-        task('today', deadline: DateTime(2026, 7, 3, 18)),
-        task('week', deadline: DateTime(2026, 7, 6)),
-      ];
-      final filtered = applyFeed(tasks, const TaskFeedFilter(), now);
-      final labels =
-          groupFeed(filtered, FeedGrouping.dueTime, now).map((g) => g.label);
-      expect(labels, ['Overdue', 'Today', 'This week', 'Later', 'Done today']);
-    });
+    test(
+      'dueTime buckets are ordered Overdue → Today → Week → Later → Done',
+      () {
+        final tasks = [
+          task('done', status: TaskStatus.approved, approvedAt: now),
+          task('later', deadline: DateTime(2026, 7, 20)),
+          task('overdue', deadline: DateTime(2026, 6, 30)),
+          task('today', deadline: DateTime(2026, 7, 3, 18)),
+          task('week', deadline: DateTime(2026, 7, 6)),
+        ];
+        final filtered = applyFeed(tasks, const TaskFeedFilter(), now);
+        final labels = groupFeed(
+          filtered,
+          FeedGrouping.dueTime,
+          now,
+        ).map((g) => g.label);
+        expect(labels, [
+          'Overdue',
+          'Today',
+          'This week',
+          'Later',
+          'Done today',
+        ]);
+      },
+    );
 
     test('branch grouping uses resolved names', () {
       final tasks = [task('a', branchId: 'b1'), task('b', branchId: 'b2')];
-      final groups = groupFeed(applyFeed(tasks, const TaskFeedFilter(), now),
-          FeedGrouping.branch, now,
-          branchNames: branchNames);
+      final groups = groupFeed(
+        applyFeed(tasks, const TaskFeedFilter(), now),
+        FeedGrouping.branch,
+        now,
+        branchNames: branchNames,
+      );
       expect(groups.map((g) => g.label), ['Arkan', 'Maadi']);
     });
 
     test('employee grouping folds assignee / shift / unassigned', () {
       final tasks = [
         task('a', assignees: ['u1']),
-        task('shift', type: TaskAssignmentType.shift, shift: ScheduleShift.morning),
+        task(
+          'shift',
+          type: TaskAssignmentType.shift,
+          shift: ScheduleShift.morning,
+        ),
         task('none'),
       ];
-      final groups = groupFeed(applyFeed(tasks, const TaskFeedFilter(), now),
-          FeedGrouping.employee, now,
-          directory: directory);
+      final groups = groupFeed(
+        applyFeed(tasks, const TaskFeedFilter(), now),
+        FeedGrouping.employee,
+        now,
+        directory: directory,
+      );
       final labels = groups.map((g) => g.label).toList();
       expect(labels.first, 'Ziad'); // assigned employees sort first
       expect(labels, containsAll(['Morning shift', 'Unassigned']));
@@ -274,8 +356,10 @@ void main() {
     test('hasActiveFilters reflects any set filter', () {
       expect(const TaskFeedFilter().hasActiveFilters, isFalse);
       expect(const TaskFeedFilter(query: '  ').hasActiveFilters, isFalse);
-      expect(const TaskFeedFilter(preset: FeedPreset.overdue).hasActiveFilters,
-          isTrue);
+      expect(
+        const TaskFeedFilter(preset: FeedPreset.overdue).hasActiveFilters,
+        isTrue,
+      );
     });
   });
 }
