@@ -63,8 +63,8 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
 
   static Map<String, dynamic>? _pageQuery(int? limit, String? cursor) {
     final query = <String, dynamic>{
-      if (limit != null) 'limit': limit,
-      if (cursor != null) 'cursor': cursor,
+      'limit': ?limit,
+      'cursor': ?cursor,
     };
     return query.isEmpty ? null : query;
   }

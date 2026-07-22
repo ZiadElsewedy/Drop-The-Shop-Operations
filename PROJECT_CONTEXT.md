@@ -75,7 +75,7 @@ Classify every change (**bug / polish / refactor / feature**) and label its risk
 | State | `flutter_bloc` — **Cubits only** | [ADR-002](docs/decisions/ADR-002-cubit-only.md) |
 | Navigation | `go_router` | Auth-aware redirects + role guards |
 | Backend | Firebase: Auth · Firestore · Storage | [ADR-001](docs/decisions/ADR-001-firebase-backend.md) |
-| Chat API (upcoming) | NestJS over `dio` | Single seam `core/network/api_client.dart`; Firebase ID token as Bearer |
+| Chat API (in progress) | NestJS over `dio` + Socket.IO (`socket_io_client`) | HTTP seam `core/network/api_client.dart`; realtime seam `features/chat/data/realtime/`; Firebase ID token as Bearer / handshake auth |
 | Server logic | Cloud Functions (Node.js, `functions/`) | 21 functions; see [DATA_MODEL](docs/design/DATA_MODEL.md) |
 | Push | `firebase_messaging` | iOS unconfigured — see CURRENT_STATE |
 | Immutable models | `freezed` + `freezed_annotation` | Entities & states |
@@ -146,7 +146,7 @@ attendance audit, swap approval, account provisioning, broadcast sends. See
 
 ## 4. Module map
 
-17 features in `lib/features/`. Detail lives in the linked design doc — not here.
+18 features in `lib/features/`. Detail lives in the linked design doc — not here.
 
 | Module | Owns | Design doc |
 | --- | --- | --- |
@@ -157,6 +157,7 @@ attendance audit, swap approval, account provisioning, broadcast sends. See
 | `attendance` | GPS clock in/out, corrections, admin board, geofences | [ATTENDANCE](docs/design/ATTENDANCE.md) |
 | `requests` | Employee → manager yes/no approvals | [REQUESTS](docs/design/REQUESTS.md) |
 | `cases` | Private employee ↔ manager/admin conversations | [CASES](docs/design/CASES.md) |
+| `chat` | Direct 1:1 staff chat over the NestJS API (**in progress** — inbox + thread UI + Socket.IO realtime + message deletion; REST is the source of truth) | — |
 | `communications` | Broadcasts, templates, schedules, reminders | [COMMUNICATIONS](docs/design/COMMUNICATIONS.md) |
 | `notifications` | Notification inbox + deep-link resolver | [NOTIFICATIONS](docs/design/NOTIFICATIONS.md) |
 | `operations` | Branch Operations cockpit: workload, KPI drills | [TASKS](docs/design/TASKS.md) |
@@ -181,10 +182,10 @@ features' cubits.
 | `errors/` | `exceptions.dart` (data) · `failures.dart` (domain) |
 | `extensions/` | `context_extensions` (currentUser/role) · `firestore_extensions` (`map.date`) |
 | `media/` | `MediaUploadService` — the **single** Storage seam for all attachments |
-| `network/` | `ApiClient` — the single authenticated HTTP seam for the NestJS chat API (+ `NetworkConfig`). No feature consumes it yet |
+| `network/` | `ApiClient` — the single authenticated HTTP seam for the NestJS chat API (+ `NetworkConfig`). Consumed only by `features/chat/` |
 | `observability/` | `CrashReporter` (4 funnels → persisted report) + `CrashContext` |
 | `responsive/` | `breakpoints.dart` |
-| `routes/` | `app_router.dart` (role dispatch + guards) · `route_names.dart` (43 routes) |
+| `routes/` | `app_router.dart` (role dispatch + guards) · `route_names.dart` (45 routes) |
 | `services/` | `notification_service.dart` (FCM) · `case_seen_store.dart` |
 | `theme/` | `app_colors` · `app_typography` · `app_spacing` · `app_radius` · `app_theme` |
 | `utils/` | `validators` · `platform_capabilities` · `app_logger` · `app_date_formatter` · `concurrent` |
@@ -203,6 +204,7 @@ Reuse these. Do not re-implement or duplicate them.
 | Any `DateTime` → string | `core/utils/app_date_formatter.dart` |
 | Any Storage upload | `core/media/media_upload_service.dart` |
 | Any NestJS API call | `core/network/api_client.dart` (never import `dio` elsewhere) |
+| Chat realtime (socket) | `features/chat/data/realtime/chat_socket_service.dart` (never import `socket_io_client` elsewhere; consume the `ChatRealtime` port) |
 | Task status → colour | `core/widgets/status_badge.dart` (`taskStatusColor`) |
 | Structured logging | `core/utils/app_logger.dart` (`AppLog`) |
 | Shift slot timing | `schedule/domain/shift_window.dart` |

@@ -118,8 +118,20 @@ import 'package:drop/features/audit/domain/repositories/audit_repository.dart';
 import 'package:drop/features/audit/domain/services/event_tracking_service.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart' show UserEntity;
 import 'package:drop/features/chat/data/datasources/chat_remote_datasource.dart';
+import 'package:drop/features/chat/data/realtime/chat_socket_service.dart';
 import 'package:drop/features/chat/data/repositories/chat_repository_impl.dart';
+import 'package:drop/features/chat/domain/chat_realtime.dart';
 import 'package:drop/features/chat/domain/repositories/chat_repository.dart';
+import 'package:drop/features/chat/domain/usecases/delete_chat_message_for_everyone.dart';
+import 'package:drop/features/chat/domain/usecases/delete_chat_message_for_me.dart';
+import 'package:drop/features/chat/domain/usecases/get_conversation.dart';
+import 'package:drop/features/chat/domain/usecases/get_conversations.dart';
+import 'package:drop/features/chat/domain/usecases/load_chat_history.dart';
+import 'package:drop/features/chat/domain/usecases/mark_chat_read.dart';
+import 'package:drop/features/chat/domain/usecases/send_chat_message.dart';
+import 'package:drop/features/chat/domain/usecases/start_conversation.dart';
+import 'package:drop/features/chat/presentation/cubit/chat_conversation_cubit.dart';
+import 'package:drop/features/chat/presentation/cubit/chat_list_cubit.dart';
 
 class AppDependencies {
   AppDependencies._();
@@ -129,9 +141,46 @@ class AppDependencies {
   static late final ApiClient apiClient;
 
   /// Direct (1:1) chat — domain + data layers over the NestJS API (Phase 2).
-  /// Cubits/UI/realtime arrive in later phases and will build their use cases
-  /// off this instance (mirroring the Cases wiring).
   static late final ChatRepository chatRepository;
+
+  /// Direct chat — the realtime channel (Socket.IO). Read-only delivery; all
+  /// writes stay on [chatRepository]. Lazily connected while any thread cubit
+  /// has its conversation joined.
+  static late final ChatRealtime chatRealtime;
+
+  /// Direct chat — the inbox list cubit (singleton, app-wide), mirroring
+  /// [caseListCubit]'s role for Cases.
+  static late final ChatListCubit chatListCubit;
+
+  // Direct chat — read/write use cases, kept so a fresh per-thread
+  // [ChatConversationCubit] can be built on demand (one per opened thread).
+  static late final GetConversation _getChatConversation;
+  static late final DeleteChatMessageForMe _deleteChatMessageForMe;
+  static late final DeleteChatMessageForEveryone _deleteChatMessageForEveryone;
+  static late final LoadChatHistory _loadChatHistory;
+  static late final SendChatMessage _sendChatMessage;
+  static late final MarkChatRead _markChatRead;
+
+  /// Builds a fresh thread cubit for [conversationId] (owned + disposed by its
+  /// `BlocProvider`; re-created when the opened conversation changes).
+  /// [counterpartUserId] — the other participant's backend-internal id — is
+  /// passed when known (list rows carry it) so own-message alignment works
+  /// before the first send.
+  static ChatConversationCubit createChatConversationCubit(
+    String conversationId, {
+    String? counterpartUserId,
+  }) =>
+      ChatConversationCubit(
+        getConversation: _getChatConversation,
+        loadHistory: _loadChatHistory,
+        sendMessage: _sendChatMessage,
+        markRead: _markChatRead,
+        deleteForMe: _deleteChatMessageForMe,
+        deleteForEveryone: _deleteChatMessageForEveryone,
+        conversationId: conversationId,
+        counterpartUserId: counterpartUserId,
+        realtime: chatRealtime,
+      );
 
   static late final AuthCubit authCubit;
   static late final ProfileCubit profileCubit;
@@ -282,15 +331,36 @@ class AppDependencies {
     // Firebase stays the identity provider: every request carries the caller's
     // Firebase ID token (cached by the SDK; force-refreshed once on a 401).
     // Signed out → null → the request goes out bare and the server rejects it.
+    Future<String?> nestTokenProvider({bool forceRefresh = false}) async =>
+        FirebaseAuth.instance.currentUser?.getIdToken(forceRefresh);
     apiClient = ApiClient(
       baseUrl: NetworkConfig.apiBaseUrl,
-      tokenProvider: ({bool forceRefresh = false}) async =>
-          FirebaseAuth.instance.currentUser?.getIdToken(forceRefresh),
+      tokenProvider: nestTokenProvider,
     );
 
-    // Direct chat (Phase 2: domain + data only). One datasource over the
-    // shared ApiClient; the repository is the seam later phases build on.
+    // Realtime channel (Socket.IO `/chat` namespace) — same identity, same
+    // base URL. Connects lazily on the first joined conversation and drops
+    // the socket when none remain; REST stays the source of truth.
+    chatRealtime = ChatSocketService(
+      baseUrl: NetworkConfig.apiBaseUrl,
+      tokenProvider: nestTokenProvider,
+    );
+
+    // Direct chat. One datasource over the shared ApiClient; the repository is
+    // the single seam, with the list cubit as an app-wide singleton and thread
+    // cubits built per opened conversation (see createChatConversationCubit).
     chatRepository = ChatRepositoryImpl(ChatRemoteDataSourceImpl(apiClient));
+    _getChatConversation = GetConversation(chatRepository);
+    _deleteChatMessageForMe = DeleteChatMessageForMe(chatRepository);
+    _deleteChatMessageForEveryone = DeleteChatMessageForEveryone(chatRepository);
+    _loadChatHistory = LoadChatHistory(chatRepository);
+    _sendChatMessage = SendChatMessage(chatRepository);
+    _markChatRead = MarkChatRead(chatRepository);
+    chatListCubit = ChatListCubit(
+      getConversations: GetConversations(chatRepository),
+      startConversation: StartConversation(chatRepository),
+      realtime: chatRealtime,
+    );
 
     final authRemoteDataSource = AuthRemoteDataSourceImpl(FirebaseAuth.instance);
     final userRemoteDataSource = UserRemoteDataSourceImpl(FirebaseFirestore.instance);

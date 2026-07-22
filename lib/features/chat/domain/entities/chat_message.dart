@@ -1,6 +1,14 @@
 import 'package:drop/core/enums/chat_attachment_kind.dart';
 import 'package:drop/core/enums/chat_message_type.dart';
 
+/// The standard text shown in place of a message deleted for everyone — the
+/// exact mirror of the backend's `DELETED_FOR_EVERYONE_PLACEHOLDER`
+/// (`drop-api` · `chat/messages/domain/delete-for-everyone.policy.ts`). REST
+/// tombstones arrive with this body already substituted; the live
+/// `message:deleted` socket event carries identifiers only, so the client
+/// applies the same text when tombstoning locally.
+const String chatDeletedForEveryonePlaceholder = 'This message was deleted';
+
 /// A chat message — the client mirror of the backend's `MessageResponseDto`
 /// (`drop-api` · `chat/messages/interface/http/dto/message.response.dto.ts`).
 ///
@@ -52,6 +60,41 @@ class ChatMessage {
   /// True when the message was deleted for everyone (tombstoned); [body] then
   /// holds the standard placeholder and [attachment] is gone.
   final bool deletedForEveryone;
+
+  /// This message in the deleted-for-everyone state — how a live
+  /// `message:deleted` event re-renders it: the placeholder as the body, the
+  /// attachment gone, everything else (id, seq, timestamps) preserved,
+  /// matching the server's own tombstone shape.
+  ChatMessage asDeletedForEveryone() => ChatMessage(
+        id: id,
+        conversationId: conversationId,
+        senderId: senderId,
+        type: type,
+        body: chatDeletedForEveryonePlaceholder,
+        attachment: null,
+        replyTo: replyTo,
+        seq: seq,
+        status: status,
+        createdAt: createdAt,
+        deletedForEveryone: true,
+      );
+
+  /// This message with an updated delivery [status] — used when a realtime
+  /// read receipt upgrades an already-rendered message. Everything else is
+  /// immutable by contract.
+  ChatMessage withStatus(String status) => ChatMessage(
+        id: id,
+        conversationId: conversationId,
+        senderId: senderId,
+        type: type,
+        body: body,
+        attachment: attachment,
+        replyTo: replyTo,
+        seq: seq,
+        status: status,
+        createdAt: createdAt,
+        deletedForEveryone: deletedForEveryone,
+      );
 }
 
 /// An attachment riding on a message — mirror of `MessageAttachmentDto`.

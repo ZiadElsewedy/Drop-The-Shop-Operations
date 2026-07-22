@@ -361,6 +361,7 @@ class App extends StatelessWidget {
         BlocProvider.value(value: AppDependencies.broadcastScheduleCubit),
         BlocProvider.value(value: AppDependencies.notificationCubit),
         BlocProvider.value(value: AppDependencies.caseListCubit),
+        BlocProvider.value(value: AppDependencies.chatListCubit),
         BlocProvider.value(value: AppDependencies.requestsListCubit),
         BlocProvider.value(value: AppDependencies.attendanceCubit),
         BlocProvider.value(value: AppDependencies.attendanceAdminCubit),

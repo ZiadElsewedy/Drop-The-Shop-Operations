@@ -57,6 +57,17 @@ class ChatConversationSummary {
   final List<String> participantIds;
   final DateTime createdAt;
   final DateTime? lastMessageAt;
+
+  /// This row with a fresher [lastMessageAt] — how a live `message:new`
+  /// bumps a conversation's activity without a REST round trip.
+  ChatConversationSummary withLastMessageAt(DateTime at) =>
+      ChatConversationSummary(
+        id: id,
+        counterpartUserId: counterpartUserId,
+        participantIds: participantIds,
+        createdAt: createdAt,
+        lastMessageAt: at,
+      );
 }
 
 /// A page of the conversation list with an opaque keyset cursor. Pass

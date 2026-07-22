@@ -11,7 +11,7 @@
 | --- | --- |
 | **Branch** | `feature/chat-nestjs` (from `feature/attendance-management`) |
 | **Build** | `flutter analyze`: 1 info, no errors/warnings (pre-existing test style) |
-| **Tests** | **974 pass · 2 fail** across 144 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **34 pass** (`cd functions && node --test`) |
+| **Tests** | **1010 pass · 2 fail** across 149 files (~20s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **34 pass** (`cd functions && node --test`) |
 | **Blocking release** | Firebase deploy (rules · indexes · functions; live `shift_templates` rule missing) · recurring-template manager read isolation · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
@@ -65,12 +65,27 @@ pruning. `Community-Hub` is **dead** — the feature was removed 2026-07-15.
 
 **Chat (NestJS backend)** — a NEW staff-chat feature (distinct from Cases, which
 stays on Firebase untouched), backed by an external, already-verified NestJS API.
-**Phase 1 done (2026-07-22):** the networking foundation — `core/network/`
-(`ApiClient` + `NetworkConfig`, dio, Firebase-ID-token Bearer auth with one
-401 force-refresh-and-replay, HTTP → `*Exception` mapping), registered as
-`AppDependencies.apiClient`. **No feature consumes it yet.** Next phases: chat
-DTO/models → REST datasource → realtime streams → the chat feature itself.
 Base URL comes from `--dart-define=API_BASE_URL` (default `http://localhost:3000`).
+
+| Phase | State |
+| --- | --- |
+| P1 — networking foundation | Done, committed (`159d6c9`). `core/network/` `ApiClient` + `NetworkConfig` (dio, Firebase-ID-token Bearer, one 401 force-refresh-and-replay, HTTP → `*Exception` mapping) |
+| P2 — domain + data | Done, committed (`159d6c9`). Entities/models/datasource/repository + 8 use cases over the REST API (cursor pagination, send idempotency keys) |
+| P3 — cubits | Done, **uncommitted**. `ChatListCubit` (app-wide singleton, mirrors `CaseListCubit`) + per-thread `ChatConversationCubit`; DI-wired |
+| P4 — Conversation List UI | Done, **uncommitted** (2026-07-22). `/chat` inbox (`ChatScreen` + `ChatConversationTile`): loading/empty/error/loaded, pull-to-refresh, scroll-driven cursor pagination, transient-error snackbar |
+| P5 — Conversation (thread) UI | Done, **uncommitted** (2026-07-22). `ChatConversationScreen` (per-thread cubit via DI factory) → shared `ChatConversationView`: `ChatMessageList` (bottom-anchored bubbles, date separators, relative timestamps, tombstone/attachment-chip rendering, "New messages" jump pill, top scroll-back pagination with preserved offset, post-frame visible→mark-read) + text-only `ChatComposer` (send spinner, clear-on-success-only, desktop autofocus + Enter-to-send). REST only |
+| P6 — Realtime (Socket.IO) | Done, **uncommitted** (2026-07-22). Protocol read from the `drop-api` gateway (namespace `/chat`, handshake `auth.token` = Firebase ID token, `conversation:join`/`leave` with `{ok,error?}` acks, server events `message:new`/`read`/`deleted`/`deleted-for-me`, auth reject = `connection:error` + disconnect). New `ChatRealtime` domain port + `ChatSocketService` (`socket_io_client ^3.1.6`, the only file importing it): refcounted connect (first join) / teardown (last leave), **self-owned reconnect** (rebuilt socket + fresh token each attempt, exp. backoff ≤30s, force-refresh after auth reject), room re-join on reconnect. `ChatConversationCubit` (additive `realtime:` param): live `message:new` inserted by `seq` + deduped, `message:read` → status READ, reconnect → newest-page REST reconcile. **REST stays the only write path & source of truth** |
+| P7 — Message deletion UI | Done, **uncommitted** (2026-07-22). Long-press → bottom-sheet menu (`chat_message_actions.dart`) → Cases-style confirm → the existing use cases. **Delete for me** always offered; **Delete for everyone** offered only on own non-deleted messages (identity fact — the real rules, sender-only + 1h window, stay server-enforced; a 403 surfaces the server's message). In-flight delete dims the bubble (`deletingMessageId`, one at a time). Live `message:deleted` now tombstones in place (client mirrors the backend placeholder constant) and `message:deleted-for-me` removes cross-session |
+| Notifications · attachments | ❌ Not started |
+
+> The list endpoint exposes **no counterpart names, no last-message preview, no
+> unread counts** — the tile renders a deterministic `Teammate XXXXXX` label +
+> honest state lines, with `title`/`preview`/`unreadCount` override slots ready
+> for when the backend provides them. No entry point in any nav chrome yet —
+> the inbox is reachable only by route. The **list** still updates only on
+> re-open/refresh (thread realtime landed; list realtime is future work).
+> **Not verified against a live backend yet** — needs `drop-api` running at
+> `API_BASE_URL`.
 
 **Attendance** — the only feature not closed out. Code is complete across all three
 phases and committed; what remains is deployment and on-device verification.
@@ -284,10 +299,10 @@ If you change status, gaps, or priorities, update this file **in the same task**
 
 ```bash
 flutter analyze                          # expect: 1 info, 0 errors/warnings
-flutter test                             # expect: 974 pass, 2 fail (splash)
+flutter test                             # expect: 1010 pass, 2 fail (splash)
 (cd functions && node --test)            # expect: 34 pass
-grep -c "static const String" lib/core/routes/route_names.dart   # expect: 43
-ls lib/features | wc -l                  # expect: 17
+grep -c "static const String" lib/core/routes/route_names.dart   # expect: 45
+ls lib/features | wc -l                  # expect: 18
 ```
 
 Routes live in [route_names.dart](lib/core/routes/route_names.dart) — read them

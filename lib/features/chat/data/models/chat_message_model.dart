@@ -94,8 +94,8 @@ class ChatMessageModel {
   }) =>
       {
         'idempotencyKey': idempotencyKey,
-        if (content != null) 'content': content,
-        if (replyToMessageId != null) 'replyToMessageId': replyToMessageId,
+        'content': ?content,
+        'replyToMessageId': ?replyToMessageId,
         if (attachment != null)
           'attachment': {
             'kind': attachment.kind.value,

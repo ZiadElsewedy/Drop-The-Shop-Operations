@@ -18,6 +18,81 @@ released — DROP ships from branches and has no version tags.
 
 ### 2026-07-22
 
+- **Chat inbox realtime (Phase 8).** The conversation list now stays live off
+  the *same* socket (no second service): the `ChatRealtime` port gains
+  `attachInbox`/`detachInbox` — inbox-level interest that keeps
+  `ChatSocketService`'s connection alive with **no room join**, since the
+  server's auto-joined personal `user:{id}` room already delivers
+  `message:new` for every conversation. `ChatListCubit` (optional additive
+  `realtime` seam, attached on first load) applies live messages as: row
+  bumped to the top with fresh `lastMessageAt`, a client-held last-message
+  preview, and a client-counted unread badge (the backend pushes no counts;
+  opening a conversation clears its badge via the new `clearUnread`, wired to
+  tile tap). Events are deduped by per-conversation `seq`; a message for a
+  conversation outside the loaded window triggers a full refresh rather than
+  a client-invented row; a reconnect re-pulls page one (reconciliation —
+  pagination resets by design, the documented refresh contract); a live
+  delete-for-everyone tombstones the previewed line. The loaded state gains
+  `previews` + `unreadCounts` maps feeding the tile's Phase-4 override slots.
+  +8 tests.
+
+- **Chat message deletion UI (Phase 7).** Long-press on a bubble opens a
+  bottom-sheet context menu (`chat_message_actions.dart`, house sheet chrome)
+  with Cases-style confirmation dialogs, driving the already-existing
+  `DeleteChatMessageForMe` / `DeleteChatMessageForEveryone` use cases (now
+  DI-registered and wired into `ChatConversationCubit`). *Delete for me* is
+  always offered (sent, received, and tombstoned messages alike — per the
+  backend contract); *Delete for everyone* is offered only on the caller's own
+  non-deleted messages — an identity fact the bubbles already render, while
+  the actual rules (original sender only, 1-hour window,
+  `delete-for-everyone.policy.ts`) stay entirely server-enforced and a 403
+  surfaces the server's own message as a snackbar. New loaded-state field
+  `deletingMessageId` dims the in-flight bubble and serializes deletes.
+  Delete-for-me removes the row; delete-for-everyone swaps in the server's
+  tombstone; the live `message:deleted` / `message:deleted-for-me` socket
+  events (parsed since Phase 6) are now applied — tombstone-in-place with the
+  mirrored `"This message was deleted"` placeholder, and cross-session hide.
+  +9 tests (7 widget + 2 realtime).
+
+- **Chat realtime over Socket.IO (Phase 6).** Protocol taken verbatim from the
+  `drop-api` gateway (`chat/realtime/interface/socket/`): namespace `/chat`,
+  Firebase ID token in the handshake `auth.token`, `conversation:join`/`leave`
+  acked `{ok, error?}`, server events `message:new` (REST-shaped message,
+  sender excluded) / `message:read` / `message:deleted` /
+  `message:deleted-for-me`, auth rejection via `connection:error` + server
+  disconnect, rooms cleared on every disconnect. New `ChatRealtime` domain
+  port + `ChatSocketService` (`socket_io_client ^3.1.6`; the only file allowed
+  to import it): socket lives only while threads are joined, reconnection is
+  self-owned (each attempt rebuilds the socket with a fresh token; exponential
+  backoff capped at 30s; force-refresh after an auth reject), rooms re-joined
+  on reconnect. `ChatConversationCubit` gains an optional `realtime` seam —
+  live messages insert by `seq` (deduped), read receipts upgrade status to
+  READ, and a reconnect triggers a newest-page REST reconcile. REST remains
+  the only write path and the source of truth; without a socket the thread
+  behaves exactly as before. +9 tests (cubit sync + wire-payload parsing).
+
+- **Chat Conversation (thread) UI (Phase 5).** The `/chat/:conversationId`
+  placeholder became the real thread: `ChatConversationScreen` builds a
+  per-thread `ChatConversationCubit` (DI factory) around the shared
+  `ChatConversationView` — `ChatMessageList` (bottom-anchored left/right
+  bubbles, date separators, relative timestamps, tombstone + attachment-chip
+  rendering, Cases' "New messages" jump pill, top scroll-back pagination with
+  preserved scroll offset, post-frame visible→`markVisibleRead`) + a text-only
+  `ChatComposer` (send spinner, clears only on success so a failed send never
+  loses typed text, desktop autofocus + Enter-to-send). REST only — new
+  messages arrive on open until the socket phase. +7 widget tests.
+
+- **Chat Conversation List UI (Phase 4).** New `/chat` inbox over the existing
+  `ChatListCubit`: `ChatScreen` (loading / branded empty / full-screen retry /
+  loaded, pull-to-refresh, scroll-driven cursor pagination, transient errors as
+  snackbars) + `ChatConversationTile` (avatar placeholder · counterpart label ·
+  preview line · relative time · monochrome unread pill, with
+  `title`/`preview`/`unreadCount` override slots for when the backend exposes
+  them). Row tap pushes the new `/chat/:conversationId` route → a placeholder
+  `ChatConversationScreen` (thread UI is the next phase). `ChatListCubit`
+  provided app-wide beside `CaseListCubit`. +11 widget tests; also cleared 10
+  chat-layer analyzer style infos (`dart fix`).
+
 - **Networking foundation for the upcoming Chat feature (NestJS backend) —
   Phase 1.** New single HTTP seam `core/network/` (`ApiClient` on `dio` +
   `NetworkConfig` base URL via `--dart-define=API_BASE_URL`): Firebase stays the
