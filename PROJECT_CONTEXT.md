@@ -75,6 +75,7 @@ Classify every change (**bug / polish / refactor / feature**) and label its risk
 | State | `flutter_bloc` — **Cubits only** | [ADR-002](docs/decisions/ADR-002-cubit-only.md) |
 | Navigation | `go_router` | Auth-aware redirects + role guards |
 | Backend | Firebase: Auth · Firestore · Storage | [ADR-001](docs/decisions/ADR-001-firebase-backend.md) |
+| Chat API (upcoming) | NestJS over `dio` | Single seam `core/network/api_client.dart`; Firebase ID token as Bearer |
 | Server logic | Cloud Functions (Node.js, `functions/`) | 21 functions; see [DATA_MODEL](docs/design/DATA_MODEL.md) |
 | Push | `firebase_messaging` | iOS unconfigured — see CURRENT_STATE |
 | Immutable models | `freezed` + `freezed_annotation` | Entities & states |
@@ -180,6 +181,7 @@ features' cubits.
 | `errors/` | `exceptions.dart` (data) · `failures.dart` (domain) |
 | `extensions/` | `context_extensions` (currentUser/role) · `firestore_extensions` (`map.date`) |
 | `media/` | `MediaUploadService` — the **single** Storage seam for all attachments |
+| `network/` | `ApiClient` — the single authenticated HTTP seam for the NestJS chat API (+ `NetworkConfig`). No feature consumes it yet |
 | `observability/` | `CrashReporter` (4 funnels → persisted report) + `CrashContext` |
 | `responsive/` | `breakpoints.dart` |
 | `routes/` | `app_router.dart` (role dispatch + guards) · `route_names.dart` (43 routes) |
@@ -200,6 +202,7 @@ Reuse these. Do not re-implement or duplicate them.
 | --- | --- |
 | Any `DateTime` → string | `core/utils/app_date_formatter.dart` |
 | Any Storage upload | `core/media/media_upload_service.dart` |
+| Any NestJS API call | `core/network/api_client.dart` (never import `dio` elsewhere) |
 | Task status → colour | `core/widgets/status_badge.dart` (`taskStatusColor`) |
 | Structured logging | `core/utils/app_logger.dart` (`AppLog`) |
 | Shift slot timing | `schedule/domain/shift_window.dart` |

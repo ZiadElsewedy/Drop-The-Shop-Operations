@@ -4,6 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:drop/core/media/media_upload_service.dart';
+import 'package:drop/core/network/api_client.dart';
+import 'package:drop/core/network/network_config.dart';
 import 'package:drop/core/services/case_seen_store.dart';
 import 'package:drop/core/services/notification_service.dart';
 import 'package:drop/features/auth/data/datasources/auth_remote_datasource.dart';
@@ -115,9 +117,21 @@ import 'package:drop/features/audit/data/repositories/audit_repository_impl.dart
 import 'package:drop/features/audit/domain/repositories/audit_repository.dart';
 import 'package:drop/features/audit/domain/services/event_tracking_service.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart' show UserEntity;
+import 'package:drop/features/chat/data/datasources/chat_remote_datasource.dart';
+import 'package:drop/features/chat/data/repositories/chat_repository_impl.dart';
+import 'package:drop/features/chat/domain/repositories/chat_repository.dart';
 
 class AppDependencies {
   AppDependencies._();
+
+  /// The authenticated HTTP seam for the external NestJS API (chat backend).
+  /// Built in [init]; consumed by the chat feature's datasource.
+  static late final ApiClient apiClient;
+
+  /// Direct (1:1) chat — domain + data layers over the NestJS API (Phase 2).
+  /// Cubits/UI/realtime arrive in later phases and will build their use cases
+  /// off this instance (mirroring the Cases wiring).
+  static late final ChatRepository chatRepository;
 
   static late final AuthCubit authCubit;
   static late final ProfileCubit profileCubit;
@@ -264,6 +278,20 @@ class AppDependencies {
   static late final AuditRepository auditRepository;
 
   static void init() {
+    // ─── NestJS API foundation (chat backend · Phase 1) ─────────
+    // Firebase stays the identity provider: every request carries the caller's
+    // Firebase ID token (cached by the SDK; force-refreshed once on a 401).
+    // Signed out → null → the request goes out bare and the server rejects it.
+    apiClient = ApiClient(
+      baseUrl: NetworkConfig.apiBaseUrl,
+      tokenProvider: ({bool forceRefresh = false}) async =>
+          FirebaseAuth.instance.currentUser?.getIdToken(forceRefresh),
+    );
+
+    // Direct chat (Phase 2: domain + data only). One datasource over the
+    // shared ApiClient; the repository is the seam later phases build on.
+    chatRepository = ChatRepositoryImpl(ChatRemoteDataSourceImpl(apiClient));
+
     final authRemoteDataSource = AuthRemoteDataSourceImpl(FirebaseAuth.instance);
     final userRemoteDataSource = UserRemoteDataSourceImpl(FirebaseFirestore.instance);
     final profileRemoteDataSource = ProfileRemoteDataSourceImpl(

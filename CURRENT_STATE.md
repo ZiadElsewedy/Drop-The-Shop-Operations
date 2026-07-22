@@ -3,15 +3,15 @@
 > **Today's snapshot. Nothing historical.** The moment something here becomes
 > history, it moves to [CHANGELOG.md](CHANGELOG.md) and leaves this file.
 >
-> **Last verified against the code:** 2026-07-19.
+> **Last verified against the code:** 2026-07-22.
 
 ## At a glance
 
 | | |
 | --- | --- |
-| **Branch** | `feature/attendance-management` |
+| **Branch** | `feature/chat-nestjs` (from `feature/attendance-management`) |
 | **Build** | `flutter analyze`: 1 info, no errors/warnings (pre-existing test style) |
-| **Tests** | **965 pass · 2 fail** across 143 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **34 pass** (`cd functions && node --test`) |
+| **Tests** | **974 pass · 2 fail** across 144 files (~18s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **34 pass** (`cd functions && node --test`) |
 | **Blocking release** | Firebase deploy (rules · indexes · functions; live `shift_templates` rule missing) · recurring-template manager read isolation · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
@@ -26,7 +26,8 @@ compile time.
 
 | Branch | Holds | State |
 | --- | --- | --- |
-| **`feature/attendance-management`** ← current | Attendance P1–P3 (data · corrections · GPS · UI) | Committed, **not merged**, deploy + QA pending |
+| **`feature/chat-nestjs`** ← current | Chat (new feature, NestJS backend) — Phase 1 networking foundation done | In progress; carries everything from `feature/attendance-management` |
+| `feature/attendance-management` | Attendance P1–P3 (data · corrections · GPS · UI) | Committed, **not merged**, deploy + QA pending |
 | `main` | Trunk | Behind this branch |
 | `feature/media-upload-v2` | Media hardening + Automation Engine | Committed (`e3bf049`), needs deploy |
 | `core/optimization` | Design System V2, Task Scheduling V2 | Merged to `main` via PR #14 |
@@ -61,6 +62,15 @@ pruning. `Community-Hub` is **dead** — the feature was removed 2026-07-15.
 | **Observability** | `AppLog` + `CrashReporter` (4 funnels, persisted across launches) |
 
 ### In progress
+
+**Chat (NestJS backend)** — a NEW staff-chat feature (distinct from Cases, which
+stays on Firebase untouched), backed by an external, already-verified NestJS API.
+**Phase 1 done (2026-07-22):** the networking foundation — `core/network/`
+(`ApiClient` + `NetworkConfig`, dio, Firebase-ID-token Bearer auth with one
+401 force-refresh-and-replay, HTTP → `*Exception` mapping), registered as
+`AppDependencies.apiClient`. **No feature consumes it yet.** Next phases: chat
+DTO/models → REST datasource → realtime streams → the chat feature itself.
+Base URL comes from `--dart-define=API_BASE_URL` (default `http://localhost:3000`).
 
 **Attendance** — the only feature not closed out. Code is complete across all three
 phases and committed; what remains is deployment and on-device verification.
@@ -274,7 +284,7 @@ If you change status, gaps, or priorities, update this file **in the same task**
 
 ```bash
 flutter analyze                          # expect: 1 info, 0 errors/warnings
-flutter test                             # expect: 965 pass, 2 fail (splash)
+flutter test                             # expect: 974 pass, 2 fail (splash)
 (cd functions && node --test)            # expect: 34 pass
 grep -c "static const String" lib/core/routes/route_names.dart   # expect: 43
 ls lib/features | wc -l                  # expect: 17

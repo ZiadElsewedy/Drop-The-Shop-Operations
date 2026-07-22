@@ -39,6 +39,11 @@ dependencies:
   # Navigation
   go_router: ^14.2.0
 
+  # Networking — authenticated HTTP for the external NestJS API (chat backend).
+  # The single HTTP seam is `core/network/api_client.dart`; nothing else may
+  # import dio directly.
+  dio: ^5.7.0
+
   # Firebase
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.1

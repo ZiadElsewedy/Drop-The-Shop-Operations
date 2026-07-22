@@ -1,0 +1,171 @@
+import 'package:dio/dio.dart';
+import 'package:drop/core/errors/exceptions.dart';
+import 'package:drop/core/network/network_config.dart';
+
+/// Resolves the caller's bearer token for the NestJS API. Returns null when no
+/// one is signed in (the request then goes out unauthenticated and the server
+/// rejects it — the client never invents credentials). [forceRefresh] bypasses
+/// the cached Firebase ID token after a 401.
+typedef AuthTokenProvider = Future<String?> Function({bool forceRefresh});
+
+/// The single HTTP seam for the external NestJS API — the `core/media/`
+/// pattern applied to HTTP: one place that owns the base URL, timeouts, the
+/// Bearer token, and error translation, so datasources built on it stay as thin
+/// as the Firestore ones.
+///
+/// - Every request carries the caller's **Firebase ID token** (Firebase stays
+///   the identity provider; the API verifies the token with the Admin SDK).
+/// - The token is fetched per request — the Firebase SDK caches it and
+///   transparently refreshes it near expiry. A **401** response additionally
+///   force-refreshes once and retries, covering revocation/clock-skew edges.
+/// - Every failure surfaces as one of the existing `core/errors` exceptions
+///   (`ServerException` / `AuthException` / `ConflictException`) with a
+///   user-readable message — callers never see a [DioException].
+///
+/// Consumed by the chat feature's `ChatRemoteDataSource`.
+class ApiClient {
+  final Dio _dio;
+
+  ApiClient({
+    required String baseUrl,
+    required AuthTokenProvider tokenProvider,
+    Dio? dio,
+  }) : _dio = dio ?? Dio() {
+    _dio.options
+      ..baseUrl = baseUrl
+      ..connectTimeout = NetworkConfig.timeout
+      ..sendTimeout = NetworkConfig.timeout
+      ..receiveTimeout = NetworkConfig.timeout
+      ..responseType = ResponseType.json;
+    _dio.interceptors.add(_AuthInterceptor(_dio, tokenProvider));
+  }
+
+  Future<dynamic> get(String path, {Map<String, dynamic>? query}) =>
+      _send(() => _dio.get<dynamic>(path, queryParameters: query));
+
+  Future<dynamic> post(String path, {Object? body}) =>
+      _send(() => _dio.post<dynamic>(path, data: body));
+
+  Future<dynamic> put(String path, {Object? body}) =>
+      _send(() => _dio.put<dynamic>(path, data: body));
+
+  Future<dynamic> patch(String path, {Object? body}) =>
+      _send(() => _dio.patch<dynamic>(path, data: body));
+
+  Future<dynamic> delete(String path, {Object? body}) =>
+      _send(() => _dio.delete<dynamic>(path, data: body));
+
+  Future<dynamic> _send(Future<Response<dynamic>> Function() request) async {
+    try {
+      return (await request()).data;
+    } on DioException catch (e) {
+      throw mapDioException(e);
+    }
+  }
+}
+
+/// Attaches the Bearer token to every request; on a **401** force-refreshes the
+/// token once and replays the request. A second 401 falls through to normal
+/// error mapping (the session is genuinely dead, not stale).
+class _AuthInterceptor extends Interceptor {
+  final Dio _dio;
+  final AuthTokenProvider _token;
+
+  static const _kRetried = 'authRetried';
+
+  _AuthInterceptor(this._dio, this._token);
+
+  @override
+  Future<void> onRequest(
+    RequestOptions options,
+    RequestInterceptorHandler handler,
+  ) async {
+    // A 401 replay already carries the force-refreshed token — re-fetching
+    // here would overwrite it with the stale cached one.
+    if (options.extra[_kRetried] == true) return handler.next(options);
+    final token = await _token();
+    if (token != null && token.isNotEmpty) {
+      options.headers['Authorization'] = 'Bearer $token';
+    }
+    handler.next(options);
+  }
+
+  @override
+  Future<void> onError(
+    DioException err,
+    ErrorInterceptorHandler handler,
+  ) async {
+    final alreadyRetried = err.requestOptions.extra[_kRetried] == true;
+    if (err.response?.statusCode != 401 || alreadyRetried) {
+      return handler.next(err);
+    }
+    try {
+      final fresh = await _token(forceRefresh: true);
+      if (fresh == null || fresh.isEmpty) return handler.next(err);
+      final options = err.requestOptions
+        ..extra[_kRetried] = true
+        ..headers['Authorization'] = 'Bearer $fresh';
+      return handler.resolve(await _dio.fetch<dynamic>(options));
+    } on DioException catch (retryErr) {
+      return handler.next(retryErr);
+    } catch (_) {
+      return handler.next(err);
+    }
+  }
+}
+
+/// Translates a [DioException] into the app's exception vocabulary — the HTTP
+/// twin of the `FirebaseException` catch in every Firestore datasource.
+/// 401/403 → [AuthException] · 409 → [ConflictException] (benign, "it was just
+/// refreshed") · everything else → [ServerException].
+Exception mapDioException(DioException e) {
+  switch (e.type) {
+    case DioExceptionType.connectionTimeout:
+    case DioExceptionType.sendTimeout:
+    case DioExceptionType.receiveTimeout:
+    case DioExceptionType.transformTimeout:
+      return const ServerException(
+          'The server took too long to respond. Please try again.');
+    case DioExceptionType.connectionError:
+      return const ServerException(
+          'Could not reach the server. Check your connection.');
+    case DioExceptionType.cancel:
+      return const ServerException('The request was cancelled.');
+    case DioExceptionType.badCertificate:
+      return const ServerException('Secure connection failed.');
+    case DioExceptionType.badResponse:
+      final status = e.response?.statusCode ?? 0;
+      final message = _serverMessage(e.response?.data);
+      if (status == 401) {
+        return const AuthException(
+            'Your session has expired. Please sign in again.');
+      }
+      if (status == 403) {
+        return AuthException(
+            message ?? 'You are not allowed to do that.');
+      }
+      if (status == 409) {
+        return ConflictException(
+            message ?? 'This was just changed by someone else.');
+      }
+      return ServerException(
+          message ?? 'Something went wrong (HTTP $status). Please try again.');
+    case DioExceptionType.unknown:
+      return const ServerException(
+          'Something went wrong. Please check your connection and try again.');
+  }
+}
+
+/// Pulls a human-readable message out of a NestJS error body. Nest's default
+/// shape is `{statusCode, message, error}` where `message` is a string or — for
+/// validation errors — a list of strings (first one wins).
+String? _serverMessage(dynamic data) {
+  if (data is! Map) return null;
+  final message = data['message'];
+  if (message is String && message.trim().isNotEmpty) return message.trim();
+  if (message is List && message.isNotEmpty) {
+    final first = message.first;
+    if (first is String && first.trim().isNotEmpty) return first.trim();
+  }
+  return null;
+}

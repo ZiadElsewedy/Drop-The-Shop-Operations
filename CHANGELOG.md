@@ -16,6 +16,17 @@ released — DROP ships from branches and has no version tags.
 
 ## Unreleased
 
+### 2026-07-22
+
+- **Networking foundation for the upcoming Chat feature (NestJS backend) —
+  Phase 1.** New single HTTP seam `core/network/` (`ApiClient` on `dio` +
+  `NetworkConfig` base URL via `--dart-define=API_BASE_URL`): Firebase stays the
+  identity provider — every request carries the caller's Firebase ID token, with
+  one force-refresh-and-replay on a 401 — and all HTTP failures map to the
+  existing `ServerException`/`AuthException`/`ConflictException` vocabulary.
+  Registered in `AppDependencies.init()`; **no feature consumes it yet** (cases
+  and all other features stay on Firebase, UI untouched). +9 unit tests.
+
 ### 2026-07-19
 
 - **Recurring shift tasks now end at their real shift deadline.** Every generated
