@@ -60,6 +60,12 @@ class AppShell extends StatefulWidget {
       label: 'Communications',
       route: RouteNames.communications,
     );
+    const chat = SidebarItem(
+      icon: Icons.chat_bubble_outline_rounded,
+      activeIcon: Icons.chat_bubble_rounded,
+      label: 'Chat',
+      route: RouteNames.chat,
+    );
     const cases = SidebarItem(
       icon: Icons.forum_outlined,
       activeIcon: Icons.forum_rounded,
@@ -108,6 +114,7 @@ class AppShell extends StatefulWidget {
               route: RouteNames.adminAttendance,
             ),
             communications,
+            chat,
             cases,
             requests,
             notifications,
@@ -167,6 +174,7 @@ class AppShell extends StatefulWidget {
               route: RouteNames.attendanceReview,
             ),
             communications,
+            chat,
             cases,
             requests,
             notifications,
@@ -194,6 +202,7 @@ class AppShell extends StatefulWidget {
               route: RouteNames.mySchedule,
             ),
             attendance,
+            chat,
             cases,
             requests,
             notifications,

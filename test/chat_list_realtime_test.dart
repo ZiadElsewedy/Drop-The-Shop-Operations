@@ -293,18 +293,26 @@ void main() {
               ChatConversationPage(items: [_summary('a'), _summary('b')])),
       rt,
     );
+    addTearDown(() => rt.controller.close());
+    addTearDown(cubit.close);
     await tester.pumpWidget(MaterialApp(
       home: BlocProvider.value(value: cubit, child: const ChatScreen()),
     ));
-    await tester.pumpAndSettle();
-    expect(_loadedOf(cubit).conversations.length, 2); // inbox is on screen
+    await tester.pump(); // post-frame load
+    await tester.pump(); // resolve the page future
+    expect(_loadedOf(cubit).conversations.length, 2,
+        reason: 'inbox should be loaded before events fire');
 
     rt.controller.add(ChatMessageReceived(_live('b', 'm1', 1, 'See you at 5')));
     rt.controller.add(ChatMessageReceived(_live('b', 'm2', 2, 'Bring keys')));
-    await tester.pumpAndSettle();
+    expect(_loadedOf(cubit).previews['b'], 'Bring keys',
+        reason: 'cubit should hold the live preview');
+    // Two pumps: the cubit's async stream delivers the new state during the
+    // first (after its frame was already built); the second renders it.
+    await tester.pump();
+    await tester.pump();
 
     expect(find.text('Bring keys'), findsOneWidget); // live preview
     expect(find.text('2'), findsOneWidget); // unread badge
-    await cubit.close();
   });
 }

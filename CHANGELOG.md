@@ -18,6 +18,16 @@ released — DROP ships from branches and has no version tags.
 
 ### 2026-07-22
 
+- **Chat promoted to a primary navigation destination.** The mobile bottom
+  nav's fourth tab changed from **Profile** to **Chat** (`chat_bubble` icon →
+  `/chat` inbox, never a specific thread); Home/Tasks/Schedule are unchanged.
+  Profile moved into the existing **Settings** hub (which already holds Profile ·
+  Change Password · Sign Out), now reached by the app-bar avatar. Chat was also
+  added to the desktop sidebar for every role (beside Cases). No Chat icon
+  existed in the app bar, so none was removed; the app bar's Cases (forum) icon
+  is a separate feature and stays. GoRouter/ShellRoute architecture and all deep
+  links are unchanged. +3 nav widget tests.
+
 - **Chat inbox realtime (Phase 8).** The conversation list now stays live off
   the *same* socket (no second service): the `ChatRealtime` port gains
   `attachInbox`/`detachInbox` — inbox-level interest that keeps
