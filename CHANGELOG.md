@@ -38,6 +38,11 @@ released — DROP ships from branches and has no version tags.
   client-only `ChatMessage.uploadProgress`, throttled to whole-percent);
   `RepaintBoundary` per bubble so progress ticks / read receipts / the swipe
   translate don't re-rasterize the whole thread. No backend/contract change.
+- **Chat ordering correctness fix (uncommitted).** `_replaceLocal` now drops the
+  optimistic placeholder and re-inserts the confirmed message by its authoritative
+  `seq` (`_insertBySeq`) instead of reusing the placeholder's slot — so rapid/
+  concurrent sends, realtime interleavings, and retries always render in server
+  order and self-heal. +3 ordering tests in `chat_realtime_sync_test.dart`.
 
 ### 2026-07-23
 

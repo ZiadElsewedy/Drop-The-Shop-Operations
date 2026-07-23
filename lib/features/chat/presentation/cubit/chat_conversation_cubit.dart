@@ -414,21 +414,22 @@ class ChatConversationCubit extends Cubit<ChatConversationState> {
     );
   }
 
+  /// Swaps a confirmed optimistic send for its authoritative server message.
+  ///
+  /// The placeholder's slot is **never** reused: its provisional `seq`
+  /// (`maxSeq + 1` at send time) need not match the order the server actually
+  /// assigned once rapid/concurrent sends or an interleaved realtime message are
+  /// in play, so reusing the slot could leave the thread out of `seq` order.
+  /// Instead the placeholder is removed and [_insertBySeq] re-inserts the
+  /// message at its true `seq`, preserving the list's sorted-by-`seq` invariant.
+  /// [_insertBySeq] also dedupes: if a realtime echo already delivered this id,
+  /// it updates that copy in place rather than inserting a duplicate.
   void _replaceLocal(String localId, ChatMessage sent) {
     final localIndex = _messages.indexWhere((m) => m.id == localId);
-    final existingIndex = _messages.indexWhere((m) => m.id == sent.id);
-    // Idempotent replay already present under the real id → drop the local.
-    if (existingIndex >= 0 && existingIndex != localIndex) {
-      if (localIndex >= 0) {
-        _messages = [..._messages]..removeAt(localIndex);
-      }
-      return;
-    }
     if (localIndex >= 0) {
-      _messages = [..._messages]..[localIndex] = sent;
-    } else {
-      _insertBySeq(sent);
+      _messages = [..._messages]..removeAt(localIndex);
     }
+    _insertBySeq(sent);
   }
 
   void _markLocalFailed(String localId) {

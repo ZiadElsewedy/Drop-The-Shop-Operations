@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:drop/core/enums/chat_message_type.dart';
+import 'package:drop/core/errors/failures.dart';
 import 'package:drop/features/chat/data/realtime/chat_realtime_payloads.dart';
 import 'package:drop/features/chat/domain/chat_realtime.dart';
 import 'package:drop/features/chat/domain/entities/chat_attachment_download.dart';
@@ -63,9 +64,13 @@ class _FakeRealtime implements ChatRealtime {
 }
 
 class _FakeChatRepository implements ChatRepository {
-  _FakeChatRepository({required this.onHistory});
+  _FakeChatRepository({required this.onHistory, this.onSend});
 
   final Future<ChatMessagePage> Function({String? cursor}) onHistory;
+
+  /// Controllable send: keyed by `content` so a test can resolve concurrent
+  /// sends out of order and with chosen server `seq`s.
+  final Future<ChatMessage> Function(String content)? onSend;
 
   @override
   Future<ChatConversation> getConversation(String conversationId) async =>
@@ -101,8 +106,11 @@ class _FakeChatRepository implements ChatRepository {
     ChatOutgoingAttachment? attachment,
     String? replyToMessageId,
     void Function(int sent, int total)? onSendProgress,
-  }) =>
-      throw UnimplementedError();
+  }) {
+    final handler = onSend;
+    if (handler == null) throw UnimplementedError();
+    return handler(content ?? '');
+  }
 
   @override
   Future<ChatConversation> startConversation(String targetUserId) =>
@@ -374,6 +382,108 @@ void main() {
         'deletedAt': '2026-07-22T11:05:00.000Z',
       });
       expect(hidden.messageId, 'm2');
+    });
+  });
+
+  // Ordering must follow the authoritative server `seq`, never the optimistic
+  // placeholder's slot. Each case is built to invert send order vs. seq order,
+  // so it would fail if a confirmed message were dropped into its placeholder's
+  // position instead of re-inserted by `seq`.
+  group('confirmed messages render in authoritative seq order', () {
+    List<int> seqs(ChatConversationCubit c) =>
+        _messagesOf(c).map((m) => m.seq.toInt()).toList();
+    List<String?> bodies(ChatConversationCubit c) =>
+        _messagesOf(c).map((m) => m.body).toList();
+
+    test('two rapid concurrent sends whose server seqs invert the send order',
+        () async {
+      final completers = <String, Completer<ChatMessage>>{};
+      final cubit = _cubit(
+        _FakeChatRepository(
+          onHistory: ({String? cursor}) async =>
+              ChatMessagePage(items: [_message('m0', 10, _them, 'seed')]),
+          onSend: (content) =>
+              (completers[content] = Completer<ChatMessage>()).future,
+        ),
+        _FakeRealtime(),
+      );
+      await _settle();
+
+      // Both optimistic sends are in flight (the POSTs are unawaited).
+      await cubit.sendMessage('A'); // local placeholder seq 11
+      await cubit.sendMessage('B'); // local placeholder seq 12
+      expect(bodies(cubit), ['seed', 'A', 'B']);
+
+      // The server assigned B the LOWER seq (it arrived first) and A the higher,
+      // and B's response returns first — the exact case in-place replace broke.
+      completers['B']!.complete(_message('mB', 11, _me, 'B'));
+      await _settle();
+      completers['A']!.complete(_message('mA', 12, _me, 'A'));
+      await _settle();
+
+      expect(bodies(cubit), ['seed', 'B', 'A']);
+      expect(seqs(cubit), [10, 11, 12]);
+      await cubit.close();
+    });
+
+    test('a pending send interleaved with a lower-seq realtime message',
+        () async {
+      final sent = Completer<ChatMessage>();
+      final rt = _FakeRealtime();
+      final cubit = _cubit(
+        _FakeChatRepository(
+          onHistory: ({String? cursor}) async =>
+              ChatMessagePage(items: [_message('m0', 10, _them, 'seed')]),
+          onSend: (_) => sent.future,
+        ),
+        rt,
+      );
+      await _settle();
+
+      await cubit.sendMessage('mine'); // local placeholder seq 11
+      // The counterpart's message lands live first with the real seq 11; the
+      // server will assign my message the next seq (12).
+      rt.controller.add(ChatMessageReceived(_message('mc', 11, _them, 'theirs')));
+      await _settle();
+
+      sent.complete(_message('mm', 12, _me, 'mine'));
+      await _settle();
+
+      expect(bodies(cubit), ['seed', 'theirs', 'mine']);
+      expect(seqs(cubit), [10, 11, 12]);
+      await cubit.close();
+    });
+
+    test('a failed send retried after a newer message keeps seq order',
+        () async {
+      final attempts = <Completer<ChatMessage>>[];
+      final rt = _FakeRealtime();
+      final cubit = _cubit(
+        _FakeChatRepository(
+          onHistory: ({String? cursor}) async =>
+              ChatMessagePage(items: [_message('m0', 10, _them, 'seed')]),
+          onSend: (_) => (attempts..add(Completer<ChatMessage>())).last.future,
+        ),
+        rt,
+      );
+      await _settle();
+
+      await cubit.sendMessage('mine'); // local placeholder seq 11 (attempt 0)
+      attempts[0].completeError(const ServerFailure('offline'));
+      await _settle();
+      // A newer counterpart message arrives while mine sits failed.
+      rt.controller.add(ChatMessageReceived(_message('mc', 11, _them, 'theirs')));
+      await _settle();
+
+      final failedId =
+          _messagesOf(cubit).firstWhere((m) => m.status == 'FAILED').id;
+      await cubit.retrySend(failedId); // attempt 1, reuses the idempotency key
+      attempts[1].complete(_message('mm', 12, _me, 'mine'));
+      await _settle();
+
+      expect(bodies(cubit), ['seed', 'theirs', 'mine']);
+      expect(seqs(cubit), [10, 11, 12]);
+      await cubit.close();
     });
   });
 }
