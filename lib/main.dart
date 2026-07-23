@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:drop/core/config/app_environment.dart';
 import 'package:drop/core/di/injection.dart';
 import 'package:drop/core/observability/crash_reporter.dart';
 import 'package:drop/core/routes/app_router.dart';
@@ -139,6 +140,12 @@ class _LaunchAppState extends State<LaunchApp> {
 }
 
 Future<GoRouter> _initializeRuntime() async {
+  // ⚠️ TEMPORARY DEBUG — confirm which backend this build actually targets.
+  // Remove alongside the rest of the NET-PROBE logging after the 401 probe.
+  debugPrint('🌍[NET-PROBE] Environment: ${AppEnvironment.current.name}');
+  debugPrint(
+      '🌍[NET-PROBE] API Base URL: ${AppEnvironment.current.apiBaseUrl}');
+
   if (Firebase.apps.isEmpty) {
     await AppLog.time(
       'boot',

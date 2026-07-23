@@ -121,9 +121,21 @@ class _AuthInterceptor extends Interceptor {
   /// outgoing request so we can confirm the Bearer token is actually attached.
   /// Remove this method and its two call sites once the 401 is diagnosed.
   void _debugLogOutgoing(RequestOptions options) {
-    debugPrint('➡️[NET-PROBE] Request URL: ${options.uri}');
+    debugPrint('➡️[NET-PROBE] Request URL: ${options.method} ${options.uri}');
     debugPrint(
         '➡️[NET-PROBE] Authorization Header: ${options.headers['Authorization']}');
+  }
+
+  @override
+  void onResponse(
+    Response<dynamic> response,
+    ResponseInterceptorHandler handler,
+  ) {
+    // ⚠️ TEMPORARY DEBUG — every HTTP response status. Remove after 401 probe.
+    debugPrint(
+        '⬅️[NET-PROBE] Response ${response.statusCode} '
+        '${response.requestOptions.method} ${response.requestOptions.uri}');
+    handler.next(response);
   }
 
   @override
@@ -131,6 +143,11 @@ class _AuthInterceptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
+    // ⚠️ TEMPORARY DEBUG — every networking exception. Remove after 401 probe.
+    debugPrint(
+        '❌[NET-PROBE] ${err.type.name} status=${err.response?.statusCode ?? '-'} '
+        '${err.requestOptions.method} ${err.requestOptions.uri} '
+        'error=${err.error ?? err.message}');
     final alreadyRetried = err.requestOptions.extra[_kRetried] == true;
     if (err.response?.statusCode != 401 || alreadyRetried) {
       return handler.next(err);
