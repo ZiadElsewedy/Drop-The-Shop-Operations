@@ -8,6 +8,8 @@ import 'package:drop/features/auth/domain/usecases/forgot_password.dart';
 import 'package:drop/features/auth/domain/usecases/change_password.dart';
 import 'package:drop/features/auth/domain/repositories/auth_repository.dart';
 import 'package:drop/features/auth/domain/entities/user_entity.dart';
+// ⚠️ TEMPORARY DEBUG IMPORT — remove with the 401 investigation.
+import 'package:drop/core/network/debug_auth_probe.dart';
 import 'auth_state.dart';
 
 /// Shown when a signed-in account has been deactivated by an admin. DROP is
@@ -66,6 +68,8 @@ class AuthCubit extends Cubit<AuthState> {
   /// Called once from SplashPage on cold start.
   Future<void> restoreSession() async {
     final firebaseUser = _repository.currentUser;
+    // ⚠️ TEMPORARY DEBUG — remove with the 401 investigation.
+    unawaited(debugLogFirebaseAuth('restoreSession'));
     if (firebaseUser == null) {
       emit(const AuthState.unauthenticated());
     } else {
@@ -165,6 +169,8 @@ class AuthCubit extends Cubit<AuthState> {
         return;
       }
       emit(AuthState.authenticated(user));
+      // ⚠️ TEMPORARY DEBUG — remove with the 401 investigation.
+      unawaited(debugLogFirebaseAuth('signInWithEmail'));
     } on AuthFailure catch (e) {
       emit(AuthState.error(e.message));
     }

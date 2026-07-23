@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+// ⚠️ TEMPORARY DEBUG IMPORT — remove with the 401 investigation (debugPrint).
+import 'package:flutter/foundation.dart';
 import 'package:drop/core/errors/exceptions.dart';
 import 'package:drop/core/network/network_config.dart';
 import 'package:drop/core/utils/app_logger.dart';
@@ -103,12 +105,25 @@ class _AuthInterceptor extends Interceptor {
   ) async {
     // A 401 replay already carries the force-refreshed token — re-fetching
     // here would overwrite it with the stale cached one.
-    if (options.extra[_kRetried] == true) return handler.next(options);
+    if (options.extra[_kRetried] == true) {
+      _debugLogOutgoing(options); // ⚠️ TEMPORARY DEBUG — remove after 401 probe.
+      return handler.next(options);
+    }
     final token = await _token();
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
     }
+    _debugLogOutgoing(options); // ⚠️ TEMPORARY DEBUG — remove after 401 probe.
     handler.next(options);
+  }
+
+  /// ⚠️ TEMPORARY DEBUG — logs the exact Authorization header and URL of every
+  /// outgoing request so we can confirm the Bearer token is actually attached.
+  /// Remove this method and its two call sites once the 401 is diagnosed.
+  void _debugLogOutgoing(RequestOptions options) {
+    debugPrint('➡️[NET-PROBE] Request URL: ${options.uri}');
+    debugPrint(
+        '➡️[NET-PROBE] Authorization Header: ${options.headers['Authorization']}');
   }
 
   @override
