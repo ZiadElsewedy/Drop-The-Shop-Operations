@@ -33,10 +33,13 @@ Future<ChatMessageAction?> showChatMessageActions(
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (sheetContext) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: AppSpacing.sm),
+      // Scrollable so a short viewport (or a full menu) can never overflow the
+      // sheet's capped height — it simply scrolls the last row into reach.
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: AppSpacing.sm),
           Container(
             width: 36,
             height: 4,
@@ -84,8 +87,9 @@ Future<ChatMessageAction?> showChatMessageActions(
               onTap: () => Navigator.of(sheetContext)
                   .pop(ChatMessageAction.deleteForEveryone),
             ),
-          const SizedBox(height: AppSpacing.sm),
-        ],
+            const SizedBox(height: AppSpacing.sm),
+          ],
+        ),
       ),
     ),
   );

@@ -44,7 +44,10 @@ class ChatConversationScreen extends StatelessWidget {
         title: name,
         titleWidget: _Header(name: name, photoUrl: args?.counterpartPhotoUrl),
         contentMaxWidth: 820,
-        body: ChatConversationView(counterpartName: args?.counterpartName),
+        body: ChatConversationView(
+          counterpartName: args?.counterpartName,
+          attachmentSource: AppDependencies.chatAttachmentSource,
+        ),
       ),
     );
   }

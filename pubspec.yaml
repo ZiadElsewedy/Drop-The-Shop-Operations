@@ -58,6 +58,8 @@ dependencies:
 
   # Media
   image_picker: ^1.1.2
+  # Document attachments in chat (images use image_picker's camera/gallery).
+  file_picker: ^8.1.6
   # In-app crop / rotate / flip / aspect editor (mobile only — gated off on
   # desktop/web via `supportsImageEditing`).
   image_cropper: ^9.0.0

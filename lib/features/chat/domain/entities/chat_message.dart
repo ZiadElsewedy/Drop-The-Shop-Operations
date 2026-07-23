@@ -32,6 +32,7 @@ class ChatMessage {
     required this.createdAt,
     this.deletedForEveryone = false,
     this.localBytes,
+    this.uploadProgress,
   });
 
   final String id;
@@ -70,6 +71,11 @@ class ChatMessage {
   /// null on a message that came from the server.
   final Uint8List? localBytes;
 
+  /// **Client-only, never serialized.** Upload progress (0.0–1.0) of an
+  /// in-flight attachment send, driven by the HTTP transfer callback. Null for
+  /// text sends and for any confirmed/server message.
+  final double? uploadProgress;
+
   /// This message in the deleted-for-everyone state — how a live
   /// `message:deleted` event re-renders it: the placeholder as the body, the
   /// attachment gone, everything else (id, seq, timestamps) preserved,
@@ -104,6 +110,25 @@ class ChatMessage {
         createdAt: createdAt,
         deletedForEveryone: deletedForEveryone,
         localBytes: localBytes,
+        uploadProgress: uploadProgress,
+      );
+
+  /// Copy with a new [uploadProgress] (0.0–1.0), keeping everything else — used
+  /// to drive the in-flight attachment progress ring.
+  ChatMessage withUploadProgress(double? progress) => ChatMessage(
+        id: id,
+        conversationId: conversationId,
+        senderId: senderId,
+        type: type,
+        body: body,
+        attachment: attachment,
+        replyTo: replyTo,
+        seq: seq,
+        status: status,
+        createdAt: createdAt,
+        deletedForEveryone: deletedForEveryone,
+        localBytes: localBytes,
+        uploadProgress: progress,
       );
 }
 

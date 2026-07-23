@@ -55,6 +55,7 @@ class ChatRepositoryImpl implements ChatRepository {
     String? content,
     ChatOutgoingAttachment? attachment,
     String? replyToMessageId,
+    void Function(int sent, int total)? onSendProgress,
   }) =>
       _guard(() => _remote.sendMessage(
             conversationId: conversationId,
@@ -62,6 +63,7 @@ class ChatRepositoryImpl implements ChatRepository {
             content: content,
             attachment: attachment,
             replyToMessageId: replyToMessageId,
+            onSendProgress: onSendProgress,
           ));
 
   @override

@@ -46,8 +46,16 @@ class ApiClient {
   Future<dynamic> get(String path, {Map<String, dynamic>? query}) =>
       _send(() => _dio.get<dynamic>(path, queryParameters: query));
 
-  Future<dynamic> post(String path, {Object? body}) =>
-      _send(() => _dio.post<dynamic>(path, data: body));
+  Future<dynamic> post(
+    String path, {
+    Object? body,
+    void Function(int sent, int total)? onSendProgress,
+  }) =>
+      _send(() => _dio.post<dynamic>(
+            path,
+            data: body,
+            onSendProgress: onSendProgress,
+          ));
 
   Future<dynamic> put(String path, {Object? body}) =>
       _send(() => _dio.put<dynamic>(path, data: body));

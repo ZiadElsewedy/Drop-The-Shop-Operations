@@ -15,6 +15,7 @@ class SendChatMessage {
     String? content,
     ChatOutgoingAttachment? attachment,
     String? replyToMessageId,
+    void Function(int sent, int total)? onSendProgress,
   }) =>
       _repository.sendMessage(
         conversationId: conversationId,
@@ -22,5 +23,6 @@ class SendChatMessage {
         content: content,
         attachment: attachment,
         replyToMessageId: replyToMessageId,
+        onSendProgress: onSendProgress,
       );
 }

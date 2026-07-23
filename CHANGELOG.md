@@ -16,6 +16,29 @@ released — DROP ships from branches and has no version tags.
 
 ## Unreleased
 
+### 2026-07-24
+
+- **Chat V1 polish (uncommitted).** Premium composer (paperclip + attachment
+  sheet, reactive circular send, staged-attachment preview). Reply via
+  WhatsApp swipe-right (`_SwipeToReply`, haptic + spring-back) and the
+  long-press menu (Reply · Copy · Message info · Delete); quoted preview in
+  bubble + composer banner. Attachments (Camera/Gallery/Documents) behind a
+  `ChatAttachmentSource` seam over `image_picker` + new `file_picker` dep, with
+  preview-before-send, premium file cards, and a full-screen `ImageViewerScreen`.
+  New Message-info screen (backend fields only). **Optimistic send** — instant
+  `SENDING` bubble, background POST, replace-on-success / `FAILED`+tap-to-retry.
+  Instant re-open via in-memory `ChatThreadCache` + skeleton cold-load. All
+  presentation/cubit; REST stays the only write path. New iOS dep needs
+  `pod install`. Not yet device-verified.
+- **Chat V1 UX polish (uncommitted).** Hero transition into the full-screen
+  image viewer; **inline thumbnails for received images** (lazy brokered-URL
+  fetch, fixed-footprint placeholder); date-separator pill (Today/Yesterday/
+  date — already Today/Yesterday-aware); real **upload-progress ring** for
+  attachments (dio `onSendProgress` threaded through repo→usecase→cubit, a new
+  client-only `ChatMessage.uploadProgress`, throttled to whole-percent);
+  `RepaintBoundary` per bubble so progress ticks / read receipts / the swipe
+  translate don't re-rasterize the whole thread. No backend/contract change.
+
 ### 2026-07-23
 
 - **Chat: real profiles, premium composer/thread, and LAN dev networking

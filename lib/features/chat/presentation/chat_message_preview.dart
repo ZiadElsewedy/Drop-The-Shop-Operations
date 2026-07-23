@@ -10,3 +10,12 @@ String chatReplySnippet({String? body, ChatMessageAttachment? attachment}) {
   if (attachment != null) return attachment.originalFilename;
   return 'Attachment';
 }
+
+/// A compact human-readable byte size (binary units): `842 B`, `12 KB`, `3.4 MB`.
+String chatHumanBytes(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  final kb = bytes / 1024;
+  if (kb < 1024) return '${kb.toStringAsFixed(kb < 10 ? 1 : 0)} KB';
+  final mb = kb / 1024;
+  return '${mb.toStringAsFixed(mb < 10 ? 1 : 0)} MB';
+}

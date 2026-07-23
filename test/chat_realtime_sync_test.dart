@@ -100,6 +100,7 @@ class _FakeChatRepository implements ChatRepository {
     String? content,
     ChatOutgoingAttachment? attachment,
     String? replyToMessageId,
+    void Function(int sent, int total)? onSendProgress,
   }) =>
       throw UnimplementedError();
 

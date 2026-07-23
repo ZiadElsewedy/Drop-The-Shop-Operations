@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:drop/core/enums/chat_attachment_format.dart';
 import 'package:drop/core/enums/chat_message_type.dart';
 import 'package:drop/core/errors/failures.dart';
 import 'package:drop/features/chat/domain/entities/chat_attachment_download.dart';
@@ -15,6 +19,7 @@ import 'package:drop/features/chat/domain/usecases/get_conversation.dart';
 import 'package:drop/features/chat/domain/usecases/load_chat_history.dart';
 import 'package:drop/features/chat/domain/usecases/mark_chat_read.dart';
 import 'package:drop/features/chat/domain/usecases/send_chat_message.dart';
+import 'package:drop/features/chat/presentation/chat_attachment_picker.dart';
 import 'package:drop/features/chat/presentation/cubit/chat_conversation_cubit.dart';
 import 'package:drop/features/chat/presentation/widgets/chat_conversation_view.dart';
 
@@ -47,11 +52,18 @@ class _FakeChatRepository implements ChatRepository {
   _FakeChatRepository({
     required this.onHistory,
     this.onSend,
+    this.progressTicks = const [(50, 100), (100, 100)],
   });
 
   final Future<ChatMessagePage> Function({String? cursor}) onHistory;
   final Future<ChatMessage> Function(String content)? onSend;
+
+  /// Transfer-progress ticks the fake emits on each send (sent, total).
+  final List<(int, int)> progressTicks;
   final List<BigInt> markedUpTo = [];
+
+  /// The attachment passed to the most recent send (null if text-only).
+  ChatOutgoingAttachment? lastAttachment;
 
   /// The `replyToMessageId` passed to the most recent send (null when the last
   /// send did not quote anything) — lets a test assert the reply was threaded.
@@ -76,8 +88,14 @@ class _FakeChatRepository implements ChatRepository {
     String? content,
     ChatOutgoingAttachment? attachment,
     String? replyToMessageId,
+    void Function(int sent, int total)? onSendProgress,
   }) {
     lastReplyTo = replyToMessageId;
+    lastAttachment = attachment;
+    // Emulate transfer-progress ticks so the ring path is exercised.
+    for (final (sent, total) in progressTicks) {
+      onSendProgress?.call(sent, total);
+    }
     final handler = onSend;
     if (handler == null) throw UnimplementedError();
     return handler(content ?? '');
@@ -132,12 +150,32 @@ ChatConversationCubit _cubit(_FakeChatRepository repo) => ChatConversationCubit(
       counterpartUserId: _them,
     );
 
-Widget _host(ChatConversationCubit cubit) => MaterialApp(
+Widget _host(ChatConversationCubit cubit, {ChatAttachmentSource? source}) =>
+    MaterialApp(
       home: Scaffold(
         body: BlocProvider.value(
-            value: cubit, child: const ChatConversationView()),
+          value: cubit,
+          child: ChatConversationView(attachmentSource: source),
+        ),
       ),
     );
+
+/// A canned attachment source — returns a small document on the document path
+/// (no image decode), so the composer's attach→preview→send flow is testable
+/// without the platform pickers.
+class _FakeAttachmentSource implements ChatAttachmentSource {
+  @override
+  Future<ChatOutgoingAttachment?> pickCameraImage() async => null;
+  @override
+  Future<ChatOutgoingAttachment?> pickGalleryImage() async => null;
+  @override
+  Future<ChatOutgoingAttachment?> pickDocument() async => ChatOutgoingAttachment(
+        format: ChatAttachmentFormat.pdf,
+        mimeType: 'application/pdf',
+        originalFilename: 'report.pdf',
+        bytes: Uint8List.fromList(const [1, 2, 3, 4]),
+      );
+}
 
 void main() {
   testWidgets('renders the thread with a date separator and both sides',
@@ -237,6 +275,8 @@ void main() {
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'On my way');
+    // The send button animates in once there's text — settle before tapping.
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
     await tester.pumpAndSettle();
 
@@ -246,13 +286,16 @@ void main() {
     await cubit.close();
   });
 
-  testWidgets('a failed send keeps the typed text in the composer',
+  testWidgets('an optimistic send that fails shows a failed bubble with retry',
       (tester) async {
+    var attempts = 0;
     final repo = _FakeChatRepository(
       onHistory: ({String? cursor}) async =>
           ChatMessagePage(items: [_message('m1', 1, _them, 'Hi')]),
-      onSend: (content) async =>
-          throw const ServerFailure('Send failed.'),
+      onSend: (content) async {
+        attempts++;
+        throw const ServerFailure('Send failed.');
+      },
     );
     final cubit = _cubit(repo);
     await tester.pumpWidget(_host(cubit));
@@ -260,12 +303,21 @@ void main() {
     await tester.pump();
 
     await tester.enterText(find.byType(TextField), 'Important reply');
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
     await tester.pumpAndSettle();
 
+    // Optimistic: the field clears immediately and the message shows as a
+    // failed bubble the user can retry — not retained text + a snackbar.
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        'Important reply');
-    expect(find.text('Send failed.'), findsOneWidget); // snackbar
+        isEmpty);
+    expect(find.text('Important reply'), findsOneWidget); // the failed bubble
+    expect(find.textContaining('Tap to retry'), findsOneWidget);
+    expect(attempts, 1);
+
+    await tester.tap(find.textContaining('Tap to retry'));
+    await tester.pumpAndSettle();
+    expect(attempts, 2); // retry re-dispatches the same send
     await cubit.close();
   });
 
@@ -374,12 +426,78 @@ void main() {
     expect(find.textContaining('Replying to'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'On it');
+    await tester.pumpAndSettle();
     await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
     await tester.pumpAndSettle();
 
     // The send carried the quoted message id, and the banner cleared.
     expect(repo.lastReplyTo, 'm1');
     expect(find.textContaining('Replying to'), findsNothing);
+    await cubit.close();
+  });
+
+  testWidgets('attaching a document previews it, then sends it optimistically',
+      (tester) async {
+    final repo = _FakeChatRepository(
+      onHistory: ({String? cursor}) async =>
+          ChatMessagePage(items: [_message('m1', 1, _them, 'Hi')]),
+      onSend: (content) async => _message('m2', 2, _me, content),
+    );
+    final cubit = _cubit(repo);
+    await tester.pumpWidget(_host(cubit, source: _FakeAttachmentSource()));
+    await tester.pump();
+    await tester.pump();
+
+    // Open the attachment sheet and choose Document.
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Document'));
+    await tester.pumpAndSettle();
+
+    // The staged attachment previews in the composer (filename shown), and the
+    // send button appears even with no text typed.
+    expect(find.text('report.pdf'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_upward_rounded), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pumpAndSettle();
+
+    // The send carried the attachment, and the staged preview cleared.
+    expect(repo.lastAttachment, isNotNull);
+    expect(repo.lastAttachment!.originalFilename, 'report.pdf');
+    await cubit.close();
+  });
+
+  testWidgets('an in-flight attachment shows a determinate upload progress ring',
+      (tester) async {
+    final held = Completer<ChatMessage>();
+    final repo = _FakeChatRepository(
+      onHistory: ({String? cursor}) async =>
+          ChatMessagePage(items: [_message('m1', 1, _them, 'Hi')]),
+      onSend: (_) => held.future, // stays pending → the bubble stays SENDING
+      progressTicks: const [(40, 100)], // one mid-upload tick
+    );
+    final cubit = _cubit(repo);
+    await tester.pumpWidget(_host(cubit, source: _FakeAttachmentSource()));
+    await tester.pump();
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.add_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Document'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.arrow_upward_rounded));
+    await tester.pump(); // optimistic insert + the 40% progress tick
+
+    // A determinate ring reflects the upload progress while it's in flight.
+    final ring = tester.widgetList<CircularProgressIndicator>(
+      find.byType(CircularProgressIndicator),
+    );
+    expect(ring.any((r) => r.value != null && (r.value! - 0.4).abs() < 0.001),
+        isTrue);
+
+    held.complete(_message('m2', 2, _me, ''));
+    await tester.pumpAndSettle();
     await cubit.close();
   });
 }

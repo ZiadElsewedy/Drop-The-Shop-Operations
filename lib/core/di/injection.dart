@@ -124,12 +124,14 @@ import 'package:drop/features/chat/domain/chat_realtime.dart';
 import 'package:drop/features/chat/domain/repositories/chat_repository.dart';
 import 'package:drop/features/chat/domain/usecases/delete_chat_message_for_everyone.dart';
 import 'package:drop/features/chat/domain/usecases/delete_chat_message_for_me.dart';
+import 'package:drop/features/chat/domain/usecases/get_chat_attachment_url.dart';
 import 'package:drop/features/chat/domain/usecases/get_conversation.dart';
 import 'package:drop/features/chat/domain/usecases/get_conversations.dart';
 import 'package:drop/features/chat/domain/usecases/load_chat_history.dart';
 import 'package:drop/features/chat/domain/usecases/mark_chat_read.dart';
 import 'package:drop/features/chat/domain/usecases/send_chat_message.dart';
 import 'package:drop/features/chat/domain/usecases/start_conversation.dart';
+import 'package:drop/features/chat/presentation/chat_attachment_picker.dart';
 import 'package:drop/features/chat/presentation/chat_thread_cache.dart';
 import 'package:drop/features/chat/presentation/cubit/chat_conversation_cubit.dart';
 import 'package:drop/features/chat/presentation/cubit/chat_list_cubit.dart';
@@ -162,6 +164,7 @@ class AppDependencies {
   static late final LoadChatHistory _loadChatHistory;
   static late final SendChatMessage _sendChatMessage;
   static late final MarkChatRead _markChatRead;
+  static late final GetChatAttachmentUrl _getChatAttachmentUrl;
 
   /// Builds a fresh thread cubit for [conversationId] (owned + disposed by its
   /// `BlocProvider`; re-created when the opened conversation changes).
@@ -183,11 +186,16 @@ class AppDependencies {
         counterpartUserId: counterpartUserId,
         realtime: chatRealtime,
         cache: _chatThreadCache,
+        getAttachmentUrl: _getChatAttachmentUrl,
       );
 
   /// Process-lifetime cache of opened threads — lets a re-opened conversation
   /// paint its last messages instantly while it refreshes in the background.
   static final ChatThreadCache _chatThreadCache = ChatThreadCache();
+
+  /// Attachment source for the chat composer (camera/gallery/documents).
+  static final ChatAttachmentSource chatAttachmentSource =
+      ChatAttachmentPicker();
 
   /// Teammate directory use case for the new-conversation picker (set in
   /// [init] once the auth repository exists).
@@ -387,6 +395,7 @@ class AppDependencies {
     _loadChatHistory = LoadChatHistory(chatRepository);
     _sendChatMessage = SendChatMessage(chatRepository);
     _markChatRead = MarkChatRead(chatRepository);
+    _getChatAttachmentUrl = GetChatAttachmentUrl(chatRepository);
     chatListCubit = ChatListCubit(
       getConversations: GetConversations(chatRepository),
       startConversation: StartConversation(chatRepository),

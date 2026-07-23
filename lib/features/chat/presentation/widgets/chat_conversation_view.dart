@@ -3,10 +3,15 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/extensions/context_extensions.dart';
 import 'package:drop/core/theme/app_colors.dart';
+import 'package:drop/core/theme/app_radius.dart';
 import 'package:drop/core/theme/app_spacing.dart';
 import 'package:drop/core/theme/app_typography.dart';
+import 'package:drop/core/widgets/skeleton.dart';
 import 'package:drop/features/chat/domain/entities/chat_message.dart';
+import 'package:drop/features/chat/domain/entities/chat_outgoing_attachment.dart';
+import 'package:drop/features/chat/presentation/chat_attachment_picker.dart';
 import 'package:drop/features/chat/presentation/chat_message_preview.dart';
+import 'package:drop/features/chat/presentation/pages/image_viewer_screen.dart';
 import 'package:drop/features/chat/presentation/pages/message_info_screen.dart';
 import 'package:drop/features/chat/presentation/cubit/chat_conversation_cubit.dart';
 import 'package:drop/features/chat/presentation/cubit/chat_conversation_state.dart';
@@ -23,10 +28,17 @@ import 'package:drop/features/chat/presentation/widgets/chat_message_list.dart';
 /// so it surfaces as a snackbar. A **first-load** failure is terminal and
 /// renders the full-screen retry.
 class ChatConversationView extends StatefulWidget {
-  const ChatConversationView({super.key, this.counterpartName});
+  const ChatConversationView({
+    super.key,
+    this.counterpartName,
+    this.attachmentSource,
+  });
 
   /// Counterpart display name — personalizes the empty state and reply banner.
   final String? counterpartName;
+
+  /// Source for the composer's attachment button. Null → no attachments.
+  final ChatAttachmentSource? attachmentSource;
 
   @override
   State<ChatConversationView> createState() => _ChatConversationViewState();
@@ -60,8 +72,7 @@ class _ChatConversationViewState extends State<ChatConversationView> {
       builder: (context, state) {
         final cubit = context.read<ChatConversationCubit>();
         return state.when(
-          loading: () => const Center(
-              child: CircularProgressIndicator(color: AppColors.primary)),
+          loading: () => const _ThreadSkeleton(),
           error: (message) => _ErrorView(
             message: message,
             onRetry: cubit.load,
@@ -84,10 +95,16 @@ class _ChatConversationViewState extends State<ChatConversationView> {
                     counterpartName: widget.counterpartName,
                     onMessageLongPress: (message, mine) =>
                         _onMessageLongPress(context, message, mine),
+                    onReply: _startReply,
+                    onRetry: (message) => cubit.retrySend(message.id),
+                    onImageTap: (message) => _openImage(context, cubit, message),
+                    imageUrlLoader: (message) =>
+                        cubit.attachmentDownloadUrl(message.id),
                   ),
                 ),
                 ChatComposer(
                   sending: sending,
+                  attachmentSource: widget.attachmentSource,
                   header: reply == null
                       ? null
                       : ReplyComposerBanner(
@@ -98,7 +115,7 @@ class _ChatConversationViewState extends State<ChatConversationView> {
                           ),
                           onCancel: _cancelReply,
                         ),
-                  onSend: (text) => _send(cubit, text),
+                  onSend: (text, attachment) => _send(cubit, text, attachment),
                 ),
               ],
             );
@@ -111,9 +128,16 @@ class _ChatConversationViewState extends State<ChatConversationView> {
   /// Sends through the cubit, quoting the active reply target when set, and
   /// clears the reply banner only on success — a failed send keeps the target
   /// (and, via the composer, the text) so the retry quotes the same message.
-  Future<bool> _send(ChatConversationCubit cubit, String text) async {
-    final ok =
-        await cubit.sendMessage(text, replyToMessageId: _replyTarget?.id);
+  Future<bool> _send(
+    ChatConversationCubit cubit,
+    String text,
+    ChatOutgoingAttachment? attachment,
+  ) async {
+    final ok = await cubit.sendMessage(
+      text,
+      replyToMessageId: _replyTarget?.id,
+      attachment: attachment,
+    );
     if (ok && mounted && _replyTarget != null) {
       setState(() => _replyTarget = null);
     }
@@ -122,6 +146,22 @@ class _ChatConversationViewState extends State<ChatConversationView> {
 
   String _authorLabel(String senderId) =>
       senderId == _myUserId ? 'You' : (widget.counterpartName ?? 'Them');
+
+  void _openImage(
+    BuildContext context,
+    ChatConversationCubit cubit,
+    ChatMessage message,
+  ) {
+    ImageViewerScreen.push(
+      context,
+      bytes: message.localBytes,
+      urlLoader: message.localBytes == null
+          ? () => cubit.attachmentDownloadUrl(message.id)
+          : null,
+      title: message.attachment?.originalFilename,
+      heroTag: 'chat-image-${message.id}',
+    );
+  }
 
   /// Long-press → context menu → the chosen action. Reply/Copy are handled
   /// here in the presentation layer; deletes go to the cubit, where the backend
@@ -156,6 +196,49 @@ class _ChatConversationViewState extends State<ChatConversationView> {
       case ChatMessageAction.deleteForEveryone:
         await cubit.deleteMessageForEveryone(message.id);
     }
+  }
+}
+
+/// A shimmering placeholder for the first-open load — a handful of alternating
+/// bubble skeletons, bottom-anchored like the real thread. A re-opened
+/// conversation paints from cache instead and never shows this.
+class _ThreadSkeleton extends StatelessWidget {
+  const _ThreadSkeleton();
+
+  // (mine, width) for a natural back-and-forth rhythm.
+  static const _rows = <(bool, double)>[
+    (false, 180),
+    (false, 120),
+    (true, 210),
+    (false, 90),
+    (true, 150),
+    (true, 240),
+    (false, 160),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.md, AppSpacing.md, AppSpacing.md, AppSpacing.md),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          for (final (mine, width) in _rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: Align(
+                alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                child: Skeleton(
+                  width: width,
+                  height: 40,
+                  borderRadius: BorderRadius.circular(AppRadius.lg),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 

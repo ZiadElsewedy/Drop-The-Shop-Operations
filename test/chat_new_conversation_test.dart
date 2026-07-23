@@ -103,7 +103,8 @@ class _FakeChatRepository implements ChatRepository {
           required String idempotencyKey,
           String? content,
           ChatOutgoingAttachment? attachment,
-          String? replyToMessageId}) =>
+          String? replyToMessageId,
+          void Function(int sent, int total)? onSendProgress}) =>
       throw UnimplementedError();
   @override
   Future<ChatReadReceipt> markMessagesRead(

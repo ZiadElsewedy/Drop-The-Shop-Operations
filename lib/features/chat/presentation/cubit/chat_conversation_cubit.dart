@@ -13,6 +13,7 @@ import 'package:drop/features/chat/domain/entities/chat_outgoing_attachment.dart
 import 'package:drop/features/chat/presentation/chat_thread_cache.dart';
 import 'package:drop/features/chat/domain/usecases/delete_chat_message_for_everyone.dart';
 import 'package:drop/features/chat/domain/usecases/delete_chat_message_for_me.dart';
+import 'package:drop/features/chat/domain/usecases/get_chat_attachment_url.dart';
 import 'package:drop/features/chat/domain/usecases/get_conversation.dart';
 import 'package:drop/features/chat/domain/usecases/load_chat_history.dart';
 import 'package:drop/features/chat/domain/usecases/mark_chat_read.dart';
@@ -54,6 +55,7 @@ class ChatConversationCubit extends Cubit<ChatConversationState> {
   final MarkChatRead _markRead;
   final DeleteChatMessageForMe _deleteForMe;
   final DeleteChatMessageForEveryone _deleteForEveryone;
+  final GetChatAttachmentUrl? _getAttachmentUrl;
   final ChatRealtime? _realtime;
   StreamSubscription<ChatRealtimeEvent>? _realtimeSub;
 
@@ -93,6 +95,7 @@ class ChatConversationCubit extends Cubit<ChatConversationState> {
     this.counterpartUserId,
     this._realtime,
     this._cache,
+    this._getAttachmentUrl,
   })  : super(const ChatConversationState.loading()) {
     // Instant re-open: paint the last-known confirmed messages synchronously
     // from the cache, then refresh from REST in the background (load()).
@@ -273,7 +276,10 @@ class ChatConversationCubit extends Cubit<ChatConversationState> {
     final failed = _messages[index];
     if (failed.status != _statusFailed) return;
 
-    _messages = [..._messages]..[index] = failed.withStatus(_statusSending);
+    final hasAttachment = _pendingAttachments.containsKey(localMessageId);
+    _messages = [..._messages]..[index] = failed
+        .withStatus(_statusSending)
+        .withUploadProgress(hasAttachment ? 0.0 : null);
     _emit();
     unawaited(_dispatchSend(
       localId: localMessageId,
@@ -282,6 +288,25 @@ class ChatConversationCubit extends Cubit<ChatConversationState> {
       replyToMessageId: failed.replyTo?.id,
       attachment: _pendingAttachments[localMessageId],
     ));
+  }
+
+  /// Resolves a short-lived download URL for a received attachment (the
+  /// full-screen image viewer fetches its bytes from it). Returns null when no
+  /// resolver is wired or the broker call fails — the viewer then shows an
+  /// unavailable state rather than throwing.
+  Future<String?> attachmentDownloadUrl(String messageId) async {
+    final resolver = _getAttachmentUrl;
+    if (resolver == null) return null;
+    try {
+      final download = await resolver(
+        conversationId: conversationId,
+        messageId: messageId,
+      );
+      return download.url;
+    } catch (e) {
+      AppLog.warning('chat', 'attachment url failed: $e');
+      return null;
+    }
   }
 
   /// Raw bytes for optimistic attachment sends, kept off the message model so a
@@ -303,6 +328,11 @@ class ChatConversationCubit extends Cubit<ChatConversationState> {
         content: content,
         replyToMessageId: replyToMessageId,
         attachment: attachment,
+        onSendProgress: attachment == null
+            ? null
+            : (sent, total) {
+                if (total > 0) _updateUploadProgress(localId, sent / total);
+              },
       );
       if (isClosed) return;
       _pendingAttachments.remove(localId);
@@ -378,6 +408,9 @@ class ChatConversationCubit extends Cubit<ChatConversationState> {
       localBytes: attachment?.kind == ChatAttachmentKind.image
           ? attachment?.bytes
           : null,
+      // Attachment sends start at 0% so the progress ring shows immediately;
+      // text sends have no meaningful transfer progress.
+      uploadProgress: attachment == null ? null : 0.0,
     );
   }
 
@@ -402,7 +435,24 @@ class ChatConversationCubit extends Cubit<ChatConversationState> {
     final index = _messages.indexWhere((m) => m.id == localId);
     if (index < 0) return;
     _messages = [..._messages]..[index] =
-        _messages[index].withStatus(_statusFailed);
+        _messages[index].withStatus(_statusFailed).withUploadProgress(null);
+  }
+
+  /// Updates an in-flight attachment's progress ring, throttled to whole-percent
+  /// changes so the transfer callback (which fires per chunk) can't trigger a
+  /// rebuild storm. Always emits the final 100%.
+  void _updateUploadProgress(String localId, double fraction) {
+    if (isClosed) return;
+    final index = _messages.indexWhere((m) => m.id == localId);
+    if (index < 0) return;
+    final clamped = fraction.clamp(0.0, 1.0);
+    final current = _messages[index].uploadProgress ?? 0;
+    if (clamped < 1.0 && (clamped * 100).floor() == (current * 100).floor()) {
+      return;
+    }
+    _messages = [..._messages]..[index] =
+        _messages[index].withUploadProgress(clamped);
+    _emit();
   }
 
   // ─── Message deletion (REST — the socket only echoes the fact) ────────

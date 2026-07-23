@@ -24,6 +24,7 @@ abstract class ChatRemoteDataSource {
     String? content,
     ChatOutgoingAttachment? attachment,
     String? replyToMessageId,
+    void Function(int sent, int total)? onSendProgress,
   });
 
   Future<ChatMessagePage> loadHistory({
@@ -108,6 +109,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
     String? content,
     ChatOutgoingAttachment? attachment,
     String? replyToMessageId,
+    void Function(int sent, int total)? onSendProgress,
   }) async {
     final data = await _api.post(
       _messages(conversationId),
@@ -117,6 +119,7 @@ class ChatRemoteDataSourceImpl implements ChatRemoteDataSource {
         attachment: attachment,
         replyToMessageId: replyToMessageId,
       ),
+      onSendProgress: onSendProgress,
     );
     return ChatMessageModel.fromJson(_asJson(data));
   }

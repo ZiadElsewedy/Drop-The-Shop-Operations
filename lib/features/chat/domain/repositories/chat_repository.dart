@@ -44,6 +44,10 @@ abstract class ChatRepository {
   /// returns the already-persisted message instead of duplicating it (or
   /// re-uploading the attachment).
   ///
+  /// [onSendProgress] is a **client-side** transfer-progress hook (bytes sent /
+  /// total) for the HTTP upload — used to drive the attachment progress ring.
+  /// It is not part of the wire contract and never affects the request body.
+  ///
   /// `POST /conversations/:id/messages`
   Future<ChatMessage> sendMessage({
     required String conversationId,
@@ -51,6 +55,7 @@ abstract class ChatRepository {
     String? content,
     ChatOutgoingAttachment? attachment,
     String? replyToMessageId,
+    void Function(int sent, int total)? onSendProgress,
   });
 
   /// A page of message history, oldest → newest within the page, newest page

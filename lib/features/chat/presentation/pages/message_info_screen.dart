@@ -108,7 +108,8 @@ class MessageInfoScreen extends StatelessWidget {
                 _InfoRow(label: 'Name', value: attachment.originalFilename),
                 _InfoRow(label: 'Format', value: attachment.format),
                 _InfoRow(label: 'Type', value: attachment.mimeType),
-                _InfoRow(label: 'Size', value: _humanBytes(attachment.byteSize)),
+                _InfoRow(
+                    label: 'Size', value: chatHumanBytes(attachment.byteSize)),
               ],
             ),
           ],
@@ -148,15 +149,6 @@ class MessageInfoScreen extends StatelessWidget {
         'document' => 'Document',
         _ => 'Text',
       };
-}
-
-/// KB/MB rendering of a byte count (binary units, one decimal above 1 KB).
-String _humanBytes(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  final kb = bytes / 1024;
-  if (kb < 1024) return '${kb.toStringAsFixed(kb < 10 ? 1 : 0)} KB';
-  final mb = kb / 1024;
-  return '${mb.toStringAsFixed(mb < 10 ? 1 : 0)} MB';
 }
 
 class _MessagePreviewCard extends StatelessWidget {
