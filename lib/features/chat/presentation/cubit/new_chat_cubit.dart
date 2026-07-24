@@ -1,7 +1,8 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:drop/core/errors/failures.dart';
 import 'package:drop/core/utils/app_logger.dart';
-import 'package:drop/features/auth/domain/usecases/get_users_by_branch.dart';
+import 'package:drop/features/auth/domain/entities/user_entity.dart';
+import 'package:drop/features/chat/domain/usecases/get_chat_directory.dart';
 import 'new_chat_state.dart';
 
 /// Loads the teammate directory for the new-conversation picker. Read-only:
@@ -9,36 +10,24 @@ import 'new_chat_state.dart';
 /// that, so the new thread lands in the list). Built per-open via
 /// [AppDependencies.createNewChatCubit].
 ///
-/// Scope: the caller's own branch (via [GetUsersByBranch]), which is the
-/// natural "teammates" set and what Firestore rules permit. The current user
-/// is excluded so you can never start a conversation with yourself (the server
-/// also rejects that).
+/// Scope is decided ENTIRELY by [GetChatDirectory] (every active user but the
+/// caller — no branch, no role). This cubit adds no filtering of its own; the
+/// only other filter in the feature is the view's search box.
 class NewChatCubit extends Cubit<NewChatState> {
-  final GetUsersByBranch _getUsersByBranch;
-  final String? _branchId;
-  final String _currentUid;
+  final GetChatDirectory _getChatDirectory;
+  final UserEntity? _currentUser;
 
   NewChatCubit({
-    required this._getUsersByBranch,
-    required this._branchId,
-    required this._currentUid,
-  })  : super(const NewChatLoading()) {
+    required this._getChatDirectory,
+    required this._currentUser,
+  }) : super(const NewChatLoading()) {
     load();
   }
 
   Future<void> load() async {
     if (!isClosed) emit(const NewChatLoading());
-    final branchId = _branchId;
-    if (branchId == null || branchId.isEmpty) {
-      // No branch → no teammate directory to scope to. Show the empty state
-      // rather than an error; it's a legitimate "nobody to chat with" case.
-      if (!isClosed) emit(const NewChatLoaded([]));
-      return;
-    }
     try {
-      final users = await _getUsersByBranch(branchId);
-      final teammates =
-          users.where((u) => u.uid != _currentUid).toList(growable: false);
+      final teammates = await _getChatDirectory(_currentUser);
       if (!isClosed) emit(NewChatLoaded(teammates));
     } on Failure catch (e) {
       if (!isClosed) emit(NewChatError(e.message));

@@ -3,7 +3,7 @@
 > **Today's snapshot. Nothing historical.** The moment something here becomes
 > history, it moves to [CHANGELOG.md](CHANGELOG.md) and leaves this file.
 >
-> **Last verified against the code:** 2026-07-22.
+> **Last verified against the code:** 2026-07-24.
 
 ## At a glance
 
@@ -11,8 +11,8 @@
 | --- | --- |
 | **Branch** | `feature/chat-nestjs` (from `feature/attendance-management`) |
 | **Build** | `flutter analyze`: 1 info, no errors/warnings (pre-existing test style) |
-| **Tests** | **1028 pass · 2 fail** across 152 files (~25s) — the 2 fails are the pre-existing splash-centering cases; see [Known issues](#known-issues). Cloud Functions: **34 pass**; NestJS chat backend: **84 pass** (`cd ~/Desktop/Developer/drop-api && npx jest`) |
-| **Blocking release** | Firebase deploy (rules · indexes · functions; live `shift_templates` rule missing) · recurring-template manager read isolation · iOS push unconfigured · attendance on-device QA |
+| **Tests** | **1038 pass · 5 fail** across 152 files (~22s) — all 5 are pre-existing and reproduce on a clean tree (2 splash-centering + 3 notification-probe); see [Known issues](#known-issues). Cloud Functions: **34 pass**; NestJS chat backend: **84 pass** (`cd ~/Desktop/Developer/drop-api && npx jest`) |
+| **Blocking release** | Firebase deploy (rules — now also carries the chat admin-visibility read · indexes · functions; live `shift_templates` rule missing) · recurring-template manager read isolation · iOS push unconfigured · attendance on-device QA |
 | **Platforms** | iOS · Android · macOS |
 
 DROP is **feature-complete for its intended scope** and gated on deployment and QA,
@@ -80,6 +80,8 @@ Base URL comes from `--dart-define=API_BASE_URL` (default `http://localhost:3000
 | P9 — New-conversation flow | Done, **uncommitted** (2026-07-22). Inbox FAB (always) + empty-state "Start Chat" CTA → `/chat/new` teammate picker (`NewChatScreen`/`NewChatView` + `NewChatCubit` over `GetUsersByBranch`): own-branch teammates, search, current user excluded, avatar · name · role. Selecting one calls `StartConversation` and `pushReplacement`s to the thread (Back → inbox); server get-or-create means an existing pair opens the same thread, no duplicate. **Backend contract change (`drop-api`):** `POST /conversations` `targetUserId` is now the teammate's **Firebase uid** (external subject), resolved server-side to the internal participant via the existing identity resolver (get-or-create — provisions a teammate who's never opened chat); clients never hold other users' internal UUIDs. Self-start rejected 400 |
 | P10 — Real profiles + polish + LAN | Done, **uncommitted** (2026-07-23). **Real titles:** `GET /conversations` now returns `counterpartExternalId` (Firebase uid, resolved via a new `USER_DIRECTORY` reverse-lookup port); the inbox loads the branch directory and renders real **avatar · name · role**, the thread header shows the counterpart avatar+name — no backend id is ever a UI key. **Composer** redesigned premium (rounded 46px pill, reactive send button, multiline). **Thread** gets message grouping (time on the run tail only) + a premium empty state. **Networking:** backend binds `0.0.0.0:3000`; a debug-only Android manifest allows cleartext; one `--dart-define=API_BASE_URL=http://192.168.1.8:3000` wires REST + socket for both the iOS Simulator and a physical Android device. `ApiClient` + `ChatListCubit` now log the real transport error (no more silent loading→error loop). Composer refined (reactive send button + lifted bar + safe-area anchor), empty state personalized ("Say hello to {first name}"). **Verified live on the iOS Simulator via the LAN IP: real profiles, inbox, thread, and a live message send all work end-to-end** |
 | P11 — V1 polish (composer · reply · attachments · optimistic · perf) | Done, **uncommitted** (2026-07-24). **Composer** rebuilt premium (r26 pill, left paperclip → attachment sheet, circular send that animates in only when there's text/an attachment, staged-attachment preview). **Reply** two ways: WhatsApp swipe-right (`_SwipeToReply` — bubble tracks the drag, reply glyph + one haptic at threshold, spring-back) **and** long-press menu (Reply · Copy · Message info · Delete-for-me/everyone); quoted preview renders in the bubble and as a composer banner. **Attachments** (`ChatAttachmentSource` seam + `ChatAttachmentPicker` over image_picker/**file_picker**): Camera/Gallery/Documents sheet, preview-before-send, premium file cards, optimistic image thumbnail from local bytes, full-screen `ImageViewerScreen` (local bytes now, brokered URL via `GetChatAttachmentUrl` for received). **Message info** screen — only backend-provided fields (sent time, status, sender, ids, seq, attachment, reply ref), IDs tap-to-copy. **Optimistic send** (`sendMessage` returns immediately, inserts a `SENDING` bubble, background POST → replace with server msg / mark `FAILED` + tap-to-retry reusing the idempotency key). **Perf:** `ChatThreadCache` (in-memory) paints a re-opened thread instantly, then refreshes; skeleton loader for a cold open. All presentation/cubit — REST stays the only write path. **NOT device-verified this session** (user reviews on-device) |
+| P12 — Flat participant directory | Done, **uncommitted** (2026-07-24), [ADR-012](docs/decisions/ADR-012-chat-directory-is-flat.md). The picker was a bare own-branch Firestore read, but **admins are provisioned branchless** (the role is global) — so an admin's picker was empty and no staff member ever saw an admin (confirmed against live data: 1 branchless admin, 8 employees over 2 branches, 1 manager). Rather than special-case admins, chat's access model is now **flat: every authenticated user may message every other active user**. `GetChatDirectory` = ONE unfiltered `getAllUsers` read, filtered only by self-exclusion + `isActive` (applied in the use case so a legacy doc missing the field keeps its `true` default); shared by the picker *and* the inbox directory. **No branch or role predicate anywhere in the chat path.** New `AuthRepository.getAllUsers`. **Requires a rules deploy** — `users` read is now `if isSignedIn()`, replacing the owner/admin/same-branch disjunction |
+| P13 — Mobile UI refinement | Done, **uncommitted** (2026-07-24). Presentation-only polish pass, no backend/contract change. **Alignment root-cause fix:** own messages were rendering LEFT — `_SwipeToReply`'s `Stack` shrink-wraps the bubble and pins it `topStart`, collapsing the bubble Column's `crossAxisAlignment`, so swipe-enabled (confirmed) sends aligned left while `local:`/tombstone bubbles aligned right. Side is now enforced by an `Align` at the list-item level (works in both the swipe and non-swipe paths). Grouping keys on **side/ownership** not raw `senderId` (folds optimistic `local:` bubbles into my run; a side change always forces a tail + gap, so two people's runs can't merge). Bubble radii 20 + 6pt tail, padding 14×9, within-group gap 3 / between-group 12, max width 0.76·w cap 560. **Composer:** animated focus (border brightens/thickens on focus), 24pt pill, tightened padding. Ticks unchanged (monochrome per the design ruling). Verified on the iPhone 17 simulator |
 | Notifications | ❌ Not started |
 
 > The list endpoint exposes **no counterpart names, no last-message preview, no
@@ -160,7 +162,16 @@ phases and committed; what remains is deployment and on-device verification.
 The remaining `use_null_aware_elements` info is the pre-existing test-style lint
 in `task_submission_gate_test.dart`. It is not an Automation Center finding.
 
-### Failing tests (2)
+### Failing tests (5)
+
+All five reproduce with the working tree stashed — none is caused by current work.
+
+`test/notification_tap_flow_probe_test.dart` — all three cases fail with
+`[core/no-app] No Firebase App '[DEFAULT]'`. `AuthCubit.restoreSession` calls
+`debugLogFirebaseAuth` (`core/network/debug_auth_probe.dart`, the temporary chat
+debug logging from `dbe15fb`), which touches `FirebaseAuth.instance` in a test
+with no initialized Firebase. The probe should no-op when Firebase isn't
+initialized, or be removed with the rest of the temporary logging.
 
 `test/splash_centering_test.dart` — both cases fail. The splash lockup's optical
 centering is off: the combined logo→bar bounding box centre sits at **375.5** where
@@ -178,6 +189,14 @@ that prerequisite query is default-denied for every client role — including ad
 and the schedule write is never reached. The correct local rule exists in
 `firestore.rules`; deployment is still pending. This is deployment drift, not an
 admin-role or schedule-payload defect.
+
+The pending deploy now also carries the **flat `users` read** (2026-07-24,
+[ADR-012](docs/decisions/ADR-012-chat-directory-is-flat.md)): `allow read: if
+isSignedIn()`, replacing the owner/admin/same-branch disjunction. Until it ships the
+chat directory is **broken for every non-admin** — the client now issues one
+unfiltered `users` query, which the live ruleset denies outright (previously a
+non-admin at least got their own branch). An admin's picker works undeployed, since
+admins already read every user. **This deploy is no longer optional for chat.**
 
 ### Access-control gap
 

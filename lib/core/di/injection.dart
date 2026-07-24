@@ -125,6 +125,7 @@ import 'package:drop/features/chat/domain/repositories/chat_repository.dart';
 import 'package:drop/features/chat/domain/usecases/delete_chat_message_for_everyone.dart';
 import 'package:drop/features/chat/domain/usecases/delete_chat_message_for_me.dart';
 import 'package:drop/features/chat/domain/usecases/get_chat_attachment_url.dart';
+import 'package:drop/features/chat/domain/usecases/get_chat_directory.dart';
 import 'package:drop/features/chat/domain/usecases/get_conversation.dart';
 import 'package:drop/features/chat/domain/usecases/get_conversations.dart';
 import 'package:drop/features/chat/domain/usecases/load_chat_history.dart';
@@ -197,27 +198,26 @@ class AppDependencies {
   static final ChatAttachmentSource chatAttachmentSource =
       ChatAttachmentPicker();
 
-  /// Teammate directory use case for the new-conversation picker (set in
-  /// [init] once the auth repository exists).
-  static late final GetUsersByBranch _getUsersByBranchForChat;
+  /// Chat directory use case — who the caller may message (set in [init] once
+  /// the auth repository exists). Shared by the picker and the inbox so both
+  /// resolve the same people.
+  static late final GetChatDirectory _getChatDirectory;
 
-  /// Builds a fresh new-conversation picker cubit, scoped to [user]'s branch
-  /// and excluding [user] themselves. Owned + disposed by its `BlocProvider`.
+  /// Builds a fresh new-conversation picker cubit for [user], excluding [user]
+  /// themselves. Owned + disposed by its `BlocProvider`.
   static NewChatCubit createNewChatCubit(UserEntity? user) => NewChatCubit(
-        getUsersByBranch: _getUsersByBranchForChat,
-        branchId: user?.branchId,
-        currentUid: user?.uid ?? '',
+        getChatDirectory: _getChatDirectory,
+        currentUser: user,
       );
 
-  /// The [user]'s branch teammate directory keyed by **Firebase uid**, so the
-  /// chat UI can resolve a conversation's `counterpartExternalId` to a real
-  /// name/avatar/role. Empty when there's no branch. Used by the inbox + thread
-  /// to render profiles instead of backend ids.
+  /// The [user]'s chat directory keyed by **Firebase uid**, so the chat UI can
+  /// resolve a conversation's `counterpartExternalId` to a real name/avatar/
+  /// role. Same set as the picker ([GetChatDirectory]) — so any thread renders
+  /// a name rather than a raw id, whoever the counterpart is. Used by the inbox
+  /// + thread.
   static Future<Map<String, UserEntity>> loadChatDirectory(
       UserEntity? user) async {
-    final branchId = user?.branchId;
-    if (branchId == null || branchId.isEmpty) return const {};
-    final users = await _getUsersByBranchForChat(branchId);
+    final users = await _getChatDirectory(user);
     return {for (final u in users) u.uid: u};
   }
 
@@ -420,8 +420,9 @@ class AppDependencies {
     final AuthRepository authRepository =
         AuthRepositoryImpl(authRemoteDataSource, userRemoteDataSource);
 
-    // Teammate directory for the chat new-conversation picker (own-branch).
-    _getUsersByBranchForChat = GetUsersByBranch(authRepository);
+    // Chat directory (every active user but the caller — flat, no branch/role)
+    // — the picker and the inbox share it.
+    _getChatDirectory = GetChatDirectory(authRepository);
 
     final ProfileRepository profileRepository =
         ProfileRepositoryImpl(profileRemoteDataSource, authRemoteDataSource);

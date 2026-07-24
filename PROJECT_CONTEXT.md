@@ -386,7 +386,19 @@ Mirrored in `firestore.rules` — the client is never the enforcement point.
 | --- | --- |
 | **admin** | Global. Not restricted by `branchId`. Can do everything a manager can, everywhere. |
 | **manager** | Exactly one branch; limited to `resource.branchId == manager.branchId`. |
-| **employee** | Own assigned data and profile. **Read-only exception:** any branch member may *read* other `users` in their own branch (the schedule needs it). Writes to user docs stay admin-only. |
+| **employee** | Own assigned data and profile. **Read-only exception:** any signed-in user may *read* any `users` doc (flat directory — see below). Writes to user docs stay admin-only. |
+
+> **An admin has no `branchId`.** The role is global, so account provisioning
+> deliberately omits the branch (`create_account_screen._needsBranch`). It follows
+> that **no `where('branchId', ...)` query can ever return an admin, or return
+> anything at all *for* an admin** — a branch read is not a directory.
+>
+> **Exception — `users` READS are flat** ([ADR-012](docs/decisions/ADR-012-chat-directory-is-flat.md)):
+> any signed-in user may read any user document, because chat's directory is
+> org-wide (anyone may message anyone). The table above still governs every other
+> collection, and still governs all `users` **writes**. Chat's directory is
+> `GetChatDirectory` — one unfiltered read, filtered only by self-exclusion and
+> `isActive`. Do not re-introduce branch or role scoping into it.
 
 - Parse roles with `UserRole.fromString`, which **defaults unknown/missing to
   `employee`** so a bad document can never escalate privileges. Use the

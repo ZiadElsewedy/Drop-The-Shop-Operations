@@ -18,9 +18,10 @@ import 'package:drop/features/chat/presentation/cubit/chat_list_cubit.dart';
 import 'package:drop/features/chat/presentation/cubit/new_chat_cubit.dart';
 import 'package:drop/features/chat/presentation/cubit/new_chat_state.dart';
 
-/// The new-conversation teammate picker (`/chat/new`). Lists the caller's
-/// teammates (own branch, current user excluded), supports search, and shows
-/// each teammate's avatar · name · role. Selecting one starts (get-or-creates)
+/// The new-conversation teammate picker (`/chat/new`). Lists everyone the
+/// caller may message — every active user except themselves, with no branch or
+/// role scoping (see [GetChatDirectory]) — supports search, and shows each
+/// teammate's avatar · name · role. Selecting one starts (get-or-creates)
 /// the conversation through [ChatListCubit] and replaces this screen with the
 /// thread — so Back returns to the inbox, not the picker. An already-existing
 /// conversation opens instead of creating a duplicate (server-idempotent).
@@ -151,7 +152,7 @@ class _List extends StatelessWidget {
               ? DropEmptyState(
                   title: total == 0 ? 'No teammates yet' : 'No matches',
                   message: total == 0
-                      ? 'There is no one in your branch to message yet.'
+                      ? 'There is no one else to message yet.'
                       : 'No teammate matches "$query".',
                 )
               : ListView.builder(

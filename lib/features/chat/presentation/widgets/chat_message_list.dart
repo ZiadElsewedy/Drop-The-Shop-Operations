@@ -238,35 +238,39 @@ class _ChatMessageListState extends State<ChatMessageList> {
           : (rp.senderId == widget.myUserId
               ? 'You'
               : (widget.counterpartName ?? 'Them'));
-      // Group consecutive same-sender messages within the same day: only the
-      // last of a run ("tail") shows the timestamp, and grouped bubbles sit
-      // tight together — the iMessage/Telegram rhythm that reads as premium.
+      // Group by SIDE (ownership), not raw senderId: a 1:1 thread has exactly
+      // two participants, and grouping on `mine` also folds an optimistic
+      // `local:` bubble — whose senderId may not have resolved yet — into my
+      // own run. Only the last message of a consecutive same-side, same-day run
+      // is a "tail": it carries the timestamp and the flattened corner and gets
+      // the roomy between-groups gap; earlier bubbles in the run sit tight. A
+      // side change therefore always forces a tail + gap, so two people's runs
+      // can never visually merge.
       final next = i + 1 < msgs.length ? msgs[i + 1] : null;
       final nextSameDay = next != null &&
           next.createdAt.year == m.createdAt.year &&
           next.createdAt.month == m.createdAt.month &&
           next.createdAt.day == m.createdAt.day;
-      final isTail =
-          next == null || next.senderId != m.senderId || !nextSameDay;
+      final isTail = next == null || _isMine(next) != mine || !nextSameDay;
       // RepaintBoundary isolates each bubble: a list-wide rebuild (a new
       // message, a read receipt, an upload-progress tick) or the swipe-to-reply
       // translate then can't force every other bubble to re-rasterize.
       final bubble = RepaintBoundary(
         child: _Bubble(
-        message: m,
-        mine: mine,
-        isTail: isTail,
-        replyAuthorLabel: replyAuthorLabel,
-        deleting: m.id == widget.deletingMessageId,
-        onLongPress: widget.onMessageLongPress == null
-            ? null
-            : () => widget.onMessageLongPress!(m, mine),
-        onRetry: widget.onRetry == null ? null : () => widget.onRetry!(m),
-        onImageTap:
-            widget.onImageTap == null ? null : () => widget.onImageTap!(m),
-        imageUrlLoader: widget.imageUrlLoader == null
-            ? null
-            : () => widget.imageUrlLoader!(m),
+          message: m,
+          mine: mine,
+          isTail: isTail,
+          replyAuthorLabel: replyAuthorLabel,
+          deleting: m.id == widget.deletingMessageId,
+          onLongPress: widget.onMessageLongPress == null
+              ? null
+              : () => widget.onMessageLongPress!(m, mine),
+          onRetry: widget.onRetry == null ? null : () => widget.onRetry!(m),
+          onImageTap:
+              widget.onImageTap == null ? null : () => widget.onImageTap!(m),
+          imageUrlLoader: widget.imageUrlLoader == null
+              ? null
+              : () => widget.imageUrlLoader!(m),
         ),
       );
       // Swipe-right to reply — never on a tombstone or an unsent local bubble.
@@ -277,11 +281,21 @@ class _ChatMessageListState extends State<ChatMessageList> {
         // Keyed by message id so an element follows its message across
         // prepends/appends — the entrance animation then fires only for a
         // genuinely new bubble, never re-running on an existing one.
+        //
+        // Side alignment is enforced HERE by an Align, not by the bubble's
+        // inner Column: the swipe-to-reply wrapper is a Stack that shrink-wraps
+        // to the bubble, which collapses any `crossAxisAlignment` and was
+        // pinning my own (swipe-enabled) messages to the left. Aligning the
+        // whole item is robust across both the swipe and non-swipe paths.
         KeyedSubtree(
           key: ValueKey(m.id),
-          child: canSwipeReply
-              ? _SwipeToReply(onReply: () => widget.onReply!(m), child: bubble)
-              : bubble,
+          child: Align(
+            alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+            child: canSwipeReply
+                ? _SwipeToReply(
+                    onReply: () => widget.onReply!(m), child: bubble)
+                : bubble,
+          ),
         ),
       );
     }
@@ -366,12 +380,16 @@ class _Bubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const tailR = 5.0; // the flattened "tail" corner nearest the sender
+    // Soft, premium rounding with a single flattened "tail" corner on the last
+    // bubble of a run, on the side nearest the sender (bottom-right for me,
+    // bottom-left for the counterpart) — the iMessage/Telegram silhouette.
+    const r = AppRadius.xl; // 20
+    const tailR = 6.0;
     final radius = BorderRadius.only(
-      topLeft: const Radius.circular(AppRadius.lg),
-      topRight: const Radius.circular(AppRadius.lg),
-      bottomLeft: Radius.circular(mine || !isTail ? AppRadius.lg : tailR),
-      bottomRight: Radius.circular(!mine || !isTail ? AppRadius.lg : tailR),
+      topLeft: const Radius.circular(r),
+      topRight: const Radius.circular(r),
+      bottomLeft: Radius.circular(mine || !isTail ? r : tailR),
+      bottomRight: Radius.circular(!mine || !isTail ? r : tailR),
     );
     final body = (message.body ?? '').trim();
     final tombstone = message.deletedForEveryone;
@@ -385,7 +403,7 @@ class _Bubble extends StatelessWidget {
     // Cap bubble width so a short line doesn't stretch edge-to-edge on tablets
     // and large phones while still tracking the viewport on small ones.
     final maxBubbleWidth =
-        math.min(MediaQuery.sizeOf(context).width * 0.72, 560.0);
+        math.min(MediaQuery.sizeOf(context).width * 0.76, 560.0);
 
     // A failed bubble re-sends on tap; an image opens the full-screen viewer.
     final VoidCallback? onTap = failed
@@ -402,7 +420,7 @@ class _Bubble extends StatelessWidget {
       ),
       child: Padding(
         // Tight gap within a group, roomier gap between senders/groups.
-        padding: EdgeInsets.only(bottom: isTail ? AppSpacing.md : 2),
+        padding: EdgeInsets.only(bottom: isTail ? AppSpacing.md : 3),
         child: Column(
           crossAxisAlignment:
               mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -419,8 +437,8 @@ class _Bubble extends StatelessWidget {
                   constraints: BoxConstraints(maxWidth: maxBubbleWidth),
                   child: Container(
                     padding: EdgeInsets.symmetric(
-                      horizontal: isImage ? 4 : AppSpacing.md,
-                      vertical: isImage ? 4 : AppSpacing.sm + 2,
+                      horizontal: isImage ? 4 : 14,
+                      vertical: isImage ? 4 : 9,
                     ),
                     decoration: BoxDecoration(
                       color:

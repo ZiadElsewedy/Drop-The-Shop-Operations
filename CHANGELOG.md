@@ -18,6 +18,46 @@ released — DROP ships from branches and has no version tags.
 
 ### 2026-07-24
 
+- **Chat mobile UI refinement (uncommitted).** Presentation-only; no backend
+  or contract change. **Fixed own-message alignment** — my messages were
+  rendering on the left. Root cause: `_SwipeToReply` wraps a confirmed bubble in
+  a `Stack`, which shrink-wraps and pins to `topStart`, collapsing the bubble
+  Column's `crossAxisAlignment`; swipe-enabled (sent) messages aligned left
+  while `local:`/tombstone bubbles aligned right. Side is now set by an `Align`
+  at the list-item level, robust in both paths. Grouping keys on side/ownership
+  instead of raw `senderId` (folds optimistic bubbles into my run; a side change
+  always forces a tail + gap so two people's runs never merge). Softer bubble
+  radii (20 + 6pt tail), roomier padding, tighter within-group spacing, wider
+  max width. **Composer** gains an animated focus state (border brightens and
+  thickens on focus), a 24pt pill, and refined padding. Delivery ticks unchanged
+  (monochrome, per the design ruling). Verified on the iPhone 17 simulator.
+
+- **Changed — chat's participant directory is now flat (uncommitted).**
+  [ADR-012](docs/decisions/ADR-012-chat-directory-is-flat.md). Every
+  authenticated user may message every other **active** user; the directory
+  carries **no branch and no role predicate** in any layer.
+  `GetChatDirectory` is a single unfiltered `getAllUsers` read whose only
+  filters are self-exclusion and `isActive` — the latter applied in the use case,
+  not as a query predicate, so a legacy doc missing the field keeps
+  `UserEntity`'s `true` default instead of being silently dropped. One source of
+  truth, shared by the picker and the inbox's name/avatar resolution.
+  `AuthRepository.getUsersByRole` (added earlier the same day) is **removed** —
+  it existed only to reconstruct "everyone" out of scoped reads.
+  **`firestore.rules` — NEEDS DEPLOY:** `users` read is now `if isSignedIn()`,
+  replacing the owner · admin · same-branch disjunction, which a flat directory
+  subsumes entirely. Compensation stays private (owner + admin subdoc) and all
+  writes are unchanged. Until deployed, the chat directory fails for non-admins.
+
+  This supersedes the earlier fix the same day, which kept branch scoping and
+  special-cased admins via a role read. The bug it fixed: an admin's picker was
+  empty and staff never saw admins, because **admins are provisioned branchless**
+  (`create_account_screen._needsBranch` — the role is global), so a
+  `where('branchId', ==, …)` read returned nothing for an admin and could never
+  contain one for anyone else. Confirmed against live data (1 branchless admin,
+  8 employees over 2 branches, 1 manager). The NestJS backend was never
+  implicated — it has **no role or branch concept at all**, and conversation
+  creation only rejects self-chat.
+
 - **Chat V1 polish (uncommitted).** Premium composer (paperclip + attachment
   sheet, reactive circular send, staged-attachment preview). Reply via
   WhatsApp swipe-right (`_SwipeToReply`, haptic + spring-back) and the

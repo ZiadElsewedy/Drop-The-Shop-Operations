@@ -57,11 +57,27 @@ class _ChatComposerState extends State<ChatComposer> {
   bool _autofocused = false;
   bool _picking = false;
 
+  /// Whether the input holds focus — drives the pill's focus animation.
+  bool _focused = false;
+
   /// The staged attachment awaiting send (preview shown above the input).
   ChatOutgoingAttachment? _pending;
 
   @override
+  void initState() {
+    super.initState();
+    _node.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (mounted && _node.hasFocus != _focused) {
+      setState(() => _focused = _node.hasFocus);
+    }
+  }
+
+  @override
   void dispose() {
+    _node.removeListener(_onFocusChange);
     _controller.dispose();
     _node.dispose();
     super.dispose();
@@ -170,15 +186,24 @@ class _ChatComposerState extends State<ChatComposer> {
                 const SizedBox(width: 6),
               ],
               Expanded(
-                child: Container(
+                // The pill lifts subtly on focus: a brighter, slightly heavier
+                // border animates in — a premium touch cue without a loud glow.
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOut,
                   constraints: const BoxConstraints(minHeight: 46),
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: AppColors.darkSurfaceElevated,
-                    borderRadius: BorderRadius.circular(26),
-                    border: Border.all(color: AppColors.darkBorder),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(
+                      color: _focused
+                          ? AppColors.textTertiary
+                          : AppColors.darkBorder,
+                      width: _focused ? 1.5 : 1,
+                    ),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: TextField(
                     controller: _controller,
                     focusNode: _node,
@@ -197,7 +222,7 @@ class _ChatComposerState extends State<ChatComposer> {
                           .copyWith(color: AppColors.textTertiary),
                       border: InputBorder.none,
                       isCollapsed: true,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     onSubmitted: _enterToSend ? null : (_) => _send(),
                   ),
